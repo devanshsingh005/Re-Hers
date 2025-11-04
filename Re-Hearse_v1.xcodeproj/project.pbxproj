@@ -1,0 +1,485 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		842B08432EBA0465001AC579 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08422EBA0465001AC579 /* ViewController.swift */; };
+		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
+		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
+		842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08642EBA0BE8001AC579 /* ScanViewController.swift */; };
+		842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */; };
+		842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08682EBA0C15001AC579 /* AnimationViewController.swift */; };
+		842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */; };
+		842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086C2EBA0D65001AC579 /* MainTabBarController.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		842B08422EBA0465001AC579 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
+		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
+		842B08642EBA0BE8001AC579 /* ScanViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanViewController.swift; sourceTree = "<group>"; };
+		842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayAlongViewController.swift; sourceTree = "<group>"; };
+		842B08682EBA0C15001AC579 /* AnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationViewController.swift; sourceTree = "<group>"; };
+		842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordRecognitionViewController.swift; sourceTree = "<group>"; };
+		842B086C2EBA0D65001AC579 /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Re-Hearse_v1" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 842B083A2EBA0465001AC579 /* Re-Hearse_v1 */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		842B083D2EBA0465001AC579 /* Re-Hearse_v1 */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Re-Hearse_v1" target */,
+			);
+			path = "Re-Hearse_v1";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		842B08382EBA0465001AC579 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		842B08322EBA0465001AC579 = {
+			isa = PBXGroup;
+			children = (
+				842B085C2EBA09DD001AC579 /* Utilities */,
+				842B085B2EBA09C6001AC579 /* Common */,
+				842B085A2EBA09B5001AC579 /* Features */,
+				842B08552EBA0589001AC579 /* Models */,
+				842B08542EBA057B001AC579 /* Views */,
+				842B08532EBA0543001AC579 /* ViewControllers */,
+				842B083D2EBA0465001AC579 /* Re-Hearse_v1 */,
+				842B083C2EBA0465001AC579 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		842B083C2EBA0465001AC579 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		842B08532EBA0543001AC579 /* ViewControllers */ = {
+			isa = PBXGroup;
+			children = (
+				842B08422EBA0465001AC579 /* ViewController.swift */,
+				842B086C2EBA0D65001AC579 /* MainTabBarController.swift */,
+			);
+			path = ViewControllers;
+			sourceTree = "<group>";
+		};
+		842B08542EBA057B001AC579 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		842B08552EBA0589001AC579 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		842B085A2EBA09B5001AC579 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				842B08602EBA0A56001AC579 /* Chord_Recognisation */,
+				842B085F2EBA0A46001AC579 /* Animation */,
+				842B085E2EBA0A32001AC579 /* Play_Along */,
+				842B085D2EBA0A22001AC579 /* Scan&Play */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		842B085B2EBA09C6001AC579 /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				842B08632EBA0B45001AC579 /* Managers */,
+				842B08622EBA0B34001AC579 /* Music_Components */,
+				842B08612EBA0B1C001AC579 /* UI_Components */,
+			);
+			path = Common;
+			sourceTree = "<group>";
+		};
+		842B085C2EBA09DD001AC579 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		842B085D2EBA0A22001AC579 /* Scan&Play */ = {
+			isa = PBXGroup;
+			children = (
+				842B08642EBA0BE8001AC579 /* ScanViewController.swift */,
+			);
+			path = "Scan&Play";
+			sourceTree = "<group>";
+		};
+		842B085E2EBA0A32001AC579 /* Play_Along */ = {
+			isa = PBXGroup;
+			children = (
+				842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */,
+			);
+			path = Play_Along;
+			sourceTree = "<group>";
+		};
+		842B085F2EBA0A46001AC579 /* Animation */ = {
+			isa = PBXGroup;
+			children = (
+				842B08682EBA0C15001AC579 /* AnimationViewController.swift */,
+			);
+			path = Animation;
+			sourceTree = "<group>";
+		};
+		842B08602EBA0A56001AC579 /* Chord_Recognisation */ = {
+			isa = PBXGroup;
+			children = (
+				842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */,
+			);
+			path = Chord_Recognisation;
+			sourceTree = "<group>";
+		};
+		842B08612EBA0B1C001AC579 /* UI_Components */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = UI_Components;
+			sourceTree = "<group>";
+		};
+		842B08622EBA0B34001AC579 /* Music_Components */ = {
+			isa = PBXGroup;
+			children = (
+				842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */,
+				842B08582EBA0712001AC579 /* PianoKeyView.swift */,
+			);
+			path = Music_Components;
+			sourceTree = "<group>";
+		};
+		842B08632EBA0B45001AC579 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		842B083A2EBA0465001AC579 /* Re-Hearse_v1 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 842B084E2EBA0466001AC579 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1" */;
+			buildPhases = (
+				842B08372EBA0465001AC579 /* Sources */,
+				842B08382EBA0465001AC579 /* Frameworks */,
+				842B08392EBA0465001AC579 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				842B083D2EBA0465001AC579 /* Re-Hearse_v1 */,
+			);
+			name = "Re-Hearse_v1";
+			packageProductDependencies = (
+			);
+			productName = "Re-Hearse_v1";
+			productReference = 842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		842B08332EBA0465001AC579 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					842B083A2EBA0465001AC579 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
+				};
+			};
+			buildConfigurationList = 842B08362EBA0465001AC579 /* Build configuration list for PBXProject "Re-Hearse_v1" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 842B08322EBA0465001AC579;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 842B083C2EBA0465001AC579 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				842B083A2EBA0465001AC579 /* Re-Hearse_v1 */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		842B08392EBA0465001AC579 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		842B08372EBA0465001AC579 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
+				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
+				842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */,
+				842B08432EBA0465001AC579 /* ViewController.swift in Sources */,
+				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
+				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
+				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
+				842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		842B084F2EBA0466001AC579 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Mukul-Parashar.Re-Hearse-v1";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		842B08502EBA0466001AC579 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Mukul-Parashar.Re-Hearse-v1";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		842B08512EBA0466001AC579 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		842B08522EBA0466001AC579 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		842B08362EBA0465001AC579 /* Build configuration list for PBXProject "Re-Hearse_v1" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				842B08512EBA0466001AC579 /* Debug */,
+				842B08522EBA0466001AC579 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		842B084E2EBA0466001AC579 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				842B084F2EBA0466001AC579 /* Debug */,
+				842B08502EBA0466001AC579 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 842B08332EBA0465001AC579 /* Project object */;
+}
