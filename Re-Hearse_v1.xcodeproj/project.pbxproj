@@ -16,6 +16,7 @@
 		842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */; };
 		842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086C2EBA0D65001AC579 /* MainTabBarController.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
+		84DBA8702EBA7816006DF51E /* HomeViewController.swift  .swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift  .swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
 		842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordRecognitionViewController.swift; sourceTree = "<group>"; };
 		842B086C2EBA0D65001AC579 /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		84DBA86F2EBA7816006DF51E /* HomeViewController.swift  .swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeViewController.swift  .swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -113,10 +115,10 @@
 		842B085A2EBA09B5001AC579 /* Features */ = {
 			isa = PBXGroup;
 			children = (
-				842B08602EBA0A56001AC579 /* Chord_Recognisation */,
+				842B08602EBA0A56001AC579 /* ChordRecognition */,
 				842B085F2EBA0A46001AC579 /* Animation */,
-				842B085E2EBA0A32001AC579 /* Play_Along */,
-				842B085D2EBA0A22001AC579 /* Scan&Play */,
+				842B085E2EBA0A32001AC579 /* PlayAlong */,
+				842B085D2EBA0A22001AC579 /* ScanandPlay */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -138,20 +140,20 @@
 			path = Utilities;
 			sourceTree = "<group>";
 		};
-		842B085D2EBA0A22001AC579 /* Scan&Play */ = {
+		842B085D2EBA0A22001AC579 /* ScanandPlay */ = {
 			isa = PBXGroup;
 			children = (
 				842B08642EBA0BE8001AC579 /* ScanViewController.swift */,
 			);
-			path = "Scan&Play";
+			path = ScanandPlay;
 			sourceTree = "<group>";
 		};
-		842B085E2EBA0A32001AC579 /* Play_Along */ = {
+		842B085E2EBA0A32001AC579 /* PlayAlong */ = {
 			isa = PBXGroup;
 			children = (
 				842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */,
 			);
-			path = Play_Along;
+			path = PlayAlong;
 			sourceTree = "<group>";
 		};
 		842B085F2EBA0A46001AC579 /* Animation */ = {
@@ -162,12 +164,12 @@
 			path = Animation;
 			sourceTree = "<group>";
 		};
-		842B08602EBA0A56001AC579 /* Chord_Recognisation */ = {
+		842B08602EBA0A56001AC579 /* ChordRecognition */ = {
 			isa = PBXGroup;
 			children = (
 				842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */,
 			);
-			path = Chord_Recognisation;
+			path = ChordRecognition;
 			sourceTree = "<group>";
 		};
 		842B08612EBA0B1C001AC579 /* UI_Components */ = {
@@ -215,6 +217,7 @@
 		84DBA85C2EBA735F006DF51E /* MainHomeScreen */ = {
 			isa = PBXGroup;
 			children = (
+				84DBA86F2EBA7816006DF51E /* HomeViewController.swift  .swift */,
 			);
 			path = MainHomeScreen;
 			sourceTree = "<group>";
@@ -316,6 +319,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
+				84DBA8702EBA7816006DF51E /* HomeViewController.swift  .swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */,
 				842B08432EBA0465001AC579 /* ViewController.swift in Sources */,
