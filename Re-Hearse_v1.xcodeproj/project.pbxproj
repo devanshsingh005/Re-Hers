@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		842B08432EBA0465001AC579 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08422EBA0465001AC579 /* ViewController.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
@@ -20,6 +21,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B08422EBA0465001AC579 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
@@ -210,6 +212,7 @@
 		84DBA85B2EBA7315006DF51E /* MainExploreScreen */ = {
 			isa = PBXGroup;
 			children = (
+				2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */,
 			);
 			path = MainExploreScreen;
 			sourceTree = "<group>";
@@ -325,6 +328,7 @@
 				842B08432EBA0465001AC579 /* ViewController.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
+				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
 				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
 				842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */,
 			);
