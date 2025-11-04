@@ -66,6 +66,7 @@
 		842B08322EBA0465001AC579 = {
 			isa = PBXGroup;
 			children = (
+				84DBA8592EBA72C7006DF51E /* Screens */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
 				842B085C2EBA09DD001AC579 /* Utilities */,
 				842B085B2EBA09C6001AC579 /* Common */,
@@ -190,6 +191,53 @@
 			children = (
 			);
 			path = Managers;
+			sourceTree = "<group>";
+		};
+		84DBA8592EBA72C7006DF51E /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				84DBA8602EBA7420006DF51E /* MainPlaylistScreen */,
+				84DBA85F2EBA73F7006DF51E /* MainChordRecognitionScreen */,
+				84DBA85E2EBA7394006DF51E /* MainPlayAlongScreen */,
+				84DBA85C2EBA735F006DF51E /* MainHomeScreen */,
+				84DBA85B2EBA7315006DF51E /* MainExploreScreen */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		84DBA85B2EBA7315006DF51E /* MainExploreScreen */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = MainExploreScreen;
+			sourceTree = "<group>";
+		};
+		84DBA85C2EBA735F006DF51E /* MainHomeScreen */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = MainHomeScreen;
+			sourceTree = "<group>";
+		};
+		84DBA85E2EBA7394006DF51E /* MainPlayAlongScreen */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = MainPlayAlongScreen;
+			sourceTree = "<group>";
+		};
+		84DBA85F2EBA73F7006DF51E /* MainChordRecognitionScreen */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = MainChordRecognitionScreen;
+			sourceTree = "<group>";
+		};
+		84DBA8602EBA7420006DF51E /* MainPlaylistScreen */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = MainPlaylistScreen;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
