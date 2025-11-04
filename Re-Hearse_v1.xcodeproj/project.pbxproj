@@ -128,7 +128,7 @@
 			children = (
 				842B08632EBA0B45001AC579 /* Managers */,
 				842B08622EBA0B34001AC579 /* Music_Components */,
-				842B08612EBA0B1C001AC579 /* UI_Components */,
+				842B08612EBA0B1C001AC579 /* UIComponents */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -172,11 +172,11 @@
 			path = ChordRecognition;
 			sourceTree = "<group>";
 		};
-		842B08612EBA0B1C001AC579 /* UI_Components */ = {
+		842B08612EBA0B1C001AC579 /* UIComponents */ = {
 			isa = PBXGroup;
 			children = (
 			);
-			path = UI_Components;
+			path = UIComponents;
 			sourceTree = "<group>";
 		};
 		842B08622EBA0B34001AC579 /* Music_Components */ = {
