@@ -101,7 +101,8 @@ class HomeViewController: UIViewController {
     // MARK: - Daily Goal
     private func addDailyGoal() {
         let container = UIView()
-        container.backgroundColor = UIColor(white: 0.95, alpha: 1)
+        container.backgroundColor = UIColor.black.withAlphaComponent(0.8) // light → dark adapts automatically
+
         container.layer.cornerRadius = 20
         container.translatesAutoresizingMaskIntoConstraints = false
         container.heightAnchor.constraint(equalToConstant: 48).isActive = true
@@ -109,14 +110,18 @@ class HomeViewController: UIViewController {
         let label = UILabel()
         label.text = "Daily goal"
         label.font = .systemFont(ofSize: 14, weight: .regular)
-        
+        label.textColor = .white                      // ✅ White text
+
         let progress = UIProgressView()
         progress.progress = 0.7
+        progress.progressTintColor = .systemGreen     // ✅ Green progress
+        progress.trackTintColor = UIColor.white.withAlphaComponent(0.2)
         progress.translatesAutoresizingMaskIntoConstraints = false
-        
+
         let time = UILabel()
         time.text = "20 mins"
         time.font = .systemFont(ofSize: 12)
+        time.textColor = .white
 
         container.addSubview(label)
         container.addSubview(progress)
@@ -140,17 +145,18 @@ class HomeViewController: UIViewController {
         contentView.addArrangedSubview(container)
     }
 
+    
     // MARK: - Continue Card
     // MARK: - Continue Card
     private func addContinueCard() {
         let card = UIView()
-        card.backgroundColor = UIColor(white: 0.08, alpha: 1)
+        card.backgroundColor = UIColor.black.withAlphaComponent(0.8)
         card.layer.cornerRadius = 22
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Album cover image
         let image = UIImageView()
-        if let imageAsset = UIImage(named: "fur_elise") {
+        if let imageAsset = UIImage(named: "ride_home") {
             image.image = imageAsset
         } else {
             // Fallback placeholder
@@ -161,100 +167,143 @@ class HomeViewController: UIViewController {
         image.contentMode = .scaleAspectFill
         image.translatesAutoresizingMaskIntoConstraints = false
         
-        // Title label - "Continue: Fur Elise"
+        // Title and subtitle stack (aligned with image top)
         let title = UILabel()
-        title.text = "Continue: Fur Elise"
+        title.text = "Continue: Ride Home"
         title.textColor = .white
         title.font = .systemFont(ofSize: 19, weight: .bold)
         title.numberOfLines = 1
         
-        // Subtitle label - "Bars 5-6 | Right-Hand focus"
         let subtitle = UILabel()
         subtitle.text = "Bars 5-6 | Right-Hand focus"
         subtitle.textColor = UIColor(white: 0.7, alpha: 1)
         subtitle.font = .systemFont(ofSize: 13, weight: .regular)
         subtitle.numberOfLines = 1
         
-        // Tags - Left aligned
-        let tag1 = UILabel()
-        tag1.text = "Right-Hand dexterity"
-        tag1.textColor = UIColor(white: 0.7, alpha: 1)
-        tag1.font = .systemFont(ofSize: 13, weight: .regular)
+        let titleStack = UIStackView(arrangedSubviews: [title, subtitle])
+        titleStack.axis = .vertical
+        titleStack.spacing = 4
+        titleStack.alignment = .leading
         
-        let tag2 = UILabel()
-        tag2.text = "Accuracy"
-        tag2.textColor = UIColor(white: 0.7, alpha: 1)
-        tag2.font = .systemFont(ofSize: 13, weight: .regular)
+        // Top row: Image + Title/Subtitle
+        let topRow = UIStackView(arrangedSubviews: [image, titleStack])
+        topRow.axis = .horizontal
+        topRow.spacing = 12
+        topRow.alignment = .top
+        
+        // Tags with white oval background - VERTICAL STACK
+        let tag1 = createTagLabel("Right-Hand dexterity")
+        let tag2 = createTagLabel("Accuracy 80%")
         
         let tagsStack = UIStackView(arrangedSubviews: [tag1, tag2])
         tagsStack.axis = .vertical
         tagsStack.spacing = 6
         tagsStack.alignment = .leading
         
-        // Progress bar
+        // Progress bar - full width
         let progressView = UIProgressView()
         progressView.progress = 0.4
         progressView.progressTintColor = .white
-        progressView.trackTintColor = UIColor(white: 0.2, alpha: 1)
+        progressView.trackTintColor = UIColor(white: 0.3, alpha: 1)
         progressView.layer.cornerRadius = 2
         progressView.clipsToBounds = true
         
-        // Buttons
+        // Buttons - equally spaced and big
         let continueBtn = createFilledButton("Continue")
         let playBtn = createBorderedButton("Play Along")
         
         let buttonStack = UIStackView(arrangedSubviews: [continueBtn, playBtn])
         buttonStack.axis = .horizontal
-        buttonStack.spacing = 16
+        buttonStack.spacing = 12
         buttonStack.distribution = .fillEqually
         
-        // Right side content stack with more spacing
-        let rightContentStack = UIStackView(arrangedSubviews: [
-            title,
-            subtitle,
+        // Spacer views to create proper gaps
+        let spacer1 = UIView()
+        spacer1.setContentHuggingPriority(.defaultLow, for: .vertical)
+        
+        let spacer2 = UIView()
+        spacer2.setContentHuggingPriority(.defaultLow, for: .vertical)
+        
+        let spacer3 = UIView()
+        spacer3.setContentHuggingPriority(.defaultLow, for: .vertical)
+        
+        // Main vertical stack with proper spacing
+        let mainStack = UIStackView(arrangedSubviews: [
+            topRow,
+            spacer1,      // Gap after top row
             tagsStack,
+            spacer2,      // Gap after tags
             progressView,
-            UIView(), // Flexible spacer
+            spacer3,      // Gap after progress bar
             buttonStack
         ])
-        rightContentStack.axis = .vertical
-        rightContentStack.spacing = 16
-        rightContentStack.alignment = .leading
-        rightContentStack.translatesAutoresizingMaskIntoConstraints = false
+        mainStack.axis = .vertical
+        mainStack.spacing = 0
+        mainStack.alignment = .fill
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
         
-        card.addSubview(image)
-        card.addSubview(rightContentStack)
+        card.addSubview(mainStack)
 
         NSLayoutConstraint.activate([
-            // Card constraints - taller for more space
-            card.heightAnchor.constraint(equalToConstant: 260),
+            // Card constraints - larger card
+            card.heightAnchor.constraint(equalToConstant: 300),
             
-            // Image constraints - larger image with more space
-            image.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            image.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
+            // Main stack constraints
+            mainStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            mainStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            mainStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
+            mainStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -24),
+            
+            // Image constraints
             image.widthAnchor.constraint(equalToConstant: 80),
             image.heightAnchor.constraint(equalToConstant: 80),
             
-            // Right content stack constraints - more padding
-            rightContentStack.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 16),
-            rightContentStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            rightContentStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
-            rightContentStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -24),
+            // Spacer constraints for proper gaps
+            spacer1.heightAnchor.constraint(equalToConstant: 16), // Gap between topRow and tags
+            spacer2.heightAnchor.constraint(equalToConstant: 12), // Gap between tags and progress bar
+            spacer3.heightAnchor.constraint(equalToConstant: 20), // Gap between progress and buttons
             
-            // Progress bar width
-            progressView.widthAnchor.constraint(equalTo: rightContentStack.widthAnchor),
+            // Progress bar height
             progressView.heightAnchor.constraint(equalToConstant: 4),
             
-            // Button constraints - slightly larger buttons
-            continueBtn.heightAnchor.constraint(equalToConstant: 48),
-            playBtn.heightAnchor.constraint(equalToConstant: 48),
-            continueBtn.widthAnchor.constraint(equalTo: playBtn.widthAnchor)
+            // Button constraints
+            continueBtn.heightAnchor.constraint(equalToConstant: 52),
+            playBtn.heightAnchor.constraint(equalToConstant: 52),
+            
+            // Tag height constraints
+            tag1.heightAnchor.constraint(equalToConstant: 24),
+            tag2.heightAnchor.constraint(equalToConstant: 24)
         ])
         
         contentView.addArrangedSubview(card)
     }
 
     // MARK: - Helper Methods
+    private func createTagLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.textColor = .black
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.backgroundColor = .white
+        label.layer.cornerRadius = 12 // Oval shape
+        label.clipsToBounds = true
+        label.textAlignment = .center
+        
+        // Add padding using constraints for longer ovals
+        label.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Calculate approximate width based on text length
+        let padding: CGFloat = 16 // Increased from default for longer ovals
+        let textSize = text.size(withAttributes: [.font: label.font!])
+        let labelWidth = textSize.width + (padding * 2)
+        
+        NSLayoutConstraint.activate([
+            label.heightAnchor.constraint(equalToConstant: 24),
+            label.widthAnchor.constraint(equalToConstant: labelWidth) // Fixed width for consistent oval shape
+        ])
+        
+        return label
+    }
     private func createFilledButton(_ title: String) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
@@ -262,6 +311,7 @@ class HomeViewController: UIViewController {
         button.backgroundColor = .systemOrange
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         button.layer.cornerRadius = 12
+        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
         return button
     }
 
@@ -274,47 +324,120 @@ class HomeViewController: UIViewController {
         button.layer.borderColor = UIColor(white: 0.3, alpha: 1).cgColor
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         button.layer.cornerRadius = 12
+        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
         return button
     }
+
    
 
     // MARK: - Continue Learning Section
+    // MARK: - Continue Learning Section
     private func addContinueLearningSection() {
-        let label = UILabel()
-        label.text = "Continue Learning"
-        label.font = .systemFont(ofSize: 18, weight: .semibold)
-        contentView.addArrangedSubview(label)
+        let sectionHeader = UILabel()
+        sectionHeader.text = "Continue Learning"
+        sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
+        sectionHeader.textColor = .black;        contentView.addArrangedSubview(sectionHeader)
         
-        let scroll = UIScrollView()
-        scroll.showsHorizontalScrollIndicator = false
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        // Add some spacing after header
+        let headerSpacer = UIView()
+        headerSpacer.translatesAutoresizingMaskIntoConstraints = false
+        headerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        contentView.addArrangedSubview(headerSpacer)
         
-        let stack = UIStackView()
-        stack.axis = .horizontal
-        stack.spacing = 14
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        let scrollView = UIScrollView()
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         
-        scroll.addSubview(stack)
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.spacing = 16
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        
+        scrollView.addSubview(stackView)
+        
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: scroll.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
-            stack.heightAnchor.constraint(equalToConstant: 150)
+            stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor)
         ])
         
-        ["arrival","meridian","classic"].forEach { name in
-            let img = UIImageView(image: UIImage(named: name))
-            img.layer.cornerRadius = 12
-            img.clipsToBounds = true
-            img.contentMode = .scaleAspectFill
-            img.widthAnchor.constraint(equalToConstant: 140).isActive = true
-            img.heightAnchor.constraint(equalToConstant: 150).isActive = true
-            stack.addArrangedSubview(img)
+        // Array of 8 image names for the carousel
+        let imageNames = ["cl_1", "cl_2", "ride_home", "cl_1", "cl_2", "ride_home", "cl_1", "cl_2"]
+        
+        // Add 8 image cards to the carousel
+        imageNames.forEach { name in
+            let cardView = createImageCard(imageName: name, title: getTitleForImage(name))
+            stackView.addArrangedSubview(cardView)
         }
         
-        contentView.addArrangedSubview(scroll)
-        scroll.heightAnchor.constraint(equalToConstant: 150).isActive = true
+        contentView.addArrangedSubview(scrollView)
+        scrollView.heightAnchor.constraint(equalToConstant: 180).isActive = true
+    }
+
+    // Helper method to create image cards with titles
+    private func createImageCard(imageName: String, title: String) -> UIView {
+        let card = UIView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.layer.cornerRadius = 12
+        card.clipsToBounds = true
+        
+        let imageView = UIImageView()
+        if let image = UIImage(named: imageName) {
+            imageView.image = image
+        } else {
+            // Fallback placeholder
+            imageView.backgroundColor = UIColor(white: 0.15, alpha: 1)
+            imageView.image = UIImage(systemName: "music.note")?
+                .withTintColor(.white, renderingMode: .alwaysOriginal)
+        }
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.textColor = .white
+        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        titleLabel.textAlignment = .center
+        titleLabel.backgroundColor = UIColor(white: 0, alpha: 0.7)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        card.addSubview(imageView)
+        card.addSubview(titleLabel)
+        
+        NSLayoutConstraint.activate([
+            card.widthAnchor.constraint(equalToConstant: 140),
+            card.heightAnchor.constraint(equalToConstant: 160),
+            
+            imageView.topAnchor.constraint(equalTo: card.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            
+            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            titleLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            titleLabel.heightAnchor.constraint(equalToConstant: 32)
+        ])
+        
+        return card
+    }
+
+    // Helper method to get titles for images
+    private func getTitleForImage(_ imageName: String) -> String {
+        let titles: [String: String] = [
+            "arrival": "The Arrival",
+            "meridian": "Meridian",
+            "classic": "Classic Suite",
+            "fur_elise": "Fur Elise",
+            "nocturne": "Nocturne",
+            "sonata": "Moonlight Sonata",
+            "prelude": "Prelude",
+            "rhapsody": "Rhapsody"
+        ]
+        return titles[imageName] ?? imageName.capitalized
     }
 
     // MARK: - Upload Section

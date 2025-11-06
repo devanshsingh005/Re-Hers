@@ -22,7 +22,7 @@
 		842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */; };
 		842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086C2EBA0D65001AC579 /* MainTabBarController.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
-		84DBA8702EBA7816006DF51E /* HomeViewController.swift  .swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift  .swift */; };
+		84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,7 +42,7 @@
 		842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordRecognitionViewController.swift; sourceTree = "<group>"; };
 		842B086C2EBA0D65001AC579 /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
-		84DBA86F2EBA7816006DF51E /* HomeViewController.swift  .swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeViewController.swift  .swift"; sourceTree = "<group>"; };
+		84DBA86F2EBA7816006DF51E /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -259,7 +259,7 @@
 		84DBA85C2EBA735F006DF51E /* MainHomeScreen */ = {
 			isa = PBXGroup;
 			children = (
-				84DBA86F2EBA7816006DF51E /* HomeViewController.swift  .swift */,
+				84DBA86F2EBA7816006DF51E /* HomeViewController.swift */,
 			);
 			path = MainHomeScreen;
 			sourceTree = "<group>";
@@ -361,7 +361,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
-				84DBA8702EBA7816006DF51E /* HomeViewController.swift  .swift in Sources */,
+				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */,
 				84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
