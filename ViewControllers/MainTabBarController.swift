@@ -1,4 +1,4 @@
-import Foundation
+/*import Foundation
 import UIKit
 
 class MainTabBarController: UITabBarController {
@@ -65,3 +65,4 @@ class MainTabBarController: UITabBarController {
         tabBar.backgroundColor = .systemGray6
     }
 }
+*/
