@@ -141,83 +141,142 @@ class HomeViewController: UIViewController {
     }
 
     // MARK: - Continue Card
+    // MARK: - Continue Card
     private func addContinueCard() {
         let card = UIView()
         card.backgroundColor = UIColor(white: 0.08, alpha: 1)
         card.layer.cornerRadius = 22
         card.translatesAutoresizingMaskIntoConstraints = false
 
-        let image = UIImageView(image: UIImage(named: "fur_elise"))
+        // Album cover image
+        let image = UIImageView()
+        if let imageAsset = UIImage(named: "fur_elise") {
+            image.image = imageAsset
+        } else {
+            // Fallback placeholder
+            image.backgroundColor = UIColor(white: 0.15, alpha: 1)
+        }
         image.layer.cornerRadius = 10
         image.clipsToBounds = true
         image.contentMode = .scaleAspectFill
         image.translatesAutoresizingMaskIntoConstraints = false
         
+        // Title label - "Continue: Fur Elise"
         let title = UILabel()
         title.text = "Continue: Fur Elise"
         title.textColor = .white
         title.font = .systemFont(ofSize: 19, weight: .bold)
+        title.numberOfLines = 1
         
+        // Subtitle label - "Bars 5-6 | Right-Hand focus"
         let subtitle = UILabel()
         subtitle.text = "Bars 5-6 | Right-Hand focus"
-        subtitle.textColor = .lightGray
-        subtitle.font = .systemFont(ofSize: 13)
+        subtitle.textColor = UIColor(white: 0.7, alpha: 1)
+        subtitle.font = .systemFont(ofSize: 13, weight: .regular)
+        subtitle.numberOfLines = 1
         
-        let tag1 = tagLabel("Right-Hand dexterity")
-        let tag2 = tagLabel("Accuracy")
+        // Tags - Left aligned
+        let tag1 = UILabel()
+        tag1.text = "Right-Hand dexterity"
+        tag1.textColor = UIColor(white: 0.7, alpha: 1)
+        tag1.font = .systemFont(ofSize: 13, weight: .regular)
         
-        let buttonStack = UIStackView()
+        let tag2 = UILabel()
+        tag2.text = "Accuracy"
+        tag2.textColor = UIColor(white: 0.7, alpha: 1)
+        tag2.font = .systemFont(ofSize: 13, weight: .regular)
+        
+        let tagsStack = UIStackView(arrangedSubviews: [tag1, tag2])
+        tagsStack.axis = .vertical
+        tagsStack.spacing = 6
+        tagsStack.alignment = .leading
+        
+        // Progress bar
+        let progressView = UIProgressView()
+        progressView.progress = 0.4
+        progressView.progressTintColor = .white
+        progressView.trackTintColor = UIColor(white: 0.2, alpha: 1)
+        progressView.layer.cornerRadius = 2
+        progressView.clipsToBounds = true
+        
+        // Buttons
+        let continueBtn = createFilledButton("Continue")
+        let playBtn = createBorderedButton("Play Along")
+        
+        let buttonStack = UIStackView(arrangedSubviews: [continueBtn, playBtn])
         buttonStack.axis = .horizontal
-        buttonStack.spacing = 12
+        buttonStack.spacing = 16
         buttonStack.distribution = .fillEqually
         
-        let continueBtn = buttonFilled("Continue")
-        let playBtn = buttonGhost("Play Along")
-        
-        buttonStack.addArrangedSubview(continueBtn)
-        buttonStack.addArrangedSubview(playBtn)
-        
-        let textStack = UIStackView(arrangedSubviews: [
-            title, subtitle
+        // Right side content stack with more spacing
+        let rightContentStack = UIStackView(arrangedSubviews: [
+            title,
+            subtitle,
+            tagsStack,
+            progressView,
+            UIView(), // Flexible spacer
+            buttonStack
         ])
-        textStack.axis = .vertical
-        textStack.spacing = 4
-        
-        let tagsStack = UIStackView(arrangedSubviews: [
-            tag1, tag2
-        ])
-        tagsStack.axis = .horizontal
-        tagsStack.spacing = 8
-        
-        let main = UIStackView(arrangedSubviews: [
-            textStack, tagsStack, buttonStack
-        ])
-        main.axis = .vertical
-        main.spacing = 16
-        main.translatesAutoresizingMaskIntoConstraints = false
+        rightContentStack.axis = .vertical
+        rightContentStack.spacing = 16
+        rightContentStack.alignment = .leading
+        rightContentStack.translatesAutoresizingMaskIntoConstraints = false
         
         card.addSubview(image)
-        card.addSubview(main)
+        card.addSubview(rightContentStack)
 
         NSLayoutConstraint.activate([
-            card.heightAnchor.constraint(equalToConstant: 220),
+            // Card constraints - taller for more space
+            card.heightAnchor.constraint(equalToConstant: 260),
             
+            // Image constraints - larger image with more space
             image.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            image.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            image.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
             image.widthAnchor.constraint(equalToConstant: 80),
             image.heightAnchor.constraint(equalToConstant: 80),
             
-            main.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 16),
-            main.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            main.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            main.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20),
+            // Right content stack constraints - more padding
+            rightContentStack.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 16),
+            rightContentStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            rightContentStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
+            rightContentStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -24),
             
-            continueBtn.heightAnchor.constraint(equalToConstant: 44),
-            playBtn.heightAnchor.constraint(equalToConstant: 44)
+            // Progress bar width
+            progressView.widthAnchor.constraint(equalTo: rightContentStack.widthAnchor),
+            progressView.heightAnchor.constraint(equalToConstant: 4),
+            
+            // Button constraints - slightly larger buttons
+            continueBtn.heightAnchor.constraint(equalToConstant: 48),
+            playBtn.heightAnchor.constraint(equalToConstant: 48),
+            continueBtn.widthAnchor.constraint(equalTo: playBtn.widthAnchor)
         ])
         
         contentView.addArrangedSubview(card)
     }
+
+    // MARK: - Helper Methods
+    private func createFilledButton(_ title: String) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.backgroundColor = .systemOrange
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        button.layer.cornerRadius = 12
+        return button
+    }
+
+    private func createBorderedButton(_ title: String) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.backgroundColor = .clear
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor(white: 0.3, alpha: 1).cgColor
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        button.layer.cornerRadius = 12
+        return button
+    }
+   
 
     // MARK: - Continue Learning Section
     private func addContinueLearningSection() {
