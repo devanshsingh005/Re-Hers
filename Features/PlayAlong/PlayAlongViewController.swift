@@ -12,6 +12,6 @@ class PlayAlongViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "Play Along"
+        title = "Play"
     }
 }

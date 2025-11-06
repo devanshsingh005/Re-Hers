@@ -12,6 +12,6 @@ class AnimationViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "Animation Video"
+        title = "Animation"
     }
 }

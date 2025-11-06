@@ -12,6 +12,6 @@ class ScanViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "Scan & Play"
+        title = "Scan"
     }
 }
