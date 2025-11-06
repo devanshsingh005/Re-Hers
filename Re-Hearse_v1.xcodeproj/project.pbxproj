@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
-		842B08432EBA0465001AC579 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08422EBA0465001AC579 /* ViewController.swift */; };
+		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
+		84114B6C2EBCF6A000E86F71 /* TopNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */; };
+		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
 		842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08642EBA0BE8001AC579 /* ScanViewController.swift */; };
@@ -22,8 +24,10 @@
 
 /* Begin PBXFileReference section */
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
+		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
+		84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TopNavbar.swift; path = Common/TopNavbar.swift; sourceTree = SOURCE_ROOT; };
+		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BottomNavbar.swift; path = Common/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		842B08422EBA0465001AC579 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
 		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
 		842B08642EBA0BE8001AC579 /* ScanViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanViewController.swift; sourceTree = "<group>"; };
@@ -67,6 +71,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		84114B682EBCF66100E86F71 /* ScanandPlay */ = {
+			isa = PBXGroup;
+			children = (
+				84114B692EBCF68300E86F71 /* uploadScreen.swift */,
+			);
+			path = ScanandPlay;
+			sourceTree = "<group>";
+		};
 		842B08322EBA0465001AC579 = {
 			isa = PBXGroup;
 			children = (
@@ -94,7 +106,6 @@
 		842B08532EBA0543001AC579 /* ViewControllers */ = {
 			isa = PBXGroup;
 			children = (
-				842B08422EBA0465001AC579 /* ViewController.swift */,
 				842B086C2EBA0D65001AC579 /* MainTabBarController.swift */,
 			);
 			path = ViewControllers;
@@ -177,6 +188,8 @@
 		842B08612EBA0B1C001AC579 /* UIComponents */ = {
 			isa = PBXGroup;
 			children = (
+				84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */,
+				84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */,
 			);
 			path = UIComponents;
 			sourceTree = "<group>";
@@ -200,6 +213,7 @@
 		84DBA8592EBA72C7006DF51E /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				84114B682EBCF66100E86F71 /* ScanandPlay */,
 				84DBA8602EBA7420006DF51E /* MainPlaylistScreen */,
 				84DBA85F2EBA73F7006DF51E /* MainChordRecognitionScreen */,
 				84DBA85E2EBA7394006DF51E /* MainPlayAlongScreen */,
@@ -323,9 +337,11 @@
 			files = (
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				84DBA8702EBA7816006DF51E /* HomeViewController.swift  .swift in Sources */,
+				84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */,
+				84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */,
-				842B08432EBA0465001AC579 /* ViewController.swift in Sources */,
+				84114B6C2EBCF6A000E86F71 /* TopNavbar.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
