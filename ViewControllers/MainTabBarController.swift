@@ -1,69 +1,67 @@
-//
-//  MainTabBarController.swift
-//  Re-Hearse_v1
-//
-//  Created by admin20 on 04/11/25
-//
-
+import Foundation
 import UIKit
 
 class MainTabBarController: UITabBarController {
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        configureTabBar()
-        setupViewControllers()
+        setupTabs()
+        setupAppearance()
     }
     
-    // MARK: - Tab Bar UI Setup
-    private func configureTabBar() {
-        tabBar.tintColor = UIColor.systemYellow          // Active icon
-        tabBar.unselectedItemTintColor = .systemGray3    // Inactive icon
-        
-        tabBar.backgroundColor = .systemBackground       // Modern iOS look
-        tabBar.isTranslucent = true
-        
-        // Extra safe padding for devices with Home indicator
-        if let tabBarLayer = tabBar.layer.sublayers?.first {
-            tabBarLayer.masksToBounds = true
-            tabBar.layer.cornerRadius = 18
-            tabBar.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        }
-        
-        // Slight shadow for elevation effect
-        tabBar.layer.shadowColor = UIColor.black.cgColor
-        tabBar.layer.shadowOpacity = 0.08
-        tabBar.layer.shadowOffset = CGSize(width: 0, height: -2)
-        tabBar.layer.shadowRadius = 6
-    }
-
-    // MARK: - Add Screens
-    private func setupViewControllers() {
+    private func setupTabs() {
+        // Home Tab
         let homeVC = HomeViewController()
-        let scanVC = ScanViewController()
-        let animationVC = AnimationViewController()
-        let playVC = PlayAlongViewController()
+        let homeNav = UINavigationController(rootViewController: homeVC)
+        homeNav.tabBarItem = UITabBarItem(
+            title: "Home",
+            image: UIImage(systemName: "house"),
+            selectedImage: UIImage(systemName: "house.fill")
+        )
+        
+        // Upload Tab (Your new screen!)
+        let uploadVC = UploadScreen()
+        let uploadNav = UINavigationController(rootViewController: uploadVC)
+        uploadNav.tabBarItem = UITabBarItem(
+            title: "Upload",
+            image: UIImage(systemName: "plus.square"),
+            selectedImage: UIImage(systemName: "plus.square.fill")
+        )
+        
+        // Explore Tab
+        let exploreVC = ExploreViewController()
+        let exploreNav = UINavigationController(rootViewController: exploreVC)
+        exploreNav.tabBarItem = UITabBarItem(
+            title: "Explore",
+            image: UIImage(systemName: "magnifyingglass"),
+            selectedImage: UIImage(systemName: "magnifyingglass")
+        )
+        
+        // Play Along Tab
+        let playAlongVC = PlayAlongViewController()
+        let playAlongNav = UINavigationController(rootViewController: playAlongVC)
+        playAlongNav.tabBarItem = UITabBarItem(
+            title: "Play",
+            image: UIImage(systemName: "music.note"),
+            selectedImage: UIImage(systemName: "music.note")
+        )
+        
+        // Chord Recognition Tab
         let chordVC = ChordRecognitionViewController()
-
-        viewControllers = [
-            createNavController(for: homeVC,      title: "Home",       icon: "house.fill"),
-            createNavController(for: scanVC,      title: "Scan",       icon: "camera.viewfinder"),
-            createNavController(for: animationVC, title: "Tutorials",  icon: "play.rectangle.fill"),
-            createNavController(for: playVC,      title: "Play Along", icon: "music.note.list"),
-            createNavController(for: chordVC,     title: "Chords",     icon: "pianokeys")
-        ]
+        let chordNav = UINavigationController(rootViewController: chordVC)
+        chordNav.tabBarItem = UITabBarItem(
+            title: "Chords",
+            image: UIImage(systemName: "pianokeys"),
+            selectedImage: UIImage(systemName: "pianokeys")
+        )
+        
+        // Set all view controllers
+        viewControllers = [homeNav, uploadNav, exploreNav, playAlongNav, chordNav]
     }
-
-    // MARK: - Helper
-    private func createNavController(for vc: UIViewController, title: String, icon: String) -> UINavigationController {
-        let nav = UINavigationController(rootViewController: vc)
-        nav.tabBarItem.title = title
-        nav.tabBarItem.image = UIImage(systemName: icon)
-        
-        // Optional: hide nav bar title for modern UI
-        vc.navigationItem.largeTitleDisplayMode = .always
-        nav.navigationBar.prefersLargeTitles = true
-        
-        return nav
+    
+    private func setupAppearance() {
+        tabBar.tintColor = UIColor(red: 0.96, green: 0.71, blue: 0.34, alpha: 1.0)
+        tabBar.unselectedItemTintColor = .systemGray
+        tabBar.backgroundColor = .systemGray6
     }
 }

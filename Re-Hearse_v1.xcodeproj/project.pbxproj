@@ -11,6 +11,9 @@
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
 		84114B6C2EBCF6A000E86F71 /* TopNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
+		84114B742EBCFEEE00E86F71 /* TopNavbar+Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B732EBCFEEE00E86F71 /* TopNavbar+Models.swift */; };
+		84114B762EBCFF1C00E86F71 /* TopNavbar+Hooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B752EBCFF1C00E86F71 /* TopNavbar+Hooks.swift */; };
+		84114B782EBD03CD00E86F71 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B772EBD03CD00E86F71 /* ProfileViewController.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
 		842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08642EBA0BE8001AC579 /* ScanViewController.swift */; };
@@ -27,6 +30,9 @@
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
 		84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TopNavbar.swift; path = Common/TopNavbar.swift; sourceTree = SOURCE_ROOT; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BottomNavbar.swift; path = Common/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
+		84114B732EBCFEEE00E86F71 /* TopNavbar+Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TopNavbar+Models.swift"; sourceTree = "<group>"; };
+		84114B752EBCFF1C00E86F71 /* TopNavbar+Hooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TopNavbar+Hooks.swift"; sourceTree = "<group>"; };
+		84114B772EBD03CD00E86F71 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
 		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
@@ -71,12 +77,40 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		84114B682EBCF66100E86F71 /* ScanandPlay */ = {
+		84114B682EBCF66100E86F71 /* MainUplaodScreen */ = {
 			isa = PBXGroup;
 			children = (
 				84114B692EBCF68300E86F71 /* uploadScreen.swift */,
+				84114B772EBD03CD00E86F71 /* ProfileViewController.swift */,
 			);
-			path = ScanandPlay;
+			path = MainUplaodScreen;
+			sourceTree = "<group>";
+		};
+		84114B702EBCFE4900E86F71 /* UIComponents */ = {
+			isa = PBXGroup;
+			children = (
+				84114B722EBCFE6400E86F71 /* BottomNavbar */,
+				84114B712EBCFE5800E86F71 /* TopNavbar */,
+			);
+			path = UIComponents;
+			sourceTree = "<group>";
+		};
+		84114B712EBCFE5800E86F71 /* TopNavbar */ = {
+			isa = PBXGroup;
+			children = (
+				84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */,
+				84114B732EBCFEEE00E86F71 /* TopNavbar+Models.swift */,
+				84114B752EBCFF1C00E86F71 /* TopNavbar+Hooks.swift */,
+			);
+			path = TopNavbar;
+			sourceTree = "<group>";
+		};
+		84114B722EBCFE6400E86F71 /* BottomNavbar */ = {
+			isa = PBXGroup;
+			children = (
+				84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */,
+			);
+			path = BottomNavbar;
 			sourceTree = "<group>";
 		};
 		842B08322EBA0465001AC579 = {
@@ -84,9 +118,9 @@
 			children = (
 				84DBA8592EBA72C7006DF51E /* Screens */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
-				842B085C2EBA09DD001AC579 /* Utilities */,
 				842B085B2EBA09C6001AC579 /* Common */,
 				842B085A2EBA09B5001AC579 /* Features */,
+				842B085C2EBA09DD001AC579 /* Utilities */,
 				842B08552EBA0589001AC579 /* Models */,
 				842B08542EBA057B001AC579 /* Views */,
 				842B08532EBA0543001AC579 /* ViewControllers */,
@@ -139,9 +173,9 @@
 		842B085B2EBA09C6001AC579 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				84114B702EBCFE4900E86F71 /* UIComponents */,
 				842B08632EBA0B45001AC579 /* Managers */,
 				842B08622EBA0B34001AC579 /* Music_Components */,
-				842B08612EBA0B1C001AC579 /* UIComponents */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -185,15 +219,6 @@
 			path = ChordRecognition;
 			sourceTree = "<group>";
 		};
-		842B08612EBA0B1C001AC579 /* UIComponents */ = {
-			isa = PBXGroup;
-			children = (
-				84114B6B2EBCF6A000E86F71 /* TopNavbar.swift */,
-				84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */,
-			);
-			path = UIComponents;
-			sourceTree = "<group>";
-		};
 		842B08622EBA0B34001AC579 /* Music_Components */ = {
 			isa = PBXGroup;
 			children = (
@@ -213,7 +238,7 @@
 		84DBA8592EBA72C7006DF51E /* Screens */ = {
 			isa = PBXGroup;
 			children = (
-				84114B682EBCF66100E86F71 /* ScanandPlay */,
+				84114B682EBCF66100E86F71 /* MainUplaodScreen */,
 				84DBA8602EBA7420006DF51E /* MainPlaylistScreen */,
 				84DBA85F2EBA73F7006DF51E /* MainChordRecognitionScreen */,
 				84DBA85E2EBA7394006DF51E /* MainPlayAlongScreen */,
@@ -342,8 +367,11 @@
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */,
 				84114B6C2EBCF6A000E86F71 /* TopNavbar.swift in Sources */,
+				84114B782EBD03CD00E86F71 /* ProfileViewController.swift in Sources */,
+				84114B742EBCFEEE00E86F71 /* TopNavbar+Models.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
+				84114B762EBCFF1C00E86F71 /* TopNavbar+Hooks.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
 				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
 				842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */,
