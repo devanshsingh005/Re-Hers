@@ -48,9 +48,9 @@ class MainTabBarController: UITabBarController {
         let playAlongVC = PlayAlongViewController()
         let playAlongNav = UINavigationController(rootViewController: playAlongVC)
         playAlongNav.tabBarItem = UITabBarItem(
-            title: "Play",
-            image: UIImage(systemName: "music.note"),
-            selectedImage: UIImage(systemName: "music.note")
+            title: "Playlist",
+            image: UIImage(systemName: "music.note.list"),          // ✅ playlist icon
+                selectedImage: UIImage(systemName: "music.note.list") 
         )
         
         // Chord Recognition Tab
