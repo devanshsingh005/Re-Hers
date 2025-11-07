@@ -63,7 +63,7 @@ class MainTabBarController: UITabBarController {
         )
         
         // Set all view controllers
-        viewControllers = [homeNav, uploadNav, exploreNav, playAlongNav, chordNav]
+        viewControllers = [homeNav, uploadNav, exploreNav, playAlongNav]
     }
     
     private func setupAppearance() {
@@ -87,3 +87,33 @@ class MainTabBarController: UITabBarController {
         }
     }
 }
+
+
+//
+//  BottomNavbar.swift
+//  Re-Hearse_v1
+//
+//  Created by admin20 on 06/11/25.
+//
+
+//
+//  BottomNavbar.swift
+//  Re-Hearse_v1
+//
+//  Created by admin20 on 06/11/25.
+//
+
+//
+//  BottomNavbar.swift
+//  Re-Hearse_v1
+//
+//  Created by admin20 on 06/11/25.
+//
+
+//
+//  BottomNavbar.swift
+//  Re-Hearse_v1
+//
+//  Created by admin20 on 06/11/25.
+//
+
