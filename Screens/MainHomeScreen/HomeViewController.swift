@@ -69,6 +69,7 @@ class HomeViewController: UIViewController {
         
         let dayBadge = UIButton()
         dayBadge.setTitle("🔥 Day 5", for: .normal)
+        dayBadge.setTitleColor(.black, for: .normal)
         dayBadge.titleLabel?.font = .systemFont(ofSize: 14, weight: .bold)
         dayBadge.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
         dayBadge.layer.cornerRadius = 16
@@ -505,3 +506,4 @@ class HomeViewController: UIViewController {
         return btn
     }
 }
+
