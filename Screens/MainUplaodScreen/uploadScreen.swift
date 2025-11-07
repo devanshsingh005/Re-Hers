@@ -6,197 +6,241 @@ class UploadScreen: UIViewController {
     // MARK: - UI Components
     private var topNavBar: TopNavBar!
     private let scrollView = UIScrollView()
-    private let contentView = UIView()
-    private let uploadBox = UIView()
+    private let contentView = UIStackView()
+    private let uploadContainer = UIView()
     private let uploadIcon = UIImageView()
     private let uploadButton = UIButton()
-    private let recentUploadsLabel = UILabel()
-    private let albumStackView = UIStackView()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupConstraints()
+        addContinueLearningSection()
     }
     
+    
+    // MARK: - Setup UI
     private func setupUI() {
         view.backgroundColor = .white
         
-        // Setup TopNavBar using hook
         setupTopNavBar()
         
-        // Setup Scroll View
-        setupScrollView()
+        // ScrollView
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsVerticalScrollIndicator = false
+        view.addSubview(scrollView)
         
-        // Upload Box
-        uploadBox.backgroundColor = .systemGray6
-        uploadBox.layer.cornerRadius = 20
-        uploadBox.translatesAutoresizingMaskIntoConstraints = false
+        // Main vertical layout
+        contentView.axis = .vertical
+        contentView.spacing = 22
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentView)
         
-        // Upload Icon
+        // Upload container with padding
+        uploadContainer.backgroundColor = .systemGray6
+        uploadContainer.layer.cornerRadius = 20
+        uploadContainer.translatesAutoresizingMaskIntoConstraints = false
+        
+        let innerPadding = UIView()
+        innerPadding.translatesAutoresizingMaskIntoConstraints = false
+        uploadContainer.addSubview(innerPadding)
+        
+        // Icon in center
         uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
         uploadIcon.tintColor = .systemGray3
         uploadIcon.contentMode = .scaleAspectFit
         uploadIcon.translatesAutoresizingMaskIntoConstraints = false
+        innerPadding.addSubview(uploadIcon)
         
-        // Upload Button
+        // Add upload container into main layout
+        contentView.addArrangedSubview(uploadContainer)
+        
+        // Upload button
         uploadButton.setTitle("Upload", for: .normal)
         uploadButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.34, alpha: 1.0)
         uploadButton.setTitleColor(.black, for: .normal)
         uploadButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
         uploadButton.layer.cornerRadius = 12
-        uploadButton.addTarget(self, action: #selector(uploadTapped), for: .touchUpInside)
         uploadButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Recent Uploads Label
-        recentUploadsLabel.text = "Recent Uploads ›"
-        recentUploadsLabel.textColor = .systemGray
-        recentUploadsLabel.font = .boldSystemFont(ofSize: 14)
-        recentUploadsLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Album Stack
-        albumStackView.axis = .vertical
-        albumStackView.spacing = 15
-        albumStackView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Add sample albums
-        addAlbumCovers()
-        
-        // Add to view hierarchy
-        uploadBox.addSubview(uploadIcon)
-        contentView.addSubview(uploadBox)
-        contentView.addSubview(uploadButton)
-        contentView.addSubview(recentUploadsLabel)
-        contentView.addSubview(albumStackView)
+        contentView.addArrangedSubview(uploadButton)
     }
     
-    private func setupTopNavBar() {
-        // Use the hook to get navbar props
-        let navBarProps = useTopNavBar.getProps(
-            username: "Mukul",
-            dayNumber: 5,
-            onProfileTap: { [weak self] in
-                self?.navigateToProfile()
-            },
-            onDayBadgeTap: { [weak self] in
-                self?.showStreakDetails()
-            }
-        )
+    
+    // MARK: ✅ Continue Learning Carousel
+    private func addContinueLearningSection() {
+        let sectionHeader = UILabel()
+        sectionHeader.text = "Continue Learning"
+        sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
+        sectionHeader.textColor = .black
+        contentView.addArrangedSubview(sectionHeader)
         
-        // Create navbar with props
-        topNavBar = TopNavBar.create(props: navBarProps)
-        topNavBar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(topNavBar)
+        let spacer = UIView()
+        spacer.heightAnchor.constraint(equalToConstant: 10).isActive = true
+        contentView.addArrangedSubview(spacer)
+        
+        let scroll = UIScrollView()
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        
+        let hStack = UIStackView()
+        hStack.axis = .horizontal
+        hStack.spacing = 16
+        hStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        scroll.addSubview(hStack)
+        contentView.addArrangedSubview(scroll)
+        
+        scroll.heightAnchor.constraint(equalToConstant: 180).isActive = true
+        
+        NSLayoutConstraint.activate([
+            hStack.topAnchor.constraint(equalTo: scroll.topAnchor),
+            hStack.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 20),
+            hStack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -20),
+            hStack.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
+            hStack.heightAnchor.constraint(equalTo: scroll.heightAnchor)
+        ])
+        
+        // Sample images
+        let imageNames = ["cl_1", "cl_2", "ride_home", "cl_1", "cl_2"]
+        
+        imageNames.forEach { name in
+            hStack.addArrangedSubview(createImageCard(imageName: name, title: getTitleForImage(name)))
+        }
     }
     
-    private func setupScrollView() {
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.showsVerticalScrollIndicator = false
-        
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-        
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
-    }
     
-    private func addAlbumCovers() {
-        // Sample album covers
-        let album1 = createAlbumView(title: "RIDE – New Album", color: .systemBlue)
-        let album2 = createAlbumView(title: "Summer Vibes", color: .systemOrange)
-        let album3 = createAlbumView(title: "Chill Lo-fi", color: .systemPurple)
+    // MARK: Helper: Create Image Card
+    private func createImageCard(imageName: String, title: String) -> UIView {
+        let card = UIView()
+        card.layer.cornerRadius = 12
+        card.clipsToBounds = true
+        card.translatesAutoresizingMaskIntoConstraints = false
         
-        albumStackView.addArrangedSubview(album1)
-        albumStackView.addArrangedSubview(album2)
-        albumStackView.addArrangedSubview(album3)
-    }
-    
-    private func createAlbumView(title: String, color: UIColor) -> UIView {
-        let view = UIView()
-        view.backgroundColor = color
-        view.layer.cornerRadius = 12
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        let imageView = UIImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFill
+        if let img = UIImage(named: imageName) {
+            imageView.image = img
+        } else {
+            imageView.backgroundColor = UIColor(white: 0.15, alpha: 1)
+            imageView.image = UIImage(systemName: "music.note")?.withTintColor(.white, renderingMode: .alwaysOriginal)
+        }
         
         let label = UILabel()
         label.text = title
         label.textColor = .white
-        label.font = .boldSystemFont(ofSize: 16)
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.backgroundColor = UIColor(white: 0, alpha: 0.7)
+        label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         
-        view.addSubview(label)
+        card.addSubview(imageView)
+        card.addSubview(label)
+        
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            label.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -16)
+            card.widthAnchor.constraint(equalToConstant: 140),
+            card.heightAnchor.constraint(equalToConstant: 160),
+            
+            imageView.topAnchor.constraint(equalTo: card.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            
+            label.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            label.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            label.heightAnchor.constraint(equalToConstant: 32)
         ])
         
-        return view
+        return card
     }
     
+    
+    // MARK: Titles
+    private func getTitleForImage(_ imageName: String) -> String {
+        let titles: [String: String] = [
+            "arrival": "The Arrival",
+            "meridian": "Meridian",
+            "classic": "Classic Suite",
+            "fur_elise": "Fur Elise",
+            "nocturne": "Nocturne",
+            "sonata": "Moonlight Sonata",
+            "prelude": "Prelude",
+            "rhapsody": "Rhapsody"
+        ]
+        return titles[imageName] ?? imageName.capitalized
+    }
+    
+    
+    // MARK: Top NavBar
+    private func setupTopNavBar() {
+        let props = useTopNavBar.getProps(
+            username: "Mukul",
+            dayNumber: 5,
+            onProfileTap: { [weak self] in self?.navigateToProfile() },
+            onDayBadgeTap: { [weak self] in self?.showStreakDetails() }
+        )
+        
+        topNavBar = TopNavBar.create(props: props)
+        topNavBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(topNavBar)
+    }
+    
+    
+    // MARK: Constraints
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            // Top Nav Bar
+            // NavBar
             topNavBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             topNavBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             topNavBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             topNavBar.heightAnchor.constraint(equalToConstant: 80),
             
-            // Scroll View
+            // Scroll
             scrollView.topAnchor.constraint(equalTo: topNavBar.bottomAnchor, constant: 16),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
-            // Content View
+            // Content Stack
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+        ])
+        
+        
+        // ✅ Upload container padded equally
+        let padding: CGFloat = 20
+        
+        NSLayoutConstraint.activate([
+            uploadContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: padding),
+            uploadContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -padding),
+            uploadContainer.heightAnchor.constraint(equalToConstant: 180),
             
-            // Upload Box
-            uploadBox.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            uploadBox.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            uploadBox.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            uploadBox.heightAnchor.constraint(equalToConstant: 180),
+            uploadIcon.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
+            uploadIcon.centerYAnchor.constraint(equalTo: uploadContainer.centerYAnchor),
+            uploadIcon.widthAnchor.constraint(equalToConstant: 45),
+            uploadIcon.heightAnchor.constraint(equalToConstant: 45),
             
-            // Upload Icon
-            uploadIcon.centerXAnchor.constraint(equalTo: uploadBox.centerXAnchor),
-            uploadIcon.centerYAnchor.constraint(equalTo: uploadBox.centerYAnchor),
-            uploadIcon.widthAnchor.constraint(equalToConstant: 40),
-            uploadIcon.heightAnchor.constraint(equalToConstant: 40),
-            
-            // Upload Button
-            uploadButton.topAnchor.constraint(equalTo: uploadBox.bottomAnchor, constant: 20),
-            uploadButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            uploadButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            uploadButton.heightAnchor.constraint(equalToConstant: 50),
-            
-            // Recent Uploads Label
-            recentUploadsLabel.topAnchor.constraint(equalTo: uploadButton.bottomAnchor, constant: 30),
-            recentUploadsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            recentUploadsLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            
-            // Album Stack
-            albumStackView.topAnchor.constraint(equalTo: recentUploadsLabel.bottomAnchor, constant: 15),
-            albumStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            albumStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            albumStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20)
+            uploadButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: padding),
+            uploadButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -padding),
+            uploadButton.heightAnchor.constraint(equalToConstant: 50)
         ])
     }
     
-    // MARK: - Actions
+    
+    // MARK: Actions
     @objc private func uploadTapped() {
         print("Upload button tapped")
-        // Implement upload logic
     }
     
     private func navigateToProfile() {
-        let profileVC = ProfileViewController()
-        navigationController?.pushViewController(profileVC, animated: true)
+        navigationController?.pushViewController(ProfileViewController(), animated: true)
     }
     
     private func showStreakDetails() {
-        print("Show streak details")
-        // Implement streak logic
+        print("Streak details tapped")
     }
 }
