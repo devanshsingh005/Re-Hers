@@ -18,6 +18,17 @@ struct Playlist {
 
 class PlaylistTableViewController: UITableViewController {
     
+    // MARK: - UI Elements
+    private let navBar = TopNavBar.make(
+        appTitle: "Re-Hearse",
+        dayText: "🔥 Day 5",
+        welcomeText: "Playlist",
+        profileImage: nil,
+        dayBadgeAction: {
+            print("Playlist day badge tapped")
+        }
+    )
+    
     // MARK: - Playlist Data
     private let playlists = [
         Playlist(title: "Silent Waves", tags: "Lo-fi Ambient Acoustic Chill", trackCount: 12, imageName: "playlist1"),
@@ -40,7 +51,27 @@ class PlaylistTableViewController: UITableViewController {
     // MARK: - View Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        setupUI()
         setupTableView()
+    }
+    
+    private func setupUI() {
+        view.backgroundColor = .white
+        navigationController?.navigationBar.isHidden = true
+        
+        // Add navbar directly to view
+        view.addSubview(navBar)
+        setupNavBarConstraints()
+    }
+    
+    private func setupNavBarConstraints() {
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20)
+        ])
     }
     
     // MARK: - Table View Setup
@@ -51,36 +82,20 @@ class PlaylistTableViewController: UITableViewController {
         tableView.register(PlaylistTableViewCell.self, forCellReuseIdentifier: "PlaylistCell")
         tableView.rowHeight = 130 // Slightly increased height for rounder cards
         
-        // Create and set table header view
-        let headerView = createHeaderView()
-        tableView.tableHeaderView = headerView
+        // Remove table header view since we're using standalone navbar
+        tableView.tableHeaderView = nil
         
-        // Add padding at bottom of table
-        tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
-    }
-    
-    // MARK: - Header View Creation
-    private func createHeaderView() -> UIView {
-        // Create header view with proper frame
-        let headerView = UIView(frame: CGRect(x: 0, y: 0, width: view.frame.width, height: 80))
-        headerView.backgroundColor = .white
+        // Adjust content inset to account for navbar
+        tableView.contentInset = UIEdgeInsets(top: navBar.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height + 8,
+                                            left: 0,
+                                            bottom: 20,
+                                            right: 0)
         
-        // Create and configure title label
-        let titleLabel = UILabel()
-        titleLabel.text = "Playlist"
-        titleLabel.font = UIFont.systemFont(ofSize: 28, weight: .bold)
-        titleLabel.textColor = .black
-        
-        // Add title label to header view with constraints
-        headerView.addSubview(titleLabel)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 20),
-            titleLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -8),
-            titleLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -20)
-        ])
-        
-        return headerView
+        // Adjust scroll indicator inset as well
+        tableView.scrollIndicatorInsets = UIEdgeInsets(top: navBar.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height + 8,
+                                                      left: 0,
+                                                      bottom: 20,
+                                                      right: 0)
     }
     
     // MARK: - UITableViewDataSource Methods
@@ -105,6 +120,15 @@ class PlaylistTableViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         // Add your selection handling code here
+    }
+    
+    // Adjust content offset when view appears
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Ensure content starts below navbar
+        if tableView.contentOffset.y < 0 {
+            tableView.contentOffset.y = -tableView.contentInset.top
+        }
     }
 }
 
@@ -245,7 +269,5 @@ class PlaylistTableViewCell: UITableViewCell {
         
         // Set background color for the card
         containerView.backgroundColor = backgroundColor
-        
-       
     }
 }

@@ -58,45 +58,17 @@ class HomeViewController: UIViewController {
 
     // MARK: - Header
     private func addHeaderSection() {
-        let titleRow = UIStackView()
-        titleRow.axis = .horizontal
-        titleRow.spacing = 10
-        titleRow.distribution = .equalSpacing
-        
-        let appLabel = UILabel()
-        appLabel.text = "Re-Hearse"
-        appLabel.font = .systemFont(ofSize: 22, weight: .bold)
-        
-        let dayBadge = UIButton()
-        dayBadge.setTitle("🔥 Day 5", for: .normal)
-        dayBadge.setTitleColor(.black, for: .normal)
-        dayBadge.titleLabel?.font = .systemFont(ofSize: 14, weight: .bold)
-        dayBadge.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
-        dayBadge.layer.cornerRadius = 16
-        dayBadge.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
-        
-        let profileImg = UIImageView()
-        profileImg.image = UIImage(systemName: "person.crop.circle.fill")
-        profileImg.tintColor = .gray
-        profileImg.layer.cornerRadius = 18
-        profileImg.clipsToBounds = true
-        profileImg.backgroundColor = .lightGray
-        profileImg.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        profileImg.heightAnchor.constraint(equalToConstant: 36).isActive = true
-        
-        let rightRow = UIStackView(arrangedSubviews: [dayBadge, profileImg])
-        rightRow.spacing = 10
-        
-        titleRow.addArrangedSubview(appLabel)
-        titleRow.addArrangedSubview(rightRow)
-        
-        contentView.addArrangedSubview(titleRow)
-        
-        // Welcome Text
-        let welcome = UILabel()
-        welcome.text = "Welcome back, Mukul"
-        welcome.font = .systemFont(ofSize: 18, weight: .semibold)
-        contentView.addArrangedSubview(welcome)
+        let topNav = TopNavBar.make(
+            appTitle: "Re-Hearse",
+            dayText: "🔥 Day 5",
+            welcomeText: "Welcome back, Mukul",
+            profileImage: nil,
+            dayBadgeAction: { [weak self] in
+                // Handle day badge tap if needed
+                print("Day badge tapped")
+            }
+        )
+        contentView.addArrangedSubview(topNav)
     }
 
     // MARK: - Daily Goal
