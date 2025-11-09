@@ -45,9 +45,9 @@ class MainTabBarController: UITabBarController {
         )
         
         // Play Along Tab
-        let playAlongVC = PlaylistTableViewController()
-        let playAlongNav = UINavigationController(rootViewController: playAlongVC)
-        playAlongNav.tabBarItem = UITabBarItem(
+        let playListVC = PlaylistViewController()
+        let playListNav = UINavigationController(rootViewController: playListVC)
+        playListNav.tabBarItem = UITabBarItem(
             title: "Playlist",
             image: UIImage(systemName: "music.note.list"),
             selectedImage: UIImage(systemName: "music.note.list")
@@ -63,7 +63,7 @@ class MainTabBarController: UITabBarController {
         )
         
         // Set all view controllers
-        viewControllers = [homeNav, uploadNav, exploreNav, playAlongNav]
+        viewControllers = [homeNav, uploadNav, exploreNav, playListNav]
     }
     
     private func setupAppearance() {

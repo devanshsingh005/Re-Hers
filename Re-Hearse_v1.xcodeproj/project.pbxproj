@@ -12,7 +12,6 @@
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
-		84114B782EBD03CD00E86F71 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B772EBD03CD00E86F71 /* ProfileViewController.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
 		842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08642EBA0BE8001AC579 /* ScanViewController.swift */; };
@@ -26,11 +25,10 @@
 
 /* Begin PBXFileReference section */
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MainPlayListScreen.swift; path = Screens/MainPlayListScreen.swift; sourceTree = SOURCE_ROOT; };
-		236CF2ED2EBE4D7300DE5E71 /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TopNavBar.swift; path = Common/UIComponents/TopNavbar/TopNavBar.swift; sourceTree = SOURCE_ROOT; };
+		236CF2ED2EBE4D7300DE5E71 /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TopNavBar.swift; path = "/Users/admin/Documents/Re-Hearse_v1/Common/UIComponents/TopNavbar/TopNavBar.swift"; sourceTree = "<absolute>"; };
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BottomNavbar.swift; path = Common/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
-		84114B772EBD03CD00E86F71 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
 		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
@@ -79,7 +77,6 @@
 			isa = PBXGroup;
 			children = (
 				84114B692EBCF68300E86F71 /* uploadScreen.swift */,
-				84114B772EBD03CD00E86F71 /* ProfileViewController.swift */,
 			);
 			path = MainUplaodScreen;
 			sourceTree = "<group>";
@@ -365,7 +362,6 @@
 				236CF2EE2EBE4D7D00DE5E71 /* TopNavBar.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */,
-				84114B782EBD03CD00E86F71 /* ProfileViewController.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,

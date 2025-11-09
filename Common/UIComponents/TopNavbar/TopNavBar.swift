@@ -12,44 +12,38 @@ public class TopNavBar: UIView {
     // MARK: - Public properties
     
     public var appTitle: String = "Re-Hearse" {
-        didSet {
-            appLabel.text = appTitle
-        }
+        didSet { appLabel.text = appTitle }
     }
     
     public var dayText: String = "🔥 Day 5" {
-        didSet {
-            dayBadge.setTitle(dayText, for: .normal)
-        }
+        didSet { dayBadge.setTitle(dayText, for: .normal) }
     }
     
     public var welcomeText: String = "Welcome back, Mukul" {
-        didSet {
-            welcomeLabel.text = welcomeText
-        }
+        didSet { welcomeLabel.text = welcomeText }
     }
     
     public var profileImage: UIImage? {
-        didSet {
-            updateProfileImage()
-        }
+        didSet { updateProfileImage() }
     }
     
     public var dayBadgeAction: (() -> Void)?
     
+    public var isWelcomeTextHidden: Bool = false {
+        didSet { welcomeLabel.isHidden = isWelcomeTextHidden }
+    }
+    
     // MARK: - Subviews
     
-    public let appLabel: UILabel = {
+    private let appLabel: UILabel = {
         let label = UILabel()
         label.text = "Re-Hearse"
         label.font = .boldSystemFont(ofSize: 22)
         label.textColor = .label
-        label.accessibilityIdentifier = "topnav.appLabel"
-        label.isAccessibilityElement = true
         return label
     }()
     
-    public let dayBadge: UIButton = {
+    private let dayBadge: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("🔥 Day 5", for: .normal)
         button.setTitleColor(.black, for: .normal)
@@ -57,59 +51,32 @@ public class TopNavBar: UIView {
         button.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
         button.layer.cornerRadius = 16
         button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
-        button.accessibilityIdentifier = "topnav.dayBadge"
-        button.isAccessibilityElement = true
         return button
     }()
     
-    public let profileImg: UIImageView = {
+    private let profileImg: UIImageView = {
         let iv = UIImageView()
-        iv.translatesAutoresizingMaskIntoConstraints = false
         iv.tintColor = .gray
         iv.backgroundColor = .lightGray
         iv.layer.cornerRadius = 18
         iv.clipsToBounds = true
-        iv.accessibilityIdentifier = "topnav.profileImage"
-        iv.isAccessibilityElement = true
         iv.contentMode = .scaleAspectFill
         return iv
     }()
     
-    public let welcomeLabel: UILabel = {
+    private let welcomeLabel: UILabel = {
         let label = UILabel()
         label.text = "Welcome back, Mukul"
         label.font = .systemFont(ofSize: 18, weight: .semibold)
         label.textColor = .label
-        label.accessibilityIdentifier = "topnav.welcomeLabel"
-        label.isAccessibilityElement = true
         return label
     }()
     
-    // MARK: - Private properties
+    // MARK: - Stack Views (Now Declared at Class Level)
     
-    private let mainStack: UIStackView = {
-        let sv = UIStackView()
-        sv.axis = .vertical
-        sv.spacing = 9
-        sv.translatesAutoresizingMaskIntoConstraints = false
-        return sv
-    }()
-    
-    private let titleRowStack: UIStackView = {
-        let sv = UIStackView()
-        sv.axis = .horizontal
-        sv.distribution = .equalSpacing
-        sv.alignment = .center
-        return sv
-    }()
-    
-    private let rightStack: UIStackView = {
-        let sv = UIStackView()
-        sv.axis = .horizontal
-        sv.spacing = 8
-        sv.alignment = .center
-        return sv
-    }()
+    private let topRowStack = UIStackView()
+    private let rightStack = UIStackView()
+    private let mainStack = UIStackView()
     
     // MARK: - Init
     
@@ -117,52 +84,89 @@ public class TopNavBar: UIView {
         super.init(frame: frame)
         setupViews()
         setupConstraints()
-        dayBadge.addTarget(self, action: #selector(dayBadgeTapped), for: .touchUpInside)
-        self.translatesAutoresizingMaskIntoConstraints = false
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupViews()
         setupConstraints()
-        dayBadge.addTarget(self, action: #selector(dayBadgeTapped), for: .touchUpInside)
-        self.translatesAutoresizingMaskIntoConstraints = false
     }
     
     // MARK: - Setup
     
     private func setupViews() {
-        addSubview(mainStack)
+        backgroundColor = .clear
         
-        // Title row: left label + right stack
-        titleRowStack.addArrangedSubview(appLabel)
+        // MARK: Configure stacks
+        topRowStack.axis = .horizontal
+        topRowStack.alignment = .center
+        topRowStack.distribution = .fill
+        topRowStack.spacing = 8
         
-        // Right stack: day badge + profile image
+        rightStack.axis = .horizontal
+        rightStack.alignment = .center
+        rightStack.spacing = 8
+        
+        mainStack.axis = .vertical
+        mainStack.alignment = .fill
+        mainStack.spacing = 6
+        
+        // MARK: Build hierarchy
         rightStack.addArrangedSubview(dayBadge)
         rightStack.addArrangedSubview(profileImg)
         
-        // Profile image size constraints
+        // Create a flexible spacer
+        let spacer = UIView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Add subviews to top row
+        topRowStack.addArrangedSubview(appLabel)
+        topRowStack.addArrangedSubview(spacer)
+        topRowStack.addArrangedSubview(rightStack)
+        
+        // Spacer expands to push content to opposite sides
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        
+        // Add both rows to main stack
+        mainStack.addArrangedSubview(topRowStack)
+        mainStack.addArrangedSubview(welcomeLabel)
+        
+        addSubview(mainStack)
+        
+        // MARK: Layout constraints
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            mainStack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            mainStack.leadingAnchor.constraint(equalTo: leadingAnchor,constant: 16),
+            mainStack.trailingAnchor.constraint(equalTo: trailingAnchor,constant: -16),
+            mainStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        ])
+        
+        // MARK: Profile image size
+        profileImg.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             profileImg.widthAnchor.constraint(equalToConstant: 36),
             profileImg.heightAnchor.constraint(equalToConstant: 36)
         ])
         
-        titleRowStack.addArrangedSubview(rightStack)
-        
-        mainStack.addArrangedSubview(titleRowStack)
-        mainStack.addArrangedSubview(welcomeLabel)
+        // Add tap to badge
+        dayBadge.addTarget(self, action: #selector(dayBadgeTapped), for: .touchUpInside)
     }
+
     
     private func setupConstraints() {
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
-            mainStack.topAnchor.constraint(equalTo: self.topAnchor),
-            mainStack.leadingAnchor.constraint(equalTo: self.leadingAnchor),
-            mainStack.trailingAnchor.constraint(equalTo: self.trailingAnchor),
-            mainStack.bottomAnchor.constraint(equalTo: self.bottomAnchor)
+            mainStack.topAnchor.constraint(equalTo: self.topAnchor, constant: 8),
+            mainStack.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: 16),
+            mainStack.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -16),
+            mainStack.bottomAnchor.constraint(equalTo: self.bottomAnchor, constant: -8)
         ])
     }
     
-    // MARK: - Private Helpers
+    // MARK: - Helpers
     
     private func updateProfileImage() {
         if let img = profileImage {
@@ -182,7 +186,7 @@ public class TopNavBar: UIView {
         dayBadgeAction?()
     }
     
-    // MARK: - Convenience
+    // MARK: - Factory Method
     
     public static func make(
         appTitle: String = "Re-Hearse",
@@ -200,3 +204,4 @@ public class TopNavBar: UIView {
         return nav
     }
 }
+
