@@ -9,6 +9,11 @@ import UIKit
 
 class ExploreViewController: UIViewController {
 
+    // MARK: - UI Components
+    private let navBar = TopNavBar.make(
+        appTitle: "Explore"
+    )
+    
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let searchBar = UISearchBar()
@@ -27,59 +32,44 @@ class ExploreViewController: UIViewController {
     private let categories = ["ride", "purple", "goaway", "diver"]
     private let albums = ["case", "arrival", "mariposa"]
 
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
-        setupHeader()
+        navigationController?.navigationBar.isHidden = true
+        
+        setupNavBar()
         setupScrollView()
         setupSearchBar()
         setupCollections()
     }
-
-    private func setupHeader() {
-        let titleLabel = UILabel()
-        titleLabel.text = "Re-Hearse"
-        titleLabel.font = .boldSystemFont(ofSize: 24)
-
-        let icon = UIImageView(image: UIImage(systemName: "pianokeys"))
-        icon.tintColor = .black
-        icon.contentMode = .scaleAspectFit
-
-        let profile = UIImageView(image: UIImage(named: "avatar"))
-        profile.layer.cornerRadius = 18
-        profile.clipsToBounds = true
-        profile.contentMode = .scaleAspectFill
-        profile.translatesAutoresizingMaskIntoConstraints = false
-        profile.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        profile.heightAnchor.constraint(equalToConstant: 36).isActive = true
-
-        let headerStack = UIStackView(arrangedSubviews: [icon, titleLabel, UIView(), profile])
-        headerStack.axis = .horizontal
-        headerStack.spacing = 10
-        headerStack.alignment = .center
-
-        view.addSubview(headerStack)
-        headerStack.translatesAutoresizingMaskIntoConstraints = false
-
+    
+    // MARK: - Navbar Setup
+    private func setupNavBar() {
+        view.addSubview(navBar)
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+       // navBar.isWelcomeTextHidden = true
+        navBar.isStreakVisible = false
         NSLayoutConstraint.activate([
-            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
-            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20)
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
         ])
     }
 
+    // MARK: - ScrollView Setup
     private func setupScrollView() {
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
         contentView.translatesAutoresizingMaskIntoConstraints = false
-
+        
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60),
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
+            
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
@@ -88,6 +78,7 @@ class ExploreViewController: UIViewController {
         ])
     }
 
+    // MARK: - Search Bar
     private func setupSearchBar() {
         searchBar.placeholder = "Search"
         searchBar.searchBarStyle = .minimal
@@ -95,12 +86,13 @@ class ExploreViewController: UIViewController {
         searchBar.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            searchBar.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
+            searchBar.topAnchor.constraint(equalTo: contentView.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             searchBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20)
         ])
     }
 
+    // MARK: - Collections Setup
     private func setupCollections() {
         // Category Label
         contentView.addSubview(categoryLabel)
@@ -121,6 +113,7 @@ class ExploreViewController: UIViewController {
         categoryCollectionView.delegate = self
         categoryCollectionView.dataSource = self
         categoryCollectionView.register(CategoryCell.self, forCellWithReuseIdentifier: "CategoryCell")
+        categoryCollectionView.backgroundColor = .clear
 
         contentView.addSubview(categoryCollectionView)
         categoryCollectionView.translatesAutoresizingMaskIntoConstraints = false
@@ -149,6 +142,7 @@ class ExploreViewController: UIViewController {
         albumCollectionView.dataSource = self
         albumCollectionView.register(AlbumCell.self, forCellWithReuseIdentifier: "AlbumCell")
         albumCollectionView.showsHorizontalScrollIndicator = false
+        albumCollectionView.backgroundColor = .clear
 
         contentView.addSubview(albumCollectionView)
         albumCollectionView.translatesAutoresizingMaskIntoConstraints = false
@@ -257,4 +251,3 @@ class SectionHeader: UILabel {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
-

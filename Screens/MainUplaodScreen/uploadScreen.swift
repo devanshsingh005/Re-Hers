@@ -1,4 +1,10 @@
-import Foundation
+//
+//  UploadScreen.swift
+//  Re-Hearse_v1
+//
+//  Created by DEVANSH on 04/11/25.
+//
+
 import UIKit
 import AVFoundation
 import Photos
@@ -17,6 +23,10 @@ class UploadScreen: UIViewController {
     }
     
     // MARK: - UI Elements
+    private let navBar = TopNavBar.make(
+       appTitle: "Upload"
+    )
+    
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
     
@@ -28,59 +38,50 @@ class UploadScreen: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        setupUI()
-        setupConstraints()
-        addContinueLearningSection()
-    }
-    
-    private func setupUI() {
         view.backgroundColor = .systemBackground
         navigationController?.navigationBar.isHidden = true
         
+        setupNavBar()
         setupScrollView()
-        addHeaderSection()
         setupUploadSection()
+        addContinueLearningSection()
     }
     
-    // MARK: - ScrollView
-    private func setupScrollView() {
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(scrollView)
-
+    // MARK: - Navbar Setup
+    private func setupNavBar() {
+        view.addSubview(navBar)
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+        //navBar.isWelcomeTextHidden = true // Hide the "Welcome back" line for Upload screen
+        navBar.isStreakVisible = false
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.leftAnchor.constraint(equalTo: view.leftAnchor),
-            scrollView.rightAnchor.constraint(equalTo: view.rightAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-
-        contentView.axis = .vertical
-        contentView.spacing = 18
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-
-        scrollView.addSubview(contentView)
-
-        NSLayoutConstraint.activate([
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
         ])
     }
 
-    // MARK: - Header
-    private func addHeaderSection() {
-        let topNav = TopNavBar.make(
-            appTitle: "Re-Hearse",
-            dayText: "🔥 Day 5",
-            welcomeText: "Welcome back, Mukul",
-            profileImage: nil,
-            dayBadgeAction: { [weak self] in
-                print("Day badge tapped")
-            }
-        )
-        contentView.addArrangedSubview(topNav)
+    // MARK: - ScrollView Setup
+    private func setupScrollView() {
+        view.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentView)
+        
+        contentView.axis = .vertical
+        contentView.spacing = Constants.sectionSpacing
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: Constants.horizontalPadding),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -Constants.horizontalPadding),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -2 * Constants.horizontalPadding)
+        ])
     }
 
     // MARK: - Upload Box
@@ -119,7 +120,6 @@ class UploadScreen: UIViewController {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(uploadTapped))
         uploadContainer.addGestureRecognizer(tapGesture)
         
-        // Upload container constraints
         NSLayoutConstraint.activate([
             uploadContainer.heightAnchor.constraint(equalToConstant: Constants.uploadContainerHeight),
             uploadIcon.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
@@ -140,7 +140,6 @@ class UploadScreen: UIViewController {
         sectionHeader.textColor = .black
         contentView.addArrangedSubview(sectionHeader)
         
-        // Add some spacing after header
         let headerSpacer = UIView()
         headerSpacer.translatesAutoresizingMaskIntoConstraints = false
         headerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
@@ -228,14 +227,10 @@ class UploadScreen: UIViewController {
     // MARK: - Helpers
     private func getTitleForImage(_ name: String) -> String {
         switch name {
-        case "cl_1":
-            return "Lo-fi Focus"
-        case "cl_2":
-            return "Deep Work Mix"
-        case "ride_home":
-            return "Ride Home"
-        default:
-            return "Playlist"
+        case "cl_1": return "Lo-fi Focus"
+        case "cl_2": return "Deep Work Mix"
+        case "ride_home": return "Ride Home"
+        default: return "Playlist"
         }
     }
     
@@ -245,12 +240,7 @@ class UploadScreen: UIViewController {
         present(alert, animated: true)
     }
 
-    // MARK: - Constraints
-    private func setupConstraints() {
-        // Constraints are now handled in setupScrollView() and individual setup methods
-    }
-
-    // MARK: Upload Handling
+    // MARK: - Upload Handling
     @objc private func uploadTapped() {
         showUploadOptions()
     }
@@ -291,7 +281,6 @@ class UploadScreen: UIViewController {
 
 // MARK: - Image Picker Delegate
 extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-    
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         picker.dismiss(animated: true)

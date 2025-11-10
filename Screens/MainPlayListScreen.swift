@@ -20,13 +20,7 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
     
     // MARK: - UI Components
     private let navBar = TopNavBar.make(
-        appTitle: "Re-Hearse",
-        dayText: "🔥 Day 5",
-        welcomeText: "Playlist",
-        profileImage: UIImage(named: "profilePic"),
-        dayBadgeAction: {
-            print("Playlist day badge tapped")
-        }
+        appTitle: "PlayList"
     )
     
     private let tableView = UITableView()
@@ -43,10 +37,10 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
     // MARK: - Grey Shades Configuration
     private let greyShades = [
         UIColor(red: 0.235, green: 0.235, blue: 0.235, alpha: 1.0), // #3C3C3C
-        UIColor(red: 0.45, green: 0.45, blue: 0.45, alpha: 1.0),    // #737373
-        UIColor(red: 0.65, green: 0.65, blue: 0.65, alpha: 1.0),    // #A6A6A6
-        UIColor(red: 0.80, green: 0.80, blue: 0.80, alpha: 1.0),    // #CCCCCC
-        UIColor(red: 0.90, green: 0.90, blue: 0.90, alpha: 1.0)     // #E6E6E6
+        UIColor(red: 0.30, green: 0.30, blue: 0.30, alpha: 1.0),    // #737373
+        UIColor(red: 0.35, green: 0.35, blue: 0.35, alpha: 1.0),    // #A6A6A6
+        UIColor(red: 0.40, green: 0.40, blue: 0.40, alpha: 1.0),    // #CCCCCC
+        UIColor(red: 0.45, green: 0.45, blue: 0.45, alpha: 1.0)     // #E6E6E6
     ]
     
     // MARK: - Lifecycle
@@ -67,12 +61,11 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
-        
+        navBar.isStreakVisible = false
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor,constant: 16),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor,constant: -16),
-            navBar.heightAnchor.constraint(equalToConstant: 90)
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor,constant: 10),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor,constant: -10)
         ])
         
         // Optional shadow for depth
@@ -94,7 +87,7 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
         tableView.rowHeight = 130
         
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
+            tableView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
