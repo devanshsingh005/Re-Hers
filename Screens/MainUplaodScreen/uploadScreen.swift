@@ -51,7 +51,7 @@ class UploadScreen: UIViewController {
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
-        //navBar.isWelcomeTextHidden = true // Hide the "Welcome back" line for Upload screen
+        navBar.isWelcomeTextHidden = true // Hide the "Welcome back" line for Upload screen
         navBar.isStreakVisible = false
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),

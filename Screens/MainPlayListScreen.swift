@@ -62,6 +62,8 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
         navBar.isStreakVisible = false
+        navBar.isWelcomeTextHidden = true
+
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor,constant: 10),

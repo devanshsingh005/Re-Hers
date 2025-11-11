@@ -48,7 +48,7 @@ class ExploreViewController: UIViewController {
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
-       // navBar.isWelcomeTextHidden = true
+       navBar.isWelcomeTextHidden = true
         navBar.isStreakVisible = false
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),

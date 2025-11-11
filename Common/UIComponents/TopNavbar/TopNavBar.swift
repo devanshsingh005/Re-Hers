@@ -269,7 +269,9 @@ public final class TopNavBar: UIView {
         iv.contentMode = .scaleAspectFill
         return iv
     }()
-    
+    public var isWelcomeTextHidden: Bool = false {
+        didSet { welcomeLabel.isHidden = isWelcomeTextHidden }
+    }
     private let welcomeLabel: UILabel = {
         let label = UILabel()
         label.text = "Welcome back, Mukul"
