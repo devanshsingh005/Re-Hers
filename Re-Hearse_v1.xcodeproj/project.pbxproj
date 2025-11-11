@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */; };
-		236CF2EE2EBE4D7D00DE5E71 /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2ED2EBE4D7300DE5E71 /* TopNavBar.swift */; };
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
@@ -20,13 +19,13 @@
 		842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */; };
 		842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086C2EBA0D65001AC579 /* MainTabBarController.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
+		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift */; };
 		84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MainPlayListScreen.swift; path = Screens/MainPlayListScreen.swift; sourceTree = SOURCE_ROOT; };
-		236CF2ED2EBE4D7300DE5E71 /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TopNavBar.swift; path = "../../../../Users/admin/Documents/Re-Hearse_v1/Common/UIComponents/TopNavbar/TopNavBar.swift"; sourceTree = DEVELOPER_DIR; };
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BottomNavbar.swift; path = Common/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
@@ -39,6 +38,7 @@
 		842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordRecognitionViewController.swift; sourceTree = "<group>"; };
 		842B086C2EBA0D65001AC579 /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopNavBar.swift; sourceTree = "<group>"; };
 		84DBA86F2EBA7816006DF51E /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 		84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChordRecognitionScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -95,7 +95,7 @@
 		84114B712EBCFE5800E86F71 /* TopNavbar */ = {
 			isa = PBXGroup;
 			children = (
-				236CF2ED2EBE4D7300DE5E71 /* TopNavBar.swift */,
+				84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */,
 			);
 			path = TopNavbar;
 			sourceTree = "<group>";
@@ -363,10 +363,10 @@
 				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */,
 				84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */,
-				236CF2EE2EBE4D7D00DE5E71 /* TopNavBar.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				842B086D2EBA0D65001AC579 /* MainTabBarController.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
+				84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */,
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
 				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
