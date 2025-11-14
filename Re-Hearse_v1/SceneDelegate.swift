@@ -11,19 +11,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
+    func scene(_ scene: UIScene,
+               willConnectTo session: UISceneSession,
+               options connectionOptions: UIScene.ConnectionOptions) {
 
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
-            
+
+        // ✅ Load the initial view controller from Main.storyboard
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        let initialVC = storyboard.instantiateInitialViewController()!
+
         let window = UIWindow(windowScene: windowScene)
-        
-        // ❌ REMOVE global setup from here
-        // Just set the root controller
-        let mainTabController = MainTabBarController()
-        window.rootViewController = mainTabController
-        window.makeKeyAndVisible()
+        window.rootViewController = initialVC
         self.window = window
+        window.makeKeyAndVisible()
     }
+
 
     func sceneDidDisconnect(_ scene: UIScene) {
         // Called as the scene is being released by the system.
