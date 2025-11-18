@@ -72,7 +72,7 @@ class HomeViewController: UIViewController {
     }
 
     // MARK: - Daily Goal
-    private func addDailyGoal() {
+    /*private func addDailyGoal() {
         let container = UIView()
         container.backgroundColor = UIColor.black.withAlphaComponent(0.8)
         container.layer.cornerRadius = 20
@@ -115,7 +115,67 @@ class HomeViewController: UIViewController {
         ])
 
         contentView.addArrangedSubview(container)
+    }*/
+    // MARK: - Daily Goal
+    private func addDailyGoal() {
+        let container = UIView()
+        container.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        container.layer.cornerRadius = 20
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        
+        // 👉 Enable tap
+        let tap = UITapGestureRecognizer(target: self, action: #selector(openPianoPage))
+        container.addGestureRecognizer(tap)
+        container.isUserInteractionEnabled = true
+        
+        let label = UILabel()
+        label.text = "Daily goal"
+        label.font = .systemFont(ofSize: 14, weight: .regular)
+        label.textColor = .white
+
+        let progress = UIProgressView()
+        progress.progress = 0.7
+        progress.progressTintColor = .systemGreen
+        progress.trackTintColor = UIColor.white.withAlphaComponent(0.2)
+        progress.translatesAutoresizingMaskIntoConstraints = false
+
+        let time = UILabel()
+        time.text = "20 mins"
+        time.font = .systemFont(ofSize: 12)
+        time.textColor = .white
+
+        container.addSubview(label)
+        container.addSubview(progress)
+        container.addSubview(time)
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        time.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            
+            progress.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 10),
+            progress.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            progress.widthAnchor.constraint(equalToConstant: 180),
+            
+            time.leadingAnchor.constraint(equalTo: progress.trailingAnchor, constant: 8),
+            time.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        contentView.addArrangedSubview(container)
     }
+
+    // MARK: - Navigation to Piano Page
+    @objc private func openPianoPage() {
+        let vc = PianoAnimationViewController()
+        let navController = UINavigationController(rootViewController: vc)
+        
+        navController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
+        present(navController, animated: true)
+    }
+
 
     // MARK: - Continue Card
     private func addContinueCard() {
@@ -358,3 +418,4 @@ class HomeViewController: UIViewController {
         return titles[name] ?? name.capitalized
     }
 }
+
