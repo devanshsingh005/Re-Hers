@@ -49,16 +49,44 @@ class UploadScreen: UIViewController {
     
     // MARK: - Navbar Setup
     private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isWelcomeTextHidden = true // Hide the "Welcome back" line for Upload screen
-        navBar.isStreakVisible = false
+          view.addSubview(navBar)
+          navBar.translatesAutoresizingMaskIntoConstraints = false
+
+          navBar.isStreakVisible = false
+          navBar.isWelcomeTextHidden = true
+          
+          // 🔥 SHOW CHORD ICON
+          navBar.isChordIconVisible = true
+          
+          // ---- IMPORTANT: use push so the chord VC becomes part of the nav stack.
+          // This keeps the bottom tab bar visible and lets back button behavior be natural.
+          navBar.chordAction = { [weak self] in
+              guard let self = self else { return }
+              let vc = ChordRecognitionViewController()
+              // prefer push (so TabBar + Nav stack remain correct)
+              if let nav = self.navigationController {
+                  nav.pushViewController(vc, animated: true)
+              } else {
+                  // fallback: if caller isn't embedded in a UINavigationController,
+                  // present modally so feature still works.
+                  vc.modalPresentationStyle = .fullScreen
+                  self.present(vc, animated: true)
+              }
+          }
+
+
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
         ])
+        
+        navBar.layer.shadowColor = UIColor.black.cgColor
+        navBar.layer.shadowOpacity = 0.1
+        navBar.layer.shadowOffset = CGSize(width: 0, height: 2)
+        navBar.layer.shadowRadius = 4
     }
+
 
     // MARK: - ScrollView Setup
     private func setupScrollView() {

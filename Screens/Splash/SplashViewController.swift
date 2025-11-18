@@ -101,7 +101,7 @@ class SplashViewController: UIViewController {
         guard let window = UIApplication.shared.connectedScenes
                 .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
 
-        let homeVC = HomeViewController()
+        let homeVC = MainTabBarController()
 
         UIView.transition(with: window,
                           duration: 0.6,

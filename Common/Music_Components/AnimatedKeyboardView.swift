@@ -26,7 +26,7 @@ class AnimatedKeyboardView: UIView {
         layer.cornerRadius = 12
         
         // Create 3 white keys for demo
-        for i in 0..<3 {
+        for _ in 0..<3 {
             let key = PianoKeyView(isBlackKey: false)
             keys.append(key)
             addSubview(key)

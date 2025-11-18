@@ -8,7 +8,7 @@
 import Foundation
 import UIKit
 
-class ChordController: UIViewController {
+class ChordRecognition: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
