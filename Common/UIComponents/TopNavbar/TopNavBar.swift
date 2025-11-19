@@ -1,8 +1,4 @@
-
-
 import Foundation
-
-
 import UIKit
 
 public final class TopNavBar: UIView {
@@ -55,7 +51,7 @@ public final class TopNavBar: UIView {
             config.background.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
             config.background.cornerRadius = 16
             config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
-            // Apply attributed title to enforce bold 14 font
+            
             var att = AttributedString("🔥 Day 5")
             att.font = .boldSystemFont(ofSize: 14)
             config.attributedTitle = att
@@ -73,7 +69,7 @@ public final class TopNavBar: UIView {
     
     private let chordButton: UIButton = {
         let button = UIButton(type: .system)
-        let icon = UIImage(systemName: "music.note.list")?.withRenderingMode(.alwaysTemplate)
+        let icon = UIImage(systemName:"opticaldisc")?.withRenderingMode(.alwaysTemplate)
         button.setImage(icon, for: .normal)
         button.tintColor = .black
         button.imageView?.contentMode = .scaleAspectFit
@@ -89,9 +85,11 @@ public final class TopNavBar: UIView {
         iv.contentMode = .scaleAspectFill
         return iv
     }()
+    
     public var isWelcomeTextHidden: Bool = false {
         didSet { welcomeLabel.isHidden = isWelcomeTextHidden }
     }
+    
     private let welcomeLabel: UILabel = {
         let label = UILabel()
         label.text = "Welcome back, Mukul"
@@ -126,7 +124,6 @@ public final class TopNavBar: UIView {
         buildHierarchy()
         applyConstraints()
         
-        // Actions
         dayBadge.addTarget(self, action: #selector(dayBadgeTapped), for: .touchUpInside)
         chordButton.addTarget(self, action: #selector(chordTapped), for: .touchUpInside)
     }
@@ -178,8 +175,9 @@ public final class TopNavBar: UIView {
             profileImg.widthAnchor.constraint(equalToConstant: 36),
             profileImg.heightAnchor.constraint(equalToConstant: 36),
             
-            chordButton.widthAnchor.constraint(equalToConstant: 30),
-            chordButton.heightAnchor.constraint(equalToConstant: 30)
+            // ⬅️ CHANGED: make optical disc icon same size as profile image
+            chordButton.widthAnchor.constraint(equalToConstant: 36),
+            chordButton.heightAnchor.constraint(equalToConstant: 36)
         ])
     }
     
@@ -227,4 +225,3 @@ public final class TopNavBar: UIView {
         return nav
     }
 }
-
