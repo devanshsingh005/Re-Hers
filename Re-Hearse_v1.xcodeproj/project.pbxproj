@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		2307DB7B2EC71C7000FC6998 /* PianoAnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307DB7A2EC71C7000FC6998 /* PianoAnimationViewController.swift */; };
 		236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */; };
+		238AE1142ECE13EC0034A02D /* SearchPageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238AE1132ECE13EC0034A02D /* SearchPageViewController.swift */; };
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3828BF2EC6441A0025933F /* SplashViewController.swift */; };
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
@@ -29,6 +30,7 @@
 /* Begin PBXFileReference section */
 		2307DB7A2EC71C7000FC6998 /* PianoAnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PianoAnimationViewController.swift; path = Screens/MainHomeScreen/PianoAnimationViewController.swift; sourceTree = SOURCE_ROOT; };
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MainPlayListScreen.swift; path = Screens/MainPlayListScreen.swift; sourceTree = SOURCE_ROOT; };
+		238AE1132ECE13EC0034A02D /* SearchPageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SearchPageViewController.swift; path = Screens/SearchPageViewController.swift; sourceTree = SOURCE_ROOT; };
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		2B3828BF2EC6441A0025933F /* SplashViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashViewController.swift; sourceTree = "<group>"; };
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
@@ -260,6 +262,7 @@
 			isa = PBXGroup;
 			children = (
 				2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */,
+				238AE1132ECE13EC0034A02D /* SearchPageViewController.swift */,
 			);
 			path = MainExploreScreen;
 			sourceTree = "<group>";
@@ -375,6 +378,7 @@
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				2307DB7B2EC71C7000FC6998 /* PianoAnimationViewController.swift in Sources */,
 				84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */,
+				238AE1142ECE13EC0034A02D /* SearchPageViewController.swift in Sources */,
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
 				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */,

@@ -26,7 +26,7 @@ class ExploreViewController: UIViewController {
         collectionViewLayout: UICollectionViewFlowLayout()
     )
 
-    private let categories = ["cl_1", "cl_2", "cl_1", "cl_2"]
+    private let categories = ["cl_1", "cl_2", "ride_home", "cl_1"]
     private let albums = ["cl_1", "cl_2", "cl_1","cl_1", "cl_2", "cl_1", "cl_2"]
 
     // MARK: - Lifecycle
@@ -109,6 +109,14 @@ class ExploreViewController: UIViewController {
     private func setupSearchBar() {
         searchBar.placeholder = "Search"
         searchBar.searchBarStyle = .minimal
+        
+        // Set background color of the search field to system light gray
+        if let textField = searchBar.value(forKey: "searchField") as? UITextField {
+            textField.backgroundColor = .systemGray3   // light gray
+            textField.layer.cornerRadius = 10
+            textField.clipsToBounds = true
+        }
+
         contentView.addSubview(searchBar)
         searchBar.translatesAutoresizingMaskIntoConstraints = false
 
@@ -118,6 +126,7 @@ class ExploreViewController: UIViewController {
             searchBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20)
         ])
     }
+
 
     // MARK: - Collections Setup
     private func setupCollections() {
