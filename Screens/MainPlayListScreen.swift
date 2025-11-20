@@ -20,7 +20,7 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
     
     // MARK: - UI Components
     private let navBar = TopNavBar.make(
-        appTitle: "PlayList"
+        title: "PlayList"
     )
     
     private let tableView = UITableView()

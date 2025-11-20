@@ -8,7 +8,7 @@ class ExploreViewController: UIViewController {
 
     // MARK: - UI Components
     private let navBar = TopNavBar.make(
-        appTitle: "Explore"
+        title: "Explore"
     )
     
     private let scrollView = UIScrollView()

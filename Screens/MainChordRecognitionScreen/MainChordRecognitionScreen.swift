@@ -20,10 +20,7 @@ final class ChordRecognitionViewController: UIViewController {
 
     // MARK: - UI
     private let navBar = TopNavBar.make(
-        appTitle: "Chord Recognition",
-        dayText: "",
-        welcomeText: "",
-        profileImage: nil
+    title: "Chord Recognition",
     )
 
     private let chordLabel: UILabel = {
@@ -77,16 +74,7 @@ final class ChordRecognitionViewController: UIViewController {
         return b
     }()
 
-    // Back button → go back to previous screen (explicit)
-    private let backButton: UIButton = {
-        let b = UIButton(type: .system)
-        b.setTitle("Back", for: .normal)
-        b.backgroundColor = .black
-        b.setTitleColor(.white, for: .normal)
-        b.layer.cornerRadius = 14
-        b.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        return b
-    }()
+ 
 
     // MARK: - Fake audio simulation (for local testing)
     private var fakeTimer: Timer?
@@ -178,7 +166,7 @@ final class ChordRecognitionViewController: UIViewController {
         navBar.isWelcomeTextHidden = true
         navBar.isStreakVisible = false
         navBar.isChordIconVisible = false
-
+        navBar.isBackButtonVisible = true
         // Optional: allow dayBadgeAction to act as a "back" affordance
         navBar.dayBadgeAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
@@ -188,6 +176,14 @@ final class ChordRecognitionViewController: UIViewController {
             }
 
         }
+        navBar.backAction = { [weak self] in
+            if let nav = self?.navigationController {
+                nav.popViewController(animated: true)
+            } else {
+                self?.dismiss(animated: true)
+            }
+        }
+
 
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -213,7 +209,7 @@ final class ChordRecognitionViewController: UIViewController {
 
     private func setupUI() {
         // Add subviews
-        [chordLabel, noteLabel, confidenceLabel, waveView, micButton, cancelButton, backButton].forEach {
+        [chordLabel, noteLabel, confidenceLabel, waveView, micButton, cancelButton].forEach {
             view.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -245,18 +241,18 @@ final class ChordRecognitionViewController: UIViewController {
             micButton.widthAnchor.constraint(equalToConstant: 92),
             micButton.heightAnchor.constraint(equalToConstant: 92),
 
-            // back button below controls
-            backButton.topAnchor.constraint(equalTo: cancelButton.bottomAnchor, constant: 20),
-            backButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            backButton.widthAnchor.constraint(equalToConstant: 200),
-            backButton.heightAnchor.constraint(equalToConstant: 60)
+//            // back button below controls
+//            backButton.topAnchor.constraint(equalTo: cancelButton.bottomAnchor, constant: 20),
+//            backButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+//            backButton.widthAnchor.constraint(equalToConstant: 200),
+//            backButton.heightAnchor.constraint(equalToConstant: 60)
         ])
     }
 
     private func configureActions() {
         micButton.addTarget(self, action: #selector(micTapped), for: .touchUpInside)
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+ 
     }
 
     @objc private func backTapped() {

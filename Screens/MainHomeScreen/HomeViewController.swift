@@ -11,8 +11,7 @@ class HomeViewController: UIViewController {
     
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(
-        
-    )
+        title: "Re-Hearse")
     
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
@@ -168,12 +167,9 @@ class HomeViewController: UIViewController {
     }
 
     // MARK: - Navigation to Piano Page
-    @objc private func openPianoPage() {
+    @objc func openPianoPage() {
         let vc = PianoAnimationViewController()
-        let navController = UINavigationController(rootViewController: vc)
-        
-        navController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
-        present(navController, animated: true)
+        navigationController?.pushViewController(vc, animated: true)
     }
 
 

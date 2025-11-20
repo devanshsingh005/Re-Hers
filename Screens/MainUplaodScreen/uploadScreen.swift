@@ -24,7 +24,7 @@ class UploadScreen: UIViewController {
     
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(
-       appTitle: "Upload"
+       title: "Upload"
     )
     
     private let scrollView = UIScrollView()

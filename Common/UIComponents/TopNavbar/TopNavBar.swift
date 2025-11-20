@@ -1,39 +1,33 @@
-import Foundation
 import UIKit
 
 public final class TopNavBar: UIView {
-    
-    // MARK: - Public properties
-    
-    public var appTitle: String = "Re-Hearse" {
-        didSet { appLabel.text = appTitle }
-    }
-    
-    public var dayText: String = "🔥 Day 5" {
-        didSet { dayBadge.setTitle(dayText, for: .normal) }
-    }
-    
-    public var welcomeText: String = "Welcome back, Mukul" {
-        didSet { welcomeLabel.text = welcomeText }
-    }
-    
-    public var profileImage: UIImage? {
-        didSet { updateProfileImage() }
-    }
-    
+
+    // MARK: - Public Toggles
+    public var isBackButtonVisible: Bool = false { didSet { backButton.isHidden = !isBackButtonVisible } }
+    public var isStreakVisible: Bool = true { didSet { dayBadge.isHidden = !isStreakVisible } }
+    public var isChordIconVisible: Bool = false { didSet { chordButton.isHidden = !isChordIconVisible } }
+    public var isProfileVisible: Bool = true { didSet { profileImg.isHidden = !isProfileVisible } }
+    public var isWelcomeTextHidden: Bool = false { didSet { welcomeLabel.isHidden = isWelcomeTextHidden } }
+
+    // MARK: - Actions
+    public var backAction: (() -> Void)?
     public var dayBadgeAction: (() -> Void)?
     public var chordAction: (() -> Void)?
-    
-    public var isStreakVisible: Bool = true {
-        didSet { dayBadge.isHidden = !isStreakVisible }
-    }
-    
-    public var isChordIconVisible: Bool = false {
-        didSet { chordButton.isHidden = !isChordIconVisible }
-    }
-    
+    public var profileAction: (() -> Void)?
+
     // MARK: - UI Components
-    
+
+    // ⬅️ NEW: Back Button
+    private let backButton: UIButton = {
+        let btn = UIButton(type: .system)
+        let icon = UIImage(systemName: "chevron.left")?.withRenderingMode(.alwaysTemplate)
+        btn.setImage(icon, for: .normal)
+        btn.tintColor = .label
+        btn.isHidden = true
+        btn.contentHorizontalAlignment = .leading
+        return btn
+    }()
+
     private let appLabel: UILabel = {
         let label = UILabel()
         label.text = "Re-Hearse"
@@ -41,55 +35,35 @@ public final class TopNavBar: UIView {
         label.textColor = .label
         return label
     }()
-    
+
     private let dayBadge: UIButton = {
-        let button = UIButton(type: .system)
-        if #available(iOS 15.0, *) {
-            var config = UIButton.Configuration.plain()
-            config.title = "🔥 Day 5"
-            config.baseForegroundColor = .black
-            config.background.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
-            config.background.cornerRadius = 16
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
-            
-            var att = AttributedString("🔥 Day 5")
-            att.font = .boldSystemFont(ofSize: 14)
-            config.attributedTitle = att
-            button.configuration = config
-        } else {
-            button.setTitle("🔥 Day 5", for: .normal)
-            button.setTitleColor(.black, for: .normal)
-            button.titleLabel?.font = .boldSystemFont(ofSize: 14)
-            button.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
-            button.layer.cornerRadius = 16
-            button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
-        }
-        return button
+        let btn = UIButton(type: .system)
+        btn.setTitle("🔥 Day 5", for: .normal)
+        btn.setTitleColor(.black, for: .normal)
+        btn.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
+        btn.layer.cornerRadius = 16
+        btn.titleLabel?.font = .boldSystemFont(ofSize: 14)
+        btn.contentEdgeInsets = .init(top: 6, left: 10, bottom: 6, right: 10)
+        return btn
     }()
-    
+
     private let chordButton: UIButton = {
-        let button = UIButton(type: .system)
-        let icon = UIImage(systemName:"opticaldisc")?.withRenderingMode(.alwaysTemplate)
-        button.setImage(icon, for: .normal)
-        button.tintColor = .black
-        button.imageView?.contentMode = .scaleAspectFit
-        return button
+        let btn = UIButton(type: .system)
+        btn.setImage(UIImage(systemName: "opticaldisc"), for: .normal)
+        btn.tintColor = .label
+        return btn
     }()
-    
+
     private let profileImg: UIImageView = {
         let iv = UIImageView()
-        iv.tintColor = .gray
-        iv.backgroundColor = .lightGray
         iv.layer.cornerRadius = 18
         iv.clipsToBounds = true
         iv.contentMode = .scaleAspectFill
+        iv.image = UIImage(systemName: "person.crop.circle")
+        iv.tintColor = .gray
         return iv
     }()
-    
-    public var isWelcomeTextHidden: Bool = false {
-        didSet { welcomeLabel.isHidden = isWelcomeTextHidden }
-    }
-    
+
     private let welcomeLabel: UILabel = {
         let label = UILabel()
         label.text = "Welcome back, Mukul"
@@ -97,131 +71,101 @@ public final class TopNavBar: UIView {
         label.textColor = .label
         return label
     }()
-    
+
     private let topRowStack = UIStackView()
     private let rightStack = UIStackView()
     private let mainStack = UIStackView()
-    
+
     // MARK: - Init
-    
     public override init(frame: CGRect) {
         super.init(frame: frame)
         configureUI()
     }
-    
+
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         configureUI()
     }
-    
+
     // MARK: - Setup
-    
     private func configureUI() {
         backgroundColor = .clear
         translatesAutoresizingMaskIntoConstraints = false
-        
+
         setupStacks()
         buildHierarchy()
         applyConstraints()
-        
-        dayBadge.addTarget(self, action: #selector(dayBadgeTapped), for: .touchUpInside)
-        chordButton.addTarget(self, action: #selector(chordTapped), for: .touchUpInside)
+
+        // actions
+        backButton.addTarget(self, action: #selector(handleBack), for: .touchUpInside)
+        dayBadge.addTarget(self, action: #selector(handleDayBadge), for: .touchUpInside)
+        chordButton.addTarget(self, action: #selector(handleChord), for: .touchUpInside)
     }
-    
+
     private func setupStacks() {
         topRowStack.axis = .horizontal
         topRowStack.alignment = .center
-        topRowStack.distribution = .fill
         topRowStack.spacing = 8
-        
+
         rightStack.axis = .horizontal
         rightStack.alignment = .center
         rightStack.spacing = 10
-        
+
         mainStack.axis = .vertical
         mainStack.alignment = .fill
         mainStack.spacing = 6
     }
-    
+
     private func buildHierarchy() {
+        // Right row: badge + chord icon + profile
         rightStack.addArrangedSubview(dayBadge)
         rightStack.addArrangedSubview(chordButton)
         rightStack.addArrangedSubview(profileImg)
-        
+
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        
+
+        // new: back button
+        topRowStack.addArrangedSubview(backButton)
         topRowStack.addArrangedSubview(appLabel)
         topRowStack.addArrangedSubview(spacer)
         topRowStack.addArrangedSubview(rightStack)
-        
+
         mainStack.addArrangedSubview(topRowStack)
         mainStack.addArrangedSubview(welcomeLabel)
-        
+
         addSubview(mainStack)
     }
-    
+
     private func applyConstraints() {
         mainStack.translatesAutoresizingMaskIntoConstraints = false
         profileImg.translatesAutoresizingMaskIntoConstraints = false
-        chordButton.translatesAutoresizingMaskIntoConstraints = false
-        
+
         NSLayoutConstraint.activate([
             mainStack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             mainStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             mainStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             mainStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-            
+
             profileImg.widthAnchor.constraint(equalToConstant: 36),
-            profileImg.heightAnchor.constraint(equalToConstant: 36),
-            
-            // ⬅️ CHANGED: make optical disc icon same size as profile image
-            chordButton.widthAnchor.constraint(equalToConstant: 36),
-            chordButton.heightAnchor.constraint(equalToConstant: 36)
+            profileImg.heightAnchor.constraint(equalToConstant: 36)
         ])
     }
-    
+
     // MARK: - Actions
-    
-    @objc private func dayBadgeTapped() {
-        dayBadgeAction?()
+    @objc private func handleBack() { backAction?() }
+    @objc private func handleDayBadge() { dayBadgeAction?() }
+    @objc private func handleChord() { chordAction?() }
+
+    // MARK: - Public API
+    public func setTitle(_ text: String) {
+        appLabel.text = text
     }
-    
-    @objc private func chordTapped() {
-        chordAction?()
-    }
-    
-    // MARK: - Helpers
-    
-    private func updateProfileImage() {
-        if let img = profileImage {
-            profileImg.image = img
-            profileImg.backgroundColor = .clear
-        } else {
-            let defaultIcon = UIImage(systemName: "person.crop.circle.fill")?.withRenderingMode(.alwaysTemplate)
-            profileImg.image = defaultIcon
-            profileImg.tintColor = .gray
-            profileImg.backgroundColor = .lightGray
-        }
-    }
-    
+
     // MARK: - Factory
-    
-    public static func make(
-        appTitle: String = "Re-Hearse",
-        dayText: String = "🔥 Day 5",
-        welcomeText: String = "Welcome back, Mukul",
-        profileImage: UIImage? = nil,
-        dayBadgeAction: (() -> Void)? = nil,
-        chordAction: (() -> Void)? = nil
-    ) -> TopNavBar {
-        let nav = TopNavBar()
-        nav.appTitle = appTitle
-        nav.dayText = dayText
-        nav.welcomeText = welcomeText
-        nav.profileImage = profileImage
-        nav.dayBadgeAction = dayBadgeAction
-        nav.chordAction = chordAction
-        return nav
+    public static func make(title: String) -> TopNavBar {
+        let bar = TopNavBar()
+        bar.setTitle(title)
+        return bar
     }
 }
