@@ -19,6 +19,8 @@
 		842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08682EBA0C15001AC579 /* AnimationViewController.swift */; };
 		842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
+		8463EBFF2ECF98B800471106 /* PianoDemoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8463EBFE2ECF98B800471106 /* PianoDemoManager.swift */; };
+		8463EC012ECF990E00471106 /* SongChord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8463EC002ECF990E00471106 /* SongChord.swift */; };
 		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
 		84C6A9DC2ECE1670007DA0D0 /* PianoAnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */; };
@@ -42,10 +44,11 @@
 		842B08682EBA0C15001AC579 /* AnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationViewController.swift; sourceTree = "<group>"; };
 		842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordRecognitionViewController.swift; sourceTree = "<group>"; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		8463EBFE2ECF98B800471106 /* PianoDemoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoDemoManager.swift; sourceTree = "<group>"; };
+		8463EC002ECF990E00471106 /* SongChord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongChord.swift; sourceTree = "<group>"; };
 		84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopNavBar.swift; sourceTree = "<group>"; };
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
 		84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoAnimationViewController.swift; sourceTree = "<group>"; };
-		84C6A9DD2ECE167C007DA0D0 /* PianoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoModels.swift; sourceTree = "<group>"; };
 		84C6A9DF2ECE1687007DA0D0 /* PianoLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoLogic.swift; sourceTree = "<group>"; };
 		84C6A9E12ECE1692007DA0D0 /* PianoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoView.swift; sourceTree = "<group>"; };
 		84DBA86F2EBA7816006DF51E /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
@@ -251,9 +254,10 @@
 			isa = PBXGroup;
 			children = (
 				84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */,
-				84C6A9DD2ECE167C007DA0D0 /* PianoModels.swift */,
 				84C6A9DF2ECE1687007DA0D0 /* PianoLogic.swift */,
 				84C6A9E12ECE1692007DA0D0 /* PianoView.swift */,
+				8463EBFE2ECF98B800471106 /* PianoDemoManager.swift */,
+				8463EC002ECF990E00471106 /* SongChord.swift */,
 			);
 			path = MainAnimationScreen;
 			sourceTree = "<group>";
@@ -387,6 +391,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8463EBFF2ECF98B800471106 /* PianoDemoManager.swift in Sources */,
 				236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */,
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */,
@@ -404,6 +409,7 @@
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
 				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
+				8463EC012ECF990E00471106 /* SongChord.swift in Sources */,
 				842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
