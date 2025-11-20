@@ -392,7 +392,7 @@
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */,
 				84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */,
-				84C6A9DE2ECE167C007DA0D0 /* PianoModels.swift in Sources */,
+				238AE1142ECE13EC0034A02D /* SearchPageViewController.swift in Sources */,
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
 				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */,
