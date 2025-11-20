@@ -22,7 +22,6 @@
 		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
 		84C6A9DC2ECE1670007DA0D0 /* PianoAnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */; };
-		84C6A9DE2ECE167C007DA0D0 /* PianoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DD2ECE167C007DA0D0 /* PianoModels.swift */; };
 		84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DF2ECE1687007DA0D0 /* PianoLogic.swift */; };
 		84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9E12ECE1692007DA0D0 /* PianoView.swift */; };
 		84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift */; };
@@ -392,7 +391,6 @@
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */,
 				84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */,
-				238AE1142ECE13EC0034A02D /* SearchPageViewController.swift in Sources */,
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
 				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */,
