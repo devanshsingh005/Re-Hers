@@ -312,7 +312,14 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         picker.dismiss(animated: true)
-        print("Image selected successfully")
+        // Navigate to SongDetailsPage after image selection
+        let vc = SongDetailViewController()
+        if let nav = self.navigationController {
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
