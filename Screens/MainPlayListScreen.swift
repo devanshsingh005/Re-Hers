@@ -17,11 +17,31 @@ struct Playlist {
 }
 
 // MARK: - Playlist Screen
+// MARK: - Playlist Screen
 class PlaylistViewController: UIViewController {
     
     // MARK: - UI Components
     private let navBar = TopNavBar.make(title: "PlayList")
     private let tableView = UITableView()
+    
+    private let floatingButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.backgroundColor = UIColor(red: 1.0, green: 0.55, blue: 0.0, alpha: 1.0) // Orange
+        btn.setTitle("+", for: .normal)
+        btn.titleLabel?.font = .boldSystemFont(ofSize: 34)
+        btn.tintColor = .white
+        
+        btn.layer.cornerRadius = 30
+        btn.clipsToBounds = false
+        
+        // Modern shadow
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowOpacity = 0.25
+        btn.layer.shadowRadius = 10
+        btn.layer.shadowOffset = CGSize(width: 0, height: 6)
+        
+        return btn
+    }()
     
     // MARK: - Data (mutable)
     private var playlists: [Playlist] = [
@@ -32,14 +52,14 @@ class PlaylistViewController: UIViewController {
         Playlist(title: "Deep Travel", imageIdentifier: "cl_1", tags: "Soul Indie Acoustic", trackCount: 8),
     ]
     
-    private var addButton: UIButton?
     
     // MARK: - Life
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        setupAddButton()
+        setupFloatingButton()
     }
+    
     
     // MARK: - Setup UI
     private func setupUI() {
@@ -70,31 +90,27 @@ class PlaylistViewController: UIViewController {
         ])
     }
     
-    // MARK: - Add Button
-    private func setupAddButton() {
-        let headerContainer = UIView()
-        headerContainer.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 60)
-
-        let addButton = UIButton(type: .system)
-        addButton.setTitle("+", for: .normal)
-        addButton.titleLabel?.font = .boldSystemFont(ofSize: 34)
-        addButton.tintColor = .black
-        addButton.translatesAutoresizingMaskIntoConstraints = false
-
-        headerContainer.addSubview(addButton)
-
+    
+    // MARK: - Floating Button
+    // MARK: - Floating Button
+    private func setupFloatingButton() {
+        view.addSubview(floatingButton)
+        floatingButton.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
-            addButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -16),
-            addButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
-            addButton.widthAnchor.constraint(equalToConstant: 44),
-            addButton.heightAnchor.constraint(equalToConstant: 44)
+            floatingButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
+            floatingButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -26),
+            floatingButton.widthAnchor.constraint(equalToConstant: 60),
+            floatingButton.heightAnchor.constraint(equalToConstant: 60)
         ])
-
-        addButton.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
-
-        tableView.tableHeaderView = headerContainer
+        
+        floatingButton.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
     }
 
+
+    
+    
+    // MARK: - Add
     @objc private func didTapAdd() {
         let addVC = AddPlaylistViewController()
         addVC.modalPresentationStyle = .overFullScreen
@@ -121,6 +137,7 @@ class PlaylistViewController: UIViewController {
         present(addVC, animated: true)
     }
     
+    
     // MARK: - Table
     private func setupTableView() {
         view.addSubview(tableView)
@@ -134,6 +151,10 @@ class PlaylistViewController: UIViewController {
         tableView.separatorStyle = .none
         tableView.rowHeight = 130
         
+        // Add padding so FAB doesn't overlap first card
+        tableView.contentInset = UIEdgeInsets(top: 10, left: 0, bottom: 30, right: 0)
+
+        
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -141,6 +162,7 @@ class PlaylistViewController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
+    
     
     // MARK: - File saving helper
     private func saveImageToDocuments(image: UIImage) -> String? {
@@ -168,6 +190,34 @@ class PlaylistViewController: UIViewController {
         return nil
     }
 }
+
+    
+    // MARK: - File saving helper
+    private func saveImageToDocuments(image: UIImage) -> String? {
+        guard let data = image.pngData() else { return nil }
+        let filename = "doc_\(UUID().uuidString).png"
+        let url = FileManager.default.urls(for: .documentDirectory,
+                                           in: .userDomainMask).first!.appendingPathComponent(filename)
+        do {
+            try data.write(to: url, options: .atomic)
+            return filename
+        } catch {
+            print("Failed to save image to documents:", error)
+            return nil
+        }
+    }
+    
+    fileprivate func loadImage(identifier: String) -> UIImage? {
+        if let img = UIImage(named: identifier) { return img }
+        
+        let url = FileManager.default.urls(for: .documentDirectory,
+                                           in: .userDomainMask).first!.appendingPathComponent(identifier)
+        if let data = try? Data(contentsOf: url) {
+            return UIImage(data: data)
+        }
+        return nil
+    }
+
 
 // MARK: - Table Delegate
 extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
