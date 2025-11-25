@@ -247,10 +247,16 @@ class SongDetailViewController: UIViewController {
     // MARK: - Setup Actions
     private func setupActions() {
         playAlongButton.addTarget(self, action: #selector(tabPlayAlong), for: .touchUpInside)
-        animationButton.addTarget(self, action: #selector(tabAnimation), for: .touchUpInside)
+        animationButton.addTarget(self, action: #selector(openPianoAnimationVC), for: .touchUpInside)
         bookmarkButton.addTarget(self, action: #selector(bookmarkTapped), for: .touchUpInside)
         pageNextButton.addTarget(self, action: #selector(nextPageTapped), for: .touchUpInside)
     }
+    @objc func openPianoAnimationVC() {
+        let vc = PianoAnimationViewController()
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
+    }
+
     
     // MARK: - Page Flip Logic
     private func updatePage() {
