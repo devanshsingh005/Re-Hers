@@ -302,10 +302,10 @@ class HomeViewController: UIViewController {
 //    }
     private func addContinueLearningSection() {
         // Top spacing (to match other sections)
-        let topSpacer = UIView()
-        topSpacer.heightAnchor.constraint(equalToConstant: 2).isActive = true
-        contentView.addArrangedSubview(topSpacer)
-        
+//        let topSpacer = UIView()
+//        topSpacer.heightAnchor.constraint(equalToConstant: 2).isActive = true
+//        contentView.addArrangedSubview(topSpacer)
+//        
         // Section title
         let sectionHeader = UILabel()
         sectionHeader.text = "Continue Learning"
@@ -314,9 +314,9 @@ class HomeViewController: UIViewController {
         contentView.addArrangedSubview(sectionHeader)
 
         // Small spacer under title (8 looks best visually)
-        let headerSpacer = UIView()
-        headerSpacer.heightAnchor.constraint(equalToConstant: 2).isActive = true
-        contentView.addArrangedSubview(headerSpacer)
+//        let headerSpacer = UIView()
+//        headerSpacer.heightAnchor.constraint(equalToConstant: 2).isActive = true
+//        contentView.addArrangedSubview(headerSpacer)
         
         // Horizontal scroll section
         let scrollView = UIScrollView()

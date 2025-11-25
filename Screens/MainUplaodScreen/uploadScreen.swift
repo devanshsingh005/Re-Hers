@@ -162,20 +162,31 @@ class UploadScreen: UIViewController {
 
     // MARK: - Continue Learning
     private func addContinueLearningSection() {
+
+        // 👉 Add padding ABOVE the "Continue Learning" title
+        let topPadding = UIView()
+        topPadding.translatesAutoresizingMaskIntoConstraints = false
+        topPadding.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        contentView.addArrangedSubview(topPadding)
+
+        // Section title
         let sectionHeader = UILabel()
         sectionHeader.text = "Continue Learning"
         sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
         sectionHeader.textColor = .black
         contentView.addArrangedSubview(sectionHeader)
         
+        // Small space UNDER the title
         let headerSpacer = UIView()
         headerSpacer.translatesAutoresizingMaskIntoConstraints = false
-        headerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        headerSpacer.heightAnchor.constraint(equalToConstant: 1).isActive = true
         contentView.addArrangedSubview(headerSpacer)
-        
+
+        // Horizontal carousel
         let slider = createHorizontalCarousel()
         contentView.addArrangedSubview(slider)
     }
+
 
     private func createHorizontalCarousel() -> UIView {
         let container = UIView()
