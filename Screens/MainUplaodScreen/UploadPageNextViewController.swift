@@ -2,166 +2,237 @@
 //  UploadPageNextViewController.swift
 //  Re-Hearse_v1
 //
-//  Created by Devvvv on 25/11/25.
-//
 
 import UIKit
 
 final class UploadPageNextViewController: UIViewController {
-    // MARK: - Public API
-    // Set this from Upload Screen before pushing this controller
+
     var uploadedImage: UIImage? {
-        didSet { imageView.image = uploadedImage }
+        didSet { sheetImageView.image = uploadedImage }
     }
 
-    // MARK: - UI
-    private let topNavBar = UIView()
-    private let backButton = UIButton(type: .system)
-    private let titleLabel = UILabel()
+    private let navBar = TopNavBar()
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
-    private let imageView = UIImageView()
 
-    private let bottomNavBar = UIView()
-    private let primaryButton = UIButton(type: .system)
+    private let sheetContainer = UIView()
+    private let sheetHeaderLabel = UILabel()
+    private let maximizeButton = UIButton(type: .system)
+    private let sheetImageView = UIImageView()
+    private let metronomeLabel = UILabel()
 
-    // MARK: - Lifecycle
+    private let tipsContainer = UIView()
+    private let tipsTitleLabel = UILabel()
+    private let tipsBodyLabel = UILabel()
+
+    private let playAlongButton = UIButton(type: .system)
+    private let animationButton = UIButton(type: .system)
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        configureView()
+        view.backgroundColor = .white
+
+        setupNavBar()
+        setupUI()
         buildHierarchy()
         applyConstraints()
-        configureContent()
+        setupActions()
     }
 
-    // MARK: - Setup
-    private func configureView() {
-        view.backgroundColor = .systemBackground
-
-        // Top Nav Bar
-        topNavBar.backgroundColor = .secondarySystemBackground
-        topNavBar.translatesAutoresizingMaskIntoConstraints = false
-
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        backButton.setTitle("", for: .normal)
-        backButton.tintColor = .label
-        backButton.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
-        backButton.translatesAutoresizingMaskIntoConstraints = false
-
-        titleLabel.text = "Preview"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        titleLabel.textAlignment = .center
-        titleLabel.textColor = .label
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // Scroll + Content
-        scrollView.alwaysBounceVertical = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-        imageView.layer.cornerRadius = 12
-        imageView.backgroundColor = .tertiarySystemFill // visible placeholder if no image
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-
-        // Bottom Nav Bar
-        bottomNavBar.backgroundColor = .secondarySystemBackground
-        bottomNavBar.translatesAutoresizingMaskIntoConstraints = false
-
-        primaryButton.setTitle("Continue", for: .normal)
-        primaryButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-        primaryButton.backgroundColor = .label
-        primaryButton.setTitleColor(.systemBackground, for: .normal)
-        primaryButton.layer.cornerRadius = 12
-        primaryButton.addTarget(self, action: #selector(didTapPrimary), for: .touchUpInside)
-        primaryButton.translatesAutoresizingMaskIntoConstraints = false
+    // MARK: - Maximize Button Action
+    private func setupActions() {
+        maximizeButton.addTarget(self, action: #selector(didTapMaximize), for: .touchUpInside)
     }
 
-    private func buildHierarchy() {
-        view.addSubview(topNavBar)
-        topNavBar.addSubview(backButton)
-        topNavBar.addSubview(titleLabel)
-
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
-        contentView.addSubview(imageView)
-
-        view.addSubview(bottomNavBar)
-        bottomNavBar.addSubview(primaryButton)
+    @objc private func didTapMaximize() {
+        let vc = MaximizeViewController()
+        vc.sheetImage = uploadedImage
+        vc.modalPresentationStyle = .fullScreen
+        present(vc, animated: true)
     }
 
-    private func applyConstraints() {
-        let topBarHeight: CGFloat = 56
-        let bottomBarHeight: CGFloat = 88
-        let horizontalInset: CGFloat = 20
+    private func setupNavBar() {
+        view.addSubview(navBar)
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+        
+        navBar.isBackButtonVisible = true
+        navBar.isChordIconVisible = true
+        navBar.isProfileVisible = true
+        navBar.isStreakVisible = false
+        navBar.isWelcomeTextHidden = true
+        navBar.setTitle("Practice")
+
+        navBar.backAction = { [weak self] in
+            self?.navigationController?.popViewController(animated: true)
+        }
+
+        navBar.chordAction = { [weak self] in
+            let vc = ChordRecognitionViewController()
+            self?.navigationController?.pushViewController(vc, animated: true)
+        }
 
         NSLayoutConstraint.activate([
-            // Top bar
-            topNavBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            topNavBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            topNavBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topNavBar.heightAnchor.constraint(equalToConstant: topBarHeight),
-
-            backButton.leadingAnchor.constraint(equalTo: topNavBar.leadingAnchor, constant: 12),
-            backButton.centerYAnchor.constraint(equalTo: topNavBar.centerYAnchor),
-            backButton.widthAnchor.constraint(equalToConstant: 44),
-            backButton.heightAnchor.constraint(equalToConstant: 44),
-
-            titleLabel.centerXAnchor.constraint(equalTo: topNavBar.centerXAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: topNavBar.centerYAnchor),
-
-            // Bottom bar
-            bottomNavBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            bottomNavBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            bottomNavBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomNavBar.heightAnchor.constraint(equalToConstant: bottomBarHeight),
-
-            primaryButton.leadingAnchor.constraint(equalTo: bottomNavBar.leadingAnchor, constant: horizontalInset),
-            primaryButton.trailingAnchor.constraint(equalTo: bottomNavBar.trailingAnchor, constant: -horizontalInset),
-            primaryButton.centerYAnchor.constraint(equalTo: bottomNavBar.centerYAnchor),
-            primaryButton.heightAnchor.constraint(equalToConstant: 52),
-
-            // Scroll area
-            scrollView.topAnchor.constraint(equalTo: topNavBar.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomNavBar.topAnchor),
-
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-
-            imageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
-            imageView.heightAnchor.constraint(greaterThanOrEqualToConstant: 240),
-            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24)
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
 
-    private func configureContent() {
-        imageView.image = uploadedImage
-    }
+    private func setupUI() {
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.translatesAutoresizingMaskIntoConstraints = false
 
-    // MARK: - Actions
-    @objc private func didTapBack() {
-        if let nav = navigationController {
-            nav.popViewController(animated: true)
-        } else {
-            dismiss(animated: true)
+        sheetContainer.backgroundColor = UIColor(white: 0.22, alpha: 1)
+        sheetContainer.layer.cornerRadius = 30
+        sheetContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        sheetHeaderLabel.text = "Right hand focus"
+        sheetHeaderLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        sheetHeaderLabel.textColor = .white
+        sheetHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        maximizeButton.setTitle("Maximize", for: .normal)
+        maximizeButton.setTitleColor(.white, for: .normal)
+        maximizeButton.titleLabel?.font = .systemFont(ofSize: 13)
+        maximizeButton.backgroundColor = UIColor.white.withAlphaComponent(0.17)
+        maximizeButton.layer.cornerRadius = 14
+        maximizeButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
+        maximizeButton.translatesAutoresizingMaskIntoConstraints = false
+
+        sheetImageView.contentMode = .scaleAspectFit
+        sheetImageView.clipsToBounds = true
+        sheetImageView.layer.cornerRadius = 20
+        sheetImageView.backgroundColor = .white
+        sheetImageView.image = uploadedImage
+        sheetImageView.translatesAutoresizingMaskIntoConstraints = false
+
+        metronomeLabel.text = "Metronome on 60 BPM"
+        metronomeLabel.font = .systemFont(ofSize: 12)
+        metronomeLabel.textColor = .white
+        metronomeLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        tipsContainer.backgroundColor = UIColor(white: 0.95, alpha: 1)
+        tipsContainer.layer.cornerRadius = 18
+        tipsContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        tipsTitleLabel.text = "Tips"
+        tipsTitleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        tipsTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        tipsBodyLabel.text = "Keep wrists relaxed and fingers curved.\nListen for even timing between notes."
+        tipsBodyLabel.numberOfLines = 0
+        tipsBodyLabel.font = .systemFont(ofSize: 14)
+        tipsBodyLabel.textColor = .darkGray
+        tipsBodyLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        DispatchQueue.main.async {
+            let border = CAShapeLayer()
+            border.strokeColor = UIColor.darkGray.cgColor
+            border.lineWidth = 2.8
+            border.lineDashPattern = [6, 4]
+            border.fillColor = UIColor.clear.cgColor
+            border.path = UIBezierPath(roundedRect: self.tipsContainer.bounds, cornerRadius: 18).cgPath
+            border.frame = self.tipsContainer.bounds
+            self.tipsContainer.layer.addSublayer(border)
         }
+
+        playAlongButton.setTitle("Play Along", for: .normal)
+        playAlongButton.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.25, alpha: 1)
+        playAlongButton.layer.cornerRadius = 12
+        playAlongButton.setTitleColor(.black, for: .normal)
+        playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        playAlongButton.translatesAutoresizingMaskIntoConstraints = false
+
+        animationButton.setTitle("Animation", for: .normal)
+        animationButton.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        animationButton.layer.cornerRadius = 12
+        animationButton.setTitleColor(.darkGray, for: .normal)
+        animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        animationButton.translatesAutoresizingMaskIntoConstraints = false
     }
 
-    @objc private func didTapPrimary() {
-        // TODO: Handle next action
-        // e.g., push another controller or call a delegate
-        let alert = UIAlertController(title: "Continue", message: "Primary action tapped.", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+    private func buildHierarchy() {
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+
+        contentView.addSubview(sheetContainer)
+        sheetContainer.addSubview(sheetHeaderLabel)
+        sheetContainer.addSubview(maximizeButton)
+        sheetContainer.addSubview(sheetImageView)
+        sheetContainer.addSubview(metronomeLabel)
+
+        contentView.addSubview(tipsContainer)
+        tipsContainer.addSubview(tipsTitleLabel)
+        tipsContainer.addSubview(tipsBodyLabel)
+
+        contentView.addSubview(playAlongButton)
+        contentView.addSubview(animationButton)
+    }
+
+    private func applyConstraints() {
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+        ])
+
+        NSLayoutConstraint.activate([
+            sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+
+            sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 20),
+            sheetHeaderLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 20),
+
+            maximizeButton.centerYAnchor.constraint(equalTo: sheetHeaderLabel.centerYAnchor),
+            maximizeButton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -20),
+
+            sheetImageView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 20),
+            sheetImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
+            sheetImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
+            sheetImageView.heightAnchor.constraint(equalToConstant: 340),
+
+            metronomeLabel.topAnchor.constraint(equalTo: sheetImageView.bottomAnchor, constant: 16),
+            metronomeLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -20),
+            metronomeLabel.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -20)
+        ])
+
+        NSLayoutConstraint.activate([
+            tipsContainer.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 30),
+            tipsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            tipsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+
+            tipsTitleLabel.topAnchor.constraint(equalTo: tipsContainer.topAnchor, constant: 16),
+            tipsTitleLabel.leadingAnchor.constraint(equalTo: tipsContainer.leadingAnchor, constant: 16),
+
+            tipsBodyLabel.topAnchor.constraint(equalTo: tipsTitleLabel.bottomAnchor, constant: 8),
+            tipsBodyLabel.leadingAnchor.constraint(equalTo: tipsContainer.leadingAnchor, constant: 16),
+            tipsBodyLabel.trailingAnchor.constraint(equalTo: tipsContainer.trailingAnchor, constant: -16),
+            tipsBodyLabel.bottomAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: -16)
+        ])
+
+        NSLayoutConstraint.activate([
+            playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 30),
+            playAlongButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            playAlongButton.heightAnchor.constraint(equalToConstant: 54),
+
+            animationButton.centerYAnchor.constraint(equalTo: playAlongButton.centerYAnchor),
+            animationButton.leadingAnchor.constraint(equalTo: playAlongButton.trailingAnchor, constant: 16),
+            animationButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            animationButton.heightAnchor.constraint(equalToConstant: 54),
+
+            playAlongButton.widthAnchor.constraint(equalTo: animationButton.widthAnchor),
+
+            animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
+        ])
     }
 }
