@@ -101,6 +101,14 @@
 			path = Splash;
 			sourceTree = "<group>";
 		};
+		2B5707A72ED59EC300C68472 /* ProfileScreen */ = {
+			isa = PBXGroup;
+			children = (
+				23C736412ED579D100BCD95B /* UserProfileViewController.swift */,
+			);
+			path = ProfileScreen;
+			sourceTree = "<group>";
+		};
 		84114B682EBCF66100E86F71 /* MainUplaodScreen */ = {
 			isa = PBXGroup;
 			children = (
@@ -271,6 +279,7 @@
 		84DBA8592EBA72C7006DF51E /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				2B5707A72ED59EC300C68472 /* ProfileScreen */,
 				84C6A9DA2ECE1655007DA0D0 /* MainAnimationScreen */,
 				2B3828BE2EC643A80025933F /* Splash */,
 				84114B682EBCF66100E86F71 /* MainUplaodScreen */,
@@ -295,7 +304,6 @@
 			isa = PBXGroup;
 			children = (
 				84DBA86F2EBA7816006DF51E /* HomeViewController.swift */,
-				23C736412ED579D100BCD95B /* UserProfileViewController.swift */,
 			);
 			path = MainHomeScreen;
 			sourceTree = "<group>";

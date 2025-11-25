@@ -19,7 +19,7 @@ private enum Constants {
         static let white = UIColor.white
         static let orange = UIColor(red: 1.0, green: 0.6549, blue: 0.1490, alpha: 1.0)
         static let dailyGoalBackground = UIColor.black.withAlphaComponent(0.8)
-        static let progressTrack = UIColor.white.withAlphaComponent(0.2)
+        static let progressTrack = UIColor.white.withAlphaComponent(0.5)
     }
     
     enum Metrics {
