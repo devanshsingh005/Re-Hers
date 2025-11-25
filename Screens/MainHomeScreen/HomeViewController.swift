@@ -116,7 +116,7 @@ class HomeViewController: UIViewController {
         contentView.addArrangedSubview(container)
     }*/
     // MARK: - Daily Goal
-    private func addDailyGoal() {
+    public func addDailyGoal() {
         let container = UIView()
         container.backgroundColor = UIColor.black.withAlphaComponent(0.8)
         container.layer.cornerRadius = 20
