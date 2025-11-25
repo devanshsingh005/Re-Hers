@@ -168,7 +168,7 @@ class HomeViewController: UIViewController {
 
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {
-        let vc = PianoAnimationViewController()
+        let vc = UserProfileViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
 
