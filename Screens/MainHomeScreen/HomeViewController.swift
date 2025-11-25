@@ -124,10 +124,10 @@ class HomeViewController: UIViewController {
         container.heightAnchor.constraint(equalToConstant: 48).isActive = true
         
         // 👉 Enable tap
-        let tap = UITapGestureRecognizer(target: self, action: #selector(openPianoPage))
-        container.addGestureRecognizer(tap)
-        container.isUserInteractionEnabled = true
-        
+//        let tap = UITapGestureRecognizer(target: self, action: #selector(openPianoPage))
+//        container.addGestureRecognizer(tap)
+//        container.isUserInteractionEnabled = true
+//        
         let label = UILabel()
         label.text = "Daily goal"
         label.font = .systemFont(ofSize: 14, weight: .regular)
@@ -211,7 +211,7 @@ class HomeViewController: UIViewController {
         
         // Tags
         let tag1 = createTagLabel("Right-Hand dexterity")
-        let tag2 = createTagLabel("Accuracy 80%")
+        let tag2 = createTagLabel("Accuracy >80%")
         let tagsStack = UIStackView(arrangedSubviews: [tag1, tag2])
         tagsStack.axis = .vertical
         tagsStack.spacing = 6
@@ -227,6 +227,8 @@ class HomeViewController: UIViewController {
         
         // Buttons
         let continueBtn = createFilledButton("Continue")
+        continueBtn.addTarget(self, action: #selector(openPianoPage), for: .touchUpInside)
+
         let playBtn = createBorderedButton("Play Along")
         let buttonStack = UIStackView(arrangedSubviews: [continueBtn, playBtn])
         buttonStack.axis = .horizontal
@@ -262,26 +264,72 @@ class HomeViewController: UIViewController {
         contentView.addArrangedSubview(card)
     }
 
-    // MARK: - Continue Learning Section
+//    // MARK: - Continue Learning Section
+//    private func addContinueLearningSection() {
+//        let sectionHeader = UILabel()
+//        sectionHeader.text = "Continue Learning"
+//        sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
+//        sectionHeader.textColor = .black
+//        contentView.addArrangedSubview(sectionHeader)
+//        
+//        let headerSpacer = UIView()
+//        headerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
+//        contentView.addArrangedSubview(headerSpacer)
+//        
+//        let scrollView = UIScrollView()
+//        scrollView.showsHorizontalScrollIndicator = false
+//        let stackView = UIStackView()
+//        stackView.axis = .horizontal
+//        stackView.spacing = 16
+//        scrollView.addSubview(stackView)
+//        stackView.translatesAutoresizingMaskIntoConstraints = false
+//        
+//        NSLayoutConstraint.activate([
+//            stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+//            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
+//            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
+//            stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+//            stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor)
+//        ])
+//        
+//        let imageNames = ["cl_1", "cl_2", "ride_home", "cl_1", "cl_2"]
+//        imageNames.forEach {
+//            stackView.addArrangedSubview(createImageCard(imageName: $0, title: getTitleForImage($0)))
+//        }
+//        
+//        contentView.addArrangedSubview(scrollView)
+//        scrollView.heightAnchor.constraint(equalToConstant: 180).isActive = true
+//    }
     private func addContinueLearningSection() {
+        // Top spacing (to match other sections)
+        let topSpacer = UIView()
+        topSpacer.heightAnchor.constraint(equalToConstant: 2).isActive = true
+        contentView.addArrangedSubview(topSpacer)
+        
+        // Section title
         let sectionHeader = UILabel()
         sectionHeader.text = "Continue Learning"
         sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
         sectionHeader.textColor = .black
         contentView.addArrangedSubview(sectionHeader)
-        
+
+        // Small spacer under title (8 looks best visually)
         let headerSpacer = UIView()
-        headerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        headerSpacer.heightAnchor.constraint(equalToConstant: 4).isActive = true
         contentView.addArrangedSubview(headerSpacer)
         
+        // Horizontal scroll section
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
+        contentView.addArrangedSubview(scrollView)
+        scrollView.heightAnchor.constraint(equalToConstant: 180).isActive = true
+        
         let stackView = UIStackView()
         stackView.axis = .horizontal
         stackView.spacing = 16
         scrollView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
-        
+
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
@@ -294,10 +342,8 @@ class HomeViewController: UIViewController {
         imageNames.forEach {
             stackView.addArrangedSubview(createImageCard(imageName: $0, title: getTitleForImage($0)))
         }
-        
-        contentView.addArrangedSubview(scrollView)
-        scrollView.heightAnchor.constraint(equalToConstant: 180).isActive = true
     }
+
 
     // MARK: - Upload Section
     private func addUploadSection() {

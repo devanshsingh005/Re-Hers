@@ -27,10 +27,10 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
     
     // MARK: - Playlist Data (UPDATED)
     private let playlists = [
-        Playlist(title: "Silent Waves", tags: "Lo-fi Ambient Acoustic Chill", trackCount: 12, imageName: "cl_1"),
-        Playlist(title: "Beast Mode Beats", tags: "Blaze Surge Rush Fuel", trackCount: 9, imageName: "cl_2"),
-        Playlist(title: "Midnight Flow", tags: "Ambient Chillwave Jazzy Groovy", trackCount: 14, imageName: "cl_1"),
-        Playlist(title: "Focus Mode", tags: "Study Chill Relax", trackCount: 10, imageName: "cl_2"),
+        Playlist(title: "Silent Waves", tags: "Lo-fi Ambient Acoustic Chill", trackCount: 12, imageName: "cl_2"),
+        Playlist(title: "Beast Mode Beats", tags: "Blaze Surge Rush Fuel", trackCount: 9, imageName: "cl_3"),
+        Playlist(title: "Midnight Flow", tags: "Ambient Chillwave Jazzy Groovy", trackCount: 14, imageName: "cl_4"),
+        Playlist(title: "Focus Mode", tags: "Study Chill Relax", trackCount: 10, imageName: "cl_5"),
         Playlist(title: "Deep Travel", tags: "Soul Indie Acoustic", trackCount: 8, imageName: "cl_1"),
     ]
     

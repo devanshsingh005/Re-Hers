@@ -26,8 +26,8 @@ class ExploreViewController: UIViewController {
         collectionViewLayout: UICollectionViewFlowLayout()
     )
 
-    private let categories = ["cl_1", "cl_2", "ride_home", "cl_1"]
-    private let albums = ["cl_1", "cl_2", "cl_1","cl_1", "cl_2", "cl_1", "cl_2"]
+    private let categories = ["cl_5", "cl_2", "ride_home", "cl_3"]
+    private let albums = ["cl_5", "cl_2", "cl_3","cl_4", "cl_1", "cl_3", "cl_2"]
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
