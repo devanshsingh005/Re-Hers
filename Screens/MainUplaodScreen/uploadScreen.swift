@@ -2,8 +2,6 @@
 //  UploadScreen.swift
 //  Re-Hearse_v1
 //
-//  Created by DEVANSH on 04/11/25.
-//
 
 import UIKit
 import AVFoundation
@@ -17,15 +15,13 @@ class UploadScreen: UIViewController {
         static let elementSpacing: CGFloat = 12
         static let cornerRadius: CGFloat = 16
         static let buttonHeight: CGFloat = 52
-        static let uploadContainerHeight: CGFloat = 180
+        static let uploadContainerHeight: CGFloat = 300
         static let cardSize = CGSize(width: 140, height: 160)
         static let carouselHeight: CGFloat = 180
     }
     
     // MARK: - UI Elements
-    private let navBar = TopNavBar.make(
-       title: "Upload"
-    )
+    private let navBar = TopNavBar.make(title: "Upload")
     
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
@@ -35,58 +31,60 @@ class UploadScreen: UIViewController {
     private let uploadLabel = UILabel()
     private let uploadButton = UIButton()
 
+    // MARK: - Metadata Storage
+    private var uploadTitle: String = "Untitled"
+    private var uploadCoverImage: UIImage? = UIImage(systemName: "music.note")
+    
+    // UI references
+    private var metaTitleLbl: UILabel?
+    private var metaCoverImgView: UIImageView?
+    
+    // Recent Uploads Data
+    private var recentUploads: [(title: String, cover: UIImage?)] = []
+    
+    // UI reference for recents stack
+    private var recentHStack: UIStackView?
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        
         view.backgroundColor = .systemBackground
         navigationController?.navigationBar.isHidden = true
         
         setupNavBar()
         setupScrollView()
+        addUploadMetaSection()
         setupUploadSection()
-        addContinueLearningSection()
+        addRecentUploadsSection()
     }
     
     // MARK: - Navbar Setup
     private func setupNavBar() {
-          view.addSubview(navBar)
-          navBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(navBar)
+        navBar.translatesAutoresizingMaskIntoConstraints = false
 
-          navBar.isStreakVisible = false
-          navBar.isWelcomeTextHidden = true
-          
-          // 🔥 SHOW CHORD ICON
-          navBar.isChordIconVisible = true
-          
-          // ---- IMPORTANT: use push so the chord VC becomes part of the nav stack.
-          // This keeps the bottom tab bar visible and lets back button behavior be natural.
-          navBar.chordAction = { [weak self] in
-              guard let self = self else { return }
-              let vc = ChordRecognitionViewController()
-              // prefer push (so TabBar + Nav stack remain correct)
-              if let nav = self.navigationController {
-                  nav.pushViewController(vc, animated: true)
-              } else {
-                  // fallback: if caller isn't embedded in a UINavigationController,
-                  // present modally so feature still works.
-                  vc.modalPresentationStyle = .fullScreen
-                  self.present(vc, animated: true)
-              }
-          }
-
+        navBar.isStreakVisible = false
+        navBar.isWelcomeTextHidden = true
+        navBar.isChordIconVisible = true
+        
+        navBar.chordAction = { [weak self] in
+            guard let self = self else { return }
+            let vc = ChordRecognitionViewController()
+            if let nav = self.navigationController {
+                nav.pushViewController(vc, animated: true)
+            } else {
+                vc.modalPresentationStyle = .fullScreen
+                self.present(vc, animated: true)
+            }
+        }
 
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
         ])
-        
-        navBar.layer.shadowColor = UIColor.black.cgColor
-        navBar.layer.shadowOpacity = 0.1
-        navBar.layer.shadowOffset = CGSize(width: 0, height: 2)
-        navBar.layer.shadowRadius = 4
     }
-
 
     // MARK: - ScrollView Setup
     private func setupScrollView() {
@@ -103,13 +101,182 @@ class UploadScreen: UIViewController {
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
+
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: Constants.horizontalPadding),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -Constants.horizontalPadding),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -2 * Constants.horizontalPadding)
         ])
+    }
+
+    // MARK: - Upload Meta Section
+    private func addUploadMetaSection() {
+
+        let metaStack = UIStackView()
+        metaStack.axis = .horizontal
+        metaStack.spacing = 14
+        metaStack.alignment = .center
+        
+        // Image
+        let cover = UIImageView()
+        cover.image = uploadCoverImage
+        cover.clipsToBounds = true
+        cover.layer.cornerRadius = 26
+        cover.contentMode = .scaleAspectFill
+        cover.translatesAutoresizingMaskIntoConstraints = false
+        metaCoverImgView = cover
+        
+        // Title
+        let title = UILabel()
+        title.text = uploadTitle
+        title.font = .systemFont(ofSize: 18, weight: .semibold)
+        title.textColor = .black
+        metaTitleLbl = title
+        
+        // Edit button
+        let editButton = UIButton(type: .system)
+        editButton.setTitle("Edit", for: .normal)
+        editButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        editButton.addTarget(self, action: #selector(showMetaEditor), for: .touchUpInside)
+        
+        metaStack.addArrangedSubview(cover)
+        metaStack.addArrangedSubview(title)
+        metaStack.addArrangedSubview(editButton)
+        
+        NSLayoutConstraint.activate([
+            cover.widthAnchor.constraint(equalToConstant: 52),
+            cover.heightAnchor.constraint(equalToConstant: 52)
+        ])
+        
+        contentView.addArrangedSubview(metaStack)
+    }
+    
+    // MARK: Edit Meta Popup
+    @objc private func showMetaEditor() {
+        let ac = UIAlertController(title: "Edit Upload Info", message: nil, preferredStyle: .actionSheet)
+
+        ac.addAction(UIAlertAction(title: "Edit Name", style: .default, handler: { _ in
+            self.askForTitle()
+        }))
+
+        ac.addAction(UIAlertAction(title: "Change Cover Image", style: .default, handler: { _ in
+            self.pickCoverImage()
+        }))
+
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        present(ac, animated: true)
+    }
+
+    private func askForTitle() {
+        let ac = UIAlertController(title: "Enter Title", message: nil, preferredStyle: .alert)
+        ac.addTextField { tf in
+            tf.text = self.uploadTitle
+            tf.placeholder = "Song Title"
+        }
+        ac.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
+            self.uploadTitle = ac.textFields?.first?.text ?? "Untitled"
+            self.metaTitleLbl?.text = self.uploadTitle
+        }))
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(ac, animated: true)
+    }
+
+    private func pickCoverImage() {
+        presentImagePicker(sourceType: .photoLibrary, forCover: true)
+    }
+    
+    // MARK: - Recent Uploads Section
+    private func addRecentUploadsSection() {
+
+        let header = UILabel()
+        header.text = "Recent Uploads"
+        header.font = .systemFont(ofSize: 18, weight: .semibold)
+        header.textColor = .black
+        
+        contentView.addArrangedSubview(header)
+
+        // Horizontal scroll
+        let scroll = UIScrollView()
+        scroll.showsHorizontalScrollIndicator = false
+        
+        let hStack = UIStackView()
+        hStack.axis = .horizontal
+        hStack.spacing = Constants.elementSpacing
+        hStack.translatesAutoresizingMaskIntoConstraints = false
+        recentHStack = hStack
+        
+        scroll.addSubview(hStack)
+        contentView.addArrangedSubview(scroll)
+
+        NSLayoutConstraint.activate([
+            scroll.heightAnchor.constraint(equalToConstant: Constants.carouselHeight),
+            hStack.topAnchor.constraint(equalTo: scroll.topAnchor),
+            hStack.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 10),
+            hStack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
+            hStack.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
+            hStack.heightAnchor.constraint(equalTo: scroll.heightAnchor)
+        ])
+    }
+    
+    // MARK: Add Card to Recent Uploads
+    private func addRecentUploadCard(title: String, image: UIImage?) {
+        guard let hStack = recentHStack else { return }
+        
+        let card = createImageCard(image: image, title: title)
+        
+        // Insert at index 0
+        hStack.insertArrangedSubview(card, at: 0)
+    }
+
+    // MARK: Create Image Card
+    private func createImageCard(image: UIImage?, title: String) -> UIView {
+
+        let card = UIButton()
+        card.layer.cornerRadius = Constants.cornerRadius
+        card.clipsToBounds = true
+        card.translatesAutoresizingMaskIntoConstraints = false
+        
+        let iv = UIImageView()
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.image = image ?? UIImage(systemName: "music.note")
+        iv.contentMode = .scaleAspectFill
+        iv.clipsToBounds = true
+        
+        let lbl = UILabel()
+        lbl.text = title
+        lbl.textAlignment = .center
+        lbl.textColor = .white
+        lbl.font = .systemFont(ofSize: 14, weight: .semibold)
+        lbl.backgroundColor = UIColor(white: 0, alpha: 0.7)
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        
+        card.addSubview(iv)
+        card.addSubview(lbl)
+        
+        NSLayoutConstraint.activate([
+            card.widthAnchor.constraint(equalToConstant: Constants.cardSize.width),
+            card.heightAnchor.constraint(equalToConstant: Constants.cardSize.height),
+            
+            iv.topAnchor.constraint(equalTo: card.topAnchor),
+            iv.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            iv.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            iv.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            
+            lbl.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            lbl.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            lbl.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            lbl.heightAnchor.constraint(equalToConstant: 32)
+        ])
+        
+        // Action → open detail page
+        card.addAction(UIAction(handler: { _ in
+            let vc = SongDetailViewController()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }), for: .touchUpInside)
+        
+        return card
     }
 
     // MARK: - Upload Box
@@ -119,21 +286,20 @@ class UploadScreen: UIViewController {
         uploadContainer.translatesAutoresizingMaskIntoConstraints = false
         
         uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-        uploadIcon.tintColor = .tertiaryLabel
+        uploadIcon.tintColor = .secondaryLabel
         uploadIcon.translatesAutoresizingMaskIntoConstraints = false
         
         uploadLabel.text = "Drag & drop or tap to upload"
-        uploadLabel.textColor = .secondaryLabel
         uploadLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        uploadLabel.textColor = .secondaryLabel
         uploadLabel.translatesAutoresizingMaskIntoConstraints = false
         
         var cfg = UIButton.Configuration.filled()
         cfg.title = "Upload Files"
         cfg.image = UIImage(systemName: "camera.fill")
         cfg.imagePadding = 8
-        cfg.baseBackgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.34, alpha: 1)
+        cfg.baseBackgroundColor = .systemYellow
         cfg.baseForegroundColor = .black
-        cfg.cornerStyle = .medium
         
         uploadButton.configuration = cfg
         uploadButton.translatesAutoresizingMaskIntoConstraints = false
@@ -144,196 +310,78 @@ class UploadScreen: UIViewController {
         
         uploadContainer.addSubview(uploadIcon)
         uploadContainer.addSubview(uploadLabel)
-
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(uploadTapped))
-        uploadContainer.addGestureRecognizer(tapGesture)
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(uploadTapped))
+        uploadContainer.addGestureRecognizer(tap)
         
         NSLayoutConstraint.activate([
-            uploadContainer.heightAnchor.constraint(equalToConstant:300),
+            uploadContainer.heightAnchor.constraint(equalToConstant: Constants.uploadContainerHeight),
+            
             uploadIcon.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
             uploadIcon.centerYAnchor.constraint(equalTo: uploadContainer.centerYAnchor, constant: -10),
             uploadIcon.widthAnchor.constraint(equalToConstant: 45),
             uploadIcon.heightAnchor.constraint(equalToConstant: 45),
+            
             uploadLabel.topAnchor.constraint(equalTo: uploadIcon.bottomAnchor, constant: 8),
             uploadLabel.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
+            
             uploadButton.heightAnchor.constraint(equalToConstant: Constants.buttonHeight)
         ])
     }
 
-    // MARK: - Continue Learning
-    private func addContinueLearningSection() {
-
-        // 👉 Add padding ABOVE the "Continue Learning" title
-        let topPadding = UIView()
-        topPadding.translatesAutoresizingMaskIntoConstraints = false
-        topPadding.heightAnchor.constraint(equalToConstant: 1).isActive = true
-        contentView.addArrangedSubview(topPadding)
-
-        // Section title
-        let sectionHeader = UILabel()
-        sectionHeader.text = "Continue Learning"
-        sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
-        sectionHeader.textColor = .black
-        contentView.addArrangedSubview(sectionHeader)
-        
-        // Small space UNDER the title
-        let headerSpacer = UIView()
-        headerSpacer.translatesAutoresizingMaskIntoConstraints = false
-        headerSpacer.heightAnchor.constraint(equalToConstant: 1).isActive = true
-        contentView.addArrangedSubview(headerSpacer)
-
-        // Horizontal carousel
-        let slider = createHorizontalCarousel()
-        contentView.addArrangedSubview(slider)
-    }
-
-
-    private func createHorizontalCarousel() -> UIView {
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        
-        let hScroll = UIScrollView()
-        hScroll.showsHorizontalScrollIndicator = false
-        hScroll.translatesAutoresizingMaskIntoConstraints = false
-        
-        let hStack = UIStackView()
-        hStack.axis = .horizontal
-        hStack.spacing = Constants.elementSpacing
-        hStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        hScroll.addSubview(hStack)
-        container.addSubview(hScroll)
-        
-        NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: Constants.carouselHeight),
-            hScroll.topAnchor.constraint(equalTo: container.topAnchor),
-            hScroll.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            hScroll.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            hScroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            hStack.topAnchor.constraint(equalTo: hScroll.topAnchor),
-            hStack.leadingAnchor.constraint(equalTo: hScroll.leadingAnchor, constant: Constants.horizontalPadding),
-            hStack.trailingAnchor.constraint(equalTo: hScroll.trailingAnchor, constant: -Constants.horizontalPadding),
-            hStack.bottomAnchor.constraint(equalTo: hScroll.bottomAnchor),
-            hStack.heightAnchor.constraint(equalTo: hScroll.heightAnchor)
-        ])
-
-        let imgs = ["cl_1", "cl_2", "ride_home", "cl_1", "cl_2"]
-        imgs.forEach {
-            hStack.addArrangedSubview(createImageCard(imageName: $0, title: getTitleForImage($0)))
-        }
-        
-        return container
-    }
-
-    private func createImageCard(imageName: String, title: String) -> UIView {
-        let card = UIView()
-        card.layer.cornerRadius = Constants.cornerRadius
-        card.clipsToBounds = true
-        card.translatesAutoresizingMaskIntoConstraints = false
-        
-        let iv = UIImageView()
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        iv.contentMode = .scaleAspectFill
-        iv.clipsToBounds = true
-        iv.image = UIImage(named: imageName) ?? UIImage(systemName: "music.note")
-        
-        let lbl = UILabel()
-        lbl.text = title
-        lbl.textColor = .white
-        lbl.font = .systemFont(ofSize: 14, weight: .semibold)
-        lbl.textAlignment = .center
-        lbl.backgroundColor = UIColor(white: 0, alpha: 0.7)
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        
-        card.addSubview(iv)
-        card.addSubview(lbl)
-        
-        NSLayoutConstraint.activate([
-            card.widthAnchor.constraint(equalToConstant: Constants.cardSize.width),
-            card.heightAnchor.constraint(equalToConstant: Constants.cardSize.height),
-            iv.topAnchor.constraint(equalTo: card.topAnchor),
-            iv.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            iv.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            iv.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            lbl.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            lbl.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            lbl.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            lbl.heightAnchor.constraint(equalToConstant: 32)
-        ])
-        return card
-    }
-    
-    // MARK: - Helpers
-    private func getTitleForImage(_ name: String) -> String {
-        switch name {
-        case "cl_1": return "Lo-fi Focus"
-        case "cl_2": return "Deep Work Mix"
-        case "ride_home": return "Ride Home"
-        default: return "Playlist"
-        }
-    }
-    
-    private func showAlert(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
-
-    // MARK: - Upload Handling
+    // MARK: - Upload Logic
     @objc private func uploadTapped() {
         showUploadOptions()
     }
 
     private func showUploadOptions() {
-        let ac = UIAlertController(title: "Upload Content", message: "Choose an option", preferredStyle: .actionSheet)
-        ac.addAction(UIAlertAction(title: "Take Photo", style: .default, handler: { _ in self.openCamera() }))
-        ac.addAction(UIAlertAction(title: "Choose from Library", style: .default, handler: { _ in self.openPhotoLibrary() }))
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        let ac = UIAlertController(title: "Upload Content", message: nil, preferredStyle: .actionSheet)
         
-        if let popover = ac.popoverPresentationController {
-            popover.sourceView = uploadButton
-            popover.sourceRect = uploadButton.bounds
-        }
+        ac.addAction(UIAlertAction(title: "Take Photo", style: .default, handler: { _ in
+            self.presentImagePicker(sourceType: .camera)
+        }))
+        
+        ac.addAction(UIAlertAction(title: "Choose From Library", style: .default, handler: { _ in
+            self.presentImagePicker(sourceType: .photoLibrary)
+        }))
+        
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(ac, animated: true)
     }
-
-    private func openCamera() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            showAlert(title: "Camera Not Available", message: "This device doesn't have a camera")
-            return
-        }
-        presentImagePicker(sourceType: .camera)
-    }
-
-    private func openPhotoLibrary() {
-        presentImagePicker(sourceType: .photoLibrary)
-    }
-
-    private func presentImagePicker(sourceType: UIImagePickerController.SourceType) {
+    
+    private func presentImagePicker(sourceType: UIImagePickerController.SourceType, forCover: Bool = false) {
         let picker = UIImagePickerController()
         picker.delegate = self
         picker.allowsEditing = true
         picker.sourceType = sourceType
+        picker.view.tag = forCover ? 999 : 0
         present(picker, animated: true)
     }
 }
 
 // MARK: - Image Picker Delegate
 extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        picker.dismiss(animated: true)
-        // Navigate to SongDetailsPage after image selection
-        let vc = SongDetailViewController()
-        if let nav = self.navigationController {
-            nav.pushViewController(vc, animated: true)
-        } else {
-            vc.modalPresentationStyle = .fullScreen
-            self.present(vc, animated: true)
+        
+        let img = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+        
+        if picker.view.tag == 999 {
+            // Cover image changed
+            uploadCoverImage = img
+            metaCoverImgView?.image = img
+            picker.dismiss(animated: true)
+            return
         }
-    }
-
-    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        
         picker.dismiss(animated: true)
+
+        // Simulate "conversion complete" by adding to Recent Uploads
+        addRecentUploadCard(title: uploadTitle, image: uploadCoverImage)
+        
+        // Redirect to detail page
+        let vc = SongDetailViewController()
+        navigationController?.pushViewController(vc, animated: true)
     }
 }
