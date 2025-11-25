@@ -70,17 +70,24 @@ class PlaylistDetailViewController: UIViewController {
         navBar.isBackButtonVisible = true
         navBar.isChordIconVisible = true
         navBar.isProfileVisible = true
+        navBar.isStreakVisible =  false
+        navBar.isWelcomeTextHidden = true
         navBar.setTitle("")
         
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
+        navBar.chordAction = { [weak self] in
+            guard let self = self else { return }
+            let vc = ChordRecognitionViewController()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+        
         
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-            navBar.heightAnchor.constraint(equalToConstant: 44)
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
     

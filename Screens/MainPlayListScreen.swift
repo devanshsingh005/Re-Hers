@@ -67,8 +67,7 @@ class PlaylistViewController: UIViewController, UITableViewDelegate, UITableView
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-            navBar.heightAnchor.constraint(equalToConstant: 44)
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
         ])
     }
     
