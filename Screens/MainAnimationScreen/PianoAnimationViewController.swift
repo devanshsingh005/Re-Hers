@@ -102,10 +102,14 @@ class PianoAnimationViewController: UIViewController {
         }
 
         // subtle shadow to match native look (no rounded floating card)
-        navBar.layer.shadowColor = UIColor.black.cgColor
-        navBar.layer.shadowOpacity = 0.10
-        navBar.layer.shadowOffset = CGSize(width: 0, height: 2)
-        navBar.layer.shadowRadius = 4
+        view.addSubview(navBar)
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
     }
 
     // MARK: - Constraints
@@ -114,19 +118,19 @@ class PianoAnimationViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             // navbar just under status bar (native)
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-            navBar.heightAnchor.constraint(equalToConstant: 44),
+//            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+//            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+//            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+//            navBar.heightAnchor.constraint(equalToConstant: 44),
 
             // safe area background begins BELOW navbar, fills safe area
-            safeAreaBG.topAnchor.constraint(equalTo: navBar.bottomAnchor),
-            safeAreaBG.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            safeAreaBG.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            safeAreaBG.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+//            safeAreaBG.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+//            safeAreaBG.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+//            safeAreaBG.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+//            safeAreaBG.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // chord display inside the safe area with extra padding (moved lower)
-            chordDisplayView.topAnchor.constraint(equalTo: safe.topAnchor, constant: 28), // extra top padding
+            chordDisplayView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10), // extra top padding
             chordDisplayView.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
             chordDisplayView.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
             chordDisplayView.heightAnchor.constraint(equalToConstant: 80),
@@ -198,41 +202,59 @@ class PianoAnimationViewController: UIViewController {
 
     private func playNextDemoChord() {
         guard isPlayingDemo, let chord = demoManager.next() else {
-            chordDisplayView.setSingleChord("🎉 Demo Complete 🎉")
+
+            // demo finished
+            chordDisplayView.setSingleChord("Demo Complete")
             isPlayingDemo = false
             updatePlayPauseUI()
             return
         }
 
-        // animate and sound
         pianoKeyboard.playChord(chord)
+
         for n in chord.leftHandNotes + chord.rightHandNotes {
             playNoteSound(n)
         }
 
         chordDisplayView.setSingleChord("🎹 \(chord.chordName)")
-
-        // schedule next
         scheduleNextDemoChord(after: chord.duration)
     }
 
     // MARK: - Play/Pause toggle
     @objc private func togglePlayPause() {
+
+        // CASE 1: Demo finished → replay mode
+        if demoManager.isFinished {
+            demoManager.reset()
+            chordDisplayView.setSingleChord("🎵 Restarting Demo... 🎵")
+            startDemoSong()
+            return
+        }
+
+        // CASE 2: Currently playing → PAUSE
         if isPlayingDemo {
             pauseDemoSong()
-        } else {
-            // if demo finished earlier, restart
-            if currentDemoIndex == 0 || !isPlayingDemo {
-                // ensure demoManager hasn't been exhausted - safe to always resume from current
-            }
-            resumeDemoSong()
+            return
         }
+
+        // CASE 3: Currently paused → RESUME
+        resumeDemoSong()
     }
 
+
     private func updatePlayPauseUI() {
-        let imageName = isPlayingDemo ? "pause.fill" : "play.fill"
-        playPauseButton.setImage(UIImage(systemName: imageName), for: .normal)
+
+        // DEMO FINISHED → REPLAY ICON
+        if demoManager.isFinished {
+            playPauseButton.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
+            return
+        }
+
+        // Normal play / pause
+        let icon = isPlayingDemo ? "pause.fill" : "play.fill"
+        playPauseButton.setImage(UIImage(systemName: icon), for: .normal)
     }
+
 
     // MARK: - Live Chord Detection
     private func handleKeyPress(noteName: String, isPressed: Bool) {
