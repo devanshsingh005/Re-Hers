@@ -13,6 +13,7 @@
 		23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C736412ED579D100BCD95B /* UserProfileViewController.swift */; };
 		23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */; };
 		23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */; };
+		23E442E72ED63F0200A2F5AC /* SearchButtonExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E62ED63F0200A2F5AC /* SearchButtonExploreViewController.swift */; };
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3828BF2EC6441A0025933F /* SplashViewController.swift */; };
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
@@ -42,6 +43,7 @@
 		23C736412ED579D100BCD95B /* UserProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileViewController.swift; sourceTree = "<group>"; };
 		23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPageNextViewController.swift; sourceTree = "<group>"; };
 		23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaximizeUploadPageViewController.swift; sourceTree = "<group>"; };
+		23E442E62ED63F0200A2F5AC /* SearchButtonExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SearchButtonExploreViewController.swift; path = Screens/SearchButtonExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		2B3828BF2EC6441A0025933F /* SplashViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashViewController.swift; sourceTree = "<group>"; };
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
@@ -302,6 +304,7 @@
 			isa = PBXGroup;
 			children = (
 				2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */,
+				23E442E62ED63F0200A2F5AC /* SearchButtonExploreViewController.swift */,
 			);
 			path = MainExploreScreen;
 			sourceTree = "<group>";
@@ -426,6 +429,7 @@
 				84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */,
 				84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */,
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
+				23E442E72ED63F0200A2F5AC /* SearchButtonExploreViewController.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,

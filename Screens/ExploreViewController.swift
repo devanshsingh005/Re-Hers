@@ -84,6 +84,8 @@ class ExploreViewController: UIViewController {
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.placeholder = "Search"
         searchBar.searchBarStyle = .minimal
+        searchBar.delegate = self
+
 
         NSLayoutConstraint.activate([
             searchBar.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
@@ -357,4 +359,11 @@ class SectionHeader: UILabel {
         textColor = .gray
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+extension ExploreViewController: UISearchBarDelegate {
+    func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+        let vc = SearchExplorePage()
+        vc.modalPresentationStyle = .fullScreen
+        navigationController?.pushViewController(vc, animated: true)
+    }
 }

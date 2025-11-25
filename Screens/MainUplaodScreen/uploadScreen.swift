@@ -398,8 +398,8 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
         addRecentUploadCard(title: uploadTitle, image: picked)
         
         // then navigate to next page (your flow)
-        let vc = SongDetailViewController()
-//        vc.uploadedImage = picked // if your detail VC accepts an image (removed per instructions)
+        let vc = UploadPageNextViewController()
+       vc.uploadedImage = picked // if your detail VC accepts an image (removed per instructions)
         if let nav = navigationController {
             nav.pushViewController(vc, animated: true)
         } else {
