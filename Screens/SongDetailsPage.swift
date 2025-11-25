@@ -10,6 +10,11 @@ import Foundation
 
 class SongDetailViewController: UIViewController {
     
+    // MARK: - Passed Data From Previous Page
+    var passedImage: UIImage?
+    var passedSongTitle: String?
+    var passedArtist: String?
+    
     // MARK: - Scroll Container
     private let mainScrollView = UIScrollView()
     private let contentView = UIView()
@@ -51,7 +56,23 @@ class SongDetailViewController: UIViewController {
         setupContent()
         setupConstraints()
         setupActions()
+        
+        applyPassedData()   // ⭐ IMPORTANT
         updatePage()
+    }
+    
+    // MARK: - Apply Passed Image + Title + Artist
+    private func applyPassedData() {
+        
+        let img = passedImage ?? UIImage(named: "ride_home")
+
+        // Set images
+        albumArtBackgroundView.image = img
+        albumArtCardView.image = img
+        
+        // Set text
+        songTitleLabel.text = passedSongTitle ?? "Unknown Song"
+        artistLabel.text = passedArtist ?? "Unknown Artist"
     }
     
     // MARK: - Navbar (Fixed)
@@ -64,7 +85,6 @@ class SongDetailViewController: UIViewController {
         navBar.isProfileVisible = true
         navBar.setTitle("")
         
-        // ⭐ ADDED — back button now works
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
@@ -100,7 +120,7 @@ class SongDetailViewController: UIViewController {
         ])
     }
     
-    // MARK: - Content
+    // MARK: - Content Setup
     private func setupContent() {
         
         albumArtBackgroundContainer.layer.cornerRadius = 24
@@ -108,13 +128,12 @@ class SongDetailViewController: UIViewController {
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtBackgroundContainer)
         
-        let bgImg = UIImage(named: "ride_home") ?? UIImage(systemName: "photo")
-        albumArtBackgroundView.image = bgImg
+        albumArtBackgroundView.image = UIImage(named: "ride_home")
         albumArtBackgroundView.contentMode = .scaleAspectFill
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
         
-        albumArtCardView.image = bgImg
+        albumArtCardView.image = UIImage(named: "ride_home")
         albumArtCardView.layer.cornerRadius = 24
         albumArtCardView.contentMode = .scaleAspectFill
         albumArtCardView.clipsToBounds = true

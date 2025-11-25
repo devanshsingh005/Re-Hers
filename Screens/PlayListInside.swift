@@ -2,16 +2,6 @@
 //  PlayListInside.swift
 //  Re-Hearse_v1
 //
-//  Created by Devvvv on 24/11/25.
-//
-
-
-//
-//  PlaylistDetailViewController.swift
-//  Re-Hearse_v1
-//
-//  Created by Devvvv on 24/11/25.
-//
 
 import UIKit
 import Foundation
@@ -24,12 +14,16 @@ struct Track {
 
 class PlaylistDetailViewController: UIViewController {
     
-    // MARK: - Data
+    // MARK: - Passed Data
+    var passedImage: UIImage?
+    var passedTitle: String?
+    var passedArtist: String?
+    
+    // MARK: - Tracks
     private let tracks: [Track] = [
         Track(title: "Last Rite",      artist: "Devjeet Saha", artworkName: "cl_3"),
         Track(title: "Phool",          artist: "Devjeet Saha", artworkName: "cl_4"),
         Track(title: "Chalo dur kahi", artist: "Devjeet Saha", artworkName: "cl_5"),
-        // add more if needed...
     ]
     
     // MARK: - Scroll Container
@@ -60,9 +54,22 @@ class PlaylistDetailViewController: UIViewController {
         setupContent()
         setupConstraints()
         setupTracks()
+        
+        applyPassedData()
     }
     
-    // MARK: - Navbar (Fixed)
+    // MARK: - Apply Passed Playlist Data
+    private func applyPassedData() {
+        let img = passedImage ?? UIImage(named: "cl_2")
+        
+        albumArtBackgroundView.image = img
+        albumArtCardView.image = img
+        
+        playlistTitleLabel.text = passedTitle ?? "Silent Waves"
+        playlistArtistLabel.text = passedArtist ?? "Devjeet Saha"
+    }
+    
+    // MARK: - Navbar Setup
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -70,19 +77,18 @@ class PlaylistDetailViewController: UIViewController {
         navBar.isBackButtonVisible = true
         navBar.isChordIconVisible = true
         navBar.isProfileVisible = true
-        navBar.isStreakVisible =  false
+        navBar.isStreakVisible = false
         navBar.isWelcomeTextHidden = true
         navBar.setTitle("")
         
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
-        navBar.chordAction = { [weak self] in
-            guard let self = self else { return }
-            let vc = ChordRecognitionViewController()
-            self.navigationController?.pushViewController(vc, animated: true)
-        }
         
+        navBar.chordAction = { [weak self] in
+            let vc = ChordRecognitionViewController()
+            self?.navigationController?.pushViewController(vc, animated: true)
+        }
         
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -91,7 +97,7 @@ class PlaylistDetailViewController: UIViewController {
         ])
     }
     
-    // MARK: - Scroll Setup
+    // MARK: - Scroll
     private func setupScroll() {
         mainScrollView.translatesAutoresizingMaskIntoConstraints = false
         mainScrollView.alwaysBounceVertical = true
@@ -114,29 +120,25 @@ class PlaylistDetailViewController: UIViewController {
         ])
     }
     
-    // MARK: - Content Setup
+    // MARK: - Content
     private func setupContent() {
-        // Banner background container
         albumArtBackgroundContainer.layer.cornerRadius = 24
         albumArtBackgroundContainer.clipsToBounds = true
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtBackgroundContainer)
         
-        let backgroundImage = UIImage(named: "cl_2") ?? UIImage(systemName: "photo")
-        albumArtBackgroundView.image = backgroundImage
+        albumArtBackgroundView.image = UIImage(named: "cl_2")
         albumArtBackgroundView.contentMode = .scaleAspectFill
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
         
-        // Center card
-        albumArtCardView.image = backgroundImage
+        albumArtCardView.image = UIImage(named: "cl_2")
         albumArtCardView.layer.cornerRadius = 24
-        albumArtCardView.clipsToBounds = true
         albumArtCardView.contentMode = .scaleAspectFill
+        albumArtCardView.clipsToBounds = true
         albumArtCardView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtCardView)
         
-        // Playlist title & artist
         playlistTitleLabel.text = "Silent Waves"
         playlistTitleLabel.font = .systemFont(ofSize: 24, weight: .bold)
         playlistTitleLabel.textAlignment = .center
@@ -144,20 +146,17 @@ class PlaylistDetailViewController: UIViewController {
         contentView.addSubview(playlistTitleLabel)
         
         playlistArtistLabel.text = "Devjeet Saha"
-        playlistArtistLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        playlistArtistLabel.textColor = .darkGray
+        playlistArtistLabel.font = .systemFont(ofSize: 14)
         playlistArtistLabel.textAlignment = .center
         playlistArtistLabel.translatesAutoresizingMaskIntoConstraints = false
+        playlistArtistLabel.textColor = .darkGray
         contentView.addSubview(playlistArtistLabel)
         
-        // Tracks header
         tracksHeaderLabel.text = "Tracks - \(tracks.count)"
         tracksHeaderLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        tracksHeaderLabel.textColor = .label
         tracksHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(tracksHeaderLabel)
         
-        // Tracks list stack
         tracksStackView.axis = .vertical
         tracksStackView.spacing = 12
         tracksStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -167,7 +166,6 @@ class PlaylistDetailViewController: UIViewController {
     // MARK: - Constraints
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            // Banner
             albumArtBackgroundContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
             albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -183,26 +181,23 @@ class PlaylistDetailViewController: UIViewController {
             albumArtCardView.widthAnchor.constraint(equalToConstant: 140),
             albumArtCardView.heightAnchor.constraint(equalToConstant: 140),
             
-            // Title & artist
             playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 16),
             playlistTitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             
             playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: 2),
             playlistArtistLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             
-            // Tracks header
             tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: 24),
             tracksHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             
-            // Track list
             tracksStackView.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: 16),
             tracksStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             tracksStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            tracksStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24)
+            tracksStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
         ])
     }
     
-    // MARK: - Build Track Cards
+    // MARK: - Track Cards
     private func setupTracks() {
         for (index, track) in tracks.enumerated() {
             let card = makeTrackCard(for: track, index: index)
@@ -211,7 +206,8 @@ class PlaylistDetailViewController: UIViewController {
     }
     
     private func makeTrackCard(for track: Track, index: Int) -> UIView {
-        let container = UIView()
+        let container =
+            UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.backgroundColor = UIColor.systemGray5
         container.layer.cornerRadius = 22
@@ -227,12 +223,11 @@ class PlaylistDetailViewController: UIViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text = track.title
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        titleLabel.textColor = .label
         
         let artistLabel = UILabel()
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         artistLabel.text = track.artist
-        artistLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        artistLabel.font = .systemFont(ofSize: 12)
         artistLabel.textColor = .secondaryLabel
         
         let labelsStack = UIStackView(arrangedSubviews: [titleLabel, artistLabel])
@@ -242,8 +237,7 @@ class PlaylistDetailViewController: UIViewController {
         
         let playButton = UIButton(type: .system)
         playButton.translatesAutoresizingMaskIntoConstraints = false
-        let playImage = UIImage(systemName: "play.fill")
-        playButton.setImage(playImage, for: .normal)
+        playButton.setImage(UIImage(systemName: "play.fill"), for: .normal)
         playButton.tintColor = .darkGray
         playButton.tag = index
         playButton.addTarget(self, action: #selector(trackPlayTapped(_:)), for: .touchUpInside)
@@ -273,15 +267,17 @@ class PlaylistDetailViewController: UIViewController {
         return container
     }
     
-    // MARK: - Actions
+    // MARK: - Play Action (UPDATED TO PASS IMAGE)
     @objc private func trackPlayTapped(_ sender: UIButton) {
         let index = sender.tag
-        guard index < tracks.count else { return }
+        let track = tracks[index]
         
-        // Navigate to your existing SongDetailViewController
         let vc = SongDetailViewController()
-        // if you want, you can pass data to vc here later
+        
+        vc.passedImage = UIImage(named: track.artworkName)
+        vc.passedSongTitle = track.title
+        vc.passedArtist = track.artist
+        
         navigationController?.pushViewController(vc, animated: true)
     }
 }
-

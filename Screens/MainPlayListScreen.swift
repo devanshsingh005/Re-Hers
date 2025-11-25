@@ -32,7 +32,6 @@ class PlaylistViewController: UIViewController {
         Playlist(title: "Deep Travel", imageIdentifier: "cl_1", tags: "Soul Indie Acoustic", trackCount: 8),
     ]
     
-    // Keep a strong reference to add button (if needed later)
     private var addButton: UIButton?
     
     // MARK: - Life
@@ -71,7 +70,7 @@ class PlaylistViewController: UIViewController {
         ])
     }
     
-    // MARK: - Add Button (fixed)
+    // MARK: - Add Button
     private func setupAddButton() {
         let headerContainer = UIView()
         headerContainer.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 60)
@@ -97,26 +96,28 @@ class PlaylistViewController: UIViewController {
     }
 
     @objc private func didTapAdd() {
-        // present custom AddPlaylistViewController
         let addVC = AddPlaylistViewController()
         addVC.modalPresentationStyle = .overFullScreen
+
         addVC.onSave = { [weak self] (name, pickedImage) in
             guard let self = self else { return }
             let id: String
+
             if let image = pickedImage {
                 if let fileName = self.saveImageToDocuments(image: image) {
-                    id = fileName // doc file id
+                    id = fileName
                 } else {
-                    id = "cl_1" // fallback asset
+                    id = "cl_1"
                 }
             } else {
-                id = "cl_1" // default asset
+                id = "cl_1"
             }
             
             let new = Playlist(title: name, imageIdentifier: id, tags: "Custom Playlist", trackCount: 0)
             self.playlists.append(new)
             self.tableView.reloadData()
         }
+        
         present(addVC, animated: true)
     }
     
@@ -141,12 +142,12 @@ class PlaylistViewController: UIViewController {
         ])
     }
     
-    // MARK: - File saving helper (Documents)
-    /// Saves the image as PNG into Documents and returns the filename (e.g. "doc_123.png") or nil on failure.
+    // MARK: - File saving helper
     private func saveImageToDocuments(image: UIImage) -> String? {
         guard let data = image.pngData() else { return nil }
         let filename = "doc_\(UUID().uuidString).png"
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(filename)
+        let url = FileManager.default.urls(for: .documentDirectory,
+                                           in: .userDomainMask).first!.appendingPathComponent(filename)
         do {
             try data.write(to: url, options: .atomic)
             return filename
@@ -156,11 +157,11 @@ class PlaylistViewController: UIViewController {
         }
     }
     
-    /// Loads image from asset first (UIImage(named:)), then fallback to Documents if name starts with "doc_"
     fileprivate func loadImage(identifier: String) -> UIImage? {
         if let img = UIImage(named: identifier) { return img }
-        // try documents
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(identifier)
+        
+        let url = FileManager.default.urls(for: .documentDirectory,
+                                           in: .userDomainMask).first!.appendingPathComponent(identifier)
         if let data = try? Data(contentsOf: url) {
             return UIImage(data: data)
         }
@@ -168,30 +169,41 @@ class PlaylistViewController: UIViewController {
     }
 }
 
-// MARK: - Table Delegate / DataSource
+// MARK: - Table Delegate
 extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { playlists.count }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
 
         let cell = tableView.dequeueReusableCell(withIdentifier: "PlaylistCell", for: indexPath) as! PlaylistTableViewCell
         let p = playlists[indexPath.row]
-        // configure cell using loadImage helper
+        
         let img = loadImage(identifier: p.imageIdentifier)
         cell.configure(withTitle: p.title, tags: p.tags, trackCount: p.trackCount, image: img)
+        
         return cell
     }
     
+    // ⬇️ UPDATED — passes image + title + tags to next screen
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+
+        let playlist = playlists[indexPath.row]
+        
         let vc = PlaylistDetailViewController()
-        // pass data as needed
+        let img = loadImage(identifier: playlist.imageIdentifier)
+
+        vc.passedImage = img                      // PASS IMAGE
+        vc.passedTitle = playlist.title           // PASS TITLE
+        vc.passedArtist = playlist.tags           // PASS ARTIST/TAGS
+        
         navigationController?.pushViewController(vc, animated: true)
     }
 }
+ 
 
-
-// MARK: - Playlist Cell (updated to accept UIImage)
+// MARK: - Playlist Cell
 class PlaylistTableViewCell: UITableViewCell {
     
     private let containerView: UIView = {
@@ -263,27 +275,23 @@ class PlaylistTableViewCell: UITableViewCell {
         titleLabel.text = title
         tagsLabel.text = tags
         trackCountLabel.text = "Tracks - \(trackCount)"
-        if let img = image {
-            playlistImageView.image = img
-        } else {
-            playlistImageView.image = UIImage(named: "cl_1")
-        }
+        playlistImageView.image = image ?? UIImage(named: "cl_1")
     }
 }
 
 
-// MARK: - AddPlaylistViewController (custom modal with image picker)
+// MARK: - AddPlaylistViewController
 class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
     // callback
     var onSave: ((_ name: String, _ image: UIImage?) -> Void)?
     
-    // UI
     private let dimView: UIView = {
         let v = UIView()
         v.backgroundColor = UIColor.black.withAlphaComponent(0.45)
         return v
     }()
+    
     private let cardView: UIView = {
         let v = UIView()
         v.backgroundColor = .systemBackground
@@ -291,6 +299,7 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
         v.clipsToBounds = true
         return v
     }()
+    
     private let titleLabel: UILabel = {
         let l = UILabel()
         l.text = "Create Playlist"
@@ -298,12 +307,14 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
         l.textAlignment = .center
         return l
     }()
+    
     private let nameField: UITextField = {
         let tf = UITextField()
         tf.placeholder = "Playlist name"
         tf.borderStyle = .roundedRect
         return tf
     }()
+    
     private let imageViewPreview: UIImageView = {
         let iv = UIImageView()
         iv.contentMode = .scaleAspectFill
@@ -312,30 +323,32 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
         iv.backgroundColor = UIColor.systemGray5
         return iv
     }()
+    
     private let pickImageButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Choose Image", for: .normal)
         return b
     }()
+    
     private let saveButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Save", for: .normal)
         b.titleLabel?.font = .boldSystemFont(ofSize: 16)
         return b
     }()
+    
     private let cancelButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Cancel", for: .normal)
         return b
     }()
     
-    // store picked image
     private var pickedImage: UIImage?
     
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        // tap to dismiss behind card
+        
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissSelf))
         dimView.addGestureRecognizer(tap)
     }
@@ -343,6 +356,7 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
     private func setupUI() {
         view.addSubview(dimView)
         view.addSubview(cardView)
+        
         dimView.translatesAutoresizingMaskIntoConstraints = false
         cardView.translatesAutoresizingMaskIntoConstraints = false
         
@@ -353,8 +367,9 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
         cardView.addSubview(saveButton)
         cardView.addSubview(cancelButton)
         
-        // translates
-        [titleLabel, nameField, imageViewPreview, pickImageButton, saveButton, cancelButton].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        [titleLabel, nameField, imageViewPreview, pickImageButton, saveButton, cancelButton].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
         
         NSLayoutConstraint.activate([
             dimView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -364,7 +379,7 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
             
             cardView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             cardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
-            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28)
+            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
         ])
         
         NSLayoutConstraint.activate([
@@ -403,32 +418,30 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
     
     // MARK: - Actions
     @objc private func pickImage() {
-        let p = UIImagePickerController()
-        p.sourceType = .photoLibrary
-        p.allowsEditing = true
-        p.delegate = self
-        present(p, animated: true)
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = true
+        picker.delegate = self
+        present(picker, animated: true)
     }
     
     @objc private func saveTapped() {
         guard let name = nameField.text, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
-            // shake or show alert
-            let a = UIAlertController(title: "Name required", message: "Please enter playlist name.", preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default))
-            present(a, animated: true)
+            let alert = UIAlertController(title: "Name Required", message: "Please enter playlist name.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
             return
         }
         onSave?(name, pickedImage)
         dismiss(animated: true)
     }
     
-    @objc private func dismissSelf() {
-        dismiss(animated: true)
-    }
+    @objc private func dismissSelf() { dismiss(animated: true) }
     
-    // MARK: - Image Picker delegate
-    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        // prefer edited image
+    // MARK: - Image Picker Delegate
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        
         if let edited = info[.editedImage] as? UIImage {
             pickedImage = edited
             imageViewPreview.image = edited

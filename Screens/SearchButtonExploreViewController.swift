@@ -50,7 +50,6 @@ final class SearchExplorePage: UIViewController {
     private let trendingStack = UIStackView()
 
     // MARK: - Data
-    // A-Z demo names (sample dataset)
     private let demoNames: [String] = [
         "Aqua Dream","Black River","Calm Nights","Deep Sea",
         "Echoes","Fallen Star","Golden Hour","Highway",
@@ -61,13 +60,13 @@ final class SearchExplorePage: UIViewController {
         "Yellow Sub","Zephyr"
     ]
 
-    // Trending images: taken from ExploreViewController's `albums` (copy)
     private let trendingImages = ["cl_5","cl_2","cl_3","cl_4","cl_1","cl_3","cl_2"]
 
-    // Filtering
+    // NEW: Search result images (cycle through)
+    private let searchImages = ["cl_1","cl_2","cl_3","cl_4","cl_5"]
+
     private var filteredNames: [String] = []
 
-    // Recent searches saved in UserDefaults
     private var recentSearches: [String] {
         get { UserDefaults.standard.stringArray(forKey: "recentSearches_v1") ?? [] }
         set { UserDefaults.standard.set(newValue, forKey: "recentSearches_v1") }
@@ -113,7 +112,6 @@ final class SearchExplorePage: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
         ])
 
-        // Add content subviews
         contentView.addSubview(recentLabel)
         contentView.addSubview(noRecentLabel)
         contentView.addSubview(recentStack)
@@ -133,7 +131,6 @@ final class SearchExplorePage: UIViewController {
         NSLayoutConstraint.activate([
             recentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
             recentLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            recentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
 
             noRecentLabel.topAnchor.constraint(equalTo: recentLabel.bottomAnchor, constant: 8),
             noRecentLabel.leadingAnchor.constraint(equalTo: recentLabel.leadingAnchor),
@@ -162,7 +159,6 @@ final class SearchExplorePage: UIViewController {
             trendingStack.heightAnchor.constraint(equalTo: trendingScroll.heightAnchor)
         ])
 
-        // stack configs
         recentStack.axis = .vertical
         recentStack.spacing = 8
 
@@ -172,14 +168,11 @@ final class SearchExplorePage: UIViewController {
         trendingStack.axis = .horizontal
         trendingStack.spacing = 12
         trendingScroll.showsHorizontalScrollIndicator = false
-        trendingScroll.alwaysBounceHorizontal = true
     }
 
     private func configureStacks() {
-        // Recent searches: initially empty -> show placeholder
         updateRecentUI()
 
-        // Trending images (reuse album images)
         trendingImages.forEach { name in
             let iv = UIImageView(image: UIImage(named: name))
             iv.layer.cornerRadius = 12
@@ -189,10 +182,8 @@ final class SearchExplorePage: UIViewController {
             iv.widthAnchor.constraint(equalToConstant: 120).isActive = true
             iv.heightAnchor.constraint(equalToConstant: 120).isActive = true
 
-            // add tap to open album (simple placeholder action)
             iv.isUserInteractionEnabled = true
-            let tap = UITapGestureRecognizer(target: self, action: #selector(didTapTrending(_:)))
-            iv.addGestureRecognizer(tap)
+            iv.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(didTapTrending(_:))))
 
             trendingStack.addArrangedSubview(iv)
         }
@@ -200,15 +191,12 @@ final class SearchExplorePage: UIViewController {
 
     // MARK: - Actions
     @objc private func didTapTrending(_ g: UITapGestureRecognizer) {
-        // placeholder behavior: simply show an alert with tapped image name if available
-        guard let iv = g.view as? UIImageView, let img = iv.image else { return }
         let alert = UIAlertController(title: "Trending", message: "Tapped trending item", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
 
     private func updateRecentUI() {
-        // clear previous
         recentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         if recentSearches.isEmpty {
@@ -216,8 +204,7 @@ final class SearchExplorePage: UIViewController {
         } else {
             noRecentLabel.isHidden = true
             recentSearches.forEach { term in
-                let v = makeRecentRow(term: term)
-                recentStack.addArrangedSubview(v)
+                recentStack.addArrangedSubview(makeRecentRow(term: term))
             }
         }
     }
@@ -237,8 +224,8 @@ final class SearchExplorePage: UIViewController {
         clearBtn.setTitle("Remove", for: .normal)
         clearBtn.titleLabel?.font = .systemFont(ofSize: 13)
         clearBtn.tintColor = .systemBlue
-        clearBtn.addTarget(self, action: #selector(removeRecent(_:)), for: .touchUpInside)
         clearBtn.accessibilityLabel = term
+        clearBtn.addTarget(self, action: #selector(removeRecent(_:)), for: .touchUpInside)
 
         view.addSubview(lbl)
         view.addSubview(clearBtn)
@@ -262,14 +249,12 @@ final class SearchExplorePage: UIViewController {
         updateRecentUI()
     }
 
+    // MARK: - Search Results
     private func showResults(for query: String) {
-        // clear previous
         resultsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        // filter dataset
         filteredNames = demoNames.filter { $0.lowercased().contains(query.lowercased()) }
 
-        // if nothing matched, show 'no results' label
         if filteredNames.isEmpty {
             let lbl = UILabel()
             lbl.text = "No results"
@@ -279,23 +264,24 @@ final class SearchExplorePage: UIViewController {
             return
         }
 
-        // populate card rows
-        for name in filteredNames {
-            let card = makeResultCard(title: name)
-            resultsStack.addArrangedSubview(card)
+        for (idx, name) in filteredNames.enumerated() {
+            resultsStack.addArrangedSubview(makeResultCard(title: name, index: idx))
         }
     }
 
-    private func makeResultCard(title: String) -> UIView {
+    private func makeResultCard(title: String, index: Int) -> UIView {
         let card = UIView()
         card.backgroundColor = UIColor.lightGray.withAlphaComponent(0.12)
         card.layer.cornerRadius = 14
         card.translatesAutoresizingMaskIntoConstraints = false
         card.heightAnchor.constraint(equalToConstant: 72).isActive = true
 
-        let img = UIImageView(image: UIImage(systemName: "music.note.list"))
-        img.contentMode = .scaleAspectFit
-        img.tintColor = .darkGray
+        // REAL IMAGE: cl_1 → cl_5 cycle
+        let imgName = searchImages[index % searchImages.count]
+        let img = UIImageView(image: UIImage(named: imgName))
+        img.contentMode = .scaleAspectFill
+        img.layer.cornerRadius = 10
+        img.clipsToBounds = true
         img.translatesAutoresizingMaskIntoConstraints = false
         img.widthAnchor.constraint(equalToConstant: 52).isActive = true
         img.heightAnchor.constraint(equalToConstant: 52).isActive = true
@@ -316,29 +302,29 @@ final class SearchExplorePage: UIViewController {
         playBtn.widthAnchor.constraint(equalToConstant: 34).isActive = true
         playBtn.heightAnchor.constraint(equalToConstant: 34).isActive = true
 
-        // Add tap gesture to whole card
         let tap = UITapGestureRecognizer(target: self, action: #selector(didTapResult(_:)))
         card.addGestureRecognizer(tap)
-        card.isUserInteractionEnabled = true
         card.accessibilityLabel = title
 
         let textStack = UIStackView(arrangedSubviews: [titleLbl, subLbl])
         textStack.axis = .vertical
         textStack.spacing = 2
+        textStack.translatesAutoresizingMaskIntoConstraints = false
 
         card.addSubview(img)
         card.addSubview(textStack)
         card.addSubview(playBtn)
 
-        img.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12).isActive = true
-        img.centerYAnchor.constraint(equalTo: card.centerYAnchor).isActive = true
+        NSLayoutConstraint.activate([
+            img.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+            img.centerYAnchor.constraint(equalTo: card.centerYAnchor),
 
-        textStack.translatesAutoresizingMaskIntoConstraints = false
-        textStack.leadingAnchor.constraint(equalTo: img.trailingAnchor, constant: 12).isActive = true
-        textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor).isActive = true
+            textStack.leadingAnchor.constraint(equalTo: img.trailingAnchor, constant: 12),
+            textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor),
 
-        playBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12).isActive = true
-        playBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor).isActive = true
+            playBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
+            playBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor)
+        ])
 
         return card
     }
@@ -346,15 +332,14 @@ final class SearchExplorePage: UIViewController {
     @objc private func didTapResult(_ g: UITapGestureRecognizer) {
         guard let v = g.view, let title = v.accessibilityLabel else { return }
 
-        // Save to recent (most recent first, unique)
         var existing = recentSearches
         existing.removeAll { $0 == title }
         existing.insert(title, at: 0)
         if existing.count > 10 { existing = Array(existing.prefix(10)) }
         recentSearches = existing
+
         updateRecentUI()
 
-        // Simple feedback
         let alert = UIAlertController(title: title, message: "Selected result", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
@@ -363,22 +348,14 @@ final class SearchExplorePage: UIViewController {
 
 // MARK: - Search Delegate
 extension SearchExplorePage: UISearchBarDelegate {
-    func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
-        // keep keyboard visible
-    }
-
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        // If empty -> show recent section and clear results
         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // clear results
             resultsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
             updateRecentUI()
             return
         }
 
-        // Hide recent placeholder when typing
         noRecentLabel.isHidden = true
-        // Show filtered results
         showResults(for: searchText)
     }
 
