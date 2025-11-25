@@ -26,9 +26,9 @@ class PlaylistDetailViewController: UIViewController {
     
     // MARK: - Data
     private let tracks: [Track] = [
-        Track(title: "Last Rite",      artist: "Devjeet Saha", artworkName: "ride_home"),
-        Track(title: "Phool",          artist: "Devjeet Saha", artworkName: "ride_home"),
-        Track(title: "Chalo dur kahi", artist: "Devjeet Saha", artworkName: "ride_home"),
+        Track(title: "Last Rite",      artist: "Devjeet Saha", artworkName: "cl_3"),
+        Track(title: "Phool",          artist: "Devjeet Saha", artworkName: "cl_4"),
+        Track(title: "Chalo dur kahi", artist: "Devjeet Saha", artworkName: "cl_5"),
         // add more if needed...
     ]
     
@@ -115,7 +115,7 @@ class PlaylistDetailViewController: UIViewController {
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtBackgroundContainer)
         
-        let backgroundImage = UIImage(named: "ride_home") ?? UIImage(systemName: "photo")
+        let backgroundImage = UIImage(named: "cl_2") ?? UIImage(systemName: "photo")
         albumArtBackgroundView.image = backgroundImage
         albumArtBackgroundView.contentMode = .scaleAspectFill
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false

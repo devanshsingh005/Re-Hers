@@ -315,7 +315,7 @@ class HomeViewController: UIViewController {
 
         // Small spacer under title (8 looks best visually)
         let headerSpacer = UIView()
-        headerSpacer.heightAnchor.constraint(equalToConstant: 4).isActive = true
+        headerSpacer.heightAnchor.constraint(equalToConstant: 2).isActive = true
         contentView.addArrangedSubview(headerSpacer)
         
         // Horizontal scroll section
@@ -326,7 +326,7 @@ class HomeViewController: UIViewController {
         
         let stackView = UIStackView()
         stackView.axis = .horizontal
-        stackView.spacing = 16
+        stackView.spacing = 14
         scrollView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -338,7 +338,7 @@ class HomeViewController: UIViewController {
             stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor)
         ])
         
-        let imageNames = ["cl_1", "cl_2", "ride_home", "cl_1", "cl_2"]
+        let imageNames = ["cl_5", "cl_4", "ride_home", "cl_1", "cl_2"]
         imageNames.forEach {
             stackView.addArrangedSubview(createImageCard(imageName: $0, title: getTitleForImage($0)))
         }
