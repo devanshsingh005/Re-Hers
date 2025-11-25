@@ -124,10 +124,9 @@ class HomeViewController: UIViewController {
         container.heightAnchor.constraint(equalToConstant: 48).isActive = true
         
         // 👉 Enable tap
-//        let tap = UITapGestureRecognizer(target: self, action: #selector(openPianoPage))
-//        container.addGestureRecognizer(tap)
-//        container.isUserInteractionEnabled = true
-//        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(openUserProfile))
+        container.addGestureRecognizer(tap)
+        
         let label = UILabel()
         label.text = "Daily goal"
         label.font = .systemFont(ofSize: 14, weight: .regular)
@@ -165,10 +164,14 @@ class HomeViewController: UIViewController {
 
         contentView.addArrangedSubview(container)
     }
+    @objc private func openUserProfile() {
+        let vc = UserProfileViewController()
+        navigationController?.pushViewController(vc, animated: true)
+    }
 
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {
-        let vc = UserProfileViewController()
+        let vc = PianoAnimationViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
 
