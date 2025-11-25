@@ -15,8 +15,8 @@ class PianoDemoManager {
         SongChord(leftHandNotes: ["F2"], rightHandNotes: ["A4","C5","F5"], chordName: "F Major", duration: 1.1),
         SongChord(leftHandNotes: ["G2"], rightHandNotes: ["B4","D5","G5"], chordName: "G Major", duration: 1.1),
 
-        SongChord(leftHandNotes: ["B2"], rightHandNotes: ["D4","F#4","A4"], chordName: "B Diminished", duration: 1.1),
-        SongChord(leftHandNotes: ["E2"], rightHandNotes: ["G#4","B4","E5"], chordName: "E Major", duration: 1.1),
+//        SongChord(leftHandNotes: ["B2"], rightHandNotes: ["D4","F#4","A4"], chordName: "B Diminished", duration: 1.1),
+//        SongChord(leftHandNotes: ["E2"], rightHandNotes: ["G#4","B4","E5"], chordName: "E Major", duration: 1.1),
 
         // Add MORE variety shapes
         SongChord(leftHandNotes: ["C2"], rightHandNotes: ["G3","C4","E4"], chordName: "C/E", duration: 1.1),
@@ -25,8 +25,8 @@ class PianoDemoManager {
         SongChord(leftHandNotes: ["F2"], rightHandNotes: ["C4","F4","A4"], chordName: "F/C", duration: 1.1),
 
         // Minor extended
-        SongChord(leftHandNotes: ["A2"], rightHandNotes: ["C5","E5","A5"], chordName: "A Minor High", duration: 1.1),
-        SongChord(leftHandNotes: ["D3"], rightHandNotes: ["A4","D5","F5"], chordName: "D Minor High", duration: 1.1),
+//        SongChord(leftHandNotes: ["A2"], rightHandNotes: ["C5","E5","A5"], chordName: "A Minor High", duration: 1.1),
+//        SongChord(leftHandNotes: ["D3"], rightHandNotes: ["A4","D5","F5"], chordName: "D Minor High", duration: 1.1),
 
         // Major 7th
         SongChord(leftHandNotes: ["C3"], rightHandNotes: ["B4","E5","G5"], chordName: "Cmaj7", duration: 1.1),

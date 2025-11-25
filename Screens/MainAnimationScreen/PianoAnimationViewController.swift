@@ -12,7 +12,7 @@ class PianoAnimationViewController: UIViewController {
     private var currentDemoIndex = 0
 
     // Nav + safe-area bg
-    private let navBar = TopNavBar.make(title: "Piano")
+    private let navBar = TopNavBar.make(title: "Animation")
     private let safeAreaBG: UIView = {
         let v = UIView()
         v.backgroundColor = .black
@@ -117,11 +117,7 @@ class PianoAnimationViewController: UIViewController {
         let safe = view.safeAreaLayoutGuide
 
         NSLayoutConstraint.activate([
-            // navbar just under status bar (native)
-//            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-//            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-//            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-//            navBar.heightAnchor.constraint(equalToConstant: 44),
+           
 
             // safe area background begins BELOW navbar, fills safe area
 //            safeAreaBG.topAnchor.constraint(equalTo: navBar.bottomAnchor),
@@ -267,10 +263,10 @@ class PianoAnimationViewController: UIViewController {
 
         let chord = chordDetector.detectChord(from: Array(activeNotes))
         if chord != "Unknown" && chord != "Play a chord!" {
-            chordDisplayView.setSingleChord("🎹 \(chord)")
+            chordDisplayView.setSingleChord(" \(chord)")
         } else if activeNotes.isEmpty {
             // optional: show default message
-            chordDisplayView.setSingleChord("🎹 Piano Ready!")
+            chordDisplayView.setSingleChord("🎹 Animation Ready!")
         }
     }
 }
