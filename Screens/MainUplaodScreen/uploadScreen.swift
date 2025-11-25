@@ -364,9 +364,9 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
     
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        
+
         let img = (info[.editedImage] ?? info[.originalImage]) as? UIImage
-        
+
         if picker.view.tag == 999 {
             // Cover image changed
             uploadCoverImage = img
@@ -374,14 +374,17 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             picker.dismiss(animated: true)
             return
         }
-        
-        picker.dismiss(animated: true)
 
-        // Simulate "conversion complete" by adding to Recent Uploads
-        addRecentUploadCard(title: uploadTitle, image: uploadCoverImage)
-        
-        // Redirect to detail page
-        let vc = SongDetailViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        picker.dismiss(animated: true) {
+            guard let selected = img else { return }
+            let nextVC = UploadPageNextViewController()
+            nextVC.uploadedImage = selected
+            if let nav = self.navigationController {
+                nav.pushViewController(nextVC, animated: true)
+            } else {
+                nextVC.modalPresentationStyle = .fullScreen
+                self.present(nextVC, animated: true)
+            }
+        }
     }
 }
