@@ -36,8 +36,9 @@ class ExploreViewController: UIViewController {
         navigationController?.navigationBar.isHidden = true
         
         setupNavBar()
-        setupScrollView()
         setupSearchBar()
+        setupScrollView()
+       
         setupCollections()
     }
     
@@ -49,11 +50,9 @@ class ExploreViewController: UIViewController {
         navBar.isStreakVisible = false
         navBar.isWelcomeTextHidden = true
         
-        // 🔥 SHOW CHORD ICON
+        //  SHOW CHORD ICON
         navBar.isChordIconVisible = true
         
-        // ---- IMPORTANT: use push so the chord VC becomes part of the nav stack.
-        // This keeps the bottom tab bar visible and lets back button behavior be natural.
         navBar.chordAction = { [weak self] in
             guard let self = self else { return }
             let vc = ChordRecognitionViewController()
@@ -79,53 +78,47 @@ class ExploreViewController: UIViewController {
         navBar.layer.shadowOffset = CGSize(width: 0, height: 2)
         navBar.layer.shadowRadius = 4
     }
+    // MARK: - Search Bar
+    private func setupSearchBar() {
+        view.addSubview(searchBar)
+        searchBar.translatesAutoresizingMaskIntoConstraints = false
+        searchBar.placeholder = "Search"
+        searchBar.searchBarStyle = .minimal
 
+        NSLayoutConstraint.activate([
+            searchBar.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+        ])
+    }
     // MARK: - ScrollView Setup
     private func setupScrollView() {
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+
         scrollView.addSubview(contentView)
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        
+
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
+            scrollView.topAnchor.constraint(equalTo: searchBar.bottomAnchor,constant: 5),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
+
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
         ])
-        
-        // Ensure scroll view is scrollable
-        scrollView.alwaysBounceVertical = true
-        scrollView.showsVerticalScrollIndicator = true
     }
-
-    // MARK: - Search Bar
-    private func setupSearchBar() {
-        searchBar.placeholder = "Search"
-        searchBar.searchBarStyle = .minimal
-        contentView.addSubview(searchBar)
-        searchBar.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            searchBar.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
-            searchBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            searchBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20)
-        ])
-    }
-
     // MARK: - Collections Setup
     private func setupCollections() {
         // Category Label
         contentView.addSubview(categoryLabel)
         categoryLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            categoryLabel.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 20), // Increased gap
+            categoryLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20), // Increased gap
             categoryLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             categoryLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20)
         ])

@@ -149,7 +149,7 @@ class UploadScreen: UIViewController {
         uploadContainer.addGestureRecognizer(tapGesture)
         
         NSLayoutConstraint.activate([
-            uploadContainer.heightAnchor.constraint(equalToConstant: Constants.uploadContainerHeight),
+            uploadContainer.heightAnchor.constraint(equalToConstant:300),
             uploadIcon.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
             uploadIcon.centerYAnchor.constraint(equalTo: uploadContainer.centerYAnchor, constant: -10),
             uploadIcon.widthAnchor.constraint(equalToConstant: 45),
