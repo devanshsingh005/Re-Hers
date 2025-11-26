@@ -81,12 +81,15 @@ class PianoAnimationViewController: UIViewController {
         navBar.isChordIconVisible = true
         navBar.backgroundColor = .white
 
+        // ✅ FIXED: Clean, single backAction — always goes back to previous page
         navBar.isBackButtonVisible = true
         navBar.backAction = { [weak self] in
-            if let nav = self?.navigationController {
+            guard let self = self else { return }
+
+            if let nav = self.navigationController {
                 nav.popViewController(animated: true)
             } else {
-                self?.dismiss(animated: true, completion: nil)
+                self.dismiss(animated: true)
             }
         }
 
@@ -100,19 +103,13 @@ class PianoAnimationViewController: UIViewController {
                 self.present(vc, animated: true)
             }
         }
-        
+
         navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = ProfileScreen()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
+            guard let self = self else { return }
+            let vc = ProfileScreen()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
 
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
-
-        // subtle shadow to match native look (no rounded floating card)
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
 
@@ -122,6 +119,7 @@ class PianoAnimationViewController: UIViewController {
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
+
 
     // MARK: - Constraints
     private func setupConstraints() {

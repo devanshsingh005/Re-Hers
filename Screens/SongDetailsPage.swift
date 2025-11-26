@@ -57,32 +57,28 @@ class SongDetailViewController: UIViewController {
         setupConstraints()
         setupActions()
         
-        applyPassedData()   // ⭐ IMPORTANT
+        applyPassedData()
         updatePage()
     }
     
-    // MARK: - Apply Passed Image + Title + Artist
+    // MARK: - Apply Passed Data
     private func applyPassedData() {
-        
         let img = passedImage ?? UIImage(named: "ride_home")
 
-        // Set images
         albumArtBackgroundView.image = img
         albumArtCardView.image = img
         
-        // Set text
         songTitleLabel.text = passedSongTitle ?? "Unknown Song"
         artistLabel.text = passedArtist ?? "Unknown Artist"
     }
     
+    // MARK: - Navbar UI
     private func setupUI() {
         view.backgroundColor = .white
         navigationController?.navigationBar.isHidden = true
-        
         setupNavBar()
-       
     }
-    // MARK: - Navbar Setup
+    
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -97,7 +93,6 @@ class SongDetailViewController: UIViewController {
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
-        
         navBar.chordAction = { [weak self] in
             let vc = ChordRecognitionViewController()
             self?.navigationController?.pushViewController(vc, animated: true)
@@ -119,8 +114,7 @@ class SongDetailViewController: UIViewController {
         ])
     }
     
-    
-    // MARK: - Scroll Setup
+    // MARK: - Scroll View Setup
     private func setupScroll() {
         mainScrollView.translatesAutoresizingMaskIntoConstraints = false
         mainScrollView.alwaysBounceVertical = true
@@ -143,7 +137,8 @@ class SongDetailViewController: UIViewController {
         ])
     }
     
-    // MARK: - Content Setup
+    
+    // MARK: - UI Content Setup
     private func setupContent() {
         
         albumArtBackgroundContainer.layer.cornerRadius = 24
@@ -151,12 +146,10 @@ class SongDetailViewController: UIViewController {
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtBackgroundContainer)
         
-        albumArtBackgroundView.image = UIImage(named: "ride_home")
         albumArtBackgroundView.contentMode = .scaleAspectFill
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
         
-        albumArtCardView.image = UIImage(named: "ride_home")
         albumArtCardView.layer.cornerRadius = 24
         albumArtCardView.contentMode = .scaleAspectFill
         albumArtCardView.clipsToBounds = true
@@ -168,36 +161,47 @@ class SongDetailViewController: UIViewController {
         bookmarkButton.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(bookmarkButton)
         
-        songTitleLabel.text = "Downtown Road"
         songTitleLabel.textAlignment = .center
         songTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         songTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(songTitleLabel)
         
-        artistLabel.text = "Devjeet Saha"
         artistLabel.textAlignment = .center
         artistLabel.font = .systemFont(ofSize: 14)
         artistLabel.textColor = .darkGray
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
         
+        
+        // MARK: - Updated Buttons
         playAlongButton.setTitle("Play Along", for: .normal)
-        playAlongButton.layer.cornerRadius = 23
+        playAlongButton.layer.cornerRadius = 12
         playAlongButton.setTitleColor(.white, for: .normal)
         playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
         
         animationButton.setTitle("Animation", for: .normal)
-        animationButton.layer.cornerRadius = 23
+        animationButton.layer.cornerRadius = 12
         animationButton.setTitleColor(.darkGray, for: .normal)
         animationButton.backgroundColor = .systemGray5
         
+        playAlongButton.layer.shadowOpacity = 0.15
+        playAlongButton.layer.shadowRadius = 6
+        playAlongButton.layer.shadowOffset = CGSize(width: 0, height: 3)
+        
+        animationButton.layer.shadowOpacity = 0.10
+        animationButton.layer.shadowRadius = 6
+        animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
+        
+        
+        // MARK: - Increased spacing between buttons
         buttonStack.axis = .horizontal
-        buttonStack.spacing = 16
+        buttonStack.spacing = 26        // ⬅️ Increased spacing here
         buttonStack.distribution = .fillEqually
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
         buttonStack.addArrangedSubview(playAlongButton)
         buttonStack.addArrangedSubview(animationButton)
         contentView.addSubview(buttonStack)
+        
         
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(sheetContainer)
@@ -209,9 +213,6 @@ class SongDetailViewController: UIViewController {
         
         sheetImageView.layer.cornerRadius = 12
         sheetImageView.clipsToBounds = true
-        sheetImageView.layer.shadowOpacity = 0.25
-        sheetImageView.layer.shadowRadius = 8
-        sheetImageView.layer.shadowOffset = CGSize(width: 0, height: 6)
         sheetImageView.contentMode = .scaleAspectFill
         sheetImageView.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.addSubview(sheetImageView)
@@ -225,6 +226,7 @@ class SongDetailViewController: UIViewController {
         bottomSpacer.backgroundColor = .clear
         contentView.addSubview(bottomSpacer)
     }
+    
     
     // MARK: - Constraints
     private func setupConstraints() {
@@ -282,25 +284,27 @@ class SongDetailViewController: UIViewController {
             bottomSpacer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             bottomSpacer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             bottomSpacer.heightAnchor.constraint(equalToConstant: 300),
-            bottomSpacer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            bottomSpacer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
     
-    // MARK: - Setup Actions
+    
+    // MARK: - Actions
     private func setupActions() {
         playAlongButton.addTarget(self, action: #selector(tabPlayAlong), for: .touchUpInside)
         animationButton.addTarget(self, action: #selector(openPianoAnimationVC), for: .touchUpInside)
         bookmarkButton.addTarget(self, action: #selector(bookmarkTapped), for: .touchUpInside)
         pageNextButton.addTarget(self, action: #selector(nextPageTapped), for: .touchUpInside)
     }
+
     @objc func openPianoAnimationVC() {
         let vc = PianoAnimationViewController()
         vc.modalPresentationStyle = .fullScreen
-        self.present(vc, animated: true)
+        present(vc, animated: true)
     }
-
     
-    // MARK: - Page Flip Logic
+    
+    // MARK: - Page Flip
     private func updatePage() {
         pageLabel.text = "\(currentPage)/\(totalPages)"
         sheetImageView.image = UIImage(named: "sheet\(currentPage).png")
@@ -319,7 +323,8 @@ class SongDetailViewController: UIViewController {
         updatePage()
     }
     
-    // MARK: - Button Actions
+    
+    // MARK: - Button States
     @objc private func tabPlayAlong() {
         playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
         playAlongButton.setTitleColor(.white, for: .normal)
@@ -335,8 +340,8 @@ class SongDetailViewController: UIViewController {
     }
     
     @objc private func bookmarkTapped() {
-        let isBookmarked = bookmarkButton.tintColor == .systemYellow
-        bookmarkButton.tintColor = isBookmarked ? .systemGray : .systemYellow
-        bookmarkButton.setImage(UIImage(systemName: isBookmarked ? "bookmark" : "bookmark.fill"), for: .normal)
+        let bookmarked = bookmarkButton.tintColor == .systemYellow
+        bookmarkButton.tintColor = bookmarked ? .systemGray : .systemYellow
+        bookmarkButton.setImage(UIImage(systemName: bookmarked ? "bookmark" : "bookmark.fill"), for: .normal)
     }
 }
