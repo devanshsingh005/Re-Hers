@@ -53,8 +53,8 @@ class UploadScreen: UIViewController {
         addRecentUploadsSection()
         
         // sample placeholder cards so area is visible on load
-        addRecentUploadCard(title: "Lo-fi Focus", image: UIImage(named: "cl_1"))
-        addRecentUploadCard(title: "Deep Work Mix", image: UIImage(named: "cl_2"))
+        addRecentUploadCard(title: "Arrival", image: UIImage(named: "cl_1"))
+        addRecentUploadCard(title: "case", image: UIImage(named: "cl_2"))
     }
     
     // MARK: - NavBar
@@ -126,12 +126,12 @@ class UploadScreen: UIViewController {
         // circular cover image
         let cover = UIImageView()
         cover.image = uploadCoverImage ?? UIImage(systemName: "music.note")
-        cover.contentMode = .scaleAspectFit
+       
         cover.tintColor = .black
         cover.backgroundColor = UIColor(white: 0.95, alpha: 1)
         cover.clipsToBounds = true
-        cover.layer.cornerRadius = Constants.metaCornerRadius
-        cover.translatesAutoresizingMaskIntoConstraints = false
+        cover.layer.cornerRadius = 20
+        cover.translatesAutoresizingMaskIntoConstraints = true
         metaCoverImgView = cover
         
         // title label
@@ -153,8 +153,8 @@ class UploadScreen: UIViewController {
         metaStack.addArrangedSubview(editButton)
         
         NSLayoutConstraint.activate([
-            cover.widthAnchor.constraint(equalToConstant: Constants.metaCoverSize),
-            cover.heightAnchor.constraint(equalToConstant: Constants.metaCoverSize)
+            cover.widthAnchor.constraint(equalToConstant: 36),
+           cover.heightAnchor.constraint(equalToConstant: 36)
         ])
         
         contentView.addArrangedSubview(metaStack)
@@ -202,7 +202,7 @@ class UploadScreen: UIViewController {
         uploadContainer.translatesAutoresizingMaskIntoConstraints = false
         
         // icon centered
-        uploadIcon.image = UIImage(systemName: "music.note") // small centered music icon
+        uploadIcon.image = UIImage(systemName: "arrow.up.to.line")// small centered music icon
         uploadIcon.tintColor = .black
         uploadIcon.contentMode = .scaleAspectFit
         uploadIcon.translatesAutoresizingMaskIntoConstraints = false

@@ -49,7 +49,7 @@ class PlaylistDetailViewController: UIViewController {
         view.backgroundColor = .systemBackground
         navigationController?.navigationBar.isHidden = true
         
-        setupNavBar()
+        setupUI()
         setupScroll()
         setupContent()
         setupConstraints()
@@ -69,6 +69,13 @@ class PlaylistDetailViewController: UIViewController {
         playlistArtistLabel.text = passedArtist ?? "Devjeet Saha"
     }
     
+    private func setupUI() {
+        view.backgroundColor = .white
+        navigationController?.navigationBar.isHidden = true
+        
+        setupNavBar()
+       
+    }
     // MARK: - Navbar Setup
     private func setupNavBar() {
         view.addSubview(navBar)
@@ -92,8 +99,8 @@ class PlaylistDetailViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
         ])
     }
     
