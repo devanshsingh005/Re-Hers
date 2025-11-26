@@ -118,6 +118,7 @@ public final class TopNavBar: UIView {
         topRowStack.axis = .horizontal
         topRowStack.alignment = .center
         topRowStack.spacing = 8
+        
 
         rightStack.axis = .horizontal
         rightStack.alignment = .center
@@ -157,7 +158,7 @@ public final class TopNavBar: UIView {
         chordButton.imageView?.contentMode = .scaleAspectFit
 
         NSLayoutConstraint.activate([
-            mainStack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            mainStack.topAnchor.constraint(equalTo: topAnchor, constant: 24),
             mainStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             mainStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             mainStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),

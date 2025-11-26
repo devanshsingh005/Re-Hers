@@ -24,7 +24,7 @@ class HomeViewController: UIViewController {
 
     // MARK: - Setup UI
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = .appBackground
         navigationController?.navigationBar.isHidden = true
         
         setupNavBar()
@@ -67,7 +67,7 @@ class HomeViewController: UIViewController {
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -128,7 +128,7 @@ class HomeViewController: UIViewController {
     // MARK: - Daily Goal
     public func addDailyGoal() {
         let container = UIView()
-        container.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        container.backgroundColor = UIColor.darkGray2.withAlphaComponent(0.8)
         container.layer.cornerRadius = 20
         container.translatesAutoresizingMaskIntoConstraints = false
         container.heightAnchor.constraint(equalToConstant: 48).isActive = true
@@ -137,7 +137,8 @@ class HomeViewController: UIViewController {
         let label = UILabel()
         label.text = "Daily goal"
         label.font = .systemFont(ofSize: 14, weight: .regular)
-        label.textColor = .white
+        label.textColor = .appBackground
+
 
         let progress = UIProgressView()
         progress.progress = 0.7
@@ -148,7 +149,8 @@ class HomeViewController: UIViewController {
         let time = UILabel()
         time.text = "20 mins"
         time.font = .systemFont(ofSize: 12)
-        time.textColor = .white
+        time.textColor = .appBackground
+
 
         container.addSubview(label)
         container.addSubview(progress)
@@ -362,7 +364,7 @@ class HomeViewController: UIViewController {
 
         let subtitle = UILabel()
         subtitle.text = "Bars 5–6 | Right-Hand focus"
-        subtitle.textColor = UIColor(white: 0.7, alpha: 1)
+        subtitle.textColor = .lightGray
         subtitle.font = .systemFont(ofSize: 13)
 
         let titleStack = UIStackView(arrangedSubviews: [title, subtitle])
@@ -387,8 +389,10 @@ class HomeViewController: UIViewController {
         // MARK: - Progress
         let progressView = UIProgressView()
         progressView.progress = 0.4
-        progressView.progressTintColor = .white
-        progressView.trackTintColor = UIColor(white: 0.3, alpha: 1)
+        progressView.progressTintColor = .appBackground
+
+        progressView.trackTintColor = .darkGray1
+
         progressView.layer.cornerRadius = 2
         progressView.clipsToBounds = true
         progressView.translatesAutoresizingMaskIntoConstraints = false
@@ -485,7 +489,8 @@ class HomeViewController: UIViewController {
         let sectionHeader = UILabel()
         sectionHeader.text = "Continue Learning"
         sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
-        sectionHeader.textColor = .black
+        sectionHeader.textColor = .darkGray1
+
         contentView.addArrangedSubview(sectionHeader)
 
         // Small spacer under title (8 looks best visually)
@@ -527,17 +532,17 @@ class HomeViewController: UIViewController {
         container.layer.cornerRadius = 22
         
         // 🔥 IMPORTANT – required to stop darkening
-        container.layer.masksToBounds = true
+//        container.layer.masksToBounds = false
 
         container.heightAnchor.constraint(equalToConstant: 120).isActive = true
 
         let icon = UIImageView(image: UIImage(systemName: "icloud.and.arrow.up"))
-        icon.tintColor = .black
+        icon.tintColor = .darkGray2
 
         let text = UILabel()
         text.text = "Sheet to Music"
-        text.font = .systemFont(ofSize: 20, weight: .bold)
-        text.textColor = .black
+        text.font = .systemFont(ofSize: 20, weight: .semibold)
+        text.textColor = .darkGray2
 
         let stack = UIStackView(arrangedSubviews: [text, icon])
         stack.axis = .vertical
@@ -584,20 +589,25 @@ class HomeViewController: UIViewController {
         return label
     }*/
 
-
     private func createFilledButton(_ title: String) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
-        button.setTitleColor(.white, for: .normal)
 
-        button.backgroundColor = .secondaryColor
-        button.tintColor = .white
+        // BLACK text (correct)
+        button.setTitleColor(.black, for: .normal)
+        button.tintColor = .black
+
+        // Orange background
+        button.backgroundColor = .secondaryColor  // #FFAE3D
+
         button.adjustsImageWhenHighlighted = false
         button.adjustsImageWhenDisabled = false
 
+        // Rounded corners
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         button.layer.cornerRadius = 12
         button.layer.masksToBounds = true
+
         return button
     }
 
@@ -605,14 +615,26 @@ class HomeViewController: UIViewController {
     private func createBorderedButton(_ title: String) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .clear
-        button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor(white: 0.3, alpha: 1).cgColor
-        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+
+        // Light gray background
+        button.backgroundColor = .lightGray   // #D9D9D9
+
+        // Dark text
+        button.setTitleColor(.darkGray2, for: .normal)  // #212121
+
+        // No border
+        button.layer.borderWidth = 0
+        button.layer.borderColor = nil
+
+        // Rounded corners (same as Continue button)
         button.layer.cornerRadius = 12
+        button.layer.masksToBounds = true
+
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+
         return button
     }
+
 
     private func createImageCard(imageName: String, title: String) -> UIView {
         let card = UIView()
@@ -625,7 +647,8 @@ class HomeViewController: UIViewController {
         
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.textColor = .white
+        titleLabel.textColor = .appBackground
+
         titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
         titleLabel.textAlignment = .center
         titleLabel.backgroundColor = UIColor(white: 0, alpha: 0.7)
