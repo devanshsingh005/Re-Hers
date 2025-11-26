@@ -264,65 +264,83 @@ final class UserProfileViewController: UIViewController {
     }
 
     // MARK: DAILY GOAL (FINAL FIXED VERSION)
+    // MARK: DAILY GOAL (PROPER FIX - MATCH PRACTICE GRAPH EXACTLY)
     private func addDailyGoalCard() {
+        let dailyGoalView = DailyGoalCardView()
+        dailyGoalView.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.addArrangedSubview(dailyGoalView)
+        
+        // Use the EXACT same constraints as PracticeGraphCardView
+        dailyGoalView.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor, constant: PG.hPad).isActive = true
+        dailyGoalView.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor, constant: -PG.hPad).isActive = true
+    }
 
-        let card = UIView()
-        card.backgroundColor = UIColor(hex: "#333333")
-        card.layer.cornerRadius = 20
-        card.translatesAutoresizingMaskIntoConstraints = false
-        card.heightAnchor.constraint(equalToConstant: 53).isActive = true
-
-        // horizontal layout
-        let hStack = UIStackView()
-        hStack.axis = .horizontal
-        hStack.alignment = .center
-        hStack.spacing = 12
-        hStack.translatesAutoresizingMaskIntoConstraints = false
-
-        let title = UILabel()
-        title.text = "Daily goal"
-        title.font = .systemFont(ofSize: 14)
-        title.textColor = .white
-
-        let progressHolder = UIView()
-        progressHolder.translatesAutoresizingMaskIntoConstraints = false
-        progressHolder.widthAnchor.constraint(equalToConstant: 125).isActive = true // FIXED WIDTH (SOLVES YOUR ISSUE)
-
-        let progress = UIProgressView()
-        progress.progress = 0.7
-        progress.progressTintColor = .systemGreen
-        progress.trackTintColor = UIColor.white.withAlphaComponent(0.2)
-        progress.translatesAutoresizingMaskIntoConstraints = false
-
-        progressHolder.addSubview(progress)
-        NSLayoutConstraint.activate([
-            progress.leadingAnchor.constraint(equalTo: progressHolder.leadingAnchor),
-            progress.trailingAnchor.constraint(equalTo: progressHolder.trailingAnchor),
-            progress.centerYAnchor.constraint(equalTo: progressHolder.centerYAnchor)
-        ])
-
-        let mins = UILabel()
-        mins.text = "20 mins"
-        mins.font = .systemFont(ofSize: 13)
-        mins.textColor = .white
-
-        hStack.addArrangedSubview(title)
-        hStack.addArrangedSubview(progressHolder)
-        hStack.addArrangedSubview(mins)
-
-        card.addSubview(hStack)
-
-        NSLayoutConstraint.activate([
-            hStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
-            hStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
-            hStack.centerYAnchor.constraint(equalTo: card.centerYAnchor)
-        ])
-
-        contentStack.addArrangedSubview(card)
-
-        // match graph padding
-        card.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor, constant: PG.hPad).isActive = true
-        card.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor, constant: -PG.hPad).isActive = true
+    final class DailyGoalCardView: UIView { // Just use regular UIView like PracticeGraphCardView
+        private let cardView = LayoutTrackingView() // Use LayoutTrackingView internally like PracticeGraphCardView does
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            setup()
+        }
+        
+        required init?(coder: NSCoder) { fatalError() }
+        
+        private func setup() {
+            // Add cardView just like PracticeGraphCardView does
+            cardView.backgroundColor = UIColor(hex: "#333333")
+            cardView.layer.cornerRadius = 20
+            cardView.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(cardView)
+            
+            NSLayoutConstraint.activate([
+                cardView.topAnchor.constraint(equalTo: topAnchor),
+                cardView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                cardView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                cardView.bottomAnchor.constraint(equalTo: bottomAnchor)
+            ])
+            
+            // Set fixed height
+            heightAnchor.constraint(equalToConstant: 53).isActive = true
+            
+            // Add content to cardView
+            let stack = UIStackView()
+            stack.axis = .horizontal
+            stack.alignment = .center
+            stack.distribution = .fill
+            stack.spacing = 12
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            
+            let title = UILabel()
+            title.text = "Daily goal"
+            title.font = .systemFont(ofSize: 14, weight: .medium)
+            title.textColor = .white
+            title.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            
+            let progress = UIProgressView()
+            progress.progress = 0.7
+            progress.progressTintColor = .systemGreen
+            progress.trackTintColor = UIColor.white.withAlphaComponent(0.2)
+            progress.translatesAutoresizingMaskIntoConstraints = false
+            progress.heightAnchor.constraint(equalToConstant: 6).isActive = true
+            
+            let mins = UILabel()
+            mins.text = "20 mins"
+            mins.font = .systemFont(ofSize: 13, weight: .medium)
+            mins.textColor = .white
+            mins.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            
+            stack.addArrangedSubview(title)
+            stack.addArrangedSubview(progress)
+            stack.addArrangedSubview(mins)
+            
+            cardView.addSubview(stack)
+            
+            NSLayoutConstraint.activate([
+                stack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+                stack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+                stack.centerYAnchor.constraint(equalTo: cardView.centerYAnchor)
+            ])
+        }
     }
 
     // MARK: PRACTICE GRAPH
