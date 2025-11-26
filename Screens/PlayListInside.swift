@@ -112,6 +112,21 @@ class PlaylistDetailViewController: UIViewController {
             self?.navigationController?.popViewController(animated: true)
         }
         
+        navBar.chordAction = { [weak self] in
+            let vc = ChordRecognitionViewController()
+            self?.navigationController?.pushViewController(vc, animated: true)
+        }
+        navBar.profileAction = { [weak self] in
+               guard let self = self else { return }
+               let vc = ProfileScreen()
+               self.navigationController?.pushViewController(vc, animated: true)
+           }
+
+           navBar.backAction = { [weak self] in
+               self?.navigationController?.popViewController(animated: true)
+           }
+
+        
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),

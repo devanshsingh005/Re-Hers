@@ -108,6 +108,10 @@ public final class TopNavBar: UIView {
         backButton.addTarget(self, action: #selector(handleBack), for: .touchUpInside)
         dayBadge.addTarget(self, action: #selector(handleDayBadge), for: .touchUpInside)
         chordButton.addTarget(self, action: #selector(handleChord), for: .touchUpInside)
+        profileImg.isUserInteractionEnabled = true
+        profileImg.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(handleProfile))
+        )
     }
 
     private func setupStacks() {
@@ -182,6 +186,9 @@ public final class TopNavBar: UIView {
     @objc private func handleBack() { backAction?() }
     @objc private func handleDayBadge() { dayBadgeAction?() }
     @objc private func handleChord() { chordAction?() }
+    @objc private func handleProfile() {
+        profileAction?()
+    }
 
     // MARK: - Public API
     public func setTitle(_ text: String) {

@@ -45,6 +45,16 @@ class HomeViewController: UIViewController {
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
         ])
+        navBar.profileAction = { [weak self] in
+               guard let self = self else { return }
+               let vc = ProfileScreen()
+               self.navigationController?.pushViewController(vc, animated: true)
+           }
+
+           navBar.backAction = { [weak self] in
+               self?.navigationController?.popViewController(animated: true)
+           }
+
     }
 
     // MARK: - ScrollView Setup
@@ -123,10 +133,7 @@ class HomeViewController: UIViewController {
         container.translatesAutoresizingMaskIntoConstraints = false
         container.heightAnchor.constraint(equalToConstant: 48).isActive = true
         
-        // 👉 Enable tap
-        let tap = UITapGestureRecognizer(target: self, action: #selector(openUserProfile))
-        container.addGestureRecognizer(tap)
-        
+       
         let label = UILabel()
         label.text = "Daily goal"
         label.font = .systemFont(ofSize: 14, weight: .regular)
@@ -164,10 +171,7 @@ class HomeViewController: UIViewController {
 
         contentView.addArrangedSubview(container)
     }
-    @objc private func openUserProfile() {
-        let vc = UserProfileViewController()
-        navigationController?.pushViewController(vc, animated: true)
-    }
+   
 
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {

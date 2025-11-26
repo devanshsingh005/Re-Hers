@@ -56,6 +56,16 @@ final class MaximizeViewController: UIViewController {
         navBar.backAction = { [weak self] in
             self?.dismiss(animated: true)
         }
+        navBar.profileAction = { [weak self] in
+               guard let self = self else { return }
+               let vc = ProfileScreen()
+               self.navigationController?.pushViewController(vc, animated: true)
+           }
+
+           navBar.backAction = { [weak self] in
+               self?.navigationController?.popViewController(animated: true)
+           }
+
 
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),

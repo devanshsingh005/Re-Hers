@@ -100,6 +100,17 @@ class PianoAnimationViewController: UIViewController {
                 self.present(vc, animated: true)
             }
         }
+        
+        navBar.profileAction = { [weak self] in
+               guard let self = self else { return }
+               let vc = ProfileScreen()
+               self.navigationController?.pushViewController(vc, animated: true)
+           }
+
+           navBar.backAction = { [weak self] in
+               self?.navigationController?.popViewController(animated: true)
+           }
+
 
         // subtle shadow to match native look (no rounded floating card)
         view.addSubview(navBar)
