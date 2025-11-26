@@ -1,12 +1,4 @@
 //
-//  MaximizeUploadPageViewController.swift
-//  Re-Hearse_v1
-//
-//  Created by Devvvv on 26/11/25.
-//
-
-import Foundation
-//
 //  MaximizeViewController.swift
 //  Re-Hearse_v1
 //
@@ -39,9 +31,10 @@ final class MaximizeViewController: UIViewController {
         setupUI()
         buildHierarchy()
         applyConstraints()
+        enableSwipeDismiss()
     }
 
-    // MARK: - Setup NavBar
+    // MARK: - Navbar
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -56,16 +49,6 @@ final class MaximizeViewController: UIViewController {
         navBar.backAction = { [weak self] in
             self?.dismiss(animated: true)
         }
-        navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = ProfileScreen()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
-
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
 
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -79,11 +62,12 @@ final class MaximizeViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
-        // Dark Rounded Card
+        // Bigger dark card
         sheetContainer.backgroundColor = UIColor(white: 0.22, alpha: 1)
-        sheetContainer.layer.cornerRadius = 32
+        sheetContainer.layer.cornerRadius = 34
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
 
+        // Bigger image
         sheetImageView.contentMode = .scaleAspectFit
         sheetImageView.clipsToBounds = true
         sheetImageView.layer.cornerRadius = 22
@@ -116,21 +100,31 @@ final class MaximizeViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
         ])
 
-        // Big center card
+        // Bigger container + bigger image
         NSLayoutConstraint.activate([
             sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 30),
-            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            sheetContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
-        ])
+            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            sheetContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
 
-        // Image with padding
-        NSLayoutConstraint.activate([
-            sheetImageView.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 24),
-            sheetImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
-            sheetImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
-            sheetImageView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -24),
-            sheetImageView.heightAnchor.constraint(greaterThanOrEqualToConstant: 450)
+            sheetImageView.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 30),
+            sheetImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 30),
+            sheetImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -30),
+            sheetImageView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -30),
+
+            // Bigger height
+            sheetImageView.heightAnchor.constraint(greaterThanOrEqualToConstant: 550)
         ])
+    }
+
+    // MARK: - Swipe to dismiss
+    private func enableSwipeDismiss() {
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeDown))
+        swipe.direction = .down
+        view.addGestureRecognizer(swipe)
+    }
+
+    @objc private func handleSwipeDown() {
+        dismiss(animated: true)
     }
 }
