@@ -118,7 +118,7 @@ class PlaylistDetailViewController: UIViewController {
         }
         navBar.profileAction = { [weak self] in
                guard let self = self else { return }
-               let vc = ProfileScreen()
+               let vc = UserProfileViewController()
                self.navigationController?.pushViewController(vc, animated: true)
            }
 
