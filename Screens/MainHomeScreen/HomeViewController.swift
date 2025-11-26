@@ -519,31 +519,39 @@ class HomeViewController: UIViewController {
     // MARK: - Upload Section
     private func addUploadSection() {
         let container = UIView()
-        container.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
+        container.backgroundColor = .secondaryColor
         container.layer.cornerRadius = 22
-        container.heightAnchor.constraint(equalToConstant: 120).isActive = true
         
+        // 🔥 IMPORTANT – required to stop darkening
+        container.layer.masksToBounds = true
+
+        container.heightAnchor.constraint(equalToConstant: 120).isActive = true
+
         let icon = UIImageView(image: UIImage(systemName: "icloud.and.arrow.up"))
         icon.tintColor = .black
+
         let text = UILabel()
         text.text = "Sheet to Music"
         text.font = .systemFont(ofSize: 20, weight: .bold)
         text.textColor = .black
-        
+
         let stack = UIStackView(arrangedSubviews: [text, icon])
         stack.axis = .vertical
         stack.alignment = .center
         stack.spacing = 8
-        
+
         container.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
+
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: container.centerYAnchor)
         ])
-        
+
         contentView.addArrangedSubview(container)
     }
+
+
     
     // MARK: - Helper Components
     /*private func createTagLabel(_ text: String) -> UILabel {
@@ -577,11 +585,18 @@ class HomeViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
         button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemOrange
+
+        button.backgroundColor = .secondaryColor
+        button.tintColor = .white
+        button.adjustsImageWhenHighlighted = false
+        button.adjustsImageWhenDisabled = false
+
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         button.layer.cornerRadius = 12
+        button.layer.masksToBounds = true
         return button
     }
+
 
     private func createBorderedButton(_ title: String) -> UIButton {
         let button = UIButton(type: .system)

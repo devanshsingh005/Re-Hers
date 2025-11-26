@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		236331F32ED6C2B3007D5F94 /* ColorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236331F22ED6C2B2007D5F94 /* ColorViewController.swift */; };
 		236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */; };
 		238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */; };
 		238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1D2ED4CE8200301661 /* PlayListInside.swift */; };
@@ -37,6 +38,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		236331F22ED6C2B2007D5F94 /* ColorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorViewController.swift; sourceTree = SOURCE_ROOT; };
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MainPlayListScreen.swift; path = Screens/MainPlayListScreen.swift; sourceTree = SOURCE_ROOT; };
 		238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SongDetailsPage.swift; path = Screens/SongDetailsPage.swift; sourceTree = SOURCE_ROOT; };
 		238BCB1D2ED4CE8200301661 /* PlayListInside.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PlayListInside.swift; path = Screens/PlayListInside.swift; sourceTree = SOURCE_ROOT; };
@@ -191,6 +193,7 @@
 		842B08552EBA0589001AC579 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				236331F22ED6C2B2007D5F94 /* ColorViewController.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -434,6 +437,7 @@
 				84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */,
+				236331F32ED6C2B3007D5F94 /* ColorViewController.swift in Sources */,
 				84C6A9DC2ECE1670007DA0D0 /* PianoAnimationViewController.swift in Sources */,
 				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,

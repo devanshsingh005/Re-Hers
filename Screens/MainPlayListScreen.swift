@@ -24,24 +24,26 @@ class PlaylistViewController: UIViewController {
     private let navBar = TopNavBar.make(title: "PlayList")
     private let tableView = UITableView()
     
+    // MARK: - Floating Button (Matches PlaylistDetailViewController)
     private let floatingButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.backgroundColor = UIColor(red: 1.0, green: 0.55, blue: 0.0, alpha: 1.0) // Orange
-        btn.setTitle("+", for: .normal)
-        btn.titleLabel?.font = .boldSystemFont(ofSize: 34)
+        btn.backgroundColor = UIColor.orange      // identical color
+        btn.setImage(UIImage(systemName: "plus"), for: .normal)
         btn.tintColor = .white
         
         btn.layer.cornerRadius = 30
         btn.clipsToBounds = false
         
-        // Modern shadow
+        // Same modern shadow
         btn.layer.shadowColor = UIColor.black.cgColor
         btn.layer.shadowOpacity = 0.25
-        btn.layer.shadowRadius = 10
-        btn.layer.shadowOffset = CGSize(width: 0, height: 6)
+        btn.layer.shadowRadius = 6
+        btn.layer.shadowOffset = CGSize(width: 0, height: 4)
         
+        btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()
+
     
     // MARK: - Data (mutable)
     private var playlists: [Playlist] = [

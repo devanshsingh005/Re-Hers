@@ -19,14 +19,22 @@ class PlaylistDetailViewController: UIViewController {
     var passedTitle: String?
     var passedArtist: String?
     
-    // MARK: - Tracks
-    private let tracks: [Track] = [
+    // MARK: - Tracks (dynamic list)
+    private var trackList: [Track] = [
         Track(title: "Last Rite",      artist: "Devjeet Saha", artworkName: "cl_3"),
         Track(title: "Phool",          artist: "Devjeet Saha", artworkName: "cl_4"),
         Track(title: "Chalo dur kahi", artist: "Devjeet Saha", artworkName: "cl_5"),
     ]
     
-    // MARK: - Scroll Container
+    // MARK: - All available songs to choose from
+    private let availableSongs: [Track] = [
+        Track(title: "Moonlight Echo", artist: "Devjeet Saha", artworkName: "cl_6"),
+        Track(title: "Broken Strings", artist: "Devjeet Saha", artworkName: "cl_7"),
+        Track(title: "Infinite Road",  artist: "Devjeet Saha", artworkName: "cl_8"),
+        Track(title: "Daydream Pulse", artist: "Devjeet Saha", artworkName: "cl_9"),
+    ]
+    
+    // MARK: - Scroll + Container
     private let mainScrollView = UIScrollView()
     private let contentView = UIView()
     
@@ -43,6 +51,22 @@ class PlaylistDetailViewController: UIViewController {
     private let tracksHeaderLabel = UILabel()
     private let tracksStackView = UIStackView()
     
+    // MARK: - Floating Button
+    private let floatingAddButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.backgroundColor = UIColor.orange
+        btn.setImage(UIImage(systemName: "plus"), for: .normal)
+        btn.tintColor = .white
+        btn.layer.cornerRadius = 30
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowOpacity = 0.25
+        btn.layer.shadowRadius = 6
+        btn.layer.shadowOffset = CGSize(width: 0, height: 4)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }()
+    
+    // MARK: - View Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -53,9 +77,9 @@ class PlaylistDetailViewController: UIViewController {
         setupScroll()
         setupContent()
         setupConstraints()
-        setupTracks()
-        
+        reloadTracksUI()
         applyPassedData()
+        setupFloatingButton()
     }
     
     // MARK: - Apply Passed Playlist Data
@@ -70,13 +94,10 @@ class PlaylistDetailViewController: UIViewController {
     }
     
     private func setupUI() {
-        view.backgroundColor = .white
-        navigationController?.navigationBar.isHidden = true
-        
         setupNavBar()
-       
     }
-    // MARK: - Navbar Setup
+
+    // MARK: - Navbar
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -86,15 +107,9 @@ class PlaylistDetailViewController: UIViewController {
         navBar.isProfileVisible = true
         navBar.isStreakVisible = false
         navBar.isWelcomeTextHidden = true
-        navBar.setTitle("")
         
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
-        }
-        
-        navBar.chordAction = { [weak self] in
-            let vc = ChordRecognitionViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
         }
         
         NSLayoutConstraint.activate([
@@ -123,7 +138,7 @@ class PlaylistDetailViewController: UIViewController {
             contentView.leadingAnchor.constraint(equalTo: mainScrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: mainScrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: mainScrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: mainScrollView.widthAnchor)
+            contentView.widthAnchor.constraint(equalTo: mainScrollView.widthAnchor),
         ])
     }
     
@@ -134,32 +149,27 @@ class PlaylistDetailViewController: UIViewController {
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtBackgroundContainer)
         
-        albumArtBackgroundView.image = UIImage(named: "cl_2")
         albumArtBackgroundView.contentMode = .scaleAspectFill
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
         
-        albumArtCardView.image = UIImage(named: "cl_2")
-        albumArtCardView.layer.cornerRadius = 24
         albumArtCardView.contentMode = .scaleAspectFill
         albumArtCardView.clipsToBounds = true
+        albumArtCardView.layer.cornerRadius = 24
         albumArtCardView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(albumArtCardView)
         
-        playlistTitleLabel.text = "Silent Waves"
         playlistTitleLabel.font = .systemFont(ofSize: 24, weight: .bold)
         playlistTitleLabel.textAlignment = .center
         playlistTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(playlistTitleLabel)
         
-        playlistArtistLabel.text = "Devjeet Saha"
         playlistArtistLabel.font = .systemFont(ofSize: 14)
+        playlistArtistLabel.textColor = .darkGray
         playlistArtistLabel.textAlignment = .center
         playlistArtistLabel.translatesAutoresizingMaskIntoConstraints = false
-        playlistArtistLabel.textColor = .darkGray
         contentView.addSubview(playlistArtistLabel)
         
-        tracksHeaderLabel.text = "Tracks - \(tracks.count)"
         tracksHeaderLabel.font = .systemFont(ofSize: 18, weight: .semibold)
         tracksHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(tracksHeaderLabel)
@@ -179,108 +189,143 @@ class PlaylistDetailViewController: UIViewController {
             albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: 180),
             
             albumArtBackgroundView.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
-            albumArtBackgroundView.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
             albumArtBackgroundView.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
             albumArtBackgroundView.trailingAnchor.constraint(equalTo: albumArtBackgroundContainer.trailingAnchor),
+            albumArtBackgroundView.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
             
             albumArtCardView.centerXAnchor.constraint(equalTo: albumArtBackgroundContainer.centerXAnchor),
             albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: -28),
-            albumArtCardView.widthAnchor.constraint(equalToConstant: 140),
             albumArtCardView.heightAnchor.constraint(equalToConstant: 140),
+            albumArtCardView.widthAnchor.constraint(equalToConstant: 140),
             
             playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 16),
             playlistTitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             
-            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: 2),
+            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: 5),
             playlistArtistLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             
-            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: 24),
-            tracksHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: 28),
+            tracksHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             
             tracksStackView.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: 16),
             tracksStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             tracksStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            tracksStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            tracksStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
         ])
     }
     
-    // MARK: - Track Cards
-    private func setupTracks() {
-        for (index, track) in tracks.enumerated() {
-            let card = makeTrackCard(for: track, index: index)
+    // MARK: - Floating Button Setup
+    private func setupFloatingButton() {
+        view.addSubview(floatingAddButton)
+        
+        floatingAddButton.addTarget(self, action: #selector(showAddSongPopup), for: .touchUpInside)
+        
+        NSLayoutConstraint.activate([
+            floatingAddButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
+            floatingAddButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            floatingAddButton.widthAnchor.constraint(equalToConstant: 60),
+            floatingAddButton.heightAnchor.constraint(equalToConstant: 60),
+        ])
+    }
+    
+    // MARK: - Popup to Choose Songs
+    @objc private func showAddSongPopup() {
+        let alert = UIAlertController(title: "Add Song", message: "Select a track to add", preferredStyle: .actionSheet)
+        
+        for song in availableSongs {
+            alert.addAction(UIAlertAction(title: song.title, style: .default, handler: { _ in
+                self.addSongToPlaylist(song)
+            }))
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        self.present(alert, animated: true)
+    }
+    
+    // MARK: - Add Song Logic
+    private func addSongToPlaylist(_ song: Track) {
+        trackList.append(song)
+        reloadTracksUI()
+    }
+    
+    // MARK: - Refresh UI
+    private func reloadTracksUI() {
+        tracksStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
+        tracksHeaderLabel.text = "Tracks - \(trackList.count)"
+        
+        for (i, track) in trackList.enumerated() {
+            let card = makeTrackCard(for: track, index: i)
             tracksStackView.addArrangedSubview(card)
         }
     }
     
+    // MARK: - Track Card
     private func makeTrackCard(for track: Track, index: Int) -> UIView {
-        let container =
-            UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
+        let container = UIView()
         container.backgroundColor = UIColor.systemGray5
         container.layer.cornerRadius = 22
+        container.translatesAutoresizingMaskIntoConstraints = false
         
-        let artworkView = UIImageView()
-        artworkView.translatesAutoresizingMaskIntoConstraints = false
-        artworkView.image = UIImage(named: track.artworkName) ?? UIImage(systemName: "music.note")
-        artworkView.contentMode = .scaleAspectFill
-        artworkView.clipsToBounds = true
-        artworkView.layer.cornerRadius = 18
+        let artwork = UIImageView(image: UIImage(named: track.artworkName))
+        artwork.contentMode = .scaleAspectFill
+        artwork.layer.cornerRadius = 18
+        artwork.clipsToBounds = true
+        artwork.translatesAutoresizingMaskIntoConstraints = false
         
-        let titleLabel = UILabel()
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text = track.title
-        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        let title = UILabel()
+        title.text = track.title
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
         
-        let artistLabel = UILabel()
-        artistLabel.translatesAutoresizingMaskIntoConstraints = false
-        artistLabel.text = track.artist
-        artistLabel.font = .systemFont(ofSize: 12)
-        artistLabel.textColor = .secondaryLabel
+        let artist = UILabel()
+        artist.text = track.artist
+        artist.font = .systemFont(ofSize: 12)
+        artist.textColor = .secondaryLabel
         
-        let labelsStack = UIStackView(arrangedSubviews: [titleLabel, artistLabel])
-        labelsStack.axis = .vertical
-        labelsStack.spacing = 2
-        labelsStack.translatesAutoresizingMaskIntoConstraints = false
+        let labels = UIStackView(arrangedSubviews: [title, artist])
+        labels.axis = .vertical
+        labels.spacing = 0
+        labels.translatesAutoresizingMaskIntoConstraints = false
         
-        let playButton = UIButton(type: .system)
-        playButton.translatesAutoresizingMaskIntoConstraints = false
-        playButton.setImage(UIImage(systemName: "play.fill"), for: .normal)
-        playButton.tintColor = .darkGray
-        playButton.tag = index
-        playButton.addTarget(self, action: #selector(trackPlayTapped(_:)), for: .touchUpInside)
+        let play = UIButton(type: .system)
+        play.setImage(UIImage(systemName: "play.fill"), for: .normal)
+        play.tintColor = .darkGray
+        play.tag = index
+        play.addTarget(self, action: #selector(trackPlayTapped(_:)), for: .touchUpInside)
+        play.translatesAutoresizingMaskIntoConstraints = false
         
-        container.addSubview(artworkView)
-        container.addSubview(labelsStack)
-        container.addSubview(playButton)
+        container.addSubview(artwork)
+        container.addSubview(labels)
+        container.addSubview(play)
         
         NSLayoutConstraint.activate([
             container.heightAnchor.constraint(equalToConstant: 80),
             
-            artworkView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            artworkView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            artworkView.widthAnchor.constraint(equalToConstant: 56),
-            artworkView.heightAnchor.constraint(equalToConstant: 56),
+            artwork.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            artwork.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            artwork.widthAnchor.constraint(equalToConstant: 56),
+            artwork.heightAnchor.constraint(equalToConstant: 56),
             
-            labelsStack.leadingAnchor.constraint(equalTo: artworkView.trailingAnchor, constant: 12),
-            labelsStack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            labelsStack.trailingAnchor.constraint(lessThanOrEqualTo: playButton.leadingAnchor, constant: -8),
+            labels.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
+            labels.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            labels.trailingAnchor.constraint(equalTo: play.leadingAnchor, constant: -10),
             
-            playButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            playButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            playButton.widthAnchor.constraint(equalToConstant: 30),
-            playButton.heightAnchor.constraint(equalToConstant: 30)
+            play.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            play.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            play.widthAnchor.constraint(equalToConstant: 32),
+            play.heightAnchor.constraint(equalToConstant: 32),
         ])
         
         return container
     }
     
-    // MARK: - Play Action (UPDATED TO PASS IMAGE)
+    // MARK: - Play Action
     @objc private func trackPlayTapped(_ sender: UIButton) {
         let index = sender.tag
-        let track = tracks[index]
+        let track = trackList[index]
         
         let vc = SongDetailViewController()
-        
         vc.passedImage = UIImage(named: track.artworkName)
         vc.passedSongTitle = track.title
         vc.passedArtist = track.artist
