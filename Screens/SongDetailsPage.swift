@@ -51,7 +51,7 @@ class SongDetailViewController: UIViewController {
         view.backgroundColor = .systemBackground
         navigationController?.navigationBar.isHidden = true
         
-        setupNavBar()
+        setupUI()
         setupScroll()
         setupContent()
         setupConstraints()
@@ -75,7 +75,14 @@ class SongDetailViewController: UIViewController {
         artistLabel.text = passedArtist ?? "Unknown Artist"
     }
     
-    // MARK: - Navbar (Fixed)
+    private func setupUI() {
+        view.backgroundColor = .white
+        navigationController?.navigationBar.isHidden = true
+        
+        setupNavBar()
+       
+    }
+    // MARK: - Navbar Setup
     private func setupNavBar() {
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -83,19 +90,26 @@ class SongDetailViewController: UIViewController {
         navBar.isBackButtonVisible = true
         navBar.isChordIconVisible = true
         navBar.isProfileVisible = true
+        navBar.isStreakVisible = false
+        navBar.isWelcomeTextHidden = true
         navBar.setTitle("")
         
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
         
+        navBar.chordAction = { [weak self] in
+            let vc = ChordRecognitionViewController()
+            self?.navigationController?.pushViewController(vc, animated: true)
+        }
+        
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-            navBar.heightAnchor.constraint(equalToConstant: 44),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
         ])
     }
+    
     
     // MARK: - Scroll Setup
     private func setupScroll() {

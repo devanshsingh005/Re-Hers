@@ -51,8 +51,16 @@ public final class TopNavBar: UIView {
         let btn = UIButton(type: .system)
         btn.setImage(UIImage(systemName: "opticaldisc"), for: .normal)
         btn.tintColor = .label
+
+        //  REQUIRED FIXES
+        btn.contentHorizontalAlignment = .fill
+        btn.contentVerticalAlignment = .fill
+        btn.contentEdgeInsets = .zero
+        btn.imageView?.contentMode = .scaleAspectFit
+
         return btn
     }()
+
 
     private let profileImg: UIImageView = {
         let iv = UIImageView()
@@ -140,6 +148,9 @@ public final class TopNavBar: UIView {
     private func applyConstraints() {
         mainStack.translatesAutoresizingMaskIntoConstraints = false
         profileImg.translatesAutoresizingMaskIntoConstraints = false
+        chordButton.translatesAutoresizingMaskIntoConstraints = false
+
+        chordButton.imageView?.contentMode = .scaleAspectFit
 
         NSLayoutConstraint.activate([
             mainStack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
@@ -148,9 +159,24 @@ public final class TopNavBar: UIView {
             mainStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
 
             profileImg.widthAnchor.constraint(equalToConstant: 36),
-            profileImg.heightAnchor.constraint(equalToConstant: 36)
+            profileImg.heightAnchor.constraint(equalToConstant: 36),
+
+            //  MAKE CHORD BUTTON ACTUALLY BIGGER
+            chordButton.widthAnchor.constraint(equalToConstant: 32),
+            chordButton.heightAnchor.constraint(equalToConstant: 32),
         ])
+
+        //  VERY IMPORTANT — overrides stackView compression
+        chordButton.setContentHuggingPriority(.required, for: .horizontal)
+        chordButton.setContentHuggingPriority(.required, for: .vertical)
+
+        chordButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        chordButton.setContentCompressionResistancePriority(.required, for: .vertical)
+
+        // Make sure the image fills the bigger button
+        chordButton.imageView?.contentMode = .scaleAspectFit
     }
+
 
     // MARK: - Actions
     @objc private func handleBack() { backAction?() }
