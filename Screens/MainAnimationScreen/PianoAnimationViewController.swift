@@ -24,11 +24,15 @@ class PianoAnimationViewController: UIViewController {
     private let playPauseButton: UIButton = {
         let b = UIButton(type: .system)
         b.translatesAutoresizingMaskIntoConstraints = false
-        b.setImage(UIImage(systemName: "pause.fill"), for: .normal)
+        var config = UIButton.Configuration.plain()
+        config.baseForegroundColor = .white
+        config.image = UIImage(systemName: "pause.fill")
+        config.imagePadding = 0
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
+        b.configuration = config
         b.tintColor = .white
         b.backgroundColor = UIColor(white: 0.06, alpha: 0.9)
         b.layer.cornerRadius = 20
-        b.contentEdgeInsets = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
         b.isHidden = false
         return b
     }()
@@ -279,3 +283,4 @@ class PianoAnimationViewController: UIViewController {
         }
     }
 }
+

@@ -5,7 +5,45 @@
 //  Created by admin20 on 04/11/25.
 //
 
+//
+//  HomeViewController.swift
+//  Re-Hearse_v1
+//
+//  Created by admin20 on 04/11/25.
+//
+
 import UIKit
+
+class HomeViewController: UIViewController {
+    
+    // MARK: - UI Elements
+     let navBar = TopNavBar.make(
+        title: "Re-Hearse")
+    
+     let scrollView = UIScrollView()
+     let contentView = UIStackView()
+
+    // MARK: - Lifecycle
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+    }
+
+    // MARK: - Setup UI
+    private func setupUI() {
+        view.backgroundColor = .appBackground
+        navigationController?.navigationBar.isHidden = true
+        
+        setupNavBar()
+        setupScrollView()
+        addDailyGoal()
+        addContinueCard()
+        addContinueLearningSection()
+        addUploadSection()
+    }
+}
+
+/*import UIKit
 
 class HomeViewController: UIViewController {
     
@@ -688,4 +726,6 @@ class HomeViewController: UIViewController {
         return titles[name] ?? name.capitalized
     }
 }
+
+*/
 
