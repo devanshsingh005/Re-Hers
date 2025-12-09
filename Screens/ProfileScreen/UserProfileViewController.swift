@@ -4,8 +4,17 @@
 //
 
 import UIKit
+import Supabase
 
-final class UserProfileViewController: UIViewController {
+struct Profile: Decodable {
+    let id: UUID
+    let full_name: String?
+    let username: String?
+    let avatar_url: String?
+    let bio: String?
+}
+
+final class UserProfileViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
 
     // MARK: - UI
     private let navBar = UIView()
@@ -13,6 +22,15 @@ final class UserProfileViewController: UIViewController {
 
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
+    
+    // Header elements we need to update
+    private let profileImageView = UIImageView()
+    private let nameLabel = UILabel()
+    private let usernameLabel = UILabel()   // will show @username
+    private let editButton = UIButton(type: .system)
+    
+    // Data
+    private var currentProfile: Profile?
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -25,6 +43,8 @@ final class UserProfileViewController: UIViewController {
         setupScroll()
         buildUI()
         view.bringSubviewToFront(navBar)
+        
+        loadProfile()
     }
 
     // MARK: - NAVBAR
@@ -87,7 +107,7 @@ final class UserProfileViewController: UIViewController {
     private func buildUI() {
         contentView.addArrangedSubview(buildHeader())
         contentView.addArrangedSubview(buildStatsSection())
-       // contentView.addArrangedSubview(buildPracticeGraphCard())
+        // contentView.addArrangedSubview(buildPracticeGraphCard())
         contentView.addArrangedSubview(buildSavedSection())
 
         let spacer = UIView()
@@ -95,48 +115,53 @@ final class UserProfileViewController: UIViewController {
         contentView.addArrangedSubview(spacer)
     }
 
-    // MARK: - HEADER
+    // MARK: - HEADER (DYNAMIC)
     private func buildHeader() -> UIView {
         let header = GradientHeaderView()
         header.translatesAutoresizingMaskIntoConstraints = false
 
-        let profileImg = UIImageView()
-        profileImg.image = UIImage(systemName: "person.fill")
-        profileImg.tintColor = .black
-        profileImg.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
-        profileImg.layer.cornerRadius = 50
-        profileImg.clipsToBounds = true
-        profileImg.translatesAutoresizingMaskIntoConstraints = false
+        // Profile image
+        profileImageView.image = UIImage(systemName: "person.fill")
+        profileImageView.tintColor = .black
+        profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+        profileImageView.layer.cornerRadius = 50
+        profileImageView.clipsToBounds = true
+        profileImageView.translatesAutoresizingMaskIntoConstraints = false
+        profileImageView.isUserInteractionEnabled = true
+        profileImageView.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
+        )
 
-        let nameLabel = UILabel()
-        nameLabel.text = "Mukul Parashar"
+        // Name
+        nameLabel.text = "Loading..."
         nameLabel.font = .boldSystemFont(ofSize: 22)
 
-        let locationLabel = UILabel()
-        locationLabel.text = "Chennai, Tamil Nadu, India"
-        locationLabel.font = .systemFont(ofSize: 14)
-        locationLabel.textColor = .darkGray
+        // Username label
+        usernameLabel.text = "@username"
+        usernameLabel.font = .systemFont(ofSize: 14)
+        usernameLabel.textColor = .darkGray
 
-        let editBtn = UIButton(type: .system)
-        editBtn.setTitle("Edit", for: .normal)
-        editBtn.titleLabel?.font = .systemFont(ofSize: 16)
+        // Edit button
+        editButton.setTitle("Edit", for: .normal)
+        editButton.titleLabel?.font = .systemFont(ofSize: 16)
+        editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
 
-        let infoStack = UIStackView(arrangedSubviews: [nameLabel, locationLabel, editBtn])
+        let infoStack = UIStackView(arrangedSubviews: [nameLabel, usernameLabel, editButton])
         infoStack.axis = .vertical
         infoStack.spacing = 6
         infoStack.alignment = .leading
         infoStack.translatesAutoresizingMaskIntoConstraints = false
 
-        header.addSubviews(profileImg, infoStack)
+        header.addSubviews(profileImageView, infoStack)
 
         NSLayoutConstraint.activate([
-            profileImg.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 20),
-            profileImg.topAnchor.constraint(equalTo: header.topAnchor, constant: 120),
-            profileImg.heightAnchor.constraint(equalToConstant: 100),
-            profileImg.widthAnchor.constraint(equalToConstant: 100),
+            profileImageView.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 20),
+            profileImageView.topAnchor.constraint(equalTo: header.topAnchor, constant: 120),
+            profileImageView.heightAnchor.constraint(equalToConstant: 100),
+            profileImageView.widthAnchor.constraint(equalToConstant: 100),
 
-            infoStack.leadingAnchor.constraint(equalTo: profileImg.trailingAnchor, constant: 30),
-            infoStack.centerYAnchor.constraint(equalTo: profileImg.centerYAnchor),
+            infoStack.leadingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 30),
+            infoStack.centerYAnchor.constraint(equalTo: profileImageView.centerYAnchor),
             infoStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -20),
 
             header.heightAnchor.constraint(equalToConstant: 260)
@@ -150,6 +175,7 @@ final class UserProfileViewController: UIViewController {
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
 
+        // TODO: later make these dynamic from playlists/followers etc.
         let playlist = statView(number: "23", label: "PLAYLISTS")
         let followers = statView(number: "58", label: "FOLLOWERS")
         let following = statView(number: "43", label: "FOLLOWING")
@@ -167,7 +193,6 @@ final class UserProfileViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
-       
 
         return container
     }
@@ -192,7 +217,7 @@ final class UserProfileViewController: UIViewController {
         return stack
     }
 
-    // MARK: - PRACTICE GRAPH (UPDATED + ACCURATE)
+    // MARK: - PRACTICE GRAPH (placeholder)
     private func buildPracticeGraphCard() -> UIView {
         let card = UIView()
         card.backgroundColor = UIColor(white: 0.12, alpha: 1)
@@ -201,7 +226,7 @@ final class UserProfileViewController: UIViewController {
 
         // STREAK
         let streak = UILabel()
-        streak.text = " __day streak"
+        streak.text = "__ day streak"
         streak.font = .systemFont(ofSize: 15, weight: .semibold)
         streak.textColor = UIColor(red: 1.0, green: 0.85, blue: 0.1, alpha: 1)
 
@@ -316,6 +341,234 @@ final class UserProfileViewController: UIViewController {
         ])
 
         return row
+    }
+}
+
+// MARK: - Supabase: Load & Update Profile (name, username, avatar_url)
+private extension UserProfileViewController {
+    
+    func loadProfile() {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else {
+                await MainActor.run { self.nameLabel.text = "Not logged in" }
+                return
+            }
+            
+            do {
+                let profile: Profile = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .select()
+                    .eq("id", value: user.id.uuidString)
+                    .single()
+                    .execute()
+                    .value   // decodes into Profile
+                
+                self.currentProfile = profile
+                
+                await MainActor.run {
+                    self.nameLabel.text = profile.full_name?.isEmpty == false ? profile.full_name : "No Name"
+                    
+                    if let username = profile.username, !username.isEmpty {
+                        self.usernameLabel.text = "@\(username)"
+                    } else {
+                        self.usernameLabel.text = "@username"
+                    }
+                    
+                    self.updateAvatar(with: profile.avatar_url)
+                }
+            } catch {
+                print("Error loading profile:", error)
+                await MainActor.run {
+                    self.nameLabel.text = "Profile Error"
+                    self.usernameLabel.text = ""
+                    self.updateAvatar(with: nil)
+                }
+            }
+        }
+    }
+    
+    /// Load avatar image from a URL string stored in `avatar_url`
+    func updateAvatar(with urlString: String?) {
+        // Reset to default first
+        self.profileImageView.image = UIImage(systemName: "person.fill")
+        self.profileImageView.tintColor = .black
+        self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+        
+        guard
+            let urlString = urlString,
+            !urlString.isEmpty,
+            let url = URL(string: urlString)
+        else {
+            return  // no valid avatar URL, keep default
+        }
+        
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    await MainActor.run {
+                        self.profileImageView.image = image
+                        self.profileImageView.contentMode = .scaleAspectFill
+                        self.profileImageView.backgroundColor = .clear
+                        self.profileImageView.tintColor = .clear
+                    }
+                }
+            } catch {
+                print("Failed to load avatar image:", error)
+            }
+        }
+    }
+
+    // MARK: - Edit Profile (name/username)
+    @objc func editProfileTapped() {
+        let alert = UIAlertController(title: "Edit Profile",
+                                      message: "Update your name and username",
+                                      preferredStyle: .alert)
+        
+        alert.addTextField { tf in
+            tf.placeholder = "Full Name"
+            tf.text = self.currentProfile?.full_name ?? self.nameLabel.text
+        }
+        alert.addTextField { tf in
+            tf.placeholder = "Username"
+            if let username = self.currentProfile?.username {
+                tf.text = username
+            } else if let text = self.usernameLabel.text, text.hasPrefix("@") {
+                tf.text = String(text.dropFirst())
+            }
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        alert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
+            let fullName = alert.textFields?[0].text ?? ""
+            let username = alert.textFields?[1].text ?? ""
+            self.updateProfile(fullName: fullName, username: username)
+        }))
+        
+        present(alert, animated: true)
+    }
+    
+    func updateProfile(fullName: String, username: String) {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            
+            let updates: [String: String] = [
+                "full_name": fullName,
+                "username": username
+            ]
+            
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .update(updates)
+                    .eq("id", value: user.id.uuidString)
+                    .execute()
+                
+                await MainActor.run {
+                    self.nameLabel.text = fullName.isEmpty ? "No Name" : fullName
+                    self.usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
+                }
+            } catch {
+                print("Error updating profile:", error)
+            }
+        }
+    }
+}
+
+// MARK: - Avatar: Pick & Upload to Supabase (bucket: useprofile)
+extension UserProfileViewController {
+    
+    @objc func changeAvatarTapped() {
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = true
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+    
+    // UIImagePickerControllerDelegate
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true)
+        
+        let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+        guard let selectedImage = image else { return }
+        
+        // Update UI immediately
+        self.profileImageView.image = selectedImage
+        
+        // Upload to Supabase Storage
+        uploadAvatarImage(selectedImage)
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+    }
+    
+    func uploadAvatarImage(_ image: UIImage) {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            guard let jpegData = image.jpegData(compressionQuality: 0.8) else {
+                print("Failed to create JPEG data")
+                return
+            }
+            
+            let client = SupabaseManager.shared.client
+            
+            // Unique file name
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let fileName = "avatar_\(user.id.uuidString)_\(timestamp).jpg"
+            let path = "\(user.id.uuidString)/\(fileName)"   // folder per user
+            
+            do {
+                // Upload to bucket "useprofile"
+                try await client.storage
+                    .from("useprofile")
+                    .upload(
+                        path: path,
+                        file: jpegData,
+                        options: FileOptions(
+                            cacheControl: "3600",
+                            contentType: "image/jpeg",
+                            upsert: true
+                        )
+                    )
+                
+                // Get public URL (URL -> String)
+                let publicURL = try client.storage
+                    .from("useprofile")
+                    .getPublicURL(path: path)
+                
+                let publicURLString = publicURL.absoluteString
+                
+                // Save URL in profiles.avatar_url
+                let updates: [String: String] = [
+                    "avatar_url": publicURLString
+                ]
+                
+                _ = try await client
+                    .from("profiles")
+                    .update(updates)
+                    .eq("id", value: user.id.uuidString)
+                    .execute()
+                
+                // Update local state + UI
+                await MainActor.run {
+                    self.currentProfile = Profile(
+                        id: self.currentProfile?.id ?? user.id,
+                        full_name: self.currentProfile?.full_name,
+                        username: self.currentProfile?.username,
+                        avatar_url: publicURLString,
+                        bio: self.currentProfile?.bio
+                    )
+                    self.updateAvatar(with: publicURLString)
+                }
+                
+            } catch {
+                print("❌ Error uploading avatar:", error)
+            }
+        }
     }
 }
 

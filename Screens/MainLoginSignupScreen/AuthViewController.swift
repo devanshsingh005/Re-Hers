@@ -17,8 +17,7 @@ final class AuthViewController: UIViewController {
     private let appTitleLabel = UILabel()
     private let screenTitleLabel = UILabel()       // "Sign In" / "Sign Up"
     
-    // We keep the segmented control only to preserve the
-    // login / signup logic, but we don't show it.
+    // Segmented control (kept hidden if you want later)
     private let modeSegment = UISegmentedControl(items: ["Login", "Sign Up"])
     
     private let emailTitleLabel = UILabel()
@@ -31,6 +30,19 @@ final class AuthViewController: UIViewController {
     private let passwordTextField = UITextField()
     private let passwordToggleButton = UIButton(type: .system)
     
+    // SIGN UP EXTRA FIELDS
+    private let fullNameTitleLabel = UILabel()
+    private let usernameTitleLabel = UILabel()
+    private let confirmPasswordTitleLabel = UILabel()
+    
+    private let fullNameContainerView = UIView()
+    private let usernameContainerView = UIView()
+    private let confirmPasswordContainerView = UIView()
+    
+    private let fullNameTextField = UITextField()
+    private let usernameTextField = UITextField()
+    private let confirmPasswordTextField = UITextField()
+    
     private let forgotPasswordButton = UIButton(type: .system)
     
     private let primaryButton = UIButton(type: .system)   // "NEXT" / "Sign Up"
@@ -40,7 +52,7 @@ final class AuthViewController: UIViewController {
     private let rightSeparatorLine = UIView()
     private let orLabel = UILabel()
     
-    // Social buttons
+    // Social buttons (UI only for now)
     private let appleButton = UIButton(type: .system)
     private let googleButton = UIButton(type: .system)
     private let facebookButton = UIButton(type: .system)
@@ -96,9 +108,27 @@ private extension AuthViewController {
         passwordTitleLabel.font = UIFont.systemFont(ofSize: 13, weight: .medium)
         passwordTitleLabel.textColor = .label
         
+        // SIGN UP LABELS
+        fullNameTitleLabel.text = "Full Name"
+        fullNameTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        fullNameTitleLabel.textColor = .label
+        
+        usernameTitleLabel.text = "Username"
+        usernameTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        usernameTitleLabel.textColor = .label
+        
+        confirmPasswordTitleLabel.text = "Confirm Password"
+        confirmPasswordTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        confirmPasswordTitleLabel.textColor = .label
+        
         // Container style (rounded rectangle like screenshot)
-        configureContainerView(emailContainerView)
-        configureContainerView(passwordContainerView)
+        [emailContainerView,
+         passwordContainerView,
+         fullNameContainerView,
+         usernameContainerView,
+         confirmPasswordContainerView].forEach {
+            configureContainerView($0)
+        }
         
         // MARK: - Text fields
         
@@ -112,9 +142,27 @@ private extension AuthViewController {
                            keyboard: .default,
                            secure: true)
         
+        configureTextField(fullNameTextField,
+                           placeholder: "Enter your full name",
+                           keyboard: .default,
+                           secure: false)
+        
+        configureTextField(usernameTextField,
+                           placeholder: "Choose a username",
+                           keyboard: .default,
+                           secure: false)
+        
+        configureTextField(confirmPasswordTextField,
+                           placeholder: "*********",
+                           keyboard: .default,
+                           secure: true)
+        
         // Padding inside textfield
-        addLeftPadding(to: emailTextField)
-        addLeftPadding(to: passwordTextField)
+        [emailTextField,
+         passwordTextField,
+         fullNameTextField,
+         usernameTextField,
+         confirmPasswordTextField].forEach { addLeftPadding(to: $0) }
         
         // Eye button for password
         passwordToggleButton.setImage(UIImage(systemName: "eye"), for: .normal)
@@ -130,6 +178,14 @@ private extension AuthViewController {
         emailTextField.translatesAutoresizingMaskIntoConstraints = false
         passwordTextField.translatesAutoresizingMaskIntoConstraints = false
         
+        fullNameTextField.translatesAutoresizingMaskIntoConstraints = false
+        usernameTextField.translatesAutoresizingMaskIntoConstraints = false
+        confirmPasswordTextField.translatesAutoresizingMaskIntoConstraints = false
+        
+        fullNameContainerView.addSubview(fullNameTextField)
+        usernameContainerView.addSubview(usernameTextField)
+        confirmPasswordContainerView.addSubview(confirmPasswordTextField)
+        
         // MARK: - Forgot password
         
         forgotPasswordButton.setTitle("Forgot Password ?", for: .normal)
@@ -137,7 +193,9 @@ private extension AuthViewController {
         forgotPasswordButton.setTitleColor(UIColor(red: 1.0, green: 0.60, blue: 0.0, alpha: 1.0),
                                            for: .normal) // orange-ish
         forgotPasswordButton.contentHorizontalAlignment = .right
-        // (No extra functionality required yet)
+        forgotPasswordButton.addTarget(self,
+                                       action: #selector(forgotPasswordTapped),
+                                       for: .touchUpInside)
         
         // MARK: - Primary button
         
@@ -195,7 +253,7 @@ private extension AuthViewController {
         
         activityIndicator.hidesWhenStopped = true
         
-        // MARK: - Layout
+        // MARK: - Add subviews
         
         [appTitleLabel,
          screenTitleLabel,
@@ -203,6 +261,12 @@ private extension AuthViewController {
          emailContainerView,
          passwordTitleLabel,
          passwordContainerView,
+         fullNameTitleLabel,
+         fullNameContainerView,
+         usernameTitleLabel,
+         usernameContainerView,
+         confirmPasswordTitleLabel,
+         confirmPasswordContainerView,
          forgotPasswordButton,
          primaryButton,
          leftSeparatorLine,
@@ -263,8 +327,52 @@ private extension AuthViewController {
             passwordToggleButton.widthAnchor.constraint(equalToConstant: 24),
             passwordToggleButton.heightAnchor.constraint(equalToConstant: 24),
             
-            forgotPasswordButton.topAnchor.constraint(equalTo: passwordContainerView.bottomAnchor, constant: 6),
-            forgotPasswordButton.trailingAnchor.constraint(equalTo: passwordContainerView.trailingAnchor),
+            // SIGN UP FIELDS
+            fullNameTitleLabel.topAnchor.constraint(equalTo: passwordContainerView.bottomAnchor, constant: 16),
+            fullNameTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            fullNameTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            
+            fullNameContainerView.topAnchor.constraint(equalTo: fullNameTitleLabel.bottomAnchor, constant: 6),
+            fullNameContainerView.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            fullNameContainerView.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            fullNameContainerView.heightAnchor.constraint(equalToConstant: 44),
+            
+            fullNameTextField.leadingAnchor.constraint(equalTo: fullNameContainerView.leadingAnchor, constant: 12),
+            fullNameTextField.trailingAnchor.constraint(equalTo: fullNameContainerView.trailingAnchor, constant: -12),
+            fullNameTextField.topAnchor.constraint(equalTo: fullNameContainerView.topAnchor),
+            fullNameTextField.bottomAnchor.constraint(equalTo: fullNameContainerView.bottomAnchor),
+            
+            usernameTitleLabel.topAnchor.constraint(equalTo: fullNameContainerView.bottomAnchor, constant: 16),
+            usernameTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            usernameTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            
+            usernameContainerView.topAnchor.constraint(equalTo: usernameTitleLabel.bottomAnchor, constant: 6),
+            usernameContainerView.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            usernameContainerView.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            usernameContainerView.heightAnchor.constraint(equalToConstant: 44),
+            
+            usernameTextField.leadingAnchor.constraint(equalTo: usernameContainerView.leadingAnchor, constant: 12),
+            usernameTextField.trailingAnchor.constraint(equalTo: usernameContainerView.trailingAnchor, constant: -12),
+            usernameTextField.topAnchor.constraint(equalTo: usernameContainerView.topAnchor),
+            usernameTextField.bottomAnchor.constraint(equalTo: usernameContainerView.bottomAnchor),
+            
+            confirmPasswordTitleLabel.topAnchor.constraint(equalTo: usernameContainerView.bottomAnchor, constant: 16),
+            confirmPasswordTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            confirmPasswordTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            
+            confirmPasswordContainerView.topAnchor.constraint(equalTo: confirmPasswordTitleLabel.bottomAnchor, constant: 6),
+            confirmPasswordContainerView.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            confirmPasswordContainerView.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            confirmPasswordContainerView.heightAnchor.constraint(equalToConstant: 44),
+            
+            confirmPasswordTextField.leadingAnchor.constraint(equalTo: confirmPasswordContainerView.leadingAnchor, constant: 12),
+            confirmPasswordTextField.trailingAnchor.constraint(equalTo: confirmPasswordContainerView.trailingAnchor, constant: -12),
+            confirmPasswordTextField.topAnchor.constraint(equalTo: confirmPasswordContainerView.topAnchor),
+            confirmPasswordTextField.bottomAnchor.constraint(equalTo: confirmPasswordContainerView.bottomAnchor),
+            
+            // Forgot password just below password (for login; for signup we ignore it visually)
+            forgotPasswordButton.topAnchor.constraint(equalTo: confirmPasswordContainerView.bottomAnchor, constant: 6),
+            forgotPasswordButton.trailingAnchor.constraint(equalTo: confirmPasswordContainerView.trailingAnchor),
             
             primaryButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 20),
             primaryButton.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
@@ -357,15 +465,19 @@ private extension AuthViewController {
     }
     
     func updateTextsForMode() {
-        if isLoginMode {
-            screenTitleLabel.text = "Sign In"
-            primaryButton.setTitle("NEXT", for: .normal)
-            switchModeButton.setTitle("Create a Account", for: .normal)
-        } else {
-            screenTitleLabel.text = "Sign Up"
-            primaryButton.setTitle("Sign Up", for: .normal)
-            switchModeButton.setTitle("Already have an account? Sign In", for: .normal)
-        }
+        let showSignupFields = !isLoginMode
+        
+        fullNameTitleLabel.isHidden = !showSignupFields
+        fullNameContainerView.isHidden = !showSignupFields
+        usernameTitleLabel.isHidden = !showSignupFields
+        usernameContainerView.isHidden = !showSignupFields
+        confirmPasswordTitleLabel.isHidden = !showSignupFields
+        confirmPasswordContainerView.isHidden = !showSignupFields
+        
+        screenTitleLabel.text = isLoginMode ? "Sign In" : "Sign Up"
+        primaryButton.setTitle(isLoginMode ? "NEXT" : "Sign Up", for: .normal)
+        switchModeButton.setTitle(isLoginMode ? "Create a Account" : "Already have an account? Sign In", for: .normal)
+        
         errorLabel.isHidden = true
     }
 }
@@ -386,6 +498,26 @@ private extension AuthViewController {
         updateTextsForMode()
     }
     
+    @objc func forgotPasswordTapped() {
+        guard let email = emailTextField.text, !email.isEmpty else {
+            showError("Please enter your email first.")
+            return
+        }
+        
+        Task {
+            do {
+                try await SupabaseManager.shared.client.auth.resetPasswordForEmail(email)
+                await MainActor.run {
+                    self.showError("Password reset email sent. Check your inbox.")
+                }
+            } catch {
+                await MainActor.run {
+                    self.showError("Failed to send reset email: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
     @objc func primaryButtonTapped() {
         view.endEditing(true)
         errorLabel.isHidden = true
@@ -394,6 +526,20 @@ private extension AuthViewController {
               let password = passwordTextField.text, !password.isEmpty else {
             showError("Please enter both email and password.")
             return
+        }
+        
+        if !isLoginMode {
+            // extra validations for sign up
+            guard let fullName = fullNameTextField.text, !fullName.isEmpty,
+                  let username = usernameTextField.text, !username.isEmpty else {
+                showError("Please enter full name and username.")
+                return
+            }
+            
+            guard let confirm = confirmPasswordTextField.text, confirm == password else {
+                showError("Passwords do not match.")
+                return
+            }
         }
         
         primaryButton.isEnabled = false
@@ -432,27 +578,52 @@ private extension AuthViewController {
             password: password
         )
         
-        showHomeScreen()
+        await MainActor.run {
+            self.showHomeScreen()
+        }
     }
     
     func signUp(email: String, password: String) async throws {
         let client = SupabaseManager.shared.client
         
+        let fullName = fullNameTextField.text ?? ""
+        let username = usernameTextField.text ?? ""
+        
+        guard !fullName.isEmpty, !username.isEmpty else {
+            await MainActor.run {
+                self.showError("Please enter full name and username.")
+            }
+            return
+        }
+        
+        // Send metadata so trigger can use it
         let result = try await client.auth.signUp(
             email: email,
-            password: password
+            password: password,
+            data: [
+                "full_name": .string(fullName),
+                "username": .string(username)
+            ]
         )
         
+        // ⛔️ IMPORTANT: remove manual insert into profiles here.
+        // The trigger now handles profile creation.
+
         print("SIGNUP RESULT:", result)
         
-        if let _ = result.session {
-            showHomeScreen()
+        if result.session != nil {
+            // Email confirm OFF -> user already logged in
+            await MainActor.run {
+                self.showHomeScreen()
+            }
         } else {
+            // Email confirm ON -> user must verify, but profile row is already created by trigger
             await MainActor.run {
                 self.showError("Account created. Please check your email to verify.")
             }
         }
     }
+
     
     
     @MainActor
