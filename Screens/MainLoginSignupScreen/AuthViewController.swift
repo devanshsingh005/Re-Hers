@@ -8,6 +8,8 @@
 import Foundation
 import UIKit
 import Supabase
+import SwiftUI
+
 
 final class AuthViewController: UIViewController {
     
@@ -308,7 +310,7 @@ private extension AuthViewController {
             emailTextField.topAnchor.constraint(equalTo: emailContainerView.topAnchor),
             emailTextField.bottomAnchor.constraint(equalTo: emailContainerView.bottomAnchor),
             
-            passwordTitleLabel.topAnchor.constraint(equalTo: emailContainerView.bottomAnchor, constant: 20),
+            passwordTitleLabel.topAnchor.constraint(equalTo: emailContainerView.bottomAnchor, constant:12),
             passwordTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
             passwordTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
             
@@ -579,7 +581,8 @@ private extension AuthViewController {
         )
         
         await MainActor.run {
-            self.showHomeScreen()
+            self.routeAfterLogin()
+
         }
     }
     
@@ -614,7 +617,8 @@ private extension AuthViewController {
         if result.session != nil {
             // Email confirm OFF -> user already logged in
             await MainActor.run {
-                self.showHomeScreen()
+                self.routeAfterLogin()
+
             }
         } else {
             // Email confirm ON -> user must verify, but profile row is already created by trigger
@@ -639,4 +643,38 @@ private extension AuthViewController {
         errorLabel.text = message
         errorLabel.isHidden = false
     }
+    @MainActor
+    func routeAfterLogin() {
+        Task {
+            do {
+                let client = SupabaseManager.shared.client
+                let session = try await client.auth.session
+                let userId = session.user.id.uuidString
+
+                // Query user_onboarding
+                let response = try await client
+                    .from("user_onboarding")
+                    .select()
+                    .eq("id", value: userId)
+                    .single()
+                    .execute()
+
+                // If record exists → go home
+                showHomeScreen()
+            } catch {
+                // If .single() fails → no onboarding data → start onboarding
+                showOnboardingFlow()
+            }
+        }
+    }
+    @MainActor
+   
+    func showOnboardingFlow() {
+        let onboardingVC = UIHostingController(rootView: OnboardingFlowRoot())
+        onboardingVC.modalPresentationStyle = .fullScreen
+        present(onboardingVC, animated: true)
+    }
+
+
+
 }

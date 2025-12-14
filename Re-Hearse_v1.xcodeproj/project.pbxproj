@@ -29,6 +29,12 @@
 		23FA2E8A2EE55F260028C205 /* HomeViewControllerUploadSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E892EE55F260028C205 /* HomeViewControllerUploadSection.swift */; };
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3828BF2EC6441A0025933F /* SplashViewController.swift */; };
+		2BC06DA72EEE8DF100CBDC03 /* ProgressIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DA62EEE8DF100CBDC03 /* ProgressIndicator.swift */; };
+		2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DA82EEE8FFD00CBDC03 /* OnboardingViewModel.swift */; };
+		2BC06DAB2EEE903200CBDC03 /* OnboardingFlowRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DAA2EEE903200CBDC03 /* OnboardingFlowRoot.swift */; };
+		2BC06DAD2EEE905100CBDC03 /* OnboardingQuestion1View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DAC2EEE905100CBDC03 /* OnboardingQuestion1View.swift */; };
+		2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DAE2EEE907000CBDC03 /* OnboardingQuestion2View.swift */; };
+		2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */; };
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
@@ -66,6 +72,12 @@
 		23FA2E892EE55F260028C205 /* HomeViewControllerUploadSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerUploadSection.swift; sourceTree = "<group>"; };
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExploreViewController.swift; path = Screens/ExploreViewController.swift; sourceTree = SOURCE_ROOT; };
 		2B3828BF2EC6441A0025933F /* SplashViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashViewController.swift; sourceTree = "<group>"; };
+		2BC06DA62EEE8DF100CBDC03 /* ProgressIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressIndicator.swift; sourceTree = "<group>"; };
+		2BC06DA82EEE8FFD00CBDC03 /* OnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewModel.swift; sourceTree = "<group>"; };
+		2BC06DAA2EEE903200CBDC03 /* OnboardingFlowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowRoot.swift; sourceTree = "<group>"; };
+		2BC06DAC2EEE905100CBDC03 /* OnboardingQuestion1View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion1View.swift; sourceTree = "<group>"; };
+		2BC06DAE2EEE907000CBDC03 /* OnboardingQuestion2View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion2View.swift; sourceTree = "<group>"; };
+		2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion3View.swift; sourceTree = "<group>"; };
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BottomNavbar.swift; path = Common/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -156,6 +168,19 @@
 				23C736412ED579D100BCD95B /* UserProfileViewController.swift */,
 			);
 			path = ProfileScreen;
+			sourceTree = "<group>";
+		};
+		2BC06DA52EEE7D6700CBDC03 /* OnBoardingQuestionsScreen */ = {
+			isa = PBXGroup;
+			children = (
+				2BC06DA62EEE8DF100CBDC03 /* ProgressIndicator.swift */,
+				2BC06DA82EEE8FFD00CBDC03 /* OnboardingViewModel.swift */,
+				2BC06DAA2EEE903200CBDC03 /* OnboardingFlowRoot.swift */,
+				2BC06DAC2EEE905100CBDC03 /* OnboardingQuestion1View.swift */,
+				2BC06DAE2EEE907000CBDC03 /* OnboardingQuestion2View.swift */,
+				2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */,
+			);
+			path = OnBoardingQuestionsScreen;
 			sourceTree = "<group>";
 		};
 		84114B682EBCF66100E86F71 /* MainUplaodScreen */ = {
@@ -333,6 +358,7 @@
 		84DBA8592EBA72C7006DF51E /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				2BC06DA52EEE7D6700CBDC03 /* OnBoardingQuestionsScreen */,
 				23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */,
 				2B5707A72ED59EC300C68472 /* ProfileScreen */,
 				84C6A9DA2ECE1655007DA0D0 /* MainAnimationScreen */,
@@ -483,6 +509,7 @@
 			files = (
 				8463EBFF2ECF98B800471106 /* PianoDemoManager.swift in Sources */,
 				23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */,
+				2BC06DAB2EEE903200CBDC03 /* OnboardingFlowRoot.swift in Sources */,
 				236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */,
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */,
@@ -494,10 +521,12 @@
 				84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */,
 				84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */,
 				84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */,
+				2BC06DAD2EEE905100CBDC03 /* OnboardingQuestion1View.swift in Sources */,
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
 				23E442E72ED63F0200A2F5AC /* SearchButtonExploreViewController.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */,
+				2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */,
 				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */,
 				236331F32ED6C2B3007D5F94 /* ColorViewController.swift in Sources */,
@@ -506,13 +535,16 @@
 				23FA2E822EE55CA60028C205 /* HomeViewControllerDailyGoal.swift in Sources */,
 				23FA2E862EE55EA30028C205 /* HomeViewControllerButtons.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
+				2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */,
 				23FA2E882EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift in Sources */,
 				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
 				8463EC012ECF990E00471106 /* SongChord.swift in Sources */,
+				2BC06DA72EEE8DF100CBDC03 /* ProgressIndicator.swift in Sources */,
 				238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */,
 				238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */,
 				23FA2E802EE55C720028C205 /* HomeViewControllerLayout.swift in Sources */,
 				842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */,
+				2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */,
 				23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
