@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 class PianoAnimationViewController: UIViewController {
 
@@ -40,6 +41,11 @@ class PianoAnimationViewController: UIViewController {
     // To manage scheduled demo steps so we can cancel on pause
     private var nextWorkItem: DispatchWorkItem?
 
+    // Keep track of currently sounding notes (MIDI numbers) so we can stop them on pause/stop
+    private var currentlyPlayingMIDINotes: Set<UInt8> = []
+    // Also keep a reference to scheduled stop work items for currently-playing chords
+    private var scheduledStopWorkItems: [DispatchWorkItem] = []
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
@@ -47,12 +53,27 @@ class PianoAnimationViewController: UIViewController {
         setupConstraints()
         setupActions()
         setupDemoSong()
+
+        // Start audio engine early (attempt to load SF2 if you added it to bundle).
+        do {
+            // If you added a .sf2 to your bundle, pass the exact filename here, e.g. "GeneralUser GS.sf2"
+            try AudioEngineManager.shared.startEngine(loadSoundFont: "GeneralUser GS.sf2")
+        } catch {
+            // Engine might still start without SF2 on some devices; log and continue.
+            print("Audio engine failed to start: \(error)")
+        }
+
         startDemoSong()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupTabBar()
+    }
+
+    deinit {
+        // Stop any playing notes if VC is deallocated
+        stopAllPlayingNotes()
     }
 
     // MARK: - UI Setup
@@ -130,13 +151,6 @@ class PianoAnimationViewController: UIViewController {
         let safe = view.safeAreaLayoutGuide
 
         NSLayoutConstraint.activate([
-           
-
-            // safe area background begins BELOW navbar, fills safe area
-//            safeAreaBG.topAnchor.constraint(equalTo: navBar.bottomAnchor),
-//            safeAreaBG.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-//            safeAreaBG.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-//            safeAreaBG.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // chord display inside the safe area with extra padding (moved lower)
             chordDisplayView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10), // extra top padding
@@ -173,7 +187,7 @@ class PianoAnimationViewController: UIViewController {
 
     // MARK: - Demo control
     private func setupDemoSong() {
-        // If you want to preload demoManager with static JSON, that stays in demoManager's init.
+        // demoManager now attempts to load JSON from sheet_music.json; nothing needed here
     }
 
     private func startDemoSong() {
@@ -190,6 +204,14 @@ class PianoAnimationViewController: UIViewController {
         // cancel any scheduled next item
         nextWorkItem?.cancel()
         nextWorkItem = nil
+
+        // cancel scheduled stops and clear them
+        scheduledStopWorkItems.forEach { $0.cancel() }
+        scheduledStopWorkItems.removeAll()
+
+        // stop any currently sounding notes
+        stopAllPlayingNotes()
+
         updatePlayPauseUI()
     }
 
@@ -215,17 +237,46 @@ class PianoAnimationViewController: UIViewController {
             // demo finished
             chordDisplayView.setSingleChord("Demo Complete")
             isPlayingDemo = false
+
+            // ensure any playing notes stop
+            stopAllPlayingNotes()
+
             updatePlayPauseUI()
             return
         }
 
+        // Visual animation (unchanged)
         pianoKeyboard.playChord(chord)
 
-        for n in chord.leftHandNotes + chord.rightHandNotes {
-            playNoteSound(n)
+        // AUDIO: start sampler notes for this chord
+        let allNotes = chord.leftHandNotes + chord.rightHandNotes
+
+        for noteName in allNotes {
+            if let midi = AudioEngineManager.shared.midiNumber(from: noteName) {
+                AudioEngineManager.shared.startNote(midi: midi, velocity: 100)
+                currentlyPlayingMIDINotes.insert(midi)
+            } else {
+                print("Couldn't map \(noteName) -> midi")
+            }
         }
 
+        // schedule note-off after chord.duration seconds and track the work item so we can cancel it
+        let stopWork = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            for noteName in allNotes {
+                if let midi = AudioEngineManager.shared.midiNumber(from: noteName) {
+                    AudioEngineManager.shared.stopNote(midi: midi)
+                    self.currentlyPlayingMIDINotes.remove(midi)
+                }
+            }
+        }
+        scheduledStopWorkItems.append(stopWork)
+        DispatchQueue.main.asyncAfter(deadline: .now() + chord.duration, execute: stopWork)
+
+        // Update label
         chordDisplayView.setSingleChord("🎹 \(chord.chordName)")
+
+        // schedule next chord
         scheduleNextDemoChord(after: chord.duration)
     }
 
@@ -265,22 +316,37 @@ class PianoAnimationViewController: UIViewController {
     }
 
 
-    // MARK: - Live Chord Detection
+    // MARK: - Live Chord Detection & Key Press Handling
     private func handleKeyPress(noteName: String, isPressed: Bool) {
         if isPressed {
             activeNotes.insert(noteName)
-            playNoteSound(noteName)
+            if let midi = AudioEngineManager.shared.midiNumber(from: noteName) {
+                AudioEngineManager.shared.startNote(midi: midi, velocity: 100)
+                currentlyPlayingMIDINotes.insert(midi)
+            } else {
+                print("Couldn't map live-pressed note \(noteName)")
+            }
         } else {
             activeNotes.remove(noteName)
+            if let midi = AudioEngineManager.shared.midiNumber(from: noteName) {
+                AudioEngineManager.shared.stopNote(midi: midi)
+                currentlyPlayingMIDINotes.remove(midi)
+            }
         }
 
         let chord = chordDetector.detectChord(from: Array(activeNotes))
         if chord != "Unknown" && chord != "Play a chord!" {
             chordDisplayView.setSingleChord(" \(chord)")
         } else if activeNotes.isEmpty {
-            // optional: show default message
             chordDisplayView.setSingleChord("🎹 Animation Ready!")
         }
     }
-}
 
+    // MARK: - Helpers
+    private func stopAllPlayingNotes() {
+        for midi in currentlyPlayingMIDINotes {
+            AudioEngineManager.shared.stopNote(midi: midi)
+        }
+        currentlyPlayingMIDINotes.removeAll()
+    }
+}
