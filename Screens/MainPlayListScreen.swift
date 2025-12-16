@@ -6,35 +6,128 @@
 //
 
 import UIKit
+import Supabase
 
 // MARK: - Playlist Data Model
 struct Playlist {
+    let id: UUID
     let title: String
-    /// imageIdentifier can be an asset name (e.g. "cl_1") or a filename saved in Documents (e.g. "doc_123.png")
+    /// imageIdentifier can be an asset name (e.g. "cl_1") or a filename saved in Documents (e.g. "doc_123.png") or a signed URL
     let imageIdentifier: String
     let tags: String
     let trackCount: Int
+    let createdAt: Date?
+    let isPublic: Bool?
+    
+    // Convenience initializer for local playlists
+    init(id: UUID = UUID(), title: String, imageIdentifier: String, tags: String, trackCount: Int, createdAt: Date? = nil, isPublic: Bool? = false) {
+        self.id = id
+        self.title = title
+        self.imageIdentifier = imageIdentifier
+        self.tags = tags
+        self.trackCount = trackCount
+        self.createdAt = createdAt
+        self.isPublic = isPublic
+    }
 }
 
-// MARK: - Playlist Screen
+// MARK: - Database Playlist Model
+struct DBPlaylist: Codable {
+    let id: UUID
+    let userId: UUID
+    let name: String
+    let description: String?
+    let coverImageUrl: String?
+    let isPublic: Bool?
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case name
+        case description
+        case coverImageUrl = "cover_image_url"
+        case isPublic = "is_public"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Image Loader with Cache
+class ImageLoader {
+    static let shared = ImageLoader()
+    private var cache = NSCache<NSString, UIImage>()
+    private var loadingTasks: [String: URLSessionDataTask] = [:]
+    
+    private init() {}
+    
+    func loadImage(from urlString: String, completion: @escaping (UIImage?) -> Void) {
+        // Check cache first
+        if let cachedImage = cache.object(forKey: urlString as NSString) {
+            completion(cachedImage)
+            return
+        }
+        
+        guard let url = URL(string: urlString) else {
+            completion(nil)
+            return
+        }
+        
+        // Cancel existing task for this URL if any
+        loadingTasks[urlString]?.cancel()
+        
+        // Create new download task
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self else { return }
+            
+            // Remove task from dictionary
+            self.loadingTasks.removeValue(forKey: urlString)
+            
+            guard let data = data,
+                  let image = UIImage(data: data),
+                  error == nil else {
+                completion(nil)
+                return
+            }
+            
+            // Cache the image
+            self.cache.setObject(image, forKey: urlString as NSString)
+            
+            DispatchQueue.main.async {
+                completion(image)
+            }
+        }
+        
+        // Store and start task
+        loadingTasks[urlString] = task
+        task.resume()
+    }
+    
+    func cancelLoad(for urlString: String) {
+        loadingTasks[urlString]?.cancel()
+        loadingTasks.removeValue(forKey: urlString)
+    }
+}
+
 // MARK: - Playlist Screen
 class PlaylistViewController: UIViewController {
     
     // MARK: - UI Components
     private let navBar = TopNavBar.make(title: "PlayList")
     private let tableView = UITableView()
+    private let refreshControl = UIRefreshControl()
     
-    // MARK: - Floating Button (Matches PlaylistDetailViewController)
+    // MARK: - Floating Button
     private let floatingButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.backgroundColor = UIColor.orange      // identical color
+        btn.backgroundColor = UIColor.orange
         btn.setImage(UIImage(systemName: "plus"), for: .normal)
         btn.tintColor = .white
         
         btn.layer.cornerRadius = 30
         btn.clipsToBounds = false
         
-        // Same modern shadow
         btn.layer.shadowColor = UIColor.black.cgColor
         btn.layer.shadowOpacity = 0.25
         btn.layer.shadowRadius = 6
@@ -43,25 +136,39 @@ class PlaylistViewController: UIViewController {
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()
-
     
-    // MARK: - Data (mutable)
-    private var playlists: [Playlist] = [
-        Playlist(title: "Silent Waves", imageIdentifier: "cl_2", tags: "Lo-fi Ambient Acoustic Chill", trackCount: 12),
-        Playlist(title: "Beast Mode Beats", imageIdentifier: "cl_3", tags: "Blaze Surge Rush Fuel", trackCount: 9),
-        Playlist(title: "Midnight Flow", imageIdentifier: "cl_4", tags: "Ambient Chillwave Jazzy Groovy", trackCount: 14),
-        Playlist(title: "Focus Mode", imageIdentifier: "cl_5", tags: "Study Chill Relax", trackCount: 10),
-        Playlist(title: "Deep Travel", imageIdentifier: "cl_1", tags: "Soul Indie Acoustic", trackCount: 8),
-    ]
+    // MARK: - Activity Indicator
+    private let activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.color = .orange
+        indicator.hidesWhenStopped = true
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        return indicator
+    }()
     
+    // MARK: - Data
+    private var playlists: [Playlist] = [] {
+        didSet {
+            DispatchQueue.main.async {
+                self.tableView.reloadData()
+            }
+        }
+    }
     
-    // MARK: - Life
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupFloatingButton()
+        setupActivityIndicator()
+        setupRefreshControl()
+        loadPlaylists()
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        loadPlaylists()
+    }
     
     // MARK: - Setup UI
     private func setupUI() {
@@ -70,6 +177,20 @@ class PlaylistViewController: UIViewController {
         
         setupNavBar()
         setupTableView()
+    }
+    
+    private func setupActivityIndicator() {
+        view.addSubview(activityIndicator)
+        NSLayoutConstraint.activate([
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+    }
+    
+    private func setupRefreshControl() {
+        refreshControl.tintColor = .orange
+        refreshControl.addTarget(self, action: #selector(refreshPlaylists), for: .valueChanged)
+        tableView.refreshControl = refreshControl
     }
     
     private func setupNavBar() {
@@ -85,15 +206,14 @@ class PlaylistViewController: UIViewController {
             self?.navigationController?.pushViewController(vc, animated: true)
         }
         navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = UserProfileViewController()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
-
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
+            guard let self = self else { return }
+            let vc = UserProfileViewController()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+        
+        navBar.backAction = { [weak self] in
+            self?.navigationController?.popViewController(animated: true)
+        }
         
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -102,8 +222,6 @@ class PlaylistViewController: UIViewController {
         ])
     }
     
-    
-    // MARK: - Floating Button
     // MARK: - Floating Button
     private func setupFloatingButton() {
         view.addSubview(floatingButton)
@@ -118,39 +236,276 @@ class PlaylistViewController: UIViewController {
         
         floatingButton.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
     }
-
-
     
+    // MARK: - Database Operations
+    @objc private func refreshPlaylists() {
+        loadPlaylists()
+    }
     
-    // MARK: - Add
+    private func loadPlaylists() {
+        activityIndicator.startAnimating()
+        
+        Task {
+            do {
+                // Get current user ID from auth
+                let session = try await SupabaseManager.shared.client.auth.session
+                let userId = session.user.id
+                
+                print("Loading playlists for user: \(userId)")
+                
+                // Fetch playlists for the current user
+                let dbPlaylists: [DBPlaylist] = try await SupabaseManager.shared.client
+                    .from("playlists")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .order("created_at", ascending: false)
+                    .execute()
+                    .value
+                
+                print("Fetched \(dbPlaylists.count) playlists from database")
+                
+                // Convert DB models to local models
+                var loadedPlaylists: [Playlist] = []
+                
+                for dbPlaylist in dbPlaylists {
+                    let imageIdentifier = dbPlaylist.coverImageUrl ?? "cl_1"
+                    
+                    let playlist = Playlist(
+                        id: dbPlaylist.id,
+                        title: dbPlaylist.name,
+                        imageIdentifier: imageIdentifier,
+                        tags: dbPlaylist.description ?? "Custom Playlist",
+                        trackCount: 0,
+                        createdAt: dbPlaylist.createdAt,
+                        isPublic: dbPlaylist.isPublic
+                    )
+                    loadedPlaylists.append(playlist)
+                }
+                
+                // Add default playlists only if no user playlists exist
+                if loadedPlaylists.isEmpty {
+                    let defaultPlaylists = [
+                        Playlist(title: "Silent Waves", imageIdentifier: "cl_2", tags: "Lo-fi Ambient Acoustic Chill", trackCount: 12),
+                        Playlist(title: "Beast Mode Beats", imageIdentifier: "cl_3", tags: "Blaze Surge Rush Fuel", trackCount: 9),
+                        Playlist(title: "Midnight Flow", imageIdentifier: "cl_4", tags: "Ambient Chillwave Jazzy Groovy", trackCount: 14),
+                        Playlist(title: "Focus Mode", imageIdentifier: "cl_5", tags: "Study Chill Relax", trackCount: 10),
+                        Playlist(title: "Deep Travel", imageIdentifier: "cl_1", tags: "Soul Indie Acoustic", trackCount: 8),
+                    ]
+                    loadedPlaylists = defaultPlaylists
+                }
+                
+                DispatchQueue.main.async {
+                    self.playlists = loadedPlaylists
+                    self.activityIndicator.stopAnimating()
+                    self.refreshControl.endRefreshing()
+                }
+                
+            } catch {
+                print("Error loading playlists: \(error)")
+                DispatchQueue.main.async {
+                    self.activityIndicator.stopAnimating()
+                    self.refreshControl.endRefreshing()
+                    
+                    // Show default playlists on error
+                    self.playlists = [
+                        Playlist(title: "Silent Waves", imageIdentifier: "cl_2", tags: "Lo-fi Ambient Acoustic Chill", trackCount: 12),
+                        Playlist(title: "Beast Mode Beats", imageIdentifier: "cl_3", tags: "Blaze Surge Rush Fuel", trackCount: 9),
+                        Playlist(title: "Midnight Flow", imageIdentifier: "cl_4", tags: "Ambient Chillwave Jazzy Groovy", trackCount: 14),
+                        Playlist(title: "Focus Mode", imageIdentifier: "cl_5", tags: "Study Chill Relax", trackCount: 10),
+                        Playlist(title: "Deep Travel", imageIdentifier: "cl_1", tags: "Soul Indie Acoustic", trackCount: 8),
+                    ]
+                    
+                    // Show error alert
+                    let alert = UIAlertController(
+                        title: "Connection Error",
+                        message: "Could not load playlists. Using local data.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Add Playlist
     @objc private func didTapAdd() {
         let addVC = AddPlaylistViewController()
         addVC.modalPresentationStyle = .overFullScreen
-
+        
         addVC.onSave = { [weak self] (name, pickedImage) in
             guard let self = self else { return }
-            let id: String
-
-            if let image = pickedImage {
-                if let fileName = self.saveImageToDocuments(image: image) {
-                    id = fileName
-                } else {
-                    id = "cl_1"
-                }
-            } else {
-                id = "cl_1"
-            }
             
-            let new = Playlist(title: name, imageIdentifier: id, tags: "Custom Playlist", trackCount: 0)
-            self.playlists.append(new)
-            self.tableView.reloadData()
+            // Show loading indicator
+            self.showLoading(true)
+            
+            Task {
+                do {
+                    // Create playlist in database
+                    let playlistId = try await self.createPlaylistInDatabase(name: name, image: pickedImage)
+                    
+                    // Create local playlist object with signed URL or local file
+                    let id: String
+                    if let image = pickedImage {
+                        do {
+                            let session = try await SupabaseManager.shared.client.auth.session
+                            let userId = session.user.id
+                            id = try await self.uploadImageToStorage(image: image, userId: userId)
+                        } catch {
+                            print("Image upload failed, saving locally: \(error)")
+                            id = self.saveImageToDocuments(image: image) ?? "cl_1"
+                        }
+                    } else {
+                        id = "cl_1"
+                    }
+                    
+                    let newPlaylist = Playlist(
+                        id: playlistId,
+                        title: name,
+                        imageIdentifier: id,
+                        tags: "Custom Playlist",
+                        trackCount: 0
+                    )
+                    
+                    DispatchQueue.main.async {
+                        self.playlists.insert(newPlaylist, at: 0)
+                        self.tableView.reloadData()
+                        self.showLoading(false)
+                    }
+                    
+                } catch {
+                    print("Error creating playlist: \(error)")
+                    DispatchQueue.main.async {
+                        self.showLoading(false)
+                        let alert = UIAlertController(
+                            title: "Error",
+                            message: "Failed to create playlist. Please try again.",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
         }
         
         present(addVC, animated: true)
     }
     
+    private func createPlaylistInDatabase(name: String, image: UIImage?) async throws -> UUID {
+        // Get current user
+        let session = try await SupabaseManager.shared.client.auth.session
+        let userId = session.user.id
+        
+        var coverImageUrl: String? = nil
+        
+        // Upload image to storage if provided
+        if let image = image {
+            do {
+                coverImageUrl = try await uploadImageToStorage(image: image, userId: userId)
+            } catch {
+                print("Image upload failed, continuing without image: \(error)")
+                // Save locally as fallback
+                if let localFile = saveImageToDocuments(image: image) {
+                    coverImageUrl = localFile
+                }
+            }
+        }
+        
+        // Create playlist in database
+        let newPlaylist = DBPlaylist(
+            id: UUID(),
+            userId: userId,
+            name: name,
+            description: "Custom Playlist",
+            coverImageUrl: coverImageUrl,
+            isPublic: false,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        
+        print("Inserting playlist to database: \(newPlaylist)")
+        
+        do {
+            let inserted: DBPlaylist = try await SupabaseManager.shared.client
+                .from("playlists")
+                .insert(newPlaylist)
+                .select()
+                .single()
+                .execute()
+                .value
+            
+            print("✅ Created playlist with ID: \(inserted.id)")
+            return inserted.id
+        } catch {
+            print("❌ Database insert error: \(error)")
+            throw error
+        }
+    }
     
-    // MARK: - Table
+    private func uploadImageToStorage(image: UIImage, userId: UUID) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            throw NSError(domain: "ImageConversionError", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+        }
+        
+        let fileName = "\(UUID().uuidString).jpg"
+        print("📤 Uploading: \(fileName), Size: \(imageData.count) bytes")
+        
+        do {
+            // First, check authentication
+            let session = try await SupabaseManager.shared.client.auth.session
+            print("✅ User authenticated: \(session.user.id)")
+            
+            // Upload to Supabase Storage
+            print("🔄 Starting upload...")
+            try await SupabaseManager.shared.client.storage
+                .from("playlistcover")
+                .upload(
+                    path: fileName,
+                    file: imageData,
+                    options: FileOptions(contentType: "image/jpeg")
+                )
+            
+            print("✅ Upload successful")
+            
+            // Get signed URL for private bucket
+            print("🔄 Getting signed URL...")
+            let signedUrl = try await SupabaseManager.shared.client.storage
+                .from("playlistcover")
+                .createSignedURL(
+                    path: fileName,
+                    expiresIn: 31536000 // 1 year expiry
+                )
+            
+            print("✅ Signed URL created: \(signedUrl.absoluteString)")
+            return signedUrl.absoluteString
+            
+        } catch {
+            print("❌ Upload error details:")
+            print("Error: \(error)")
+            
+            if let urlError = error as? URLError {
+                print("URL Error code: \(urlError.errorCode)")
+            }
+            
+            throw error
+        }
+    }
+    
+    private func showLoading(_ show: Bool) {
+        DispatchQueue.main.async {
+            if show {
+                self.activityIndicator.startAnimating()
+                self.view.isUserInteractionEnabled = false
+            } else {
+                self.activityIndicator.stopAnimating()
+                self.view.isUserInteractionEnabled = true
+            }
+        }
+    }
+    
+    // MARK: - Table View Setup
     private func setupTableView() {
         view.addSubview(tableView)
         tableView.translatesAutoresizingMaskIntoConstraints = false
@@ -165,7 +520,6 @@ class PlaylistViewController: UIViewController {
         
         // Add padding so FAB doesn't overlap first card
         tableView.contentInset = UIEdgeInsets(top: 10, left: 0, bottom: 30, right: 0)
-
         
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
@@ -175,8 +529,7 @@ class PlaylistViewController: UIViewController {
         ])
     }
     
-    
-    // MARK: - File saving helper
+    // MARK: - File saving helper (for local fallback)
     private func saveImageToDocuments(image: UIImage) -> String? {
         guard let data = image.pngData() else { return nil }
         let filename = "doc_\(UUID().uuidString).png"
@@ -192,78 +545,137 @@ class PlaylistViewController: UIViewController {
     }
     
     fileprivate func loadImage(identifier: String) -> UIImage? {
+        // Check if it's a signed URL (contains "token=" or is a https URL)
+        if identifier.contains("token=") || identifier.hasPrefix("https://") {
+            // Return placeholder, will be loaded asynchronously
+            return UIImage(named: "cl_1")
+        }
+        
+        // Check if it's a local asset
         if let img = UIImage(named: identifier) { return img }
         
+        // Check if it's a document file
         let url = FileManager.default.urls(for: .documentDirectory,
                                            in: .userDomainMask).first!.appendingPathComponent(identifier)
         if let data = try? Data(contentsOf: url) {
             return UIImage(data: data)
         }
-        return nil
+        
+        // Fallback to default
+        return UIImage(named: "cl_1")
     }
 }
 
-    
-    // MARK: - File saving helper
-    private func saveImageToDocuments(image: UIImage) -> String? {
-        guard let data = image.pngData() else { return nil }
-        let filename = "doc_\(UUID().uuidString).png"
-        let url = FileManager.default.urls(for: .documentDirectory,
-                                           in: .userDomainMask).first!.appendingPathComponent(filename)
-        do {
-            try data.write(to: url, options: .atomic)
-            return filename
-        } catch {
-            print("Failed to save image to documents:", error)
-            return nil
-        }
-    }
-    
-    fileprivate func loadImage(identifier: String) -> UIImage? {
-        if let img = UIImage(named: identifier) { return img }
-        
-        let url = FileManager.default.urls(for: .documentDirectory,
-                                           in: .userDomainMask).first!.appendingPathComponent(identifier)
-        if let data = try? Data(contentsOf: url) {
-            return UIImage(data: data)
-        }
-        return nil
-    }
-
-
 // MARK: - Table Delegate
 extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
-
+    
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { playlists.count }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-
         let cell = tableView.dequeueReusableCell(withIdentifier: "PlaylistCell", for: indexPath) as! PlaylistTableViewCell
         let p = playlists[indexPath.row]
         
-        let img = loadImage(identifier: p.imageIdentifier)
-        cell.configure(withTitle: p.title, tags: p.tags, trackCount: p.trackCount, image: img)
+        // Load initial placeholder
+        cell.configure(withTitle: p.title, tags: p.tags, trackCount: p.trackCount, image: UIImage(named: "cl_1"))
+        
+        // If it's a signed URL, load it asynchronously
+        if p.imageIdentifier.contains("token=") || p.imageIdentifier.hasPrefix("https://") {
+            ImageLoader.shared.loadImage(from: p.imageIdentifier) { image in
+                DispatchQueue.main.async {
+                    // Make sure we're still looking at the same cell
+                    if let currentCell = tableView.cellForRow(at: indexPath) as? PlaylistTableViewCell {
+                        currentCell.playlistImageView.image = image ?? UIImage(named: "cl_1")
+                    }
+                }
+            }
+        } else {
+            // Load local image
+            let img = loadImage(identifier: p.imageIdentifier)
+            cell.configure(withTitle: p.title, tags: p.tags, trackCount: p.trackCount, image: img)
+        }
         
         return cell
     }
     
-    // ⬇️ UPDATED — passes image + title + tags to next screen
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-
-        let playlist = playlists[indexPath.row]
         
+        let playlist = playlists[indexPath.row]
         let vc = PlaylistDetailViewController()
-        let img = loadImage(identifier: playlist.imageIdentifier)
-
-        vc.passedImage = img                      // PASS IMAGE
-        vc.passedTitle = playlist.title           // PASS TITLE
-        vc.passedArtist = playlist.tags           // PASS ARTIST/TAGS
+        
+        // Set title and tags immediately
+        vc.passedTitle = playlist.title
+        vc.passedArtist = playlist.tags
+        
+        // Load image asynchronously if needed
+        if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
+            ImageLoader.shared.loadImage(from: playlist.imageIdentifier) { image in
+                DispatchQueue.main.async {
+                    vc.passedImage = image ?? UIImage(named: "cl_1")
+                }
+            }
+        } else {
+            vc.passedImage = loadImage(identifier: playlist.imageIdentifier)
+        }
         
         navigationController?.pushViewController(vc, animated: true)
     }
+    
+    // MARK: - Swipe to delete
+    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        // Only allow deletion for user-created playlists (not default ones)
+        let playlist = playlists[indexPath.row]
+        return !playlist.imageIdentifier.hasPrefix("cl_") // Default playlists start with "cl_"
+    }
+    
+    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        if editingStyle == .delete {
+            let playlist = playlists[indexPath.row]
+            deletePlaylist(playlist, at: indexPath)
+        }
+    }
+    
+    private func deletePlaylist(_ playlist: Playlist, at indexPath: IndexPath) {
+        Task {
+            do {
+                // Delete from database
+                try await SupabaseManager.shared.client
+                    .from("playlists")
+                    .delete()
+                    .eq("id", value: playlist.id)
+                    .execute()
+                
+                // If playlist has a storage image, try to delete it
+                if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
+                    // Extract filename from URL
+                    if let url = URL(string: playlist.imageIdentifier),
+                       let fileName = url.pathComponents.last?.components(separatedBy: "?").first {
+                        try? await SupabaseManager.shared.client.storage
+                            .from("playlistcover")
+                            .remove(paths: [fileName])
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    self.playlists.remove(at: indexPath.row)
+                    self.tableView.deleteRows(at: [indexPath], with: .automatic)
+                }
+                
+            } catch {
+                print("Error deleting playlist: \(error)")
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: "Error",
+                        message: "Failed to delete playlist.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
 }
- 
 
 // MARK: - Playlist Cell
 class PlaylistTableViewCell: UITableViewCell {
@@ -276,7 +688,7 @@ class PlaylistTableViewCell: UITableViewCell {
         return v
     }()
     
-    private let playlistImageView = UIImageView()
+    let playlistImageView = UIImageView()
     private let titleLabel = UILabel()
     private let tagsLabel = UILabel()
     private let trackCountLabel = UILabel()
@@ -285,6 +697,7 @@ class PlaylistTableViewCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setupUI()
     }
+    
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     private func setupUI() {
@@ -340,7 +753,6 @@ class PlaylistTableViewCell: UITableViewCell {
         playlistImageView.image = image ?? UIImage(named: "cl_1")
     }
 }
-
 
 // MARK: - AddPlaylistViewController
 class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {

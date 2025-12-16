@@ -1,4 +1,3 @@
-//
 //  ProfileScreen.swift
 //  Re-Hearse_v1
 //
@@ -8,10 +7,10 @@ import Supabase
 
 struct Profile: Decodable {
     let id: UUID
-    let full_name: String?
-    let username: String?
-    let avatar_url: String?
-    let bio: String?
+    var full_name: String?
+    var username: String?
+    var avatar_url: String?
+    var bio: String?
 }
 
 final class UserProfileViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -75,6 +74,8 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
     }
 
     @objc private func goBack() {
+        // Send notification before popping to refresh navbar
+        NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
         navigationController?.popViewController(animated: true)
     }
 
@@ -90,7 +91,6 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         contentView.axis = .vertical
         contentView.spacing = 20
         contentView.alignment = .fill
-        scrollView.contentInsetAdjustmentBehavior = .never
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -108,42 +108,35 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
 
     // MARK: - Build Screen UI
     private func buildUI() {
+        // Add profile header FIRST
         contentView.addArrangedSubview(buildHeader())
-        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
+        contentView.setCustomSpacing(20, after: contentView.arrangedSubviews.last!)
 
+        // Then add stats section
         contentView.addArrangedSubview(buildStatsSection())
-        // contentView.addArrangedSubview(buildPracticeGraphCard())
+        contentView.setCustomSpacing(20, after: contentView.arrangedSubviews.last!)
+
+        // Then add saved section
         contentView.addArrangedSubview(buildSavedSection())
 
+        // Add bottom spacer
         let spacer = UIView()
-        spacer.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        spacer.heightAnchor.constraint(equalToConstant: 100).isActive = true
         contentView.addArrangedSubview(spacer)
     }
 
     // MARK: - HEADER (DYNAMIC, NICER DESIGN)
     private func buildHeader() -> UIView {
         let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
         
         let header = GradientHeaderView()
         header.layer.cornerRadius = 24
         header.layer.masksToBounds = true
-        header.translatesAutoresizingMaskIntoConstraints = false
         
         container.addSubview(header)
         
-        NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            header.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            header.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            header.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            header.heightAnchor.constraint(greaterThanOrEqualToConstant: 260)
-        ])
-
         // Avatar container in center
         let avatarWrapper = UIView()
-        avatarWrapper.translatesAutoresizingMaskIntoConstraints = false
-        header.addSubview(avatarWrapper)
         
         // Profile image
         profileImageView.image = UIImage(systemName: "person.fill")
@@ -153,55 +146,31 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         profileImageView.clipsToBounds = true
         profileImageView.layer.borderColor = UIColor.white.withAlphaComponent(0.8).cgColor
         profileImageView.layer.borderWidth = 3
-        profileImageView.translatesAutoresizingMaskIntoConstraints = false
         profileImageView.isUserInteractionEnabled = true
         profileImageView.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
         )
         
-        // Camera badge overlay
+        // Camera badge overlay (FOR IMAGE UPLOAD ONLY)
         cameraBadgeView.backgroundColor = .white
         cameraBadgeView.layer.cornerRadius = 16
         cameraBadgeView.layer.shadowColor = UIColor.black.cgColor
         cameraBadgeView.layer.shadowOpacity = 0.15
         cameraBadgeView.layer.shadowOffset = CGSize(width: 0, height: 2)
         cameraBadgeView.layer.shadowRadius = 4
-        cameraBadgeView.translatesAutoresizingMaskIntoConstraints = false
+        cameraBadgeView.isUserInteractionEnabled = true
+        cameraBadgeView.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
+        )
         
         let cameraIcon = UIImageView(image: UIImage(systemName: "camera.fill"))
         cameraIcon.tintColor = UIColor.systemOrange
         cameraIcon.contentMode = .scaleAspectFit
-        cameraIcon.translatesAutoresizingMaskIntoConstraints = false
         cameraBadgeView.addSubview(cameraIcon)
-        
-        NSLayoutConstraint.activate([
-            cameraIcon.centerXAnchor.constraint(equalTo: cameraBadgeView.centerXAnchor),
-            cameraIcon.centerYAnchor.constraint(equalTo: cameraBadgeView.centerYAnchor),
-            cameraIcon.widthAnchor.constraint(equalToConstant: 16),
-            cameraIcon.heightAnchor.constraint(equalToConstant: 16)
-        ])
         
         avatarWrapper.addSubview(profileImageView)
         avatarWrapper.addSubview(cameraBadgeView)
         
-        NSLayoutConstraint.activate([
-            avatarWrapper.centerXAnchor.constraint(equalTo: header.centerXAnchor),
-            avatarWrapper.topAnchor.constraint(equalTo: header.topAnchor, constant: 84),
-            
-            profileImageView.topAnchor.constraint(equalTo: avatarWrapper.topAnchor),
-            profileImageView.leadingAnchor.constraint(equalTo: avatarWrapper.leadingAnchor),
-            profileImageView.trailingAnchor.constraint(equalTo: avatarWrapper.trailingAnchor),
-            profileImageView.heightAnchor.constraint(equalToConstant: 104),
-            profileImageView.widthAnchor.constraint(equalToConstant: 104),
-            
-            cameraBadgeView.widthAnchor.constraint(equalToConstant: 32),
-            cameraBadgeView.heightAnchor.constraint(equalToConstant: 32),
-            cameraBadgeView.trailingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 4),
-            cameraBadgeView.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 4),
-            
-            avatarWrapper.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor)
-        ])
-
         // Name
         nameLabel.text = "Loading..."
         nameLabel.font = .systemFont(ofSize: 22, weight: .semibold)
@@ -221,31 +190,76 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         bioLabel.textAlignment = .center
         bioLabel.numberOfLines = 2
         
-        // Edit button
-        editButton.setTitle("Edit Profile", for: .normal)
-        editButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        editButton.setTitleColor(.white, for: .normal)
+        // Edit pencil button (FOR EDITING NAME/USERNAME/PASSWORD)
+        editButton.setImage(UIImage(systemName: "pencil"), for: .normal)
+        editButton.tintColor = .white
         editButton.backgroundColor = UIColor.systemOrange
         editButton.layer.cornerRadius = 16
-        editButton.contentEdgeInsets = .init(top: 8, left: 20, bottom: 8, right: 20)
+        editButton.contentEdgeInsets = .init(top: 8, left: 8, bottom: 8, right: 8)
         editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
         
         let textStack = UIStackView(arrangedSubviews: [nameLabel, usernameLabel, bioLabel])
         textStack.axis = .vertical
         textStack.alignment = .center
         textStack.spacing = 4
-        textStack.translatesAutoresizingMaskIntoConstraints = false
         
+        header.addSubview(avatarWrapper)
         header.addSubview(textStack)
         header.addSubview(editButton)
         
+        // Enable Auto Layout
+        header.translatesAutoresizingMaskIntoConstraints = false
+        avatarWrapper.translatesAutoresizingMaskIntoConstraints = false
+        profileImageView.translatesAutoresizingMaskIntoConstraints = false
+        cameraBadgeView.translatesAutoresizingMaskIntoConstraints = false
+        cameraIcon.translatesAutoresizingMaskIntoConstraints = false
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+        editButton.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
-            textStack.topAnchor.constraint(equalTo: avatarWrapper.bottomAnchor, constant: 16),
+            // Header constraints
+            header.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            header.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            header.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            header.heightAnchor.constraint(equalToConstant: 300),
+            
+            // Avatar wrapper
+            avatarWrapper.centerXAnchor.constraint(equalTo: header.centerXAnchor),
+            avatarWrapper.topAnchor.constraint(equalTo: header.topAnchor, constant: 40),
+            
+            // Profile image
+            profileImageView.topAnchor.constraint(equalTo: avatarWrapper.topAnchor),
+            profileImageView.leadingAnchor.constraint(equalTo: avatarWrapper.leadingAnchor),
+            profileImageView.trailingAnchor.constraint(equalTo: avatarWrapper.trailingAnchor),
+            profileImageView.heightAnchor.constraint(equalToConstant: 104),
+            profileImageView.widthAnchor.constraint(equalToConstant: 104),
+            
+            // Camera badge
+            cameraBadgeView.widthAnchor.constraint(equalToConstant: 32),
+            cameraBadgeView.heightAnchor.constraint(equalToConstant: 32),
+            cameraBadgeView.trailingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 4),
+            cameraBadgeView.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 4),
+            
+            // Camera icon inside badge
+            cameraIcon.centerXAnchor.constraint(equalTo: cameraBadgeView.centerXAnchor),
+            cameraIcon.centerYAnchor.constraint(equalTo: cameraBadgeView.centerYAnchor),
+            cameraIcon.widthAnchor.constraint(equalToConstant: 16),
+            cameraIcon.heightAnchor.constraint(equalToConstant: 16),
+            
+            // Avatar wrapper bottom
+            avatarWrapper.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor),
+            
+            // Text stack
+            textStack.topAnchor.constraint(equalTo: avatarWrapper.bottomAnchor, constant: 20),
             textStack.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 24),
             textStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -24),
             
-            editButton.topAnchor.constraint(equalTo: textStack.bottomAnchor, constant: 12),
+            // Edit button
+            editButton.topAnchor.constraint(equalTo: textStack.bottomAnchor, constant: 16),
             editButton.centerXAnchor.constraint(equalTo: header.centerXAnchor),
+            editButton.widthAnchor.constraint(equalToConstant: 80),
+            editButton.heightAnchor.constraint(equalToConstant: 32),
             editButton.bottomAnchor.constraint(lessThanOrEqualTo: header.bottomAnchor, constant: -24)
         ])
         
@@ -255,10 +269,8 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
     // MARK: - STATS
     private func buildStatsSection() -> UIView {
         let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
         
         let card = UIView()
-        card.translatesAutoresizingMaskIntoConstraints = false
         card.backgroundColor = .white
         card.layer.cornerRadius = 18
         card.layer.shadowColor = UIColor.black.cgColor
@@ -268,13 +280,6 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         
         container.addSubview(card)
         
-        NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: container.topAnchor),
-            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            card.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-
         let playlist = statView(number: "23", label: "PLAYLISTS")
         let followers = statView(number: "58", label: "FOLLOWERS")
         let following = statView(number: "43", label: "FOLLOWING")
@@ -284,11 +289,19 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         stack.distribution = .fillEqually
         stack.alignment = .center
         stack.spacing = 0
-        stack.translatesAutoresizingMaskIntoConstraints = false
 
         card.addSubview(stack)
-
+        
+        // Enable Auto Layout
+        card.translatesAutoresizingMaskIntoConstraints = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: container.topAnchor),
+            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
@@ -319,61 +332,11 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         return stack
     }
 
-    // MARK: - PRACTICE GRAPH (placeholder)
-    private func buildPracticeGraphCard() -> UIView {
-        let card = UIView()
-        card.backgroundColor = UIColor(white: 0.12, alpha: 1)
-        card.layer.cornerRadius = 20
-        card.translatesAutoresizingMaskIntoConstraints = false
-
-        let streak = UILabel()
-        streak.text = "__ day streak"
-        streak.font = .systemFont(ofSize: 15, weight: .semibold)
-        streak.textColor = UIColor(red: 1.0, green: 0.85, blue: 0.1, alpha: 1)
-
-        let hours = UILabel()
-        hours.text = "⏱️ __ hrs spent"
-        hours.font = .systemFont(ofSize: 15, weight: .semibold)
-        hours.textColor = .white
-
-        let topRow = UIStackView(arrangedSubviews: [streak, hours])
-        topRow.axis = .horizontal
-        topRow.distribution = .equalSpacing
-
-        let title = UILabel()
-        title.text = "Practice Graph"
-        title.font = .boldSystemFont(ofSize: 20)
-        title.textColor = .white
-
-        let graphBox = UIView()
-        graphBox.backgroundColor = UIColor(white: 0.12, alpha: 1)
-        graphBox.layer.cornerRadius = 16
-        graphBox.heightAnchor.constraint(equalToConstant: 160).isActive = true
-
-        let stack = UIStackView(arrangedSubviews: [topRow, title, graphBox])
-        stack.axis = .vertical
-        stack.spacing = 16
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        card.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
-        ])
-
-        return card
-    }
-
     // MARK: - SAVED SECTION
     private func buildSavedSection() -> UIView {
         let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
 
         let card = UIView()
-        card.translatesAutoresizingMaskIntoConstraints = false
         card.backgroundColor = .white
         card.layer.cornerRadius = 18
         card.layer.shadowColor = UIColor.black.cgColor
@@ -394,10 +357,13 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         ])
         stack.axis = .vertical
         stack.spacing = 14
-        stack.translatesAutoresizingMaskIntoConstraints = false
 
         card.addSubview(stack)
-
+        
+        // Enable Auto Layout
+        card.translatesAutoresizingMaskIntoConstraints = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: container.topAnchor),
             card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
@@ -415,7 +381,6 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
 
     private func savedRow(title: String, likes: String) -> UIView {
         let row = UIView()
-        row.translatesAutoresizingMaskIntoConstraints = false
 
         let icon = UIImageView(image: UIImage(systemName: "music.note.list"))
         icon.tintColor = .systemOrange
@@ -423,7 +388,6 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         icon.layer.cornerRadius = 12
         icon.clipsToBounds = true
         icon.contentMode = .center
-        icon.translatesAutoresizingMaskIntoConstraints = false
 
         let t = UILabel()
         t.text = title
@@ -437,14 +401,17 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         let textStack = UIStackView(arrangedSubviews: [t, l])
         textStack.axis = .vertical
         textStack.spacing = 2
-        textStack.translatesAutoresizingMaskIntoConstraints = false
 
         let arrow = UIImageView(image: UIImage(systemName: "chevron.right"))
         arrow.tintColor = .tertiaryLabel
-        arrow.translatesAutoresizingMaskIntoConstraints = false
 
         row.addSubviews(icon, textStack, arrow)
-
+        
+        // Enable Auto Layout
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+        arrow.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: row.leadingAnchor),
             icon.centerYAnchor.constraint(equalTo: row.centerYAnchor),
@@ -470,7 +437,10 @@ private extension UserProfileViewController {
     func loadProfile() {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else {
-                await MainActor.run { self.nameLabel.text = "Not logged in" }
+                await MainActor.run {
+                    self.nameLabel.text = "Not logged in"
+                    self.usernameLabel.text = "@username"
+                }
                 return
             }
             
@@ -504,7 +474,7 @@ private extension UserProfileViewController {
                 print("Error loading profile:", error)
                 await MainActor.run {
                     self.nameLabel.text = "Profile Error"
-                    self.usernameLabel.text = ""
+                    self.usernameLabel.text = "@username"
                     self.updateAvatar(with: nil)
                 }
             }
@@ -517,18 +487,37 @@ private extension UserProfileViewController {
         self.profileImageView.image = UIImage(systemName: "person.fill")
         self.profileImageView.tintColor = .white
         self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
+        self.profileImageView.contentMode = .center
         
         guard
             let urlString = urlString,
-            !urlString.isEmpty,
-            let url = URL(string: urlString)
+            !urlString.isEmpty
         else {
             return  // keep default
         }
         
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                // Check if URL is valid
+                var finalURLString = urlString
+                
+                // Fix the URL if it's missing /public/
+                if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
+                    // Replace /object/useprofile/ with /object/public/useprofile/
+                    finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+                }
+                
+                guard let url = URL(string: finalURLString) else {
+                    print("Invalid URL string: \(finalURLString)")
+                    return
+                }
+                
+                print("Loading avatar from: \(url)")
+                
+                // Load image with timeout
+                let request = URLRequest(url: url, timeoutInterval: 30)
+                let (data, _) = try await URLSession.shared.data(for: request)
+                
                 if let image = UIImage(data: data) {
                     await MainActor.run {
                         self.profileImageView.image = image
@@ -539,13 +528,38 @@ private extension UserProfileViewController {
                 }
             } catch {
                 print("Failed to load avatar image:", error)
+                print("URL attempted: \(urlString)")
             }
         }
     }
 
-    // MARK: - Edit Profile (name/username only)
+    // MARK: - Edit Profile (name/username and password) - PENCIL BUTTON
     @objc func editProfileTapped() {
         let alert = UIAlertController(title: "Edit Profile",
+                                      message: "What would you like to update?",
+                                      preferredStyle: .actionSheet)
+        
+        alert.addAction(UIAlertAction(title: "Update Name & Username", style: .default, handler: { _ in
+            self.showNameUsernameEditor()
+        }))
+        
+        alert.addAction(UIAlertAction(title: "Change Password", style: .default, handler: { _ in
+            self.showPasswordChangeDialog()
+        }))
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        // For iPad
+        if let popoverController = alert.popoverPresentationController {
+            popoverController.sourceView = editButton
+            popoverController.sourceRect = editButton.bounds
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func showNameUsernameEditor() {
+        let alert = UIAlertController(title: "Update Profile",
                                       message: "Update your name and username",
                                       preferredStyle: .alert)
         
@@ -573,25 +587,83 @@ private extension UserProfileViewController {
         present(alert, animated: true)
     }
     
+    private func showPasswordChangeDialog() {
+        let alert = UIAlertController(title: "Change Password",
+                                      message: "Enter your new password",
+                                      preferredStyle: .alert)
+        
+        alert.addTextField { tf in
+            tf.placeholder = "New Password"
+            tf.isSecureTextEntry = true
+        }
+        
+        alert.addTextField { tf in
+            tf.placeholder = "Confirm New Password"
+            tf.isSecureTextEntry = true
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        alert.addAction(UIAlertAction(title: "Change", style: .default, handler: { _ in
+            let newPassword = alert.textFields?[0].text ?? ""
+            let confirmPassword = alert.textFields?[1].text ?? ""
+            
+            if newPassword.isEmpty {
+                self.showAlert(title: "Error", message: "Password cannot be empty")
+            } else if newPassword != confirmPassword {
+                self.showAlert(title: "Error", message: "Passwords do not match")
+            } else if newPassword.count < 6 {
+                self.showAlert(title: "Error", message: "Password must be at least 6 characters")
+            } else {
+                self.updatePassword(newPassword: newPassword)
+            }
+        }))
+        
+        present(alert, animated: true)
+    }
+    
     func updateProfile(fullName: String, username: String) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
             
-            let updates: [String: String] = [
-                "full_name": fullName,
-                "username": username
+            // Create updates dictionary with only String values
+            var updates: [String: String?] = [
+                "full_name": fullName.isEmpty ? nil : fullName
             ]
             
+            // Only add username if it's not empty
+            if !username.isEmpty {
+                updates["username"] = username
+            } else {
+                updates["username"] = nil
+            }
+            
             do {
+                // Filter out nil values for the update
+                let filteredUpdates = updates.compactMapValues { $0 }
+                
                 _ = try await SupabaseManager.shared.client
                     .from("profiles")
-                    .update(updates)
+                    .update(filteredUpdates)
                     .eq("id", value: user.id.uuidString)
                     .execute()
+                
+                // Create a new Profile object with updated values
+                self.currentProfile = Profile(
+                    id: self.currentProfile?.id ?? user.id,
+                    full_name: fullName.isEmpty ? nil : fullName,
+                    username: username.isEmpty ? nil : username,
+                    avatar_url: self.currentProfile?.avatar_url,
+                    bio: self.currentProfile?.bio
+                )
                 
                 await MainActor.run {
                     self.nameLabel.text = fullName.isEmpty ? "No Name" : fullName
                     self.usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
+                    self.showAlert(title: "Success", message: "Profile updated successfully")
+                    
+                    // Send notification to refresh navbar
+                    NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
                 }
             } catch {
                 print("Error updating profile:", error)
@@ -600,18 +672,123 @@ private extension UserProfileViewController {
                 }
             }
         }
+        
+    }
+    
+    func updatePassword(newPassword: String) {
+        Task {
+            do {
+                try await SupabaseManager.shared.client.auth.update(user: .init(password: newPassword))
+                
+                await MainActor.run {
+                    self.showAlert(title: "Success", message: "Password updated successfully")
+                }
+            } catch {
+                print("Error updating password:", error)
+                await MainActor.run {
+                    self.showAlert(title: "Update failed", message: error.localizedDescription)
+                }
+            }
+        }
     }
 }
 
-// MARK: - Avatar: Pick & Upload to Supabase (bucket: useprofile)
+// MARK: - Avatar: Pick & Upload to Supabase (bucket: useprofile) - CAMERA BADGE
 extension UserProfileViewController {
     
     @objc func changeAvatarTapped() {
+        let alert = UIAlertController(title: "Change Profile Picture",
+                                      message: "Choose an option",
+                                      preferredStyle: .actionSheet)
+        
+        alert.addAction(UIAlertAction(title: "Choose from Library", style: .default, handler: { _ in
+            self.openPhotoLibrary()
+        }))
+        
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            alert.addAction(UIAlertAction(title: "Take Photo", style: .default, handler: { _ in
+                self.openCamera()
+            }))
+        }
+        
+        // Check if user has existing avatar to allow removal
+        if let currentProfile = currentProfile, currentProfile.avatar_url != nil {
+            alert.addAction(UIAlertAction(title: "Remove Current Photo", style: .destructive, handler: { _ in
+                self.removeAvatar()
+            }))
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        // For iPad
+        if let popoverController = alert.popoverPresentationController {
+            popoverController.sourceView = cameraBadgeView
+            popoverController.sourceRect = cameraBadgeView.bounds
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func openPhotoLibrary() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.allowsEditing = true
         picker.delegate = self
+        picker.modalPresentationStyle = .fullScreen
         present(picker, animated: true)
+    }
+    
+    private func openCamera() {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.allowsEditing = true
+        picker.delegate = self
+        picker.modalPresentationStyle = .fullScreen
+        present(picker, animated: true)
+    }
+    
+    private func removeAvatar() {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            
+            do {
+                // Update database to remove avatar_url
+                let updates: [String: String?] = [
+                    "avatar_url": nil
+                ]
+                
+                // Filter out nil values
+                let filteredUpdates = updates.compactMapValues { $0 }
+                
+                _ = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .update(filteredUpdates)
+                    .eq("id", value: user.id.uuidString)
+                    .execute()
+                
+                // Create a new Profile object without avatar_url
+                self.currentProfile = Profile(
+                    id: self.currentProfile?.id ?? user.id,
+                    full_name: self.currentProfile?.full_name,
+                    username: self.currentProfile?.username,
+                    avatar_url: nil,
+                    bio: self.currentProfile?.bio
+                )
+                
+                await MainActor.run {
+                    self.profileImageView.image = UIImage(systemName: "person.fill")
+                    self.profileImageView.tintColor = .white
+                    self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
+                    self.profileImageView.contentMode = .center
+                    self.showAlert(title: "Success", message: "Profile picture removed")
+                }
+            } catch {
+                print("Error removing avatar:", error)
+                await MainActor.run {
+                    self.showAlert(title: "Error", message: error.localizedDescription)
+                }
+            }
+        }
     }
     
     // UIImagePickerControllerDelegate
@@ -619,14 +796,19 @@ extension UserProfileViewController {
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         picker.dismiss(animated: true)
         
-        let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
-        guard let selectedImage = image else { return }
+        guard let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage else {
+            self.showAlert(title: "Error", message: "Could not select image")
+            return
+        }
         
         // Update UI immediately
-        self.profileImageView.image = selectedImage
+        self.profileImageView.image = image
+        self.profileImageView.contentMode = .scaleAspectFill
+        self.profileImageView.backgroundColor = .clear
+        self.profileImageView.tintColor = .clear
         
         // Upload to Supabase Storage
-        uploadAvatarImage(selectedImage)
+        uploadAvatarImage(image)
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
@@ -635,7 +817,13 @@ extension UserProfileViewController {
     
     func uploadAvatarImage(_ image: UIImage) {
         Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            guard let user = SupabaseManager.shared.client.auth.currentUser else {
+                await MainActor.run {
+                    self.showAlert(title: "Error", message: "Not logged in")
+                }
+                return
+            }
+            
             guard let jpegData = image.jpegData(compressionQuality: 0.85) else {
                 await MainActor.run {
                     self.showAlert(title: "Error", message: "Could not prepare image data.")
@@ -648,50 +836,94 @@ extension UserProfileViewController {
             // Unique file name
             let timestamp = Int(Date().timeIntervalSince1970)
             let fileName = "avatar_\(user.id.uuidString)_\(timestamp).jpg"
-            let path = "\(user.id.uuidString)/\(fileName)"   // folder per user
             
             do {
-                // Upload to bucket "useprofile"
+                // METHOD 1: Try simplest upload without options
                 try await client.storage
                     .from("useprofile")
                     .upload(
-                        path: path,
-                        file: jpegData,
-                        options: FileOptions(
-                            cacheControl: "3600",
-                            contentType: "image/jpeg",
-                            upsert: true
-                        )
+                        path: fileName,
+                        file: jpegData
                     )
                 
-                // Get public URL (throwing in your SDK)
-                let publicURL = try client.storage
-                    .from("useprofile")
-                    .getPublicURL(path: path)
+                print("✅ Upload successful")
                 
-                let publicURLString = publicURL.absoluteString
-                print("✅ Avatar uploaded: \(publicURLString)")
+            } catch {
+                print("❌ Method 1 failed, trying Method 2:", error)
                 
-                // Save URL in profiles.avatar_url
-                let updates: [String: String] = [
-                    "avatar_url": publicURLString
-                ]
-                
+                // METHOD 2: Try with FileOptions (FIXED ORDER - cacheControl before contentType)
+                do {
+                    try await client.storage
+                        .from("useprofile")
+                        .upload(
+                            path: fileName,
+                            file: jpegData,
+                            options: FileOptions(
+                                cacheControl: "3600",
+                                contentType: "image/jpeg"
+                            )
+                        )
+                    
+                    print("✅ Method 2 upload successful")
+                    
+                } catch {
+                    print("❌ All upload methods failed:", error)
+                    await MainActor.run {
+                        // Revert to default image
+                        self.profileImageView.image = UIImage(systemName: "person.fill")
+                        self.profileImageView.tintColor = .white
+                        self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
+                        self.profileImageView.contentMode = .center
+                        
+                        let errorMessage: String
+                        if (error as NSError).code == -1005 {
+                            errorMessage = "Network connection lost. Please check your internet and try again."
+                        } else {
+                            errorMessage = "Upload failed: \(error.localizedDescription)"
+                        }
+                        self.showAlert(title: "Upload Error", message: errorMessage)
+                    }
+                    return
+                }
+            }
+            
+            // If we get here, upload was successful
+            // Get the correct public URL
+            let projectRef = "djqgmowfjxsnjdffdohw" // REPLACE WITH YOUR PROJECT REF
+            let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
+            
+            // Save URL in profiles.avatar_url
+            let updates: [String: String] = [
+                "avatar_url": publicURL
+            ]
+            
+            do {
                 _ = try await client
                     .from("profiles")
                     .update(updates)
                     .eq("id", value: user.id.uuidString)
                     .execute()
                 
-                // Reload from DB to confirm
+                // Create a new Profile object with updated avatar_url
+                self.currentProfile = Profile(
+                    id: self.currentProfile?.id ?? user.id,
+                    full_name: self.currentProfile?.full_name,
+                    username: self.currentProfile?.username,
+                    avatar_url: publicURL,
+                    bio: self.currentProfile?.bio
+                )
+                
                 await MainActor.run {
-                    self.loadProfile()
+                    self.showAlert(title: "Success", message: "Profile picture updated!")
+                    
+                    // Send notification to refresh navbar
+                    NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
                 }
                 
             } catch {
-                print("❌ Error uploading avatar:", error)
+                print("❌ Error saving to database:", error)
                 await MainActor.run {
-                    self.showAlert(title: "Upload failed", message: error.localizedDescription)
+                    self.showAlert(title: "Database Error", message: "Image uploaded but couldn't update profile.")
                 }
             }
         }

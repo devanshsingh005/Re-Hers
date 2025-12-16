@@ -88,17 +88,29 @@ public final class TopNavBar: UIView {
     private let rightStack = UIStackView()
     private let mainStack = UIStackView()
 
+    // MARK: - Public Refresh Mechanism
+    public static let profileDidUpdateNotification = Notification.Name("TopNavBarProfileDidUpdate")
+    private var observer: NSObjectProtocol?
+
     // MARK: - Init
     public override init(frame: CGRect) {
         super.init(frame: frame)
         configureUI()
         loadUserProfile()
+        setupNotificationObserver()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         configureUI()
         loadUserProfile()
+        setupNotificationObserver()
+    }
+
+    deinit {
+        if let observer = observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     // MARK: - Setup
@@ -181,6 +193,18 @@ public final class TopNavBar: UIView {
         chordButton.setContentCompressionResistancePriority(.required, for: .vertical)
     }
 
+    // MARK: - Notification Observer
+    private func setupNotificationObserver() {
+        observer = NotificationCenter.default.addObserver(
+            forName: TopNavBar.profileDidUpdateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("🔄 NavBar received profile update notification - refreshing...")
+            self?.loadUserProfile()
+        }
+    }
+
     // MARK: - Actions
     @objc private func handleBack()     { backAction?() }
     @objc private func handleDayBadge() { dayBadgeAction?() }
@@ -198,10 +222,24 @@ public final class TopNavBar: UIView {
         return bar
     }
 
+    // MARK: - Refresh Profile (Public Method)
+    public func refreshProfile() {
+        print("🔄 Manually refreshing navbar profile...")
+        loadUserProfile()
+    }
+
     // MARK: - Load Name + Avatar from Supabase
     public func loadUserProfile() {
         Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            guard let user = SupabaseManager.shared.client.auth.currentUser else {
+                await MainActor.run {
+                    self.welcomeLabel.text = "Welcome back..."
+                    self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                    self.profileImg.tintColor = .gray
+                    self.profileImg.contentMode = .scaleAspectFit
+                }
+                return
+            }
 
             do {
                 // This infers NavbarProfile as the generic return type
@@ -214,36 +252,84 @@ public final class TopNavBar: UIView {
                     .value
 
                 await MainActor.run {
-                    let name = profile.full_name?.isEmpty == false ? profile.full_name! : "User"
-                    self.welcomeLabel.text = "Welcome back, \(name)"
+                    if let fullName = profile.full_name, !fullName.isEmpty {
+                        self.welcomeLabel.text = "Welcome back, \(fullName)"
+                    } else {
+                        self.welcomeLabel.text = "Welcome back, User"
+                    }
+                    
+                    print("✅ NavBar loaded profile name: \(profile.full_name ?? "nil")")
                 }
 
                 if let urlString = profile.avatar_url, !urlString.isEmpty {
                     await loadProfileImage(from: urlString)
                 } else {
-                    // keep default icon
+                    await MainActor.run {
+                        self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                        self.profileImg.tintColor = .gray
+                        self.profileImg.contentMode = .scaleAspectFit
+                        print("✅ NavBar: No avatar URL, using default")
+                    }
                 }
             } catch {
                 print("❌ Failed to load navbar profile:", error)
+                await MainActor.run {
+                    self.welcomeLabel.text = "Welcome back..."
+                    self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                    self.profileImg.tintColor = .gray
+                    self.profileImg.contentMode = .scaleAspectFit
+                }
             }
         }
     }
 
     // MARK: - Load Profile Image
     private func loadProfileImage(from urlString: String) async {
-        guard let url = URL(string: urlString) else { return }
+        var finalURLString = urlString
+        
+        // Fix the URL if it's missing /public/
+        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
+            // Replace /object/useprofile/ with /object/public/useprofile/
+            finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+        }
+        
+        guard let url = URL(string: finalURLString) else {
+            print("❌ Invalid URL for navbar profile: \(finalURLString)")
+            await MainActor.run {
+                self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                self.profileImg.tintColor = .gray
+                self.profileImg.contentMode = .scaleAspectFit
+            }
+            return
+        }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            print("🔄 NavBar loading image from: \(url)")
+            let request = URLRequest(url: url, timeoutInterval: 30)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            
             if let img = UIImage(data: data) {
                 await MainActor.run {
                     self.profileImg.image = img
                     self.profileImg.contentMode = .scaleAspectFill
                     self.profileImg.tintColor = .clear
+                    print("✅ NavBar image loaded successfully")
+                }
+            } else {
+                await MainActor.run {
+                    self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                    self.profileImg.tintColor = .gray
+                    self.profileImg.contentMode = .scaleAspectFit
+                    print("❌ NavBar: Could not create image from data")
                 }
             }
         } catch {
             print("❌ Failed to load profile image:", error)
+            await MainActor.run {
+                self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                self.profileImg.tintColor = .gray
+                self.profileImg.contentMode = .scaleAspectFit
+            }
         }
     }
 }
