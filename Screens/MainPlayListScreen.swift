@@ -18,6 +18,7 @@ struct Playlist {
     let trackCount: Int
     let createdAt: Date?
     let isPublic: Bool?
+    var isSelectedForDeletion: Bool = false
     
     // Convenience initializer for local playlists
     init(id: UUID = UUID(), title: String, imageIdentifier: String, tags: String, trackCount: Int, createdAt: Date? = nil, isPublic: Bool? = false) {
@@ -118,23 +119,56 @@ class PlaylistViewController: UIViewController {
     private let tableView = UITableView()
     private let refreshControl = UIRefreshControl()
     
-    // MARK: - Floating Button
-    private let floatingButton: UIButton = {
+    // MARK: - Floating Action Buttons
+    private let addButton: UIButton = {
         let btn = UIButton(type: .system)
         btn.backgroundColor = UIColor.orange
         btn.setImage(UIImage(systemName: "plus"), for: .normal)
         btn.tintColor = .white
-        
         btn.layer.cornerRadius = 30
         btn.clipsToBounds = false
-        
         btn.layer.shadowColor = UIColor.black.cgColor
         btn.layer.shadowOpacity = 0.25
         btn.layer.shadowRadius = 6
         btn.layer.shadowOffset = CGSize(width: 0, height: 4)
-        
         btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.tag = 1 // Tag for add button
         return btn
+    }()
+    
+    private let deleteButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.backgroundColor = UIColor.systemRed
+        btn.setImage(UIImage(systemName: "trash"), for: .normal)
+        btn.tintColor = .white
+        btn.layer.cornerRadius = 30
+        btn.clipsToBounds = false
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowOpacity = 0.25
+        btn.layer.shadowRadius = 6
+        btn.layer.shadowOffset = CGSize(width: 0, height: 4)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.tag = 2 // Tag for delete button
+        btn.alpha = 0
+        btn.isHidden = true
+        return btn
+    }()
+    
+    private let selectionModeLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Select Playlists to Delete"
+        label.textColor = .systemRed
+        label.font = .boldSystemFont(ofSize: 16)
+        label.textAlignment = .center
+        label.backgroundColor = .white
+        label.layer.cornerRadius = 8
+        label.clipsToBounds = true
+        label.layer.borderColor = UIColor.systemRed.cgColor
+        label.layer.borderWidth = 1
+        label.alpha = 0
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
     }()
     
     // MARK: - Activity Indicator
@@ -155,11 +189,18 @@ class PlaylistViewController: UIViewController {
         }
     }
     
+    // MARK: - State Management
+    private var isSelectionMode = false {
+        didSet {
+            updateUIForSelectionMode()
+        }
+    }
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        setupFloatingButton()
+        setupFloatingButtons()
         setupActivityIndicator()
         setupRefreshControl()
         loadPlaylists()
@@ -177,6 +218,7 @@ class PlaylistViewController: UIViewController {
         
         setupNavBar()
         setupTableView()
+        setupSelectionModeLabel()
     }
     
     private func setupActivityIndicator() {
@@ -191,6 +233,16 @@ class PlaylistViewController: UIViewController {
         refreshControl.tintColor = .orange
         refreshControl.addTarget(self, action: #selector(refreshPlaylists), for: .valueChanged)
         tableView.refreshControl = refreshControl
+    }
+    
+    private func setupSelectionModeLabel() {
+        view.addSubview(selectionModeLabel)
+        NSLayoutConstraint.activate([
+            selectionModeLabel.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
+            selectionModeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            selectionModeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            selectionModeLabel.heightAnchor.constraint(equalToConstant: 40)
+        ])
     }
     
     private func setupNavBar() {
@@ -222,19 +274,240 @@ class PlaylistViewController: UIViewController {
         ])
     }
     
-    // MARK: - Floating Button
-    private func setupFloatingButton() {
-        view.addSubview(floatingButton)
-        floatingButton.translatesAutoresizingMaskIntoConstraints = false
+    // MARK: - Floating Buttons
+    private func setupFloatingButtons() {
+        view.addSubview(addButton)
+        view.addSubview(deleteButton)
         
+        // Add button constraints
         NSLayoutConstraint.activate([
-            floatingButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
-            floatingButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -26),
-            floatingButton.widthAnchor.constraint(equalToConstant: 60),
-            floatingButton.heightAnchor.constraint(equalToConstant: 60)
+            addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
+            addButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -26),
+            addButton.widthAnchor.constraint(equalToConstant: 60),
+            addButton.heightAnchor.constraint(equalToConstant: 60)
         ])
         
-        floatingButton.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
+        // Delete button constraints (positioned above add button)
+        NSLayoutConstraint.activate([
+            deleteButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
+            deleteButton.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -16),
+            deleteButton.widthAnchor.constraint(equalToConstant: 60),
+            deleteButton.heightAnchor.constraint(equalToConstant: 60)
+        ])
+        
+        addButton.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
+        deleteButton.addTarget(self, action: #selector(didTapDelete), for: .touchUpInside)
+    }
+    
+    private func updateUIForSelectionMode() {
+        UIView.animate(withDuration: 0.3) {
+            if self.isSelectionMode {
+                // Show delete button and selection label
+                self.deleteButton.isHidden = false
+                self.deleteButton.alpha = 1
+                self.selectionModeLabel.isHidden = false
+                self.selectionModeLabel.alpha = 1
+                
+                // Change add button to "Done" for confirming deletion
+                self.addButton.setImage(UIImage(systemName: "checkmark"), for: .normal)
+                self.addButton.backgroundColor = UIColor.systemGreen
+            } else {
+                // Hide delete button and selection label
+                self.deleteButton.alpha = 0
+                self.selectionModeLabel.alpha = 0
+                
+                // Reset add button to original state
+                self.addButton.setImage(UIImage(systemName: "plus"), for: .normal)
+                self.addButton.backgroundColor = UIColor.orange
+                
+                // Hide delete button after animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.deleteButton.isHidden = true
+                    self.selectionModeLabel.isHidden = true
+                }
+                
+                // Deselect all playlists
+                for i in 0..<self.playlists.count {
+                    self.playlists[i].isSelectedForDeletion = false
+                }
+            }
+            self.tableView.reloadData()
+        }
+    }
+    
+    // MARK: - Button Actions
+    @objc private func didTapAdd() {
+        if isSelectionMode {
+            // Confirm deletion
+            confirmDeletion()
+        } else {
+            // Create new playlist
+            let addVC = AddPlaylistViewController()
+            addVC.modalPresentationStyle = .overFullScreen
+            
+            addVC.onSave = { [weak self] (name, pickedImage) in
+                guard let self = self else { return }
+                
+                // Show loading indicator
+                self.showLoading(true)
+                
+                Task {
+                    do {
+                        // Create playlist in database
+                        let playlistId = try await self.createPlaylistInDatabase(name: name, image: pickedImage)
+                        
+                        // Create local playlist object with signed URL or local file
+                        let id: String
+                        if let image = pickedImage {
+                            do {
+                                let session = try await SupabaseManager.shared.client.auth.session
+                                let userId = session.user.id
+                                id = try await self.uploadImageToStorage(image: image, userId: userId)
+                            } catch {
+                                print("Image upload failed, saving locally: \(error)")
+                                id = self.saveImageToDocuments(image: image) ?? "cl_1"
+                            }
+                        } else {
+                            id = "cl_1"
+                        }
+                        
+                        let newPlaylist = Playlist(
+                            id: playlistId,
+                            title: name,
+                            imageIdentifier: id,
+                            tags: "Custom Playlist",
+                            trackCount: 0
+                        )
+                        
+                        DispatchQueue.main.async {
+                            self.playlists.insert(newPlaylist, at: 0)
+                            self.tableView.reloadData()
+                            self.showLoading(false)
+                        }
+                        
+                    } catch {
+                        print("Error creating playlist: \(error)")
+                        DispatchQueue.main.async {
+                            self.showLoading(false)
+                            let alert = UIAlertController(
+                                title: "Error",
+                                message: "Failed to create playlist. Please try again.",
+                                preferredStyle: .alert
+                            )
+                            alert.addAction(UIAlertAction(title: "OK", style: .default))
+                            self.present(alert, animated: true)
+                        }
+                    }
+                }
+            }
+            
+            present(addVC, animated: true)
+        }
+    }
+    
+    @objc private func didTapDelete() {
+        // Toggle selection mode
+        isSelectionMode.toggle()
+    }
+    
+    private func confirmDeletion() {
+        let selectedPlaylists = playlists.filter { $0.isSelectedForDeletion }
+        
+        guard !selectedPlaylists.isEmpty else {
+            // No playlists selected, exit selection mode
+            isSelectionMode = false
+            return
+        }
+        
+        let alert = UIAlertController(
+            title: "Delete Playlists",
+            message: "Are you sure you want to delete \(selectedPlaylists.count) playlist(s)?",
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            // Just exit selection mode without deleting
+            self.isSelectionMode = false
+        })
+        
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
+            self.deleteSelectedPlaylists()
+        })
+        
+        present(alert, animated: true)
+    }
+    
+    private func deleteSelectedPlaylists() {
+        let selectedPlaylists = playlists.filter { $0.isSelectedForDeletion }
+        var indexesToDelete: [IndexPath] = []
+        
+        // Collect indexes of selected playlists
+        for (index, playlist) in playlists.enumerated() {
+            if playlist.isSelectedForDeletion {
+                indexesToDelete.append(IndexPath(row: index, section: 0))
+            }
+        }
+        
+        // Show loading indicator
+        showLoading(true)
+        
+        Task {
+            do {
+                for playlist in selectedPlaylists {
+                    // Delete from database
+                    try await SupabaseManager.shared.client
+                        .from("playlists")
+                        .delete()
+                        .eq("id", value: playlist.id)
+                        .execute()
+                    
+                    // If playlist has a storage image, try to delete it
+                    if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
+                        // Extract filename from URL
+                        if let url = URL(string: playlist.imageIdentifier),
+                           let fileName = url.pathComponents.last?.components(separatedBy: "?").first {
+                            try? await SupabaseManager.shared.client.storage
+                                .from("playlistcover")
+                                .remove(paths: [fileName])
+                        }
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    // Remove selected playlists from data source
+                    self.playlists.removeAll { $0.isSelectedForDeletion }
+                    
+                    // Exit selection mode
+                    self.isSelectionMode = false
+                    
+                    // Update table view with animation
+                    self.tableView.deleteRows(at: indexesToDelete, with: .automatic)
+                    self.showLoading(false)
+                    
+                    // Show success message
+                    let alert = UIAlertController(
+                        title: "Success",
+                        message: "\(selectedPlaylists.count) playlist(s) deleted successfully.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+                
+            } catch {
+                print("Error deleting playlists: \(error)")
+                DispatchQueue.main.async {
+                    self.showLoading(false)
+                    let alert = UIAlertController(
+                        title: "Error",
+                        message: "Failed to delete playlists. Please try again.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
     }
     
     // MARK: - Database Operations
@@ -326,70 +599,6 @@ class PlaylistViewController: UIViewController {
                 }
             }
         }
-    }
-    
-    // MARK: - Add Playlist
-    @objc private func didTapAdd() {
-        let addVC = AddPlaylistViewController()
-        addVC.modalPresentationStyle = .overFullScreen
-        
-        addVC.onSave = { [weak self] (name, pickedImage) in
-            guard let self = self else { return }
-            
-            // Show loading indicator
-            self.showLoading(true)
-            
-            Task {
-                do {
-                    // Create playlist in database
-                    let playlistId = try await self.createPlaylistInDatabase(name: name, image: pickedImage)
-                    
-                    // Create local playlist object with signed URL or local file
-                    let id: String
-                    if let image = pickedImage {
-                        do {
-                            let session = try await SupabaseManager.shared.client.auth.session
-                            let userId = session.user.id
-                            id = try await self.uploadImageToStorage(image: image, userId: userId)
-                        } catch {
-                            print("Image upload failed, saving locally: \(error)")
-                            id = self.saveImageToDocuments(image: image) ?? "cl_1"
-                        }
-                    } else {
-                        id = "cl_1"
-                    }
-                    
-                    let newPlaylist = Playlist(
-                        id: playlistId,
-                        title: name,
-                        imageIdentifier: id,
-                        tags: "Custom Playlist",
-                        trackCount: 0
-                    )
-                    
-                    DispatchQueue.main.async {
-                        self.playlists.insert(newPlaylist, at: 0)
-                        self.tableView.reloadData()
-                        self.showLoading(false)
-                    }
-                    
-                } catch {
-                    print("Error creating playlist: \(error)")
-                    DispatchQueue.main.async {
-                        self.showLoading(false)
-                        let alert = UIAlertController(
-                            title: "Error",
-                            message: "Failed to create playlist. Please try again.",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
-                    }
-                }
-            }
-        }
-        
-        present(addVC, animated: true)
     }
     
     private func createPlaylistInDatabase(name: String, image: UIImage?) async throws -> UUID {
@@ -573,14 +782,22 @@ extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "PlaylistCell", for: indexPath) as! PlaylistTableViewCell
-        let p = playlists[indexPath.row]
+        var playlist = playlists[indexPath.row]
+        
+        // Configure selection indicator
+        if isSelectionMode {
+            cell.accessoryType = playlist.isSelectedForDeletion ? .checkmark : .none
+            cell.tintColor = .systemRed
+        } else {
+            cell.accessoryType = .none
+        }
         
         // Load initial placeholder
-        cell.configure(withTitle: p.title, tags: p.tags, trackCount: p.trackCount, image: UIImage(named: "cl_1"))
+        cell.configure(withTitle: playlist.title, tags: playlist.tags, trackCount: playlist.trackCount, image: UIImage(named: "cl_1"))
         
         // If it's a signed URL, load it asynchronously
-        if p.imageIdentifier.contains("token=") || p.imageIdentifier.hasPrefix("https://") {
-            ImageLoader.shared.loadImage(from: p.imageIdentifier) { image in
+        if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
+            ImageLoader.shared.loadImage(from: playlist.imageIdentifier) { image in
                 DispatchQueue.main.async {
                     // Make sure we're still looking at the same cell
                     if let currentCell = tableView.cellForRow(at: indexPath) as? PlaylistTableViewCell {
@@ -590,38 +807,53 @@ extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
             }
         } else {
             // Load local image
-            let img = loadImage(identifier: p.imageIdentifier)
-            cell.configure(withTitle: p.title, tags: p.tags, trackCount: p.trackCount, image: img)
+            let img = loadImage(identifier: playlist.imageIdentifier)
+            cell.configure(withTitle: playlist.title, tags: playlist.tags, trackCount: playlist.trackCount, image: img)
         }
         
         return cell
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        
-        let playlist = playlists[indexPath.row]
-        let vc = PlaylistDetailViewController()
-        
-        // Set title and tags immediately
-        vc.passedTitle = playlist.title
-        vc.passedArtist = playlist.tags
-        
-        // Load image asynchronously if needed
-        if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
-            ImageLoader.shared.loadImage(from: playlist.imageIdentifier) { image in
-                DispatchQueue.main.async {
-                    vc.passedImage = image ?? UIImage(named: "cl_1")
-                }
+        if isSelectionMode {
+            // Toggle selection for deletion
+            var playlist = playlists[indexPath.row]
+            playlist.isSelectedForDeletion.toggle()
+            playlists[indexPath.row] = playlist
+            
+            // Update cell
+            if let cell = tableView.cellForRow(at: indexPath) {
+                cell.accessoryType = playlist.isSelectedForDeletion ? .checkmark : .none
             }
+            
+            tableView.deselectRow(at: indexPath, animated: true)
         } else {
-            vc.passedImage = loadImage(identifier: playlist.imageIdentifier)
+            // Normal tap - go to playlist detail
+            tableView.deselectRow(at: indexPath, animated: true)
+            
+            let playlist = playlists[indexPath.row]
+            let vc = PlaylistDetailViewController()
+            
+            // Set title and tags immediately
+            vc.passedTitle = playlist.title
+            vc.passedArtist = playlist.tags
+            
+            // Load image asynchronously if needed
+            if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
+                ImageLoader.shared.loadImage(from: playlist.imageIdentifier) { image in
+                    DispatchQueue.main.async {
+                        vc.passedImage = image ?? UIImage(named: "cl_1")
+                    }
+                }
+            } else {
+                vc.passedImage = loadImage(identifier: playlist.imageIdentifier)
+            }
+            
+            navigationController?.pushViewController(vc, animated: true)
         }
-        
-        navigationController?.pushViewController(vc, animated: true)
     }
     
-    // MARK: - Swipe to delete
+    // MARK: - Swipe to delete (kept as alternative method)
     func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
         // Only allow deletion for user-created playlists (not default ones)
         let playlist = playlists[indexPath.row]
@@ -631,7 +863,19 @@ extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
             let playlist = playlists[indexPath.row]
-            deletePlaylist(playlist, at: indexPath)
+            
+            let alert = UIAlertController(
+                title: "Delete Playlist",
+                message: "Are you sure you want to delete '\(playlist.title)'?",
+                preferredStyle: .alert
+            )
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
+                self.deletePlaylist(playlist, at: indexPath)
+            })
+            
+            present(alert, animated: true)
         }
     }
     
@@ -754,7 +998,7 @@ class PlaylistTableViewCell: UITableViewCell {
     }
 }
 
-// MARK: - AddPlaylistViewController
+// MARK: - AddPlaylistViewController (unchanged, keep as is)
 class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
     // callback

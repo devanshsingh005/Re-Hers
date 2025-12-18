@@ -45,10 +45,7 @@ class PianoDemoManager {
         demoChords = [
             SongChord(leftHandNotes: ["A2"], rightHandNotes: ["E4","A4","C5"], chordName: "A Minor", duration: 1.1),
             SongChord(leftHandNotes: ["E2"], rightHandNotes: ["E4","G4","B4"], chordName: "E Minor", duration: 1.1),
-            SongChord(leftHandNotes: ["D3"], rightHandNotes: ["F#4","A4","D5"], chordName: "D Major", duration: 1.1),
-            SongChord(leftHandNotes: ["C3"], rightHandNotes: ["E4","G4","C5"], chordName: "C Major", duration: 1.1),
-            SongChord(leftHandNotes: ["F2"], rightHandNotes: ["A4","C5","F5"], chordName: "F Major", duration: 1.1),
-            SongChord(leftHandNotes: ["G2"], rightHandNotes: ["B4","D5","G5"], chordName: "G Major", duration: 1.1)
+           
         ]
         isUsingJSON = false
         print("[PianoDemoManager] Using fallback demo with \(demoChords.count) chords.")
