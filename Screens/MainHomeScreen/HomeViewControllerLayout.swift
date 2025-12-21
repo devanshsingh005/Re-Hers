@@ -64,5 +64,12 @@ extension HomeViewController {
         let vc = PianoAnimationViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
+    @objc func playAlongTapped() {
+        print("🔥 PLAY ALONG TAP DETECTED")
+        let vc = PlayAlongViewController()
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
 }
+
 

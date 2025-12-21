@@ -42,13 +42,10 @@
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
-		842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08642EBA0BE8001AC579 /* ScanViewController.swift */; };
-		842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */; };
-		842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08682EBA0C15001AC579 /* AnimationViewController.swift */; };
-		842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
 		8463EBFF2ECF98B800471106 /* PianoDemoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8463EBFE2ECF98B800471106 /* PianoDemoManager.swift */; };
 		8463EC012ECF990E00471106 /* SongChord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8463EC002ECF990E00471106 /* SongChord.swift */; };
+		84AFA4462EF82681004A8110 /* PlayAlongViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */; };
 		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
 		84C6A9DC2ECE1670007DA0D0 /* PianoAnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */; };
@@ -89,13 +86,10 @@
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
 		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
-		842B08642EBA0BE8001AC579 /* ScanViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanViewController.swift; sourceTree = "<group>"; };
-		842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayAlongViewController.swift; sourceTree = "<group>"; };
-		842B08682EBA0C15001AC579 /* AnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationViewController.swift; sourceTree = "<group>"; };
-		842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordRecognitionViewController.swift; sourceTree = "<group>"; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		8463EBFE2ECF98B800471106 /* PianoDemoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoDemoManager.swift; sourceTree = "<group>"; };
 		8463EC002ECF990E00471106 /* SongChord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongChord.swift; sourceTree = "<group>"; };
+		84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PlayAlongViewController.swift; path = Screens/PlayAlongViewController.swift; sourceTree = SOURCE_ROOT; };
 		84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopNavBar.swift; sourceTree = "<group>"; };
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
 		84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoAnimationViewController.swift; sourceTree = "<group>"; };
@@ -231,7 +225,6 @@
 				84DBA8592EBA72C7006DF51E /* Screens */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
 				842B085B2EBA09C6001AC579 /* Common */,
-				842B085A2EBA09B5001AC579 /* Features */,
 				842B085C2EBA09DD001AC579 /* Utilities */,
 				842B08552EBA0589001AC579 /* Models */,
 				842B08542EBA057B001AC579 /* Views */,
@@ -272,17 +265,6 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
-		842B085A2EBA09B5001AC579 /* Features */ = {
-			isa = PBXGroup;
-			children = (
-				842B08602EBA0A56001AC579 /* ChordRecognition */,
-				842B085F2EBA0A46001AC579 /* Animation */,
-				842B085E2EBA0A32001AC579 /* PlayAlong */,
-				842B085D2EBA0A22001AC579 /* ScanandPlay */,
-			);
-			path = Features;
-			sourceTree = "<group>";
-		};
 		842B085B2EBA09C6001AC579 /* Common */ = {
 			isa = PBXGroup;
 			children = (
@@ -298,38 +280,6 @@
 			children = (
 			);
 			path = Utilities;
-			sourceTree = "<group>";
-		};
-		842B085D2EBA0A22001AC579 /* ScanandPlay */ = {
-			isa = PBXGroup;
-			children = (
-				842B08642EBA0BE8001AC579 /* ScanViewController.swift */,
-			);
-			path = ScanandPlay;
-			sourceTree = "<group>";
-		};
-		842B085E2EBA0A32001AC579 /* PlayAlong */ = {
-			isa = PBXGroup;
-			children = (
-				842B08662EBA0BFF001AC579 /* PlayAlongViewController.swift */,
-			);
-			path = PlayAlong;
-			sourceTree = "<group>";
-		};
-		842B085F2EBA0A46001AC579 /* Animation */ = {
-			isa = PBXGroup;
-			children = (
-				842B08682EBA0C15001AC579 /* AnimationViewController.swift */,
-			);
-			path = Animation;
-			sourceTree = "<group>";
-		};
-		842B08602EBA0A56001AC579 /* ChordRecognition */ = {
-			isa = PBXGroup;
-			children = (
-				842B086A2EBA0C31001AC579 /* ChordRecognitionViewController.swift */,
-			);
-			path = ChordRecognition;
 			sourceTree = "<group>";
 		};
 		842B08622EBA0B34001AC579 /* Music_Components */ = {
@@ -409,6 +359,7 @@
 			isa = PBXGroup;
 			children = (
 				238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */,
+				84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */,
 			);
 			path = MainPlayAlongScreen;
 			sourceTree = "<group>";
@@ -538,24 +489,21 @@
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */,
 				2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */,
-				842B086B2EBA0C31001AC579 /* ChordRecognitionViewController.swift in Sources */,
 				2344B7122EEC991100B0CDA6 /* AudioEngineManager.swift in Sources */,
 				84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */,
 				236331F32ED6C2B3007D5F94 /* ColorViewController.swift in Sources */,
 				84C6A9DC2ECE1670007DA0D0 /* PianoAnimationViewController.swift in Sources */,
-				842B08652EBA0BE8001AC579 /* ScanViewController.swift in Sources */,
 				23FA2E822EE55CA60028C205 /* HomeViewControllerDailyGoal.swift in Sources */,
 				23FA2E862EE55EA30028C205 /* HomeViewControllerButtons.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
 				2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */,
 				23FA2E882EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift in Sources */,
-				842B08672EBA0BFF001AC579 /* PlayAlongViewController.swift in Sources */,
+				84AFA4462EF82681004A8110 /* PlayAlongViewController.swift in Sources */,
 				8463EC012ECF990E00471106 /* SongChord.swift in Sources */,
 				2BC06DA72EEE8DF100CBDC03 /* ProgressIndicator.swift in Sources */,
 				238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */,
 				238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */,
 				23FA2E802EE55C720028C205 /* HomeViewControllerLayout.swift in Sources */,
-				842B08692EBA0C15001AC579 /* AnimationViewController.swift in Sources */,
 				2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */,
 				23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */,
 			);

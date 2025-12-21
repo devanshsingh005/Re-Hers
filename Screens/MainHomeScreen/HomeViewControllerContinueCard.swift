@@ -15,6 +15,7 @@ import UIKit
 
 extension HomeViewController {
     
+    
     // MARK: - Padded Label Class
     final class PaddingLabel: UILabel {
 
@@ -130,7 +131,8 @@ extension HomeViewController {
         let continueBtn = createFilledButton("Continue")
         continueBtn.addTarget(self, action: #selector(openPianoPage), for: .touchUpInside)
 
-        let playBtn = createBorderedButton("Play Along")
+         let playBtn = createBorderedButton("Play Along")
+         playBtn.addTarget(self, action: #selector(playAlongTapped), for: .touchUpInside)
 
         continueBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
         playBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
