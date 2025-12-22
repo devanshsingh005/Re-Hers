@@ -116,7 +116,7 @@ class PlaylistViewController: UIViewController {
     
     // MARK: - UI Components
     private let navBar = TopNavBar.make(title: "PlayList")
-    private let tableView = UITableView()
+    private var collectionView: UICollectionView!
     private let refreshControl = UIRefreshControl()
     
     // MARK: - Floating Action Buttons
@@ -125,7 +125,7 @@ class PlaylistViewController: UIViewController {
         btn.backgroundColor = UIColor.orange
         btn.setImage(UIImage(systemName: "plus"), for: .normal)
         btn.tintColor = .white
-        btn.layer.cornerRadius = 30
+        btn.layer.cornerRadius = UIDevice.current.userInterfaceIdiom == .pad ? 35 : 30
         btn.clipsToBounds = false
         btn.layer.shadowColor = UIColor.black.cgColor
         btn.layer.shadowOpacity = 0.25
@@ -141,7 +141,7 @@ class PlaylistViewController: UIViewController {
         btn.backgroundColor = UIColor.systemRed
         btn.setImage(UIImage(systemName: "trash"), for: .normal)
         btn.tintColor = .white
-        btn.layer.cornerRadius = 30
+        btn.layer.cornerRadius = UIDevice.current.userInterfaceIdiom == .pad ? 35 : 30
         btn.clipsToBounds = false
         btn.layer.shadowColor = UIColor.black.cgColor
         btn.layer.shadowOpacity = 0.25
@@ -158,7 +158,7 @@ class PlaylistViewController: UIViewController {
         let label = UILabel()
         label.text = "Select Playlists to Delete"
         label.textColor = .systemRed
-        label.font = .boldSystemFont(ofSize: 16)
+        label.font = UIDevice.current.userInterfaceIdiom == .pad ? .boldSystemFont(ofSize: 18) : .boldSystemFont(ofSize: 16)
         label.textAlignment = .center
         label.backgroundColor = .white
         label.layer.cornerRadius = 8
@@ -184,7 +184,7 @@ class PlaylistViewController: UIViewController {
     private var playlists: [Playlist] = [] {
         didSet {
             DispatchQueue.main.async {
-                self.tableView.reloadData()
+                self.collectionView.reloadData()
             }
         }
     }
@@ -195,6 +195,10 @@ class PlaylistViewController: UIViewController {
             updateUIForSelectionMode()
         }
     }
+    
+    // MARK: - iPad-specific properties
+    private let isPad = UIDevice.current.userInterfaceIdiom == .pad
+    private var selectedIndexPaths: Set<IndexPath> = []
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -211,13 +215,20 @@ class PlaylistViewController: UIViewController {
         loadPlaylists()
     }
     
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate { _ in
+            self.collectionView.collectionViewLayout.invalidateLayout()
+        }
+    }
+    
     // MARK: - Setup UI
     private func setupUI() {
         view.backgroundColor = .white
         navigationController?.navigationBar.isHidden = true
         
         setupNavBar()
-        setupTableView()
+        setupCollectionView()
         setupSelectionModeLabel()
     }
     
@@ -232,16 +243,16 @@ class PlaylistViewController: UIViewController {
     private func setupRefreshControl() {
         refreshControl.tintColor = .orange
         refreshControl.addTarget(self, action: #selector(refreshPlaylists), for: .valueChanged)
-        tableView.refreshControl = refreshControl
+        collectionView.refreshControl = refreshControl
     }
     
     private func setupSelectionModeLabel() {
         view.addSubview(selectionModeLabel)
         NSLayoutConstraint.activate([
             selectionModeLabel.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
-            selectionModeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            selectionModeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            selectionModeLabel.heightAnchor.constraint(equalToConstant: 40)
+            selectionModeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: isPad ? 40 : 20),
+            selectionModeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: isPad ? -40 : -20),
+            selectionModeLabel.heightAnchor.constraint(equalToConstant: isPad ? 50 : 40)
         ])
     }
     
@@ -267,10 +278,11 @@ class PlaylistViewController: UIViewController {
             self?.navigationController?.popViewController(animated: true)
         }
         
+        let sidePadding: CGFloat = isPad ? 40 : 10
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: sidePadding),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -sidePadding)
         ])
     }
     
@@ -279,20 +291,22 @@ class PlaylistViewController: UIViewController {
         view.addSubview(addButton)
         view.addSubview(deleteButton)
         
-        // Add button constraints
-        NSLayoutConstraint.activate([
-            addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
-            addButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -26),
-            addButton.widthAnchor.constraint(equalToConstant: 60),
-            addButton.heightAnchor.constraint(equalToConstant: 60)
-        ])
+        // Size for iPad vs iPhone
+        let buttonSize: CGFloat = isPad ? 70 : 60
+        let buttonBottomPadding: CGFloat = isPad ? 40 : 26
+        let buttonSidePadding: CGFloat = isPad ? 40 : 22
+        let buttonSpacing: CGFloat = isPad ? 24 : 16
         
-        // Delete button constraints (positioned above add button)
         NSLayoutConstraint.activate([
-            deleteButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
-            deleteButton.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -16),
-            deleteButton.widthAnchor.constraint(equalToConstant: 60),
-            deleteButton.heightAnchor.constraint(equalToConstant: 60)
+            addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -buttonSidePadding),
+            addButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -buttonBottomPadding),
+            addButton.widthAnchor.constraint(equalToConstant: buttonSize),
+            addButton.heightAnchor.constraint(equalToConstant: buttonSize),
+            
+            deleteButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -buttonSidePadding),
+            deleteButton.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -buttonSpacing),
+            deleteButton.widthAnchor.constraint(equalToConstant: buttonSize),
+            deleteButton.heightAnchor.constraint(equalToConstant: buttonSize)
         ])
         
         addButton.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
@@ -330,8 +344,9 @@ class PlaylistViewController: UIViewController {
                 for i in 0..<self.playlists.count {
                     self.playlists[i].isSelectedForDeletion = false
                 }
+                self.selectedIndexPaths.removeAll()
             }
-            self.tableView.reloadData()
+            self.collectionView.reloadData()
         }
     }
     
@@ -381,7 +396,7 @@ class PlaylistViewController: UIViewController {
                         
                         DispatchQueue.main.async {
                             self.playlists.insert(newPlaylist, at: 0)
-                            self.tableView.reloadData()
+                            self.collectionView.reloadData()
                             self.showLoading(false)
                         }
                         
@@ -444,7 +459,7 @@ class PlaylistViewController: UIViewController {
         // Collect indexes of selected playlists
         for (index, playlist) in playlists.enumerated() {
             if playlist.isSelectedForDeletion {
-                indexesToDelete.append(IndexPath(row: index, section: 0))
+                indexesToDelete.append(IndexPath(item: index, section: 0))
             }
         }
         
@@ -480,8 +495,8 @@ class PlaylistViewController: UIViewController {
                     // Exit selection mode
                     self.isSelectionMode = false
                     
-                    // Update table view with animation
-                    self.tableView.deleteRows(at: indexesToDelete, with: .automatic)
+                    // Update collection view with animation
+                    self.collectionView.deleteItems(at: indexesToDelete)
                     self.showLoading(false)
                     
                     // Show success message
@@ -714,27 +729,42 @@ class PlaylistViewController: UIViewController {
         }
     }
     
-    // MARK: - Table View Setup
-    private func setupTableView() {
-        view.addSubview(tableView)
-        tableView.translatesAutoresizingMaskIntoConstraints = false
+    // MARK: - Collection View Setup
+    private func setupCollectionView() {
+        let layout = UICollectionViewFlowLayout()
         
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.register(PlaylistTableViewCell.self, forCellReuseIdentifier: "PlaylistCell")
+        if isPad {
+            // iPad: Grid layout with 2-3 columns depending on orientation
+            let spacing: CGFloat = 20
+            let itemWidth = (view.bounds.width - (3 * spacing)) / 2
+            layout.itemSize = CGSize(width: itemWidth, height: 150)
+            layout.minimumInteritemSpacing = spacing
+            layout.minimumLineSpacing = spacing
+            layout.sectionInset = UIEdgeInsets(top: 20, left: spacing, bottom: 100, right: spacing)
+        } else {
+            // iPhone: Single column list layout
+            layout.itemSize = CGSize(width: view.bounds.width - 32, height: 130)
+            layout.minimumInteritemSpacing = 0
+            layout.minimumLineSpacing = 10
+            layout.sectionInset = UIEdgeInsets(top: 10, left: 16, bottom: 100, right: 16)
+        }
         
-        tableView.backgroundColor = .white
-        tableView.separatorStyle = .none
-        tableView.rowHeight = 130
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        view.addSubview(collectionView)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
         
-        // Add padding so FAB doesn't overlap first card
-        tableView.contentInset = UIEdgeInsets(top: 10, left: 0, bottom: 30, right: 0)
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        collectionView.register(PlaylistCollectionViewCell.self, forCellWithReuseIdentifier: "PlaylistCell")
+        
+        collectionView.backgroundColor = .white
+        collectionView.alwaysBounceVertical = true
         
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            collectionView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: isPad ? 20 : 18),
+            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
     
@@ -775,22 +805,19 @@ class PlaylistViewController: UIViewController {
     }
 }
 
-// MARK: - Table Delegate
-extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
+// MARK: - Collection View Delegate & DataSource
+extension PlaylistViewController: UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { playlists.count }
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return playlists.count
+    }
     
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "PlaylistCell", for: indexPath) as! PlaylistTableViewCell
-        var playlist = playlists[indexPath.row]
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "PlaylistCell", for: indexPath) as! PlaylistCollectionViewCell
+        var playlist = playlists[indexPath.item]
         
         // Configure selection indicator
-        if isSelectionMode {
-            cell.accessoryType = playlist.isSelectedForDeletion ? .checkmark : .none
-            cell.tintColor = .systemRed
-        } else {
-            cell.accessoryType = .none
-        }
+        cell.selectionOverlay.isHidden = !isSelectionMode || !playlist.isSelectedForDeletion
         
         // Load initial placeholder
         cell.configure(withTitle: playlist.title, tags: playlist.tags, trackCount: playlist.trackCount, image: UIImage(named: "cl_1"))
@@ -800,7 +827,7 @@ extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
             ImageLoader.shared.loadImage(from: playlist.imageIdentifier) { image in
                 DispatchQueue.main.async {
                     // Make sure we're still looking at the same cell
-                    if let currentCell = tableView.cellForRow(at: indexPath) as? PlaylistTableViewCell {
+                    if let currentCell = collectionView.cellForItem(at: indexPath) as? PlaylistCollectionViewCell {
                         currentCell.playlistImageView.image = image ?? UIImage(named: "cl_1")
                     }
                 }
@@ -814,24 +841,24 @@ extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
         return cell
     }
     
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         if isSelectionMode {
             // Toggle selection for deletion
-            var playlist = playlists[indexPath.row]
+            var playlist = playlists[indexPath.item]
             playlist.isSelectedForDeletion.toggle()
-            playlists[indexPath.row] = playlist
+            playlists[indexPath.item] = playlist
             
             // Update cell
-            if let cell = tableView.cellForRow(at: indexPath) {
-                cell.accessoryType = playlist.isSelectedForDeletion ? .checkmark : .none
+            if let cell = collectionView.cellForItem(at: indexPath) as? PlaylistCollectionViewCell {
+                cell.selectionOverlay.isHidden = !playlist.isSelectedForDeletion
             }
             
-            tableView.deselectRow(at: indexPath, animated: true)
+            collectionView.deselectItem(at: indexPath, animated: true)
         } else {
             // Normal tap - go to playlist detail
-            tableView.deselectRow(at: indexPath, animated: true)
+            collectionView.deselectItem(at: indexPath, animated: true)
             
-            let playlist = playlists[indexPath.row]
+            let playlist = playlists[indexPath.item]
             let vc = PlaylistDetailViewController()
             
             // Set title and tags immediately
@@ -853,82 +880,39 @@ extension PlaylistViewController: UITableViewDelegate, UITableViewDataSource {
         }
     }
     
-    // MARK: - Swipe to delete (kept as alternative method)
-    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
-        // Only allow deletion for user-created playlists (not default ones)
-        let playlist = playlists[indexPath.row]
-        return !playlist.imageIdentifier.hasPrefix("cl_") // Default playlists start with "cl_"
-    }
-    
-    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        if editingStyle == .delete {
-            let playlist = playlists[indexPath.row]
-            
-            let alert = UIAlertController(
-                title: "Delete Playlist",
-                message: "Are you sure you want to delete '\(playlist.title)'?",
-                preferredStyle: .alert
-            )
-            
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
-                self.deletePlaylist(playlist, at: indexPath)
-            })
-            
-            present(alert, animated: true)
+    // MARK: - Collection View Layout (for iPad responsive design)
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        guard isPad else {
+            // iPhone: single column
+            return CGSize(width: collectionView.bounds.width - 32, height: 130)
         }
-    }
-    
-    private func deletePlaylist(_ playlist: Playlist, at indexPath: IndexPath) {
-        Task {
-            do {
-                // Delete from database
-                try await SupabaseManager.shared.client
-                    .from("playlists")
-                    .delete()
-                    .eq("id", value: playlist.id)
-                    .execute()
-                
-                // If playlist has a storage image, try to delete it
-                if playlist.imageIdentifier.contains("token=") || playlist.imageIdentifier.hasPrefix("https://") {
-                    // Extract filename from URL
-                    if let url = URL(string: playlist.imageIdentifier),
-                       let fileName = url.pathComponents.last?.components(separatedBy: "?").first {
-                        try? await SupabaseManager.shared.client.storage
-                            .from("playlistcover")
-                            .remove(paths: [fileName])
-                    }
-                }
-                
-                DispatchQueue.main.async {
-                    self.playlists.remove(at: indexPath.row)
-                    self.tableView.deleteRows(at: [indexPath], with: .automatic)
-                }
-                
-            } catch {
-                print("Error deleting playlist: \(error)")
-                DispatchQueue.main.async {
-                    let alert = UIAlertController(
-                        title: "Error",
-                        message: "Failed to delete playlist.",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
-                }
-            }
-        }
+        
+        // iPad: adaptive columns
+        let spacing: CGFloat = 20
+        let availableWidth = collectionView.bounds.width - (3 * spacing)
+        
+        // Calculate number of columns based on width
+        let minColumnWidth: CGFloat = 300
+        let maxColumns = Int(availableWidth / minColumnWidth)
+        let columns = max(2, maxColumns)
+        
+        let itemWidth = (availableWidth - (CGFloat(columns - 1) * spacing)) / CGFloat(columns)
+        return CGSize(width: itemWidth, height: 150)
     }
 }
 
-// MARK: - Playlist Cell
-class PlaylistTableViewCell: UITableViewCell {
+// MARK: - Playlist Collection View Cell
+class PlaylistCollectionViewCell: UICollectionViewCell {
     
-    private let containerView: UIView = {
+    let containerView: UIView = {
         let v = UIView()
         v.backgroundColor = UIColor.black.withAlphaComponent(0.85)
         v.layer.cornerRadius = 20
         v.clipsToBounds = true
+        v.layer.shadowColor = UIColor.black.cgColor
+        v.layer.shadowOpacity = 0.1
+        v.layer.shadowOffset = CGSize(width: 0, height: 2)
+        v.layer.shadowRadius = 4
         return v
     }()
     
@@ -936,9 +920,18 @@ class PlaylistTableViewCell: UITableViewCell {
     private let titleLabel = UILabel()
     private let tagsLabel = UILabel()
     private let trackCountLabel = UILabel()
+    let selectionOverlay: UIView = {
+        let v = UIView()
+        v.backgroundColor = UIColor.systemRed.withAlphaComponent(0.2)
+        v.layer.cornerRadius = 20
+        v.layer.borderColor = UIColor.systemRed.cgColor
+        v.layer.borderWidth = 2
+        v.isHidden = true
+        return v
+    }()
     
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
         setupUI()
     }
     
@@ -946,47 +939,60 @@ class PlaylistTableViewCell: UITableViewCell {
     
     private func setupUI() {
         backgroundColor = .clear
-        selectionStyle = .none
         
         playlistImageView.contentMode = .scaleAspectFill
-        playlistImageView.layer.cornerRadius = 16
+        playlistImageView.layer.cornerRadius = UIDevice.current.userInterfaceIdiom == .pad ? 14 : 16
         playlistImageView.clipsToBounds = true
         
-        titleLabel.font = .boldSystemFont(ofSize: 18)
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        titleLabel.font = isPad ? .boldSystemFont(ofSize: 20) : .boldSystemFont(ofSize: 18)
         titleLabel.textColor = .white
+        titleLabel.numberOfLines = 1
         
-        tagsLabel.font = .systemFont(ofSize: 13)
+        tagsLabel.font = isPad ? .systemFont(ofSize: 15) : .systemFont(ofSize: 13)
         tagsLabel.textColor = .lightGray
+        tagsLabel.numberOfLines = 2
         
-        trackCountLabel.font = .systemFont(ofSize: 13)
+        trackCountLabel.font = isPad ? .systemFont(ofSize: 14) : .systemFont(ofSize: 13)
         trackCountLabel.textColor = .white
         
         let stack = UIStackView(arrangedSubviews: [titleLabel, tagsLabel, trackCountLabel])
         stack.axis = .vertical
-        stack.spacing = 3
+        stack.spacing = isPad ? 6 : 4
+        stack.alignment = .leading
         
         contentView.addSubview(containerView)
         containerView.addSubview(playlistImageView)
         containerView.addSubview(stack)
+        containerView.addSubview(selectionOverlay)
         
         containerView.translatesAutoresizingMaskIntoConstraints = false
         playlistImageView.translatesAutoresizingMaskIntoConstraints = false
         stack.translatesAutoresizingMaskIntoConstraints = false
+        selectionOverlay.translatesAutoresizingMaskIntoConstraints = false
+        
+        let imageSize: CGFloat = isPad ? 80 : 70
+        let padding: CGFloat = isPad ? 20 : 15
         
         NSLayoutConstraint.activate([
-            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
-            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
+            containerView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             
-            playlistImageView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 15),
+            playlistImageView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: padding),
             playlistImageView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            playlistImageView.widthAnchor.constraint(equalToConstant: 70),
-            playlistImageView.heightAnchor.constraint(equalToConstant: 70),
+            playlistImageView.widthAnchor.constraint(equalToConstant: imageSize),
+            playlistImageView.heightAnchor.constraint(equalToConstant: imageSize),
             
-            stack.leadingAnchor.constraint(equalTo: playlistImageView.trailingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
-            stack.centerYAnchor.constraint(equalTo: containerView.centerYAnchor)
+            stack.leadingAnchor.constraint(equalTo: playlistImageView.trailingAnchor, constant: padding),
+            stack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -padding),
+            stack.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            
+            selectionOverlay.topAnchor.constraint(equalTo: containerView.topAnchor),
+            selectionOverlay.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            selectionOverlay.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            selectionOverlay.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
         ])
     }
     
@@ -998,7 +1004,7 @@ class PlaylistTableViewCell: UITableViewCell {
     }
 }
 
-// MARK: - AddPlaylistViewController (unchanged, keep as is)
+// MARK: - AddPlaylistViewController (Updated for iPad)
 class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
     // callback
@@ -1013,15 +1019,19 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
     private let cardView: UIView = {
         let v = UIView()
         v.backgroundColor = .systemBackground
-        v.layer.cornerRadius = 16
+        v.layer.cornerRadius = 20
         v.clipsToBounds = true
+        v.layer.shadowColor = UIColor.black.cgColor
+        v.layer.shadowOpacity = 0.2
+        v.layer.shadowRadius = 10
+        v.layer.shadowOffset = CGSize(width: 0, height: 4)
         return v
     }()
     
     private let titleLabel: UILabel = {
         let l = UILabel()
         l.text = "Create Playlist"
-        l.font = .boldSystemFont(ofSize: 18)
+        l.font = UIDevice.current.userInterfaceIdiom == .pad ? .boldSystemFont(ofSize: 22) : .boldSystemFont(ofSize: 18)
         l.textAlignment = .center
         return l
     }()
@@ -1030,13 +1040,14 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
         let tf = UITextField()
         tf.placeholder = "Playlist name"
         tf.borderStyle = .roundedRect
+        tf.font = UIDevice.current.userInterfaceIdiom == .pad ? .systemFont(ofSize: 18) : .systemFont(ofSize: 16)
         return tf
     }()
     
     private let imageViewPreview: UIImageView = {
         let iv = UIImageView()
         iv.contentMode = .scaleAspectFill
-        iv.layer.cornerRadius = 10
+        iv.layer.cornerRadius = 12
         iv.clipsToBounds = true
         iv.backgroundColor = UIColor.systemGray5
         return iv
@@ -1045,23 +1056,26 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
     private let pickImageButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Choose Image", for: .normal)
+        b.titleLabel?.font = UIDevice.current.userInterfaceIdiom == .pad ? .systemFont(ofSize: 18) : .systemFont(ofSize: 16)
         return b
     }()
     
     private let saveButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Save", for: .normal)
-        b.titleLabel?.font = .boldSystemFont(ofSize: 16)
+        b.titleLabel?.font = UIDevice.current.userInterfaceIdiom == .pad ? .boldSystemFont(ofSize: 20) : .boldSystemFont(ofSize: 16)
         return b
     }()
     
     private let cancelButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Cancel", for: .normal)
+        b.titleLabel?.font = UIDevice.current.userInterfaceIdiom == .pad ? .systemFont(ofSize: 18) : .systemFont(ofSize: 16)
         return b
     }()
     
     private var pickedImage: UIImage?
+    private let isPad = UIDevice.current.userInterfaceIdiom == .pad
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -1089,6 +1103,9 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         
+        let cardWidth: CGFloat = isPad ? 500 : 300
+        let cardPadding: CGFloat = isPad ? 40 : 28
+        
         NSLayoutConstraint.activate([
             dimView.topAnchor.constraint(equalTo: view.topAnchor),
             dimView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -1096,37 +1113,44 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
             dimView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             
             cardView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            cardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
-            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            cardView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cardView.widthAnchor.constraint(equalToConstant: cardWidth),
         ])
         
+        let verticalPadding: CGFloat = isPad ? 30 : 18
+        let horizontalPadding: CGFloat = isPad ? 32 : 16
+        let elementSpacing: CGFloat = isPad ? 20 : 12
+        let buttonHeight: CGFloat = isPad ? 50 : 44
+        let fieldHeight: CGFloat = isPad ? 50 : 40
+        let imageHeight: CGFloat = isPad ? 180 : 140
+        
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 18),
-            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
-            titleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: verticalPadding),
+            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: horizontalPadding),
+            titleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -horizontalPadding),
             
-            nameField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
-            nameField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
-            nameField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
-            nameField.heightAnchor.constraint(equalToConstant: 40),
+            nameField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: elementSpacing),
+            nameField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: horizontalPadding),
+            nameField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -horizontalPadding),
+            nameField.heightAnchor.constraint(equalToConstant: fieldHeight),
             
-            imageViewPreview.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 12),
-            imageViewPreview.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
-            imageViewPreview.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
-            imageViewPreview.heightAnchor.constraint(equalToConstant: 140),
+            imageViewPreview.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: elementSpacing),
+            imageViewPreview.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: horizontalPadding),
+            imageViewPreview.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -horizontalPadding),
+            imageViewPreview.heightAnchor.constraint(equalToConstant: imageHeight),
             
-            pickImageButton.topAnchor.constraint(equalTo: imageViewPreview.bottomAnchor, constant: 12),
+            pickImageButton.topAnchor.constraint(equalTo: imageViewPreview.bottomAnchor, constant: elementSpacing),
             pickImageButton.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
             
-            saveButton.topAnchor.constraint(equalTo: pickImageButton.bottomAnchor, constant: 12),
-            saveButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            saveButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
-            saveButton.heightAnchor.constraint(equalToConstant: 44),
+            saveButton.topAnchor.constraint(equalTo: pickImageButton.bottomAnchor, constant: elementSpacing),
+            saveButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: horizontalPadding),
+            saveButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -verticalPadding),
+            saveButton.heightAnchor.constraint(equalToConstant: buttonHeight),
             
-            cancelButton.topAnchor.constraint(equalTo: pickImageButton.bottomAnchor, constant: 12),
-            cancelButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
-            cancelButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
-            cancelButton.heightAnchor.constraint(equalToConstant: 44),
+            cancelButton.topAnchor.constraint(equalTo: pickImageButton.bottomAnchor, constant: elementSpacing),
+            cancelButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -horizontalPadding),
+            cancelButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -verticalPadding),
+            cancelButton.heightAnchor.constraint(equalToConstant: buttonHeight),
         ])
         
         pickImageButton.addTarget(self, action: #selector(pickImage), for: .touchUpInside)
@@ -1140,6 +1164,13 @@ class AddPlaylistViewController: UIViewController, UIImagePickerControllerDelega
         picker.sourceType = .photoLibrary
         picker.allowsEditing = true
         picker.delegate = self
+        if isPad {
+            picker.modalPresentationStyle = .popover
+            if let popover = picker.popoverPresentationController {
+                popover.sourceView = pickImageButton
+                popover.sourceRect = pickImageButton.bounds
+            }
+        }
         present(picker, animated: true)
     }
     
