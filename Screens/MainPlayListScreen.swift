@@ -218,7 +218,12 @@ class PlaylistViewController: UIViewController {
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate { _ in
-            self.collectionView.collectionViewLayout.invalidateLayout()
+            guard let collectionView = self.collectionView else {
+                print("❌ collectionView is nil")
+                return
+            }
+            collectionView.collectionViewLayout.invalidateLayout()
+
         }
     }
     
