@@ -147,13 +147,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		23542CB82EE5D5600074B2A2 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		2B3828BE2EC643A80025933F /* Splash */ = {
 			isa = PBXGroup;
 			children = (
@@ -225,12 +218,8 @@
 				84DBA8592EBA72C7006DF51E /* Screens */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
 				842B085B2EBA09C6001AC579 /* Common */,
-				842B085C2EBA09DD001AC579 /* Utilities */,
 				842B08552EBA0589001AC579 /* Models */,
-				842B08542EBA057B001AC579 /* Views */,
-				842B08532EBA0543001AC579 /* ViewControllers */,
 				842B083D2EBA0465001AC579 /* Re-Hearse_v1 */,
-				23542CB82EE5D5600074B2A2 /* Frameworks */,
 				842B083C2EBA0465001AC579 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -241,20 +230,6 @@
 				842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		842B08532EBA0543001AC579 /* ViewControllers */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = ViewControllers;
-			sourceTree = "<group>";
-		};
-		842B08542EBA057B001AC579 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Views;
 			sourceTree = "<group>";
 		};
 		842B08552EBA0589001AC579 /* Models */ = {
@@ -269,17 +244,9 @@
 			isa = PBXGroup;
 			children = (
 				84114B702EBCFE4900E86F71 /* UIComponents */,
-				842B08632EBA0B45001AC579 /* Managers */,
 				842B08622EBA0B34001AC579 /* Music_Components */,
 			);
 			path = Common;
-			sourceTree = "<group>";
-		};
-		842B085C2EBA09DD001AC579 /* Utilities */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Utilities;
 			sourceTree = "<group>";
 		};
 		842B08622EBA0B34001AC579 /* Music_Components */ = {
@@ -290,13 +257,6 @@
 				842B08582EBA0712001AC579 /* PianoKeyView.swift */,
 			);
 			path = Music_Components;
-			sourceTree = "<group>";
-		};
-		842B08632EBA0B45001AC579 /* Managers */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Managers;
 			sourceTree = "<group>";
 		};
 		84C6A9DA2ECE1655007DA0D0 /* MainAnimationScreen */ = {
