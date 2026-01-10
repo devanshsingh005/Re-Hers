@@ -6,6 +6,7 @@
 import UIKit
 import AVFoundation
 import Photos
+import Supabase
 
 class UploadScreen: UIViewController {
     
@@ -25,10 +26,18 @@ class UploadScreen: UIViewController {
     // MARK: - State / Data
     private var uploadTitle: String = "Untitled"
     private var uploadCoverImage: UIImage? = UIImage(systemName: "music.note")
+    private var currentUploadData: Data? // Store uploaded file data
+    private var currentFileName: String = ""
+    private var currentFileType: String = ""
     
     private var metaTitleLbl: UILabel?
     private var metaCoverImgView: UIImageView?
     private var recentHStack: UIStackView?
+    
+    // Use shared Supabase client
+    private var supabase: SupabaseClient {
+        return SupabaseManager.shared.client
+    }
     
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(title: "Upload")
@@ -52,9 +61,331 @@ class UploadScreen: UIViewController {
         setupUploadSection()
         addRecentUploadsSection()
         
-        // sample placeholder cards so area is visible on load
-        addRecentUploadCard(title: "Arrival", image: UIImage(named: "cl_1"))
-        addRecentUploadCard(title: "case", image: UIImage(named: "cl_2"))
+        // Load real recent uploads from database
+        loadRecentUploadsFromDB()
+    }
+    
+    // MARK: - Database Methods
+    
+    private func loadRecentUploadsFromDB() {
+        Task {
+            do {
+                let recentUploads = try await fetchRecentUploadsFromDatabase()
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    self.displayRecentUploads(recentUploads)
+                }
+            } catch {
+                print("Error loading recent uploads: \(error)")
+                // Fallback to sample data if needed
+                DispatchQueue.main.async {
+                    self.addRecentUploadCard(title: "Sample Upload", image: UIImage(named: "cl_1"))
+                }
+            }
+        }
+    }
+    
+    private func fetchRecentUploadsFromDatabase() async throws -> [Scan] {
+        // First, let's test if we can get the current user ID
+        guard let userIdString = await getCurrentUserId() else {
+            print("No user ID found")
+            return []
+        }
+        
+        guard let userId = UUID(uuidString: userIdString) else {
+            print("Invalid user ID format: \(userIdString)")
+            return []
+        }
+        
+        print("Fetching scans for user ID: \(userId)")
+        
+        do {
+            let response: [Scan] = try await supabase
+                .from("scans")
+                .select()
+                .eq("user_id", value: userId)
+                .order("updated_at", ascending: false)
+                .limit(5)
+                .execute()
+                .value
+            
+            print("Successfully fetched \(response.count) scans")
+            return response
+        } catch {
+            print("Error fetching scans: \(error)")
+            throw error
+        }
+    }
+    
+    private func getCurrentUserId() async -> String? {
+        do {
+            // Get current session from Supabase
+            let session = try await supabase.auth.session
+            return session.user.id.uuidString
+        } catch {
+            print("Error getting user session: \(error)")
+            return nil
+        }
+    }
+    private func displayRecentUploads(_ scans: [Scan]) {
+        guard let hStack = recentHStack else { return }
+        
+        // Clear existing cards
+        for view in hStack.arrangedSubviews {
+            view.removeFromSuperview()
+        }
+        
+        // Add cards from database
+        for scan in scans {
+            let title = extractTitle(from: scan.jsonData) ?? scan.originalFilename ?? "Untitled"
+            // You might want to store thumbnail URLs in JSON or use a placeholder
+            addRecentUploadCard(title: title, image: UIImage(named: "cl_1"))
+        }
+        
+        // If no uploads, show empty state
+        if scans.isEmpty {
+            let emptyLabel = UILabel()
+            emptyLabel.text = "No recent uploads"
+            emptyLabel.textColor = .secondaryLabel
+            emptyLabel.textAlignment = .center
+            hStack.addArrangedSubview(emptyLabel)
+        }
+    }
+    
+    private func extractTitle(from jsonData: AnyCodable?) -> String? {
+        guard let jsonData = jsonData else { return nil }
+        
+        // Access the underlying value
+        if let dict = jsonData.value as? [String: Any] {
+            return dict["title"] as? String
+        }
+        return nil
+    }
+    
+    private func saveUploadToDatabase(imageData: Data, fileName: String, fileType: String) async throws {
+        print("Starting upload process...")
+        
+        // 1. Create a unique processing ID
+        let processingId = "proc_\(UUID().uuidString)"
+        
+        // 2. Get user ID
+        guard let userIdString = await getCurrentUserId(),
+              let userId = UUID(uuidString: userIdString) else {
+            throw NSError(domain: "UploadError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
+        }
+        
+        print("User ID: \(userId)")
+        
+        // 3. Create JSON data
+        let jsonDict: [String: Any] = [
+            "status": "processing",
+            "filename": fileName,
+            "uploaded_at": ISO8601DateFormatter().string(from: Date())
+        ]
+        
+        let initialScan = ScanInsert(
+            userId: userId,
+            jsonData: AnyCodable(jsonDict),
+            processingId: processingId,
+            status: "processing",
+            originalFilename: fileName,
+            fileType: fileType
+        )
+        
+        print("Inserting scan record...")
+        
+        do {
+            let response: Scan = try await supabase
+                .from("scans")
+                .insert(initialScan)
+                .select()
+                .single()
+                .execute()
+                .value
+            
+            print("Scan record inserted successfully with ID: \(response.id)")
+            
+            let createdScan = response
+            
+            // 4. Simulate API call to external cloud processing
+            print("Simulating API call to cloud processing service...")
+            
+            // Simulate processing delay
+            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            
+            // 5. Simulate getting JSON response from cloud
+            let mockJsonResponse: [String: Any] = [
+                "title": uploadTitle,
+                "documentType": "image_scan",
+                "filename": fileName,
+                "fileType": fileType,
+                "size": imageData.count,
+                "processedAt": ISO8601DateFormatter().string(from: Date()),
+                "confidence": 0.95,
+                "status": "completed",
+                "analysis": [
+                    "chords": ["C", "G", "Am", "F"],
+                    "key": "C Major",
+                    "tempo": "120 BPM"
+                ]
+            ]
+            
+            print("Updating scan with processing results...")
+            
+            // 6. Update the database with the JSON result
+            try await updateScanInDatabase(
+                scanId: createdScan.id,
+                jsonData: mockJsonResponse,
+                processingId: processingId
+            )
+            
+            print("Scan updated successfully!")
+            
+        } catch {
+            print("Error in saveUploadToDatabase: \(error)")
+            throw error
+        }
+        
+        // 7. Refresh recent uploads
+        await loadRecentUploadsFromDB()
+    }
+    
+    private func updateScanInDatabase(scanId: Int64, jsonData: [String: Any], processingId: String) async throws {
+        let updateData = UpdateScanData(
+            jsonData: AnyCodable(jsonData),
+            status: "completed",
+            processedAt: ISO8601DateFormatter().string(from: Date()),
+            processingId: processingId,
+            updatedAt: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        do {
+            try await supabase
+                .from("scans")
+                .update(updateData)
+                .eq("id", value: String(scanId))
+                .execute()
+            
+            print("Database update successful for scan ID: \(scanId)")
+        } catch {
+            print("Error updating scan in database: \(error)")
+            throw error
+        }
+    }
+    
+    // MARK: - Data Models
+    struct Scan: Codable, Identifiable {
+        let id: Int64
+        let userId: UUID
+        let jsonData: AnyCodable?
+        let processingId: String?
+        let status: String?
+        let originalFilename: String?
+        let fileType: String?
+        let processedAt: String?
+        let updatedAt: String?
+        let errorMessage: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case jsonData = "json_data"
+            case processingId = "processing_id"
+            case status
+            case originalFilename = "original_filename"
+            case fileType = "file_type"
+            case processedAt = "processed_at"
+            case updatedAt = "updated_at"
+            case errorMessage = "error_message"
+        }
+    }
+    
+    struct ScanInsert: Encodable {
+        let userId: UUID
+        let jsonData: AnyCodable
+        let processingId: String
+        let status: String
+        let originalFilename: String?
+        let fileType: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case userId = "user_id"
+            case jsonData = "json_data"
+            case processingId = "processing_id"
+            case status
+            case originalFilename = "original_filename"
+            case fileType = "file_type"
+        }
+    }
+    
+    struct UpdateScanData: Encodable {
+        let jsonData: AnyCodable
+        let status: String
+        let processedAt: String
+        let processingId: String
+        let updatedAt: String
+        
+        enum CodingKeys: String, CodingKey {
+            case jsonData = "json_data"
+            case status
+            case processedAt = "processed_at"
+            case processingId = "processing_id"
+            case updatedAt = "updated_at"
+        }
+    }
+    
+    // MARK: - AnyCodable helper for handling dynamic JSON
+    struct AnyCodable: Codable {
+        let value: Any
+        
+        init(_ value: Any) {
+            self.value = value
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            
+            if let boolValue = try? container.decode(Bool.self) {
+                value = boolValue
+            } else if let intValue = try? container.decode(Int.self) {
+                value = intValue
+            } else if let doubleValue = try? container.decode(Double.self) {
+                value = doubleValue
+            } else if let stringValue = try? container.decode(String.self) {
+                value = stringValue
+            } else if let arrayValue = try? container.decode([AnyCodable].self) {
+                value = arrayValue.map { $0.value }
+            } else if let dictValue = try? container.decode([String: AnyCodable].self) {
+                value = dictValue.mapValues { $0.value }
+            } else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable cannot decode value")
+            }
+        }
+        
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            
+            switch value {
+            case let boolValue as Bool:
+                try container.encode(boolValue)
+            case let intValue as Int:
+                try container.encode(intValue)
+            case let doubleValue as Double:
+                try container.encode(doubleValue)
+            case let stringValue as String:
+                try container.encode(stringValue)
+            case let arrayValue as [Any]:
+                let anyCodableArray = arrayValue.map { AnyCodable($0) }
+                try container.encode(anyCodableArray)
+            case let dictValue as [String: Any]:
+                let anyCodableDict = dictValue.mapValues { AnyCodable($0) }
+                try container.encode(anyCodableDict)
+            default:
+                let context = EncodingError.Context(codingPath: container.codingPath, debugDescription: "AnyCodable cannot encode value of type \(type(of: value))")
+                throw EncodingError.invalidValue(value, context)
+            }
+        }
     }
     
     // MARK: - NavBar
@@ -76,15 +407,14 @@ class UploadScreen: UIViewController {
             }
         }
         navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = UserProfileViewController()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
-
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
+            guard let self = self else { return }
+            let vc = UserProfileViewController()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+        
+        navBar.backAction = { [weak self] in
+            self?.navigationController?.popViewController(animated: true)
+        }
         
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -136,7 +466,6 @@ class UploadScreen: UIViewController {
         // circular cover image
         let cover = UIImageView()
         cover.image = uploadCoverImage ?? UIImage(systemName: "music.note")
-       
         cover.tintColor = .black
         cover.backgroundColor = UIColor(white: 0.95, alpha: 1)
         cover.clipsToBounds = true
@@ -164,7 +493,7 @@ class UploadScreen: UIViewController {
         
         NSLayoutConstraint.activate([
             cover.widthAnchor.constraint(equalToConstant: 36),
-           cover.heightAnchor.constraint(equalToConstant: 36)
+            cover.heightAnchor.constraint(equalToConstant: 36)
         ])
         
         contentView.addArrangedSubview(metaStack)
@@ -212,7 +541,7 @@ class UploadScreen: UIViewController {
         uploadContainer.translatesAutoresizingMaskIntoConstraints = false
         
         // icon centered
-        uploadIcon.image = UIImage(systemName: "arrow.up.to.line")// small centered music icon
+        uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
         uploadIcon.tintColor = .black
         uploadIcon.contentMode = .scaleAspectFit
         uploadIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -404,17 +733,78 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             return
         }
         
-        // Normal upload flow — simulate conversion finished by adding to recents
-        addRecentUploadCard(title: uploadTitle, image: picked)
+        // Normal upload flow - prepare data for database
+        guard let image = picked else { return }
         
-        // then navigate to next page (your flow)
-        let vc = UploadPageNextViewController()
-       vc.uploadedImage = picked // if your detail VC accepts an image (removed per instructions)
-        if let nav = navigationController {
-            nav.pushViewController(vc, animated: true)
-        } else {
-            vc.modalPresentationStyle = .fullScreen
-            present(vc, animated: true)
+        // Convert image to Data
+        if let imageData = image.jpegData(compressionQuality: 0.8) {
+            currentUploadData = imageData
+            currentFileName = "upload_\(Date().timeIntervalSince1970).jpg"
+            currentFileType = "image/jpeg"
+            
+            // Show loading state
+            uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+            uploadLabel.text = "Processing upload..."
+            
+            // Simulate API flow and save to database
+            Task {
+                do {
+                    print("Starting upload task...")
+                    try await saveUploadToDatabase(
+                        imageData: imageData,
+                        fileName: currentFileName,
+                        fileType: currentFileType
+                    )
+                    
+                    print("Upload completed successfully!")
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        // Show success
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Upload completed!"
+                        
+                        // Reset after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        // Navigate to next page
+                        let vc = UploadPageNextViewController()
+                        if let nav = self.navigationController {
+                            nav.pushViewController(vc, animated: true)
+                        } else {
+                            vc.modalPresentationStyle = .fullScreen
+                            self.present(vc, animated: true)
+                        }
+                    }
+                } catch {
+                    print("Upload failed with error: \(error)")
+                    print("Error details: \(error.localizedDescription)")
+                    
+                    DispatchQueue.main.async {
+                        // Show error with more details
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        // Reset after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        // Show error alert with more details
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
         }
     }
     
@@ -422,4 +812,3 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
         picker.dismiss(animated: true)
     }
 }
-
