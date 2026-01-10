@@ -153,7 +153,7 @@ final class PlayAlongViewController: UIViewController {
             tempoContainer.trailingAnchor.constraint(equalTo: infoBar.trailingAnchor, constant: -12),
             tempoContainer.centerYAnchor.constraint(equalTo: infoBar.centerYAnchor),
             tempoContainer.widthAnchor.constraint(equalToConstant: 160),
-            tempoContainer.heightAnchor.constraint(equalToConstant: 44)
+            tempoContainer.heightAnchor.constraint(equalToConstant: 80)
         ])
 
         tempoLabel.font = .systemFont(ofSize: 12, weight: .semibold)
