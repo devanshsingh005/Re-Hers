@@ -14,5 +14,12 @@ AUDIVERIS_API_URL = os.getenv("AUDIVERIS_API_URL", "http://localhost:8080")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
-# Storage bucket name
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "audiveris-outputs")
+# Storage bucket names
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "sheet_data")
+PDF_BUCKET = os.getenv("PDF_BUCKET", "pdf_uploads")
+
+# Request timeout (in seconds)
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "300"))
+
+# Max file size (in bytes)
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "104857600"))  # 100MB

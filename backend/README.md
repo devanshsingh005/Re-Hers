@@ -1,53 +1,85 @@
-# Audiveris PDF Conversion Backend
+# Audiveris PDF Conversion Backend with User Isolation
 
-A FastAPI backend service that accepts PDF uploads, queues them for processing, and uses Audiveris HTTP API to convert PDFs to JSON format. The output is stored in Supabase Storage.
+A FastAPI backend service with **user isolation and data security** that accepts PDF uploads, queues them for processing, and uses Audiveris HTTP API to convert PDFs to JSON format. The output is stored in Supabase Storage with full user authentication and RLS.
 
-## System Overview
+## ✨ Key Features
 
-This backend acts as a **Manager** that coordinates between:
-- **Users**: Upload PDFs and poll for results
-- **Audiveris API**: External HTTP service that processes PDFs (treated as black-box)
-- **Supabase**: Storage for job outputs
-- **Dispatcher**: Background scheduler that processes jobs one at a time
+- **User Isolation**: Every file is linked to the authenticated user who uploaded it
+- **Data Security**: Row-Level Security (RLS) prevents users from accessing other users' data
+- **JWT Authentication**: Secure endpoints with Supabase Auth
+- **Orphan Detection**: Built-in tools to detect and clean up orphaned files
+- **Horizontal Scalable**: Redis-ready queue and PostgreSQL backend
+- **File Validation**: MIME type and size validation
+- **Audit Logging**: Track all file operations
 
-## Architecture
+## System Architecture
 
 ```
-┌─────────┐      POST /convert      ┌──────────┐
-│  User   │ ──────────────────────> │ FastAPI  │
-└─────────┘                          │  Backend │
-     │                                └──────────┘
-     │ GET /status/{job_id}                │
-     │ <───────────────────────────────────┘
-     │                                      │
-     │                                ┌─────▼─────┐
-     │                                │   Queue   │
-     │                                └─────┬─────┘
-     │                                      │
-     │                                ┌─────▼────────┐
-     │                                │  Dispatcher  │
-     │                                │  (Background)│
-     │                                └─────┬────────┘
-     │                                      │
-     │                                ┌─────▼──────────┐
-     │                                │ Audiveris API  │
-     │                                │  (HTTP Service)│
-     │                                └─────┬──────────┘
-     │                                      │
-     │                                ┌─────▼────────┐
-     │                                │  Supabase    │
-     │                                │   Storage    │
-     │                                └──────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    AUTHENTICATED USER                        │
+│              (Supabase Auth JWT Token)                       │
+└────────────────┬────────────────────────────────────────────┘
+                 │
+        ┌────────▼────────┐
+        │   Load Balancer  │
+        │   (Nginx/HAProxy)│
+        └────────┬────────┘
+                 │
+    ┌────────────┼────────────┐
+    ▼            ▼            ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐
+│  API-1  │ │  API-2  │ │  API-3  │
+│(FastAPI)│ │(FastAPI)│ │(FastAPI)│
+└────┬────┘ └────┬────┘ └────┬────┘
+     │           │           │
+     └───────────┼───────────┘
+                 │
+        ┌────────▼────────┐
+        │   Redis Queue   │
+        │  (Shared Jobs)  │
+        └────────┬────────┘
+                 │
+    ┌────────────┼────────────┐
+    ▼            ▼            ▼
+┌──────────┐ ┌──────────┐ ┌──────────┐
+│Worker-1  │ │Worker-2  │ │Worker-3  │
+│(Dispatcher│ │(Dispatcher│ │(Dispatcher
+│ Process) │ │ Process) │ │ Process) │
+└────┬─────┘ └────┬─────┘ └────┬─────┘
+     │            │            │
+     └────────────┼────────────┘
+                  │
+        ┌─────────▼──────────┐
+        │   Audiveris API    │
+        │   (HTTP Service)   │
+        └─────────┬──────────┘
+                  │
+        ┌─────────▼──────────┐
+        │  Supabase          │
+        │ ┌─────────────────┐│
+        │ │  PostgreSQL DB  ││  jobs (user_id -> jobs)
+        │ │  jobs table     ││  sheet_files (user_id -> files)
+        │ │  sheet_files    ││  RLS policies enforce isolation
+        │ └─────────────────┘│
+        │ ┌─────────────────┐│
+        │ │  Storage        ││  sheet_data bucket
+        │ │  (with RLS)     ││  pdf_uploads bucket
+        │ │  {user_id}/...  ││  User-scoped paths
+        │ └─────────────────┘│
+        └────────────────────┘
 ```
 
 ## Job Lifecycle
 
-1. **Upload**: User uploads PDF via `POST /convert`
-   - Backend generates unique `job_id`
-   - PDF saved to `jobs/{job_id}/input.pdf`
-   - Job record created with status `queued`
-   - Job ID added to queue
-   - API returns immediately with `job_id`
+1. **Upload**: User uploads PDF via `POST /convert` with JWT token
+   - ✅ Validates JWT token
+   - ✅ Validates MIME type and file size
+   - ✅ Generates unique `job_id`
+   - ✅ Uploads PDF to `{user_id}/{job_id}/input.pdf` (user-scoped)
+   - ✅ Creates job record in PostgreSQL with `user_id` FK
+   - ✅ Enqueues to Redis
+   - ✅ Returns immediately with `job_id`
+
 
 2. **Processing**: Dispatcher picks up job from queue
    - Job status changes to `running`

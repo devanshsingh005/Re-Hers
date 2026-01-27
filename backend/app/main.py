@@ -1,17 +1,37 @@
-"""FastAPI application with endpoints for PDF conversion."""
+"""FastAPI application with endpoints for PDF conversion with user isolation."""
 import os
 import uuid
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import logging
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from app.models import job_store, JobStatus
 from app.queue import job_queue
 from app.dispatcher import start_dispatcher
-import logging
+from app.auth import get_current_user
+from app.database import DatabaseClient
+from app.storage import StorageManager
+from app.orphan_detector import OrphanDetector
+from app.config import SUPABASE_URL, SUPABASE_KEY
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Audiveris PDF Conversion API")
+app = FastAPI(title="Audiveris PDF Conversion API with User Isolation")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize managers
+db_client = DatabaseClient(SUPABASE_URL, SUPABASE_KEY)
+storage_manager = StorageManager(SUPABASE_URL, SUPABASE_KEY, db_client)
+orphan_detector = OrphanDetector(db_client, storage_manager)
 
 # Ensure jobs directory exists
 JOBS_DIR = "jobs"
@@ -26,76 +46,243 @@ async def startup_event():
     logger.info("Application started")
 
 
-@app.post("/convert")
-async def convert_pdf(file: UploadFile = File(...)):
-    """Accept PDF upload and create a conversion job.
-    
-    Returns:
-        JSON with job_id and status.
-    """
-    # Generate unique job ID
-    job_id = str(uuid.uuid4())
-    
-    # Create job directory
-    job_dir = os.path.join(JOBS_DIR, job_id)
-    os.makedirs(job_dir, exist_ok=True)
-    
-    # Save uploaded file
-    input_pdf_path = os.path.join(job_dir, "input.pdf")
-    with open(input_pdf_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-    
-    # Create job record
-    job = job_store.create_job(job_id, input_pdf_path)
-    
-    # Enqueue job
-    job_queue.enqueue(job_id)
-    
-    logger.info(f"Created job {job_id} and enqueued for processing")
-    
-    return JSONResponse({
-        "job_id": job_id,
-        "status": job.status.value
-    })
-
-
-@app.get("/status/{job_id}")
-async def get_status(job_id: str):
-    """Get the status of a job.
-    
-    Args:
-        job_id: The job ID to query.
-    
-    Returns:
-        Job metadata including status, output_url, and error (if any).
-    """
-    job = job_store.get_job(job_id)
-    
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    response = {
-        "job_id": job.job_id,
-        "status": job.status.value,
-        "input_pdf_path": job.input_pdf_path,
-    }
-    
-    if job.output_url:
-        response["output_url"] = job.output_url
-    
-    if job.error:
-        response["error"] = job.error
-    
-    return JSONResponse(response)
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return JSONResponse({"status": "healthy"})
+    return {"status": "healthy"}
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.post("/convert")
+async def convert_pdf(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """Accept PDF upload and create a conversion job linked to user.
+    
+    Args:
+        file: PDF file to convert
+        user: Authenticated user (from JWT token)
+    
+    Returns:
+        JSON with job_id and status
+    """
+    user_id = user["id"]
+    
+    try:
+        # Validate file is PDF
+        if file.content_type != "application/pdf":
+            raise HTTPException(
+                status_code=400,
+                detail="File must be a PDF (application/pdf)"
+            )
+        
+        # Generate unique job ID
+        job_id = str(uuid.uuid4())
+        
+        # Read PDF content
+        pdf_content = await file.read()
+        
+        # Validate file size (max 100MB)
+        MAX_FILE_SIZE = 100 * 1024 * 1024
+        if len(pdf_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024}MB"
+            )
+        
+        # Upload PDF to Supabase Storage (user-scoped)
+        pdf_path = await storage_manager.upload_pdf(user_id, job_id, pdf_content)
+        
+        # Create job in database linked to user
+        job = await db_client.create_job(
+            job_id=job_id,
+            user_id=user_id,
+            pdf_path=pdf_path,
+            status="pending"
+        )
+        
+        # Enqueue for processing
+        queue_entry = {
+            "job_id": job_id,
+            "user_id": user_id,
+            "pdf_path": pdf_path
+        }
+        job_queue.enqueue(queue_entry)
+        
+        logger.info(f"Created job {job_id} for user {user_id}")
+        
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "user_id": user_id
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload failed for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+
+
+@app.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get job status with user validation.
+    
+    Args:
+        job_id: Job ID
+        user: Authenticated user (from JWT token)
+    
+    Returns:
+        JSON with job status and result_url (if completed)
+    """
+    user_id = user["id"]
+    
+    try:
+        # Query DB scoped by user_id (RLS enforced)
+        job = await db_client.get_job(job_id, user_id)
+        
+        if not job:
+            # Don't reveal if job exists for other users
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        response = {
+            "job_id": job_id,
+            "status": job["status"],
+            "user_id": user_id
+        }
+        
+        if job.get("result_url"):
+            response["result_url"] = job["result_url"]
+        
+        if job.get("error_message"):
+            response["error"] = job["error_message"]
+        
+        return response
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching job {job_id} for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching job status")
+
+
+@app.get("/sheets/{job_id}")
+async def get_sheet_json(
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Download JSON sheet with user validation.
+    
+    Args:
+        job_id: Job ID
+        user: Authenticated user (from JWT token)
+    
+    Returns:
+        JSON sheet data
+    """
+    user_id = user["id"]
+    
+    try:
+        result = await storage_manager.get_file_for_user(user_id, job_id)
+        return result["data"]
+    
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    except Exception as e:
+        logger.error(f"Error fetching sheet {job_id} for user {user_id}: {e}")
+        raise HTTPException(status_code=404, detail="Sheet not found")
+
+
+@app.get("/jobs")
+async def list_user_jobs(
+    user: dict = Depends(get_current_user),
+    limit: int = 50,
+    offset: int = 0
+):
+    """List all jobs for authenticated user.
+    
+    Args:
+        user: Authenticated user (from JWT token)
+        limit: Number of results
+        offset: Pagination offset
+    
+    Returns:
+        List of jobs
+    """
+    user_id = user["id"]
+    
+    try:
+        jobs = await db_client.get_user_jobs(user_id, limit, offset)
+        return {
+            "jobs": jobs,
+            "total": len(jobs),
+            "user_id": user_id
+        }
+    except Exception as e:
+        logger.error(f"Error listing jobs for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error listing jobs")
+
+
+@app.delete("/sheets/{job_id}")
+async def delete_sheet(
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Delete sheet and associated files with user validation.
+    
+    Args:
+        job_id: Job ID
+        user: Authenticated user (from JWT token)
+    
+    Returns:
+        Success message
+    """
+    user_id = user["id"]
+    
+    try:
+        await storage_manager.delete_file_for_user(user_id, job_id)
+        logger.info(f"Deleted sheet {job_id} for user {user_id}")
+        return {"message": "Sheet deleted successfully"}
+    
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    except Exception as e:
+        logger.error(f"Error deleting sheet {job_id} for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error deleting sheet")
+
+
+# Admin endpoints (should be protected separately in production)
+@app.get("/admin/orphans/detect")
+async def detect_orphans(user: dict = Depends(get_current_user)):
+    """Detect orphaned files (admin only).
+    
+    Note: In production, add proper admin role verification
+    """
+    try:
+        report = await orphan_detector.detect_orphans()
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/orphans/cleanup")
+async def cleanup_orphans(
+    dry_run: bool = True,
+    user: dict = Depends(get_current_user)
+):
+    """Clean up orphaned files (admin only).
+    
+    Args:
+        dry_run: If true, only report without deleting
+    
+    Note: In production, add proper admin role verification
+    """
+    try:
+        result = await orphan_detector.cleanup_orphans(dry_run)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
