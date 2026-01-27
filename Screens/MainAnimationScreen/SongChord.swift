@@ -1,12 +1,8 @@
-//
-//  SongChord.swift
-//  Re-Hearse
-//
-
 import Foundation
 
-/// Represents one “step” of the demo song.
-/// A chord is simply left-hand notes + right-hand notes + a readable chord name + duration.
+/// Represents one step of a demo song.
+/// A SongChord groups left-hand notes, right-hand notes,
+/// a human-readable name, and its duration in seconds.
 struct SongChord {
     let leftHandNotes: [String]
     let rightHandNotes: [String]

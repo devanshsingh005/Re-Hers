@@ -51,6 +51,7 @@
 		84C6A9DC2ECE1670007DA0D0 /* PianoAnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */; };
 		84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9DF2ECE1687007DA0D0 /* PianoLogic.swift */; };
 		84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9E12ECE1692007DA0D0 /* PianoView.swift */; };
+		84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */; };
 		84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift */; };
 		84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */; };
 /* End PBXBuildFile section */
@@ -95,6 +96,7 @@
 		84C6A9DB2ECE1670007DA0D0 /* PianoAnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoAnimationViewController.swift; sourceTree = "<group>"; };
 		84C6A9DF2ECE1687007DA0D0 /* PianoLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoLogic.swift; sourceTree = "<group>"; };
 		84C6A9E12ECE1692007DA0D0 /* PianoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoView.swift; sourceTree = "<group>"; };
+		84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Wurlitzer210.sf2; sourceTree = "<group>"; };
 		84DBA86F2EBA7816006DF51E /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 		84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChordRecognitionScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -214,6 +216,7 @@
 		842B08322EBA0465001AC579 = {
 			isa = PBXGroup;
 			children = (
+				84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
 				84DBA8592EBA72C7006DF51E /* Screens */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
@@ -416,6 +419,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */,
 				23F2015C2EF0722000D9BF6D /* sheet_test.json in Resources */,
 				842B088B2EBA594A001AC579 /* .gitignore in Resources */,
 			);
@@ -479,6 +483,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q82D6R25SN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -510,6 +515,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q82D6R25SN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

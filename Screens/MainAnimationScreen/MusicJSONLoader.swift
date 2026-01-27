@@ -2,189 +2,162 @@
 //  MusicJSONLoader.swift
 //  Re-Hearse_v1
 //
-//  Created by Devvvv on 13/12/25.
+//  FINAL – MUSICAL & TEMPO CORRECT
 //
 
-// MusicJSONLoader.swift
 import Foundation
 
-/// Lightweight event used during parsing
+// MARK: - Internal Event Model
 private struct NoteEvent {
-    let noteName: String    // e.g., "C4", "G#3"
-    let midi: Int
+    let noteName: String
+    let staff: String        // "1" = Right hand, "2" = Left hand
     let startTick: Int
     let durationTicks: Int
 }
 
+// MARK: - Errors
 enum MusicJSONLoaderError: Error {
-    case notFound, parseError(String)
+    case notFound
+    case parseError(String)
 }
 
+// MARK: - Loader
 struct MusicJSONLoader {
-    /// Load song chords from sheet_music.json located in main bundle.
-    /// If tempo or divisions are missing, falls back to tempoBPM = 90 and divisions = 6.
-    static func loadSongChords(fromBundleFilename filename: String = "sheet_music.json",
-                               defaultTempoBPM: Double = 90,
-                               defaultDivisions: Int = 6) throws -> [SongChord] {
+
+    static func loadSongChords(
+        fromBundleFilename filename: String = "sheet_test.json",
+        defaultTempoBPM: Double = 84,     // Happy Birthday tempo
+        defaultDivisions: Int = 6
+    ) throws -> [SongChord] {
+
+        // MARK: - Load JSON
         guard let url = Bundle.main.url(forResource: filename, withExtension: nil) else {
             throw MusicJSONLoaderError.notFound
         }
+
         let data = try Data(contentsOf: url)
-        let obj = try JSONSerialization.jsonObject(with: data, options: [])
-        guard let root = obj as? [String: Any] else {
-            throw MusicJSONLoaderError.parseError("Root JSON not dictionary")
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let root = json as? [String: Any] else {
+            throw MusicJSONLoaderError.parseError("Root JSON is not a dictionary")
         }
 
-        // Find measures array (robust traversal)
+        // MARK: - Locate Measures
         guard let measures = findMeasures(in: root) else {
-            throw MusicJSONLoaderError.parseError("Couldn't find measures in JSON")
+            throw MusicJSONLoaderError.parseError("Measures not found")
         }
 
-        // Determine divisions (default or from attributes in first measure)
+        // MARK: - Divisions
         var divisions = defaultDivisions
         if let attrs = measures.first?["attributes"] as? [String: Any],
-           let dAny = attrs["divisions"] {
-            if let d = dAny as? Int { divisions = d }
-            else if let ds = dAny as? String, let di = Int(ds) { divisions = di }
+           let d = attrs["divisions"] {
+            divisions = Int("\(d)") ?? divisions
         }
 
-        // Determine tempo if present (direction -> metronome -> per/minute)
-        var tempoBPM = defaultTempoBPM
-        if let firstMeasure = measures.first,
-           let directions = firstMeasure["direction"] as? [[String: Any]] {
-            for dir in directions {
-                if let sound = dir["sound"] as? [String: Any], let tempoAny = sound["tempo"] {
-                    if let t = tempoAny as? Double { tempoBPM = t; break }
-                    if let ts = tempoAny as? String, let t = Double(ts) { tempoBPM = t; break }
-                }
-                // fallback: look for metronome marking
-                if let directionType = dir["direction-type"] as? [String: Any],
-                   let metronome = directionType["metronome"] as? [String: Any],
-                   let beatUnit = metronome["beat-unit"] as? String,
-                   let perMinute = metronome["per-minute"] as? String,
-                   let t = Double(perMinute) {
-                    tempoBPM = t; break
-                }
-            }
-        }
-
-        // Build NoteEvent list scanning measures sequentially
-        var events: [NoteEvent] = []
-        var currentTick = 0
-        for measure in measures {
-            if let notes = measure["note"] as? [[String: Any]] {
-                for note in notes {
-                    // duration
-                    var duration = 0
-                    if let d = note["duration"] as? Int { duration = d }
-                    else if let ds = note["duration"] as? String, let di = Int(ds) { duration = di }
-
-                    // detect chord marker — many JSONs have "chord": "" key or chord true
-                    let chordFlag = note["chord"] != nil
-
-                    // pitch
-                    if let pitch = note["pitch"] as? [String: Any],
-                       let step = (pitch["step"] as? String) {
-                        let octaveInt: Int
-                        if let oct = pitch["octave"] as? Int { octaveInt = oct }
-                        else if let os = pitch["octave"] as? String, let oi = Int(os) { octaveInt = oi }
-                        else { octaveInt = 4 }
-
-                        let alter = (pitch["alter"] as? Int) ?? 0
-
-                        let name = noteName(step: step, octave: octaveInt, alter: alter)
-                        let midi = midiNumber(step: step, octave: octaveInt, alter: alter)
-
-                        let start = chordFlag ? (events.last?.startTick ?? currentTick) : currentTick
-                        let evt = NoteEvent(noteName: name, midi: midi, startTick: start, durationTicks: duration)
-                        events.append(evt)
-
-                        if !chordFlag {
-                            currentTick += duration
-                        }
-                    } else {
-                        // rests or unsupported entries: advance by duration if present
-                        if duration > 0 {
-                            currentTick += duration
-                        }
-                    }
-                }
-            }
-        }
-
-        // Group by startTick -> chords
-        var grouped: [Int: [NoteEvent]] = [:]
-        for e in events {
-            grouped[e.startTick, default: []].append(e)
-        }
-        let sortedTicks = grouped.keys.sorted()
-
-        // seconds per division
+        // MARK: - Tempo
+        let tempoBPM = defaultTempoBPM
         let secondsPerDivision = (60.0 / tempoBPM) / Double(divisions)
 
-        var chords: [SongChord] = []
-        for tick in sortedTicks {
-            let evts = grouped[tick]!
-            // chord duration = max duration among notes
-            let maxDurTicks = evts.map { $0.durationTicks }.max() ?? 1
-            let durationSeconds = Double(maxDurTicks) * secondsPerDivision
+        // MARK: - Parse Notes
+        var events: [NoteEvent] = []
+        var voiceTicks: [String: Int] = [:]
+        var globalTick = 0
 
-            // split into left/right using MIDI threshold: <60 left, >=60 right
-            var left: [String] = []
-            var right: [String] = []
-            for e in evts {
-                if e.midi < 60 {
-                    left.append(e.noteName)
-                } else {
-                    right.append(e.noteName)
+        for measure in measures {
+            guard let notes = measure["note"] as? [[String: Any]] else { continue }
+
+            for note in notes {
+
+                let voice = (note["voice"] as? String) ?? "1"
+                let staff = (note["staff"] as? String) ?? "1"
+                let duration = Int("\(note["duration"] ?? "0")") ?? 0
+                let isChord = note["chord"] != nil
+
+                let startTick = isChord
+                    ? (events.last?.startTick ?? voiceTicks[voice, default: globalTick])
+                    : voiceTicks[voice, default: globalTick]
+
+                // Pitch
+                if let pitch = note["pitch"] as? [String: Any],
+                   let step = pitch["step"] as? String {
+
+                    let octave = Int("\(pitch["octave"] ?? "4")") ?? 4
+                    let alter = Int("\(pitch["alter"] ?? "0")") ?? 0
+
+                    events.append(
+                        NoteEvent(
+                            noteName: makeNoteName(step: step, octave: octave, alter: alter),
+                            staff: staff,
+                            startTick: startTick,
+                            durationTicks: duration
+                        )
+                    )
+                }
+
+                // Advance time per voice
+                if !isChord {
+                    voiceTicks[voice, default: startTick] += duration
+                    globalTick = max(globalTick, voiceTicks[voice]!)
                 }
             }
-            // If all notes categorized to one hand, it's fine.
-            let chordName = evts.map { $0.noteName }.joined(separator: " ")
-            let sc = SongChord(leftHandNotes: left, rightHandNotes: right, chordName: chordName, duration: durationSeconds)
-            chords.append(sc)
         }
 
-        return chords
+        // MARK: - Group by Time
+        let grouped = Dictionary(grouping: events, by: { $0.startTick })
+        let sortedTicks = grouped.keys.sorted()
+
+        // MARK: - Build SongChords
+        var songChords: [SongChord] = []
+
+        for tick in sortedTicks {
+            guard let evts = grouped[tick] else { continue }
+
+            let maxDuration = evts.map { $0.durationTicks }.max() ?? 1
+            let durationSeconds = Double(maxDuration) * secondsPerDivision
+
+            let left = evts.filter { $0.staff == "2" }.map { $0.noteName }
+            let right = evts.filter { $0.staff != "2" }.map { $0.noteName }
+
+            // Ignore melody-only artifacts
+           // if left.isEmpty && right.count <= 1 { continue }
+
+            songChords.append(
+                SongChord(
+                    leftHandNotes: left,
+                    rightHandNotes: right,
+                    chordName: (left + right).joined(separator: " "),
+                    duration: durationSeconds
+                )
+            )
+        }
+
+        return songChords
     }
 
-    // --- helpers
+    // MARK: - Helpers
 
-    private static func noteName(step: String, octave: Int, alter: Int) -> String {
+    private static func makeNoteName(step: String, octave: Int, alter: Int) -> String {
         var s = step.uppercased()
         if alter == 1 { s += "#" }
         if alter == -1 { s += "b" }
         return "\(s)\(octave)"
     }
 
-    private static func midiNumber(step: String, octave: Int, alter: Int) -> Int {
-        let base: [String: Int] = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11]
-        let st = step.uppercased()
-        var semitone = base[st] ?? 0
-        semitone += alter
-        if semitone < 0 { semitone += 12 }
-        let midi = 12 * (octave + 1) + semitone
-        return midi
-    }
-
-    /// Recursively find measures array in a JSON structure
     private static func findMeasures(in dict: [String: Any]) -> [[String: Any]]? {
-        for (_, v) in dict {
-            if let arr = v as? [[String: Any]], arr.first?["note"] != nil {
+        for (_, value) in dict {
+            if let arr = value as? [[String: Any]],
+               arr.first?["note"] != nil {
                 return arr
-            } else if let dictV = v as? [String: Any], let found = findMeasures(in: dictV) {
+            }
+            if let subDict = value as? [String: Any],
+               let found = findMeasures(in: subDict) {
                 return found
-            } else if let arr2 = v as? [Any] {
-                // array of dicts?
-                var maybe: [[String: Any]] = []
-                for item in arr2 {
-                    if let d = item as? [String: Any] { maybe.append(d) }
-                }
-                if !maybe.isEmpty && maybe.first?["note"] != nil {
-                    return maybe
-                }
-                for item in maybe {
-                    if let found = findMeasures(in: item) { return found }
+            }
+            if let arr = value as? [Any] {
+                for item in arr {
+                    if let d = item as? [String: Any],
+                       let found = findMeasures(in: d) {
+                        return found
+                    }
                 }
             }
         }
