@@ -300,3 +300,7 @@ final class RealTimeChordDisplayView: UIView {
         }
     }
 }
+
+
+
+

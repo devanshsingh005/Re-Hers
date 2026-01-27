@@ -3,38 +3,57 @@
     "part": {
       "measure": [
         {
-          "attributes": {
-            "divisions": 6
-          },
+          "attributes": { "divisions": 3 },
           "note": [
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "A", "octave": 4 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "C", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "B", "octave": 4 }, "duration": 24, "voice": "1", "staff": "1" },
 
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "A", "octave": 4 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "D", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "C", "octave": 5 }, "duration": 24, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "C", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "C", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "A", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "A", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 4, "voice": "1", "staff": "1" },
 
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "G", "octave": 4 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "G", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "E", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "C", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "B", "octave": 4 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "A", "octave": 4 }, "duration": 24, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "D", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "D", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "C", "octave": 4 }, "duration": 4, "voice": "1", "staff": "1" },
 
-            { "pitch": { "step": "F", "octave": 5 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "F", "octave": 5 }, "duration": 6,  "voice": "1", "staff": "1" },
-            { "pitch": { "step": "E", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "C", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "D", "octave": 5 }, "duration": 12, "voice": "1", "staff": "1" },
-            { "pitch": { "step": "C", "octave": 5 }, "duration": 36, "voice": "1", "staff": "1" }
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "D", "octave": 4 }, "duration": 4, "voice": "1", "staff": "1" },
+
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "D", "octave": 4 }, "duration": 4, "voice": "1", "staff": "1" },
+
+            { "pitch": { "step": "C", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "C", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "A", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "A", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "G", "octave": 4 }, "duration": 4, "voice": "1", "staff": "1" },
+
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "F", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "E", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "D", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "D", "octave": 4 }, "duration": 2, "voice": "1", "staff": "1" },
+            { "pitch": { "step": "C", "octave": 4 }, "duration": 6, "voice": "1", "staff": "1" }
+
           ]
         }
       ]
