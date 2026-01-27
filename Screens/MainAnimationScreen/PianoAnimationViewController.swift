@@ -52,6 +52,11 @@ final class PianoAnimationViewController: UIViewController {
         startDemoSong()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        pianoKeyboard.layoutIfNeeded()
+    }
+
     deinit {
         stopAllPlayingNotes()
     }
@@ -154,11 +159,13 @@ final class PianoAnimationViewController: UIViewController {
             return
         }
 
-        // 🎹 VISUAL
-        pianoKeyboard.playChord(
-            leftHand: chord.leftHandNotes,
-            rightHand: chord.rightHandNotes
-        )
+        // 🎹 VISUAL ANIMATIONS
+        animateChordWithHandColors(chord: chord)
+        
+        // Auto-scroll to the lowest note (usually bass/left hand)
+        if let lowestNote = findLowestNote(chord) {
+            scrollToNote(lowestNote)
+        }
 
         // 🔊 AUDIO
         let allNotes = chord.leftHandNotes + chord.rightHandNotes
@@ -183,6 +190,90 @@ final class PianoAnimationViewController: UIViewController {
 
         chordDisplayView.setSingleChord("🎹 \(chord.chordName)")
         scheduleNextDemoChord(after: chord.duration)
+    }
+
+    // MARK: - Hand-Specific Animations
+    private func animateChordWithHandColors(chord: SongChord) {
+        // Reset all keys first
+        pianoKeyboard.resetAllKeys()
+        
+        // Animate left hand notes with red color
+        for note in chord.leftHandNotes {
+            if let key = pianoKeyboard.findKey(named: note) {
+                animateKeyWithHandColor(key: key, hand: .left)
+            }
+        }
+        
+        // Animate right hand notes with green color
+        for note in chord.rightHandNotes {
+            if let key = pianoKeyboard.findKey(named: note) {
+                animateKeyWithHandColor(key: key, hand: .right)
+            }
+        }
+    }
+    
+    private func animateKeyWithHandColor(key: AnimatedPianoKeyView, hand: HandType) {
+        // Save original color
+        let originalColor = key.backgroundColor
+        
+        // Set hand-specific color
+        let handColor: UIColor
+        switch hand {
+        case .left:
+            handColor = UIColor.red.withAlphaComponent(0.7)
+        case .right:
+            handColor = UIColor.green.withAlphaComponent(0.7)
+        }
+        
+        // Animation
+        UIView.animate(withDuration: 0.15, delay: 0, options: [.curveEaseInOut]) {
+            key.backgroundColor = handColor
+            key.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            // Return to original color after a slight delay
+            UIView.animate(withDuration: 0.1, delay: 0.1, options: [.curveEaseOut]) {
+                key.backgroundColor = originalColor
+                key.transform = .identity
+            }
+        }
+    }
+    
+    // MARK: - Auto-Scrolling
+    private func findLowestNote(_ chord: SongChord) -> String? {
+        let allNotes = chord.leftHandNotes + chord.rightHandNotes
+        
+        // Helper to extract octave number from note string (e.g., "C4" -> 4)
+        func octaveFromNote(_ note: String) -> Int {
+            if let lastChar = note.last, let octave = Int(String(lastChar)) {
+                return octave
+            }
+            return 4 // Default if can't parse
+        }
+        
+        // Helper to get base note position (A=0, B=1, etc.)
+        func baseNoteValue(_ note: String) -> Int {
+            let baseNote = String(note.prefix(1)).uppercased()
+            let noteValues: [String: Int] = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11]
+            return noteValues[baseNote] ?? 0
+        }
+        
+        // Find the note with lowest octave, then lowest pitch
+        return allNotes.min(by: { note1, note2 in
+            let octave1 = octaveFromNote(note1)
+            let octave2 = octaveFromNote(note2)
+            
+            if octave1 != octave2 {
+                return octave1 < octave2
+            }
+            
+            return baseNoteValue(note1) < baseNoteValue(note2)
+        })
+    }
+    
+    private func scrollToNote(_ noteName: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.pianoKeyboard.scrollToNote(noteName)
+        }
     }
 
     // MARK: - Play / Pause
@@ -223,3 +314,4 @@ final class PianoAnimationViewController: UIViewController {
         currentlyPlayingMIDINotes.removeAll()
     }
 }
+

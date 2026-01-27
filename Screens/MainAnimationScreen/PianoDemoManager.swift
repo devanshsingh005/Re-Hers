@@ -25,8 +25,8 @@ final class PianoDemoManager {
         do {
             let loaded = try MusicJSONLoader.loadSongChords(
                 fromBundleFilename: jsonFilename,
-                defaultTempoBPM: 90,
-                defaultDivisions: 6
+                defaultTempoBPM: 100,
+                defaultDivisions: 12
             )
 
             if !loaded.isEmpty {
