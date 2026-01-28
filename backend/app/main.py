@@ -102,12 +102,7 @@ async def convert_pdf(
         )
         
         # Enqueue for processing
-        queue_entry = {
-            "job_id": job_id,
-            "user_id": user_id,
-            "pdf_path": pdf_path
-        }
-        job_queue.enqueue(queue_entry)
+        job_queue.enqueue(job_id)
         
         logger.info(f"Created job {job_id} for user {user_id}")
         
