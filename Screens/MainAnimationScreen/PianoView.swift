@@ -406,9 +406,3 @@ final class RealTimeChordDisplayView: UIView {
     }
 }
 
-<<<<<<< refs/remotes/origin/develop
-
-
-
-=======
->>>>>>> some more change
