@@ -69,35 +69,36 @@ async def convert_pdf(
     user_id = user["id"]
     
     try:
-        # Validate file is PDF
-        if file.content_type != "application/pdf":
+        # Validate file type (PDF or JPEG)
+        allowed_types = ["application/pdf", "image/jpeg", "image/jpg"]
+        if file.content_type not in allowed_types:
             raise HTTPException(
                 status_code=400,
-                detail="File must be a PDF (application/pdf)"
+                detail="File must be a PDF or JPEG image"
             )
         
         # Generate unique job ID
         job_id = str(uuid.uuid4())
         
-        # Read PDF content
-        pdf_content = await file.read()
+        # Read file content
+        file_content = await file.read()
         
         # Validate file size (max 100MB)
         MAX_FILE_SIZE = 100 * 1024 * 1024
-        if len(pdf_content) > MAX_FILE_SIZE:
+        if len(file_content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
                 detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024}MB"
             )
         
-        # Upload PDF to Supabase Storage (user-scoped)
-        pdf_path = await storage_manager.upload_pdf(user_id, job_id, pdf_content)
+        # Upload file to Supabase Storage (user-scoped)
+        file_path = await storage_manager.upload_pdf(user_id, job_id, file_content)
         
         # Create job in database linked to user
         job = await db_client.create_job(
             job_id=job_id,
             user_id=user_id,
-            pdf_path=pdf_path,
+            pdf_path=file_path,
             status="pending"
         )
         
