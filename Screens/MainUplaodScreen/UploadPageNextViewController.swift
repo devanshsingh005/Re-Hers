@@ -12,11 +12,12 @@ final class UploadPageNextViewController: UIViewController {
         didSet { sheetImageView.image = uploadedImage }
     }
     
-    var scanData: UploadScreen.Scan? // Add this to store scan data
+    var jobData: Job?
     private var sheetMusicText: String = ""
     private var extractedChords: [String] = []
     private var timeSignature: String = "4/4"
     private var tempo: String = "120 BPM"
+    private var keySignature: String = "C Major"
 
     private let navBar = TopNavBar()
 
@@ -41,6 +42,37 @@ final class UploadPageNextViewController: UIViewController {
 
     private let playAlongButton = UIButton(type: .system)
     private let animationButton = UIButton(type: .system)
+    
+    // MARK: - Data Models
+    struct Job: Codable, Identifiable {
+        let id: UUID
+        let userId: UUID
+        let pdfPath: String
+        let resultUrl: String?
+        let status: String
+        let errorMessage: String?
+        let createdAt: Date
+        let updatedAt: Date
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case pdfPath = "pdf_path"
+            case resultUrl = "result_url"
+            case status
+            case errorMessage = "error_message"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+    
+    struct SheetMusicData {
+        let text: String
+        let chords: [String]
+        let timeSignature: String
+        let tempo: String
+        let keySignature: String
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -52,33 +84,50 @@ final class UploadPageNextViewController: UIViewController {
         applyConstraints()
         setupActions()
         
-        loadScanData()
+        loadJobData()
     }
     
     // MARK: - Data Loading
-    private func loadScanData() {
-        loadLatestScanFromDatabase()
+    private func loadJobData() {
+        loadLatestJobFromDatabase()
     }
     
-    private func loadLatestScanFromDatabase() {
+    private func loadLatestJobFromDatabase() {
         Task {
             do {
-                let scans: [UploadScreen.Scan] = try await SupabaseManager.shared.client
-                    .from("scans")
+                // Get current user ID
+                guard let currentUserId = await getCurrentUserId() else {
+                    throw NSError(domain: "DataError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No user found"])
+                }
+                
+                print("Fetching jobs for user: \(currentUserId)")
+                
+                // Fetch latest job for current user
+                let jobs: [Job] = try await SupabaseManager.shared.client
+                    .from("jobs")
                     .select()
-                    .order("updated_at", ascending: false)
+                    .eq("user_id", value: currentUserId)
+                    .order("created_at", ascending: false)
                     .limit(1)
                     .execute()
                     .value
                 
-                if let latestScan = scans.first {
-                    self.scanData = latestScan
+                if let latestJob = jobs.first {
+                    self.jobData = latestJob
+                    print("Found job: \(latestJob.id), status: \(latestJob.status), resultUrl: \(latestJob.resultUrl ?? "nil")")
+                    
+                    // Load and display the sheet music data
                     DispatchQueue.main.async {
-                        self.extractAndDisplaySheetMusic()
+                        self.loadAndDisplaySheetMusic(from: latestJob)
+                    }
+                } else {
+                    print("No jobs found for user")
+                    DispatchQueue.main.async {
+                        self.showSampleSheetMusic()
                     }
                 }
             } catch {
-                print("Error loading scan: \(error)")
+                print("Error loading job: \(error)")
                 DispatchQueue.main.async {
                     self.showSampleSheetMusic()
                 }
@@ -86,146 +135,408 @@ final class UploadPageNextViewController: UIViewController {
         }
     }
     
-    private func extractAndDisplaySheetMusic() {
-        guard let scan = scanData,
-              let jsonData = scan.jsonData,
-              let analysisDict = jsonData.value as? [String: Any] else {
-            showSampleSheetMusic()
+    private func getCurrentUserId() async -> UUID? {
+        do {
+            let session = try await SupabaseManager.shared.client.auth.session
+            return session.user.id
+        } catch {
+            print("Error getting user session: \(error)")
+            return nil
+        }
+    }
+    
+    private func loadAndDisplaySheetMusic(from job: Job) {
+        // Check if job is completed and has result URL
+        guard job.status == "completed", let resultUrl = job.resultUrl else {
+            if job.status == "failed" {
+                showErrorState(error: job.errorMessage ?? "Processing failed")
+            } else if job.status == "processing" {
+                showProcessingState()
+            } else {
+                showSampleSheetMusic()
+            }
             return
         }
         
-        // Try to extract MusicXML data
-        if let scorePartwise = analysisDict["score-partwise"] as? [String: Any] {
-            processMusicXMLData(scorePartwise)
-        } else if let sheetMusic = analysisDict["sheet_music"] as? String {
-            sheetMusicText = sheetMusic
-            displaySheetMusic()
-        } else {
-            showSampleSheetMusic()
-        }
-        
-        metronomeLabel.text = "Metronome: \(tempo)"
-        updatePracticeTips()
-    }
-    
-    private func processMusicXMLData(_ data: [String: Any]) {
-        var result = ""
-        extractedChords.removeAll()
-        
-        // Extract time signature
-        if let part = data["part"] as? [String: Any],
-           let measures = part["measure"] as? [[String: Any]],
-           let firstMeasure = measures.first,
-           let attributes = firstMeasure["attributes"] as? [String: Any],
-           let time = attributes["time"] as? [String: Any],
-           let beats = time["beats"] as? String,
-           let beatType = time["beat-type"] as? String {
-            timeSignature = "\(beats)/\(beatType)"
-        }
-        
-        // Process measures
-        if let part = data["part"] as? [String: Any],
-           let measures = part["measure"] as? [[String: Any]] {
-            
-            result += "TIME: \(timeSignature)\n"
-            result += "INSTRUMENT: Piano\n\n"
-            
-            for (index, measureDict) in measures.enumerated() {
-                let measureNum = index + 1
-                result += "Measure \(measureNum):\n"
+        // Download and parse the result JSON from bucket
+        Task {
+            do {
+                print("Downloading result from: \(resultUrl)")
+                let resultData = try await downloadResultFromBucket(url: resultUrl)
                 
-                if let notes = measureDict["note"] {
-                    var measureNotes: [String] = []
+                // First, try to parse as JSON
+                if let json = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] {
+                    print("Successfully parsed as JSON")
+                    let sheetData = try await parseSheetMusicData(json: json)
                     
-                    if let noteArray = notes as? [[String: Any]] {
-                        for noteDict in noteArray {
-                            if let pitch = noteDict["pitch"] as? [String: Any],
-                               let step = pitch["step"] as? String,
-                               let octave = pitch["octave"] as? String {
-                                let noteName = "\(step)\(octave)"
-                                measureNotes.append(noteName)
-                                extractChordFromNote(step: step, octave: octave)
-                            }
-                        }
-                    } else if let noteDict = notes as? [String: Any],
-                              let pitch = noteDict["pitch"] as? [String: Any],
-                              let step = pitch["step"] as? String,
-                              let octave = pitch["octave"] as? String {
-                        let noteName = "\(step)\(octave)"
-                        measureNotes.append(noteName)
-                        extractChordFromNote(step: step, octave: octave)
+                    DispatchQueue.main.async {
+                        self.displaySheetData(sheetData)
                     }
-                    
-                    if !measureNotes.isEmpty {
-                        result += "  Notes: \(measureNotes.joined(separator: ", "))\n"
+                } else {
+                    // If not JSON, try to parse as text
+                    if let text = String(data: resultData, encoding: .utf8) {
+                        print("Parsing as text")
+                        let sheetData = SheetMusicData(
+                            text: text,
+                            chords: [],
+                            timeSignature: "4/4",
+                            tempo: "120 BPM",
+                            keySignature: "C Major"
+                        )
+                        
+                        DispatchQueue.main.async {
+                            self.displaySheetData(sheetData)
+                        }
+                    } else {
+                        throw NSError(domain: "ParseError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Unsupported file format"])
                     }
                 }
-                result += "\n"
+            } catch {
+                print("Error loading sheet music: \(error)")
+                DispatchQueue.main.async {
+                    self.showSampleSheetMusic()
+                }
+            }
+        }
+    }
+    
+    private func downloadResultFromBucket(url: String) async throws -> Data {
+        guard let fileUrl = URL(string: url) else {
+            throw NSError(domain: "DownloadError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: fileUrl)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw NSError(domain: "DownloadError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to download file"])
+        }
+        
+        return data
+    }
+    
+    // MARK: - MusicXML Parsing
+    private func parseSheetMusicData(json: [String: Any]) async throws -> SheetMusicData {
+        print("Parsing sheet music JSON...")
+        
+        // Extract from score-partwise structure (MusicXML)
+        var sheetMusicText = ""
+        var chords: [String] = []
+        var timeSig = "4/4"
+        var tempoStr = "120 BPM"
+        var keySig = "C Major"
+        
+        // Check if we have score-partwise structure
+        if let scorePartwise = json["score-partwise"] as? [String: Any] {
+            print("Found score-partwise structure")
+            sheetMusicText = formatMusicXMLData(scorePartwise)
+            
+            // Extract time signature from first measure
+            if let part = scorePartwise["part"] as? [String: Any],
+               let measures = parseMeasures(from: part),
+               let firstMeasure = measures.first,
+               let attributes = firstMeasure["attributes"] as? [String: Any],
+               let time = attributes["time"] as? [String: Any] {
+                
+                if let beats = time["beats"] as? String,
+                   let beatType = time["beat-type"] as? String {
+                    timeSig = "\(beats)/\(beatType)"
+                } else if let beats = time["beats"] as? Int,
+                          let beatType = time["beat-type"] as? Int {
+                    timeSig = "\(beats)/\(beatType)"
+                }
             }
             
-            if !extractedChords.isEmpty {
-                result += "CHORD PROGRESSION:\n"
-                let uniqueChords = Array(Set(extractedChords))
-                result += uniqueChords.joined(separator: " - ") + "\n"
-                chordLabel.text = "Chords: \(uniqueChords.joined(separator: ", "))"
+            // Extract notes and chords from all measures
+            if let part = scorePartwise["part"] as? [String: Any],
+               let measures = parseMeasures(from: part) {
+                
+                var allNotes: [String] = []
+                
+                for measure in measures {
+                    if let notes = measure["note"] {
+                        let measureNotes = extractNotes(from: notes)
+                        allNotes.append(contentsOf: measureNotes)
+                    }
+                }
+                
+                // Analyze chords from collected notes
+                chords = analyzeChords(from: allNotes)
+            }
+        } else {
+            // Try other possible structures
+            sheetMusicText = "MusicXML Score\n\n"
+            
+            if let partList = json["part-list"] as? [String: Any],
+               let scorePart = partList["score-part"] as? [String: Any],
+               let partName = scorePart["part-name"] as? String {
+                sheetMusicText += "Instrument: \(partName)\n\n"
+            }
+            
+            // Add raw JSON for debugging
+            sheetMusicText += "JSON Structure:\n"
+            for key in json.keys {
+                sheetMusicText += "- \(key)\n"
             }
         }
         
-        sheetMusicText = result
-        displaySheetMusic()
-        keyLabel.text = "Key: C Major"
-        timeLabel.text = "Time: \(timeSignature)"
+        print("Parsing complete. Time: \(timeSig), Chords: \(chords)")
+        
+        return SheetMusicData(
+            text: sheetMusicText,
+            chords: Array(Set(chords)), // Remove duplicates
+            timeSignature: timeSig,
+            tempo: tempoStr,
+            keySignature: keySig
+        )
     }
     
-    private func extractChordFromNote(step: String, octave: String) {
-        let note = "\(step)\(octave)"
-        let chordNotes: [String: [String]] = [
+    private func parseMeasures(from part: [String: Any]) -> [[String: Any]]? {
+        if let measures = part["measure"] as? [[String: Any]] {
+            return measures
+        } else if let measure = part["measure"] as? [String: Any] {
+            return [measure]
+        }
+        return nil
+    }
+    
+    private func extractNotes(from notes: Any) -> [String] {
+        var noteNames: [String] = []
+        
+        if let noteArray = notes as? [[String: Any]] {
+            for noteDict in noteArray {
+                if let pitch = noteDict["pitch"] as? [String: Any],
+                   let step = pitch["step"] as? String,
+                   let octave = pitch["octave"] as? String {
+                    let alter = pitch["alter"] as? String
+                    let accidental = alter.flatMap { Int($0) } ?? 0
+                    
+                    var noteName = step
+                    if accidental == 1 {
+                        noteName += "♯"
+                    } else if accidental == -1 {
+                        noteName += "♭"
+                    }
+                    noteName += "\(octave)"
+                    noteNames.append(noteName)
+                } else if noteDict["rest"] != nil {
+                    noteNames.append("REST")
+                }
+            }
+        } else if let noteDict = notes as? [String: Any] {
+            if let pitch = noteDict["pitch"] as? [String: Any],
+               let step = pitch["step"] as? String,
+               let octave = pitch["octave"] as? String {
+                let alter = pitch["alter"] as? String
+                let accidental = alter.flatMap { Int($0) } ?? 0
+                
+                var noteName = step
+                if accidental == 1 {
+                    noteName += "♯"
+                } else if accidental == -1 {
+                    noteName += "♭"
+                }
+                noteName += "\(octave)"
+                noteNames.append(noteName)
+            } else if noteDict["rest"] != nil {
+                noteNames.append("REST")
+            }
+        }
+        
+        return noteNames
+    }
+    
+    private func analyzeChords(from notes: [String]) -> [String] {
+        var chords: [String] = []
+        
+        // Group notes by measure (simplified analysis)
+        let chordMap: [String: [String]] = [
             "C": ["C4", "E4", "G4"],
             "G": ["G4", "B4", "D5"],
             "Am": ["A4", "C5", "E5"],
             "F": ["F4", "A4", "C5"],
             "Dm": ["D4", "F4", "A4"],
-            "Em": ["E4", "G4", "B4"]
+            "Em": ["E4", "G4", "B4"],
+            "A": ["A4", "C♯5", "E5"],
+            "D": ["D4", "F♯4", "A4"],
+            "E": ["E4", "G♯4", "B4"],
+            "Bm": ["B4", "D5", "F♯5"]
         ]
         
-        for (chord, notes) in chordNotes {
-            if notes.contains(note) && !extractedChords.contains(chord) {
-                extractedChords.append(chord)
+        // Look for common chord patterns
+        for (chord, chordNotes) in chordMap {
+            var matchCount = 0
+            for chordNote in chordNotes {
+                if notes.contains(chordNote) {
+                    matchCount += 1
+                }
+            }
+            if matchCount >= 2 { // At least 2 matching notes for a chord
+                chords.append(chord)
             }
         }
+        
+        // If no chords found, return common progression
+        if chords.isEmpty {
+            chords = ["C", "G", "Am", "F"]
+        }
+        
+        return chords
+    }
+    
+    private func formatMusicXMLData(_ data: [String: Any]) -> String {
+        var result = ""
+        
+        // Extract part information
+        if let partList = data["part-list"] as? [String: Any],
+           let scorePart = partList["score-part"] as? [String: Any] {
+            
+            if let partName = scorePart["part-name"] as? String {
+                result += "INSTRUMENT: \(partName)\n"
+            }
+        }
+        
+        // Extract measures
+        if let part = data["part"] as? [String: Any],
+           let measures = parseMeasures(from: part) {
+            
+            result += "TIME SIGNATURE: \(timeSignature)\n\n"
+            
+            for (index, measureDict) in measures.enumerated() {
+                let measureNum = index + 1
+                result += "=== MEASURE \(measureNum) ===\n"
+                
+                // Extract attributes for this measure
+                if let attributes = measureDict["attributes"] as? [String: Any] {
+                    if let divisions = attributes["divisions"] {
+                        result += "Divisions: \(divisions)\n"
+                    }
+                }
+                
+                // Extract notes
+                if let notes = measureDict["note"] {
+                    let noteList = extractNotes(from: notes)
+                    if !noteList.isEmpty {
+                        result += "Notes: \(noteList.joined(separator: ", "))\n"
+                    }
+                    
+                    // Extract note types and durations
+                    if let noteArray = notes as? [[String: Any]] {
+                        for noteDict in noteArray {
+                            if let type = noteDict["type"] as? String,
+                               let duration = noteDict["duration"] {
+                                if let pitch = noteDict["pitch"] as? [String: Any],
+                                   let step = pitch["step"] as? String,
+                                   let octave = pitch["octave"] as? String {
+                                    result += "  \(step)\(octave): \(type) (duration: \(duration))\n"
+                                } else if noteDict["rest"] != nil {
+                                    result += "  REST: \(type) (duration: \(duration))\n"
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check for barline
+                if measureDict["barline"] != nil {
+                    result += "--- Barline ---\n"
+                }
+                
+                result += "\n"
+            }
+        } else {
+            result += "No measures found in the score.\n"
+        }
+        
+        return result
+    }
+    
+    private func displaySheetData(_ data: SheetMusicData) {
+        sheetMusicText = data.text
+        extractedChords = data.chords
+        timeSignature = data.timeSignature
+        tempo = data.tempo
+        keySignature = data.keySignature
+        
+        displaySheetMusic()
+        metronomeLabel.text = "Metronome: \(tempo)"
+        keyLabel.text = "Key: \(keySignature)"
+        timeLabel.text = "Time: \(timeSignature)"
+        chordLabel.text = "Chords: \(extractedChords.joined(separator: ", "))"
+        updatePracticeTips()
+    }
+    
+    private func showErrorState(error: String) {
+        sheetMusicText = """
+        PROCESSING ERROR
+        
+        Status: Failed
+        Error: \(error)
+        
+        Please try uploading the sheet again.
+        Make sure the image is clear and well-lit.
+        """
+        
+        displaySheetMusic()
+        metronomeLabel.text = "Metronome: N/A"
+        keyLabel.text = "Key: N/A"
+        timeLabel.text = "Time: N/A"
+        chordLabel.text = "Chords: N/A"
+        
+        tipsBodyLabel.text = "• Check your internet connection\n• Ensure the sheet is clear\n• Try uploading again"
+    }
+    
+    private func showProcessingState() {
+        sheetMusicText = """
+        PROCESSING...
+        
+        Your sheet music is being analyzed.
+        This may take a few moments.
+        
+        Please wait...
+        """
+        
+        displaySheetMusic()
+        metronomeLabel.text = "Metronome: Processing"
+        keyLabel.text = "Key: Processing"
+        timeLabel.text = "Time: Processing"
+        chordLabel.text = "Chords: Processing"
+        
+        tipsBodyLabel.text = "• Processing usually takes 30-60 seconds\n• Results will appear automatically\n• Check back in a moment"
     }
     
     private func showSampleSheetMusic() {
         sheetMusicText = """
-        TIME: 2/4
-        INSTRUMENT: Piano
+        MUSIC SHEET ANALYSIS
         
-        Measure 1:
-          Right Hand: C4 (quarter) | C4 (quarter)
-          Left Hand: C3 (half)
+        No recent sheet music found.
         
-        Measure 2:
-          Right Hand: G4 (quarter) | G4 (quarter)
-          Left Hand: E3 (half)
+        Upload a sheet music image to get started!
         
-        Measure 3:
-          Right Hand: A4 (quarter) | A4 (quarter)
-          Left Hand: F3 (half)
+        Features:
+        • Automatic chord detection
+        • Time signature analysis
+        • Practice tips
+        • Play-along mode
         
-        CHORD PROGRESSION:
-        C - G - Am - F
-        
-        KEY: C Major
-        DIFFICULTY: Beginner
+        How to use:
+        1. Take a photo of sheet music
+        2. Upload it from the Upload screen
+        3. Get instant analysis here
         """
         
         extractedChords = ["C", "G", "Am", "F"]
-        timeSignature = "2/4"
+        timeSignature = "4/4"
+        tempo = "120 BPM"
+        keySignature = "C Major"
         
         displaySheetMusic()
-        keyLabel.text = "Key: C Major"
+        metronomeLabel.text = "Metronome: \(tempo)"
+        keyLabel.text = "Key: \(keySignature)"
         timeLabel.text = "Time: \(timeSignature)"
         chordLabel.text = "Chords: \(extractedChords.joined(separator: ", "))"
+        
+        tipsBodyLabel.text = "• Sample chords shown for demonstration\n• Upload your own sheet music for analysis\n• Practice regularly for best results"
     }
     
     private func displaySheetMusic() {
@@ -241,19 +552,8 @@ final class UploadPageNextViewController: UIViewController {
         ]
         attributedText.addAttributes(baseAttributes, range: NSRange(location: 0, length: sheetMusicText.count))
         
-        // Highlight measure numbers
-        let measureRegex = try! NSRegularExpression(pattern: "Measure \\d+:", options: [])
-        let measureMatches = measureRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
-        
-        for match in measureMatches {
-            attributedText.addAttributes([
-                .font: UIFont.monospacedSystemFont(ofSize: 16, weight: .bold),
-                .foregroundColor: UIColor(red: 0.4, green: 0.8, blue: 1, alpha: 1)
-            ], range: match.range)
-        }
-        
         // Highlight section headers
-        let sectionRegex = try! NSRegularExpression(pattern: "(TIME:|INSTRUMENT:|CHORD PROGRESSION:|KEY:|DIFFICULTY:)", options: [])
+        let sectionRegex = try! NSRegularExpression(pattern: "(INSTRUMENT:|TIME SIGNATURE:|MEASURE \\d+|Divisions:|Notes:|--- Barline ---)", options: [])
         let sectionMatches = sectionRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
         
         for match in sectionMatches {
@@ -264,7 +564,7 @@ final class UploadPageNextViewController: UIViewController {
         }
         
         // Highlight notes
-        let noteRegex = try! NSRegularExpression(pattern: "\\b[A-G][#b]?\\d\\b", options: [])
+        let noteRegex = try! NSRegularExpression(pattern: "\\b[A-G][#♯b♭]?\\d\\b", options: [])
         let noteMatches = noteRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
         
         for match in noteMatches {
@@ -291,20 +591,27 @@ final class UploadPageNextViewController: UIViewController {
     private func updatePracticeTips() {
         var tips = ""
         
+        // Chord-based tips
         if extractedChords.contains("F") || extractedChords.contains("Bm") {
             tips += "• Practice barre chords for better sound\n"
-        }
-        
-        if timeSignature == "2/4" || timeSignature == "3/4" {
-            tips += "• Count aloud: 1-2 for 2/4, 1-2-3 for 3/4\n"
         }
         
         if extractedChords.contains("Am") || extractedChords.contains("Dm") || extractedChords.contains("Em") {
             tips += "• Minor chords add emotional depth\n"
         }
         
+        // Time signature tips
+        if timeSignature == "2/4" || timeSignature == "3/4" {
+            tips += "• Count aloud: 1-2 for 2/4, 1-2-3 for 3/4\n"
+        } else if timeSignature == "6/8" {
+            tips += "• Feel in 2: 1-2-3, 4-5-6\n"
+        }
+        
+        // General tips
         tips += "• Keep wrists relaxed and fingers curved\n"
         tips += "• Listen for even timing between notes\n"
+        tips += "• Practice slowly, then increase tempo\n"
+        tips += "• Use a metronome for consistent rhythm\n"
         
         tipsBodyLabel.text = tips
     }
@@ -317,7 +624,7 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     @objc private func didTapMaximize() {
-        let vc = MaximizeUploadPageViewController() // Use correct class name
+        let vc = MaximizeUploadPageViewController()
         vc.sheetImage = uploadedImage
         vc.sheetMusicText = sheetMusicText
         vc.modalPresentationStyle = .fullScreen
@@ -341,7 +648,7 @@ final class UploadPageNextViewController: UIViewController {
         print("Playing chords: \(extractedChords)")
         let playingAlert = UIAlertController(
             title: "Playing...",
-            message: "Chord progression: \(extractedChords.joined(separator: " → "))",
+            message: "Chord progression: \(extractedChords.joined(separator: " → "))\nTempo: \(tempo)",
             preferredStyle: .alert
         )
         playingAlert.addAction(UIAlertAction(title: "Stop", style: .destructive))

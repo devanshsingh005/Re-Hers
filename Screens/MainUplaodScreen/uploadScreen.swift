@@ -128,6 +128,17 @@ class UploadScreen: UIViewController {
             return nil
         }
     }
+    
+    private func getSupabaseAuthToken() async -> String? {
+        do {
+            let session = try await supabase.auth.session
+            return session.accessToken
+        } catch {
+            print("Error getting auth token: \(error)")
+            return nil
+        }
+    }
+    
     private func displayRecentUploads(_ scans: [Scan]) {
         guard let hStack = recentHStack else { return }
         
@@ -208,35 +219,39 @@ class UploadScreen: UIViewController {
             
             let createdScan = response
             
-            // 4. Simulate API call to external cloud processing
-            print("Simulating API call to cloud processing service...")
+            // 4. Get Supabase auth token for the external API
+            print("Getting Supabase auth token...")
+            guard let authToken = await getSupabaseAuthToken() else {
+                throw NSError(domain: "UploadError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
+            }
             
-            // Simulate processing delay
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            print("Auth token obtained, calling external API...")
             
-            // 5. Simulate getting JSON response from cloud
-            let mockJsonResponse: [String: Any] = [
-                "title": uploadTitle,
-                "documentType": "image_scan",
-                "filename": fileName,
-                "fileType": fileType,
-                "size": imageData.count,
-                "processedAt": ISO8601DateFormatter().string(from: Date()),
-                "confidence": 0.95,
-                "status": "completed",
-                "analysis": [
-                    "chords": ["C", "G", "Am", "F"],
-                    "key": "C Major",
-                    "tempo": "120 BPM"
-                ]
-            ]
+            // 5. Call external conversion API with the image
+            let apiResponse: [String: Any] = try await callExternalConversionAPI(
+                imageData: imageData,
+                fileName: fileName,
+                fileType: fileType,
+                authToken: authToken
+            )
             
+            print("External API response received")
+            
+            // 6. Update the database with the combined results
             print("Updating scan with processing results...")
             
-            // 6. Update the database with the JSON result
+            // Merge external API response with our metadata
+            var finalJsonResponse = apiResponse
+            finalJsonResponse["original_filename"] = fileName
+            finalJsonResponse["file_type"] = fileType
+            finalJsonResponse["size"] = imageData.count
+            finalJsonResponse["user_id"] = userIdString
+            finalJsonResponse["title"] = uploadTitle
+            finalJsonResponse["processed_at"] = ISO8601DateFormatter().string(from: Date())
+            
             try await updateScanInDatabase(
                 scanId: createdScan.id,
-                jsonData: mockJsonResponse,
+                jsonData: finalJsonResponse,
                 processingId: processingId
             )
             
@@ -249,6 +264,83 @@ class UploadScreen: UIViewController {
         
         // 7. Refresh recent uploads
         await loadRecentUploadsFromDB()
+    }
+    
+    // MARK: - External API Call
+    private func callExternalConversionAPI(
+        imageData: Data,
+        fileName: String,
+        fileType: String,
+        authToken: String
+    ) async throws -> [String: Any] {
+        let url = URL(string: "https://maybe-working-production.up.railway.app/convert")!
+        
+        // Create boundary for multipart form
+        let boundary = UUID().uuidString
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60 // 60 second timeout for file upload
+        
+        // Build multipart form data
+        var body = Data()
+        
+        // Add file part
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(fileType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        
+        // Close boundary
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        print("Making API request to: \(url.absoluteString)")
+        print("File size: \(imageData.count) bytes")
+        print("File name: \(fileName)")
+        print("File type: \(fileType)")
+        
+        // Make the API call
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "APIError", code: 0,
+                         userInfo: [NSLocalizedDescriptionKey: "No response from server"])
+        }
+        
+        print("API Response Status Code: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let responseBody = String(data: data, encoding: .utf8) ?? "No response body"
+            print("API Error Response: \(responseBody)")
+            throw NSError(domain: "APIError", code: httpResponse.statusCode,
+                         userInfo: [NSLocalizedDescriptionKey: "API request failed with status \(httpResponse.statusCode): \(responseBody)"])
+        }
+        
+        // Parse JSON response
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
+            
+            if let dict = jsonObject as? [String: Any] {
+                print("External API returned: \(dict)")
+                return dict
+            } else if let array = jsonObject as? [[String: Any]], let first = array.first {
+                print("External API returned array: using first element")
+                return first
+            } else {
+                // If response is not a dictionary or array of dictionaries, wrap it
+                return ["api_response": jsonObject, "status": "success"]
+            }
+        } catch {
+            // If JSON parsing fails, return raw response as string
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("External API raw response: \(responseString)")
+            return ["raw_response": responseString, "status": "processed"]
+        }
     }
     
     private func updateScanInDatabase(scanId: Int64, jsonData: [String: Any], processingId: String) async throws {
