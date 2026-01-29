@@ -486,6 +486,7 @@
 				DEVELOPMENT_TEAM = Q82D6R25SN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone is used for real-time chord recognition.\n";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -518,6 +519,7 @@
 				DEVELOPMENT_TEAM = Q82D6R25SN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone is used for real-time chord recognition.\n";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;

@@ -68,34 +68,6 @@
             landmarkType = "3">
             <Locations>
                <Location
-                  uuid = "FDE4DE79-53AE-4531-9A28-4DCA87B09CA2 - f7df02015b8d026b"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "Re_Hearse_v1.SongDetailViewController.init(nibName: Swift.Optional&lt;Swift.String&gt;, bundle: Swift.Optional&lt;__C.NSBundle&gt;) -&gt; Re_Hearse_v1.SongDetailViewController"
-                  moduleName = "Re-Hearse_v1.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/admin/Documents/Re-Hearse_v1/Screens/SongDetailsPage.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "23"
-                  endingLineNumber = "23">
-               </Location>
-               <Location
-                  uuid = "FDE4DE79-53AE-4531-9A28-4DCA87B09CA2 - 4fad6ea04ad49d56"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "Re_Hearse_v1.SongDetailViewController.init(coder: __C.NSCoder) -&gt; Swift.Optional&lt;Re_Hearse_v1.SongDetailViewController&gt;"
-                  moduleName = "Re-Hearse_v1.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/admin/Documents/Re-Hearse_v1/Screens/SongDetailsPage.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "23"
-                  endingLineNumber = "23">
-               </Location>
-               <Location
                   uuid = "FDE4DE79-53AE-4531-9A28-4DCA87B09CA2 - 9038c97370a78454"
                   shouldBeEnabled = "Yes"
                   ignoreCount = "0"
