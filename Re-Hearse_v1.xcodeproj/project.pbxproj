@@ -40,6 +40,7 @@
 		2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */; };
 		84114B6A2EBCF68300E86F71 /* uploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* uploadScreen.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
+		8416D6382F2BD83C00E0E638 /* MainChordRecognitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */; };
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
@@ -53,7 +54,6 @@
 		84C6A9E22ECE1692007DA0D0 /* PianoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9E12ECE1692007DA0D0 /* PianoView.swift */; };
 		84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */; };
 		84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift */; };
-		84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +84,7 @@
 		2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion3View.swift; sourceTree = "<group>"; };
 		84114B692EBCF68300E86F71 /* uploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = uploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BottomNavbar.swift; path = Common/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
+		8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChordRecognitionScreen.swift; sourceTree = "<group>"; };
 		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
 		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
@@ -98,7 +99,6 @@
 		84C6A9E12ECE1692007DA0D0 /* PianoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoView.swift; sourceTree = "<group>"; };
 		84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Wurlitzer210.sf2; sourceTree = "<group>"; };
 		84DBA86F2EBA7816006DF51E /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
-		84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChordRecognitionScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -330,7 +330,7 @@
 		84DBA85F2EBA73F7006DF51E /* MainChordRecognitionScreen */ = {
 			isa = PBXGroup;
 			children = (
-				84E0E2C72EC20355000BD345 /* MainChordRecognitionScreen.swift */,
+				8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */,
 			);
 			path = MainChordRecognitionScreen;
 			sourceTree = "<group>";
@@ -438,9 +438,9 @@
 				236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */,
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
 				84C6A9E02ECE1687007DA0D0 /* PianoLogic.swift in Sources */,
-				84E0E2C82EC20355000BD345 /* MainChordRecognitionScreen.swift in Sources */,
 				23FA2E8A2EE55F260028C205 /* HomeViewControllerUploadSection.swift in Sources */,
 				23FA2E842EE55D680028C205 /* HomeViewControllerContinueCard.swift in Sources */,
+				8416D6382F2BD83C00E0E638 /* MainChordRecognitionScreen.swift in Sources */,
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
 				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */,
