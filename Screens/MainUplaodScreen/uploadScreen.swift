@@ -39,6 +39,9 @@ class UploadScreen: UIViewController {
         return SupabaseManager.shared.client
     }
     
+    // Supabase storage base URL
+    private let supabaseStorageBaseURL = "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/public"
+    
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(title: "Upload")
     private let scrollView = UIScrollView()
@@ -62,6 +65,12 @@ class UploadScreen: UIViewController {
         addRecentUploadsSection()
         
         // Load real recent uploads from database
+        loadRecentUploadsFromDB()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Refresh recent uploads when view appears
         loadRecentUploadsFromDB()
     }
     
@@ -111,7 +120,20 @@ class UploadScreen: UIViewController {
                 .value
             
             print("Successfully fetched \(response.count) scans")
-            return response
+            
+            // Remove duplicates by ID to prevent showing same data multiple times
+            var uniqueScans: [Scan] = []
+            var seenIDs: Set<Int64> = []
+            
+            for scan in response {
+                if !seenIDs.contains(scan.id) {
+                    seenIDs.insert(scan.id)
+                    uniqueScans.append(scan)
+                }
+            }
+            
+            print("After removing duplicates: \(uniqueScans.count) unique scans")
+            return uniqueScans
         } catch {
             print("Error fetching scans: \(error)")
             throw error
@@ -177,10 +199,7 @@ class UploadScreen: UIViewController {
     private func saveUploadToDatabase(imageData: Data, fileName: String, fileType: String) async throws {
         print("Starting upload process...")
         
-        // 1. Create a unique processing ID
-        let processingId = "proc_\(UUID().uuidString)"
-        
-        // 2. Get user ID
+        // 1. Get user ID
         guard let userIdString = await getCurrentUserId(),
               let userId = UUID(uuidString: userIdString) else {
             throw NSError(domain: "UploadError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
@@ -188,82 +207,194 @@ class UploadScreen: UIViewController {
         
         print("User ID: \(userId)")
         
-        // 3. Create JSON data
-        let jsonDict: [String: Any] = [
-            "status": "processing",
-            "filename": fileName,
-            "uploaded_at": ISO8601DateFormatter().string(from: Date())
-        ]
+        // 2. Get Supabase auth token for the external API
+        print("Getting Supabase auth token...")
+        guard let authToken = await getSupabaseAuthToken() else {
+            throw NSError(domain: "UploadError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
+        }
         
-        let initialScan = ScanInsert(
-            userId: userId,
-            jsonData: AnyCodable(jsonDict),
-            processingId: processingId,
-            status: "processing",
-            originalFilename: fileName,
-            fileType: fileType
+        print("Auth token obtained, calling external API...")
+        
+        // 3. Call external conversion API with the image
+        let apiResponse: [String: Any] = try await callExternalConversionAPI(
+            imageData: imageData,
+            fileName: fileName,
+            fileType: fileType,
+            authToken: authToken
         )
         
-        print("Inserting scan record...")
+        print("External API response received")
         
-        do {
-            let response: Scan = try await supabase
+        // 4. Extract job_id and user_id from API response
+        guard let apiJobIdString = apiResponse["job_id"] as? String,
+              let apiJobId = UUID(uuidString: apiJobIdString),
+              let apiUserIdString = apiResponse["user_id"] as? String,
+              let apiUserId = UUID(uuidString: apiUserIdString) else {
+            throw NSError(domain: "UploadError", code: 5, userInfo: [NSLocalizedDescriptionKey: "Missing job_id or user_id in API response"])
+        }
+        
+        print("Job ID from API: \(apiJobId)")
+        print("User ID from API: \(apiUserId)")
+        
+        // 5. Construct the result URL
+        let resultURL = "\(supabaseStorageBaseURL)/sheet_data/\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/output.json"
+        print("Constructed result URL: \(resultURL)")
+        
+        // 6. Create PDF path (based on the actual job ID from API)
+        let pdfPath = "uploads/\(apiUserIdString)/\(apiJobIdString)/\(fileName)"
+        
+        // 7. First, check if a job with this ID already exists
+        let existingJobs: [Job] = try await supabase
+            .from("jobs")
+            .select()
+            .eq("id", value: apiJobId)
+            .execute()
+            .value
+        
+        if existingJobs.isEmpty {
+            // 8. Create a job record in the jobs table with the API's job ID
+            print("Creating job record with API job ID: \(apiJobId)")
+            
+            let jobInsert = JobInsert(
+                id: apiJobId,
+                userId: apiUserId,
+                pdfPath: pdfPath,
+                resultUrl: resultURL,
+                status: "completed"
+            )
+            
+            do {
+                let jobResponse: Job = try await supabase
+                    .from("jobs")
+                    .insert(jobInsert)
+                    .select()
+                    .single()
+                    .execute()
+                    .value
+                
+                print("Job record inserted successfully with ID: \(jobResponse.id)")
+            } catch {
+                print("Error inserting job record: \(error)")
+                // Continue even if job insertion fails
+            }
+        } else {
+            print("Job already exists with ID: \(apiJobId)")
+            
+            // Update existing job with result URL
+            let jobUpdate = JobUpdate(
+                resultUrl: resultURL,
+                status: "completed",
+                errorMessage: nil,
+                updatedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            try await supabase
+                .from("jobs")
+                .update(jobUpdate)
+                .eq("id", value: apiJobId)
+                .execute()
+            
+            print("Updated existing job with result URL")
+        }
+        
+        // 9. Check if a scan record already exists for this job
+        let existingScans: [Scan] = try await supabase
+            .from("scans")
+            .select()
+            .eq("user_id", value: userId)
+            .like("json_data->>'job_id'", pattern: "%\(apiJobIdString)%")
+            .execute()
+            .value
+        
+        if existingScans.isEmpty {
+            // 10. Create a scan record in the scans table
+            print("Creating scan record...")
+            
+            // Create processing ID for scan
+            let processingId = "proc_\(UUID().uuidString)"
+            
+            // Create JSON data for scan
+            var jsonDict: [String: Any] = [
+                "status": "completed",
+                "filename": fileName,
+                "uploaded_at": ISO8601DateFormatter().string(from: Date()),
+                "title": uploadTitle,
+                "result_url": resultURL,
+                "job_id": apiJobIdString,
+                "user_id": apiUserIdString,
+                "pdf_path": pdfPath
+            ]
+            
+            // Merge API response into JSON
+            for (key, value) in apiResponse {
+                jsonDict[key] = value
+            }
+            
+            let scanInsert = ScanInsert(
+                userId: userId,
+                jsonData: AnyCodable(jsonDict),
+                processingId: processingId,
+                status: "completed",
+                originalFilename: fileName,
+                fileType: fileType,
+                processedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            let scanResponse: Scan = try await supabase
                 .from("scans")
-                .insert(initialScan)
+                .insert(scanInsert)
                 .select()
                 .single()
                 .execute()
                 .value
             
-            print("Scan record inserted successfully with ID: \(response.id)")
+            print("Scan record inserted successfully with ID: \(scanResponse.id)")
             
-            let createdScan = response
-            
-            // 4. Get Supabase auth token for the external API
-            print("Getting Supabase auth token...")
-            guard let authToken = await getSupabaseAuthToken() else {
-                throw NSError(domain: "UploadError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
+            // 11. Now we can navigate to next page immediately
+            DispatchQueue.main.async {
+                self.navigateToNextPage(with: scanResponse.id, resultURL: resultURL)
             }
-            
-            print("Auth token obtained, calling external API...")
-            
-            // 5. Call external conversion API with the image
-            let apiResponse: [String: Any] = try await callExternalConversionAPI(
-                imageData: imageData,
-                fileName: fileName,
-                fileType: fileType,
-                authToken: authToken
-            )
-            
-            print("External API response received")
-            
-            // 6. Update the database with the combined results
-            print("Updating scan with processing results...")
-            
-            // Merge external API response with our metadata
-            var finalJsonResponse = apiResponse
-            finalJsonResponse["original_filename"] = fileName
-            finalJsonResponse["file_type"] = fileType
-            finalJsonResponse["size"] = imageData.count
-            finalJsonResponse["user_id"] = userIdString
-            finalJsonResponse["title"] = uploadTitle
-            finalJsonResponse["processed_at"] = ISO8601DateFormatter().string(from: Date())
-            
-            try await updateScanInDatabase(
-                scanId: createdScan.id,
-                jsonData: finalJsonResponse,
-                processingId: processingId
-            )
-            
-            print("Scan updated successfully!")
-            
-        } catch {
-            print("Error in saveUploadToDatabase: \(error)")
-            throw error
+        } else {
+            print("Scan already exists for job ID: \(apiJobIdString)")
+            // Update existing scan
+            if let existingScan = existingScans.first {
+                var jsonDict: [String: Any] = [
+                    "status": "completed",
+                    "filename": fileName,
+                    "uploaded_at": ISO8601DateFormatter().string(from: Date()),
+                    "title": uploadTitle,
+                    "result_url": resultURL,
+                    "job_id": apiJobIdString,
+                    "user_id": apiUserIdString,
+                    "pdf_path": pdfPath
+                ]
+                
+                // Merge API response into JSON
+                for (key, value) in apiResponse {
+                    jsonDict[key] = value
+                }
+                
+                let scanUpdate = ScanUpdate(
+                    jsonData: AnyCodable(jsonDict),
+                    status: "completed",
+                    processedAt: ISO8601DateFormatter().string(from: Date()),
+                    updatedAt: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("scans")
+                    .update(scanUpdate)
+                    .eq("id", value: existingScan.id as! PostgrestFilterValue)
+                    .execute()
+                
+                print("Updated existing scan with ID: \(existingScan.id)")
+                
+                // Navigate with existing scan ID
+                DispatchQueue.main.async {
+                    self.navigateToNextPage(with: existingScan.id, resultURL: resultURL)
+                }
+            }
         }
-        
-        // 7. Refresh recent uploads
-        await loadRecentUploadsFromDB()
     }
     
     // MARK: - External API Call
@@ -343,30 +474,70 @@ class UploadScreen: UIViewController {
         }
     }
     
-    private func updateScanInDatabase(scanId: Int64, jsonData: [String: Any], processingId: String) async throws {
-        let updateData = UpdateScanData(
-            jsonData: AnyCodable(jsonData),
-            status: "completed",
-            processedAt: ISO8601DateFormatter().string(from: Date()),
-            processingId: processingId,
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
+    // MARK: - Data Models
+    
+    // Job table models
+    struct Job: Codable, Identifiable {
+        let id: UUID
+        let userId: UUID
+        let pdfPath: String
+        let resultUrl: String?
+        let status: String
+        let errorMessage: String?
+        let createdAt: String?
+        let updatedAt: String?
         
-        do {
-            try await supabase
-                .from("scans")
-                .update(updateData)
-                .eq("id", value: String(scanId))
-                .execute()
-            
-            print("Database update successful for scan ID: \(scanId)")
-        } catch {
-            print("Error updating scan in database: \(error)")
-            throw error
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case pdfPath = "pdf_path"
+            case resultUrl = "result_url"
+            case status
+            case errorMessage = "error_message"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
     
-    // MARK: - Data Models
+    struct JobInsert: Encodable {
+        let id: UUID
+        let userId: UUID
+        let pdfPath: String
+        let resultUrl: String?
+        let status: String
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case pdfPath = "pdf_path"
+            case resultUrl = "result_url"
+            case status
+        }
+    }
+    
+    struct JobUpdate: Encodable {
+        let resultUrl: String?
+        let status: String?
+        let errorMessage: String?
+        let updatedAt: String
+        
+        enum CodingKeys: String, CodingKey {
+            case resultUrl = "result_url"
+            case status
+            case errorMessage = "error_message"
+            case updatedAt = "updated_at"
+        }
+        
+        // Add initializer with default values
+        init(resultUrl: String? = nil, status: String? = nil, errorMessage: String? = nil, updatedAt: String) {
+            self.resultUrl = resultUrl
+            self.status = status
+            self.errorMessage = errorMessage
+            self.updatedAt = updatedAt
+        }
+    }
+    
+    // Scan table models
     struct Scan: Codable, Identifiable {
         let id: Int64
         let userId: UUID
@@ -400,6 +571,7 @@ class UploadScreen: UIViewController {
         let status: String
         let originalFilename: String?
         let fileType: String?
+        let processedAt: String?
         
         enum CodingKeys: String, CodingKey {
             case userId = "user_id"
@@ -408,21 +580,20 @@ class UploadScreen: UIViewController {
             case status
             case originalFilename = "original_filename"
             case fileType = "file_type"
+            case processedAt = "processed_at"
         }
     }
     
-    struct UpdateScanData: Encodable {
+    struct ScanUpdate: Encodable {
         let jsonData: AnyCodable
         let status: String
         let processedAt: String
-        let processingId: String
         let updatedAt: String
         
         enum CodingKeys: String, CodingKey {
             case jsonData = "json_data"
             case status
             case processedAt = "processed_at"
-            case processingId = "processing_id"
             case updatedAt = "updated_at"
         }
     }
@@ -826,6 +997,34 @@ class UploadScreen: UIViewController {
         picker.view.tag = forCover ? 999 : 0
         present(picker, animated: true)
     }
+    
+    // MARK: - Navigation Helper
+    private func navigateToNextPage(with scanId: Int64, resultURL: String) {
+        DispatchQueue.main.async {
+            let vc = UploadPageNextViewController()
+            // Pass the scan ID and result URL to the next page
+            // You need to add these properties to UploadPageNextViewController:
+            /*
+            class UploadPageNextViewController: UIViewController {
+                var scanId: Int64?
+                var resultURL: String?
+                
+                override func viewDidLoad() {
+                    super.viewDidLoad()
+                    if let scanId = scanId {
+                        print("Received scan ID: \(scanId)")
+                    }
+                    if let resultURL = resultURL {
+                        print("Received result URL: \(resultURL)")
+                    }
+                }
+                // Rest of your code...
+            }
+            */
+            // For now, we'll just navigate
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+    }
 }
 
 // MARK: - UIImagePickerControllerDelegate
@@ -845,6 +1044,7 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
         picker.allowsMultipleSelection = false
         present(picker, animated: true)
     }
+    
     func documentPicker(
         _ controller: UIDocumentPickerViewController,
         didPickDocumentsAt urls: [URL]
@@ -857,22 +1057,74 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             currentFileName = fileURL.lastPathComponent
             currentFileType = "application/pdf"
 
+            // Show loading state
+            uploadIcon.image = UIImage(systemName: "arrow.clockwise")
             uploadLabel.text = "Processing upload..."
 
             Task {
-                try await saveUploadToDatabase(
-                    imageData: data,
-                    fileName: currentFileName,
-                    fileType: currentFileType
-                )
+                do {
+                    print("Starting PDF upload task...")
+                    try await saveUploadToDatabase(
+                        imageData: data,
+                        fileName: currentFileName,
+                        fileType: currentFileType
+                    )
+                    
+                    print("PDF upload completed successfully!")
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        // Show success
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Upload completed!"
+                        
+                        // Reset after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("PDF upload failed with error: \(error)")
+                    print("Error details: \(error.localizedDescription)")
+                    
+                    DispatchQueue.main.async {
+                        // Show error with more details
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        // Reset after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        // Show error alert with more details
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
             }
         } catch {
             print("Failed to read file:", error)
+            DispatchQueue.main.async {
+                let alert = UIAlertController(
+                    title: "Error",
+                    message: "Failed to read file: \(error.localizedDescription)",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
         }
-
-        print("Type:", fileURL.pathExtension)
-
-        // Upload to server / Supabase / Firebase / API
     }
 
     func imagePickerController(_ picker: UIImagePickerController,
@@ -912,6 +1164,9 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
                     
                     print("Upload completed successfully!")
                     
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
                     // Update UI on main thread
                     DispatchQueue.main.async {
                         // Show success
@@ -922,15 +1177,6 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
                             self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                        
-                        // Navigate to next page
-                        let vc = UploadPageNextViewController()
-                        if let nav = self.navigationController {
-                            nav.pushViewController(vc, animated: true)
-                        } else {
-                            vc.modalPresentationStyle = .fullScreen
-                            self.present(vc, animated: true)
                         }
                     }
                 } catch {

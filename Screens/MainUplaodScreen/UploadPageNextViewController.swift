@@ -13,12 +13,19 @@ final class UploadPageNextViewController: UIViewController {
         didSet { sheetImageView.image = uploadedImage }
     }
     
-    var jobData: Job?
+    // Properties to receive data from UploadScreen
+    var scanId: Int64?
+    var resultURL: String?
+    var jobId: UUID?
+    
     private var sheetMusicText: String = ""
     private var extractedChords: [String] = []
     private var timeSignature: String = "4/4"
     private var tempo: String = "120 BPM"
     private var keySignature: String = "C Major"
+    private var sheetMusicJSON: [String: Any]?
+    private var isProcessing = true
+    private var pollingTimer: Timer?
 
     private let navBar = TopNavBar()
 
@@ -33,6 +40,8 @@ final class UploadPageNextViewController: UIViewController {
     private let sheetImageView = UIImageView()
     private let musicTextView = UITextView() // Text view for sheet music
     private let metronomeLabel = UILabel()
+    private let progressView = UIProgressView()
+    private let statusLabel = UILabel()
     
     private let infoStackView = UIStackView()
     private let keyLabel = UILabel()
@@ -45,6 +54,7 @@ final class UploadPageNextViewController: UIViewController {
 
     private let playAlongButton = UIButton(type: .system)
     private let animationButton = UIButton(type: .system)
+    private let refreshButton = UIButton(type: .system)
     
     // MARK: - Data Models
     struct Job: Codable, Identifiable {
@@ -75,6 +85,7 @@ final class UploadPageNextViewController: UIViewController {
         let timeSignature: String
         let tempo: String
         let keySignature: String
+        let jsonData: [String: Any]?
     }
 
     override func viewDidLoad() {
@@ -87,27 +98,509 @@ final class UploadPageNextViewController: UIViewController {
         applyConstraints()
         setupActions()
         
-        loadJobData()
-    }
-    
-    // MARK: - Data Loading
-    private func loadJobData() {
-        loadLatestJobFromDatabase()
-    }
-    private func loadUploadedPDF(from fullPath: String) async {
-        do {
-            let signedURL = try await getSignedURL(from: fullPath)
-
-            DispatchQueue.main.async {
-                self.pdfView.document = PDFDocument(url: signedURL)
-                self.pdfView.isHidden = false
-                self.sheetImageView.isHidden = true
-            }
-        } catch {
-            print("Failed to load PDF:", error)
+        print("UploadPageNextViewController loaded with scanId: \(String(describing: scanId)), resultURL: \(String(describing: resultURL))")
+        
+        // Show processing state initially
+        showProcessingState()
+        
+        // Load data based on passed parameters
+        if let resultURL = resultURL {
+            loadDataFromResultURL(resultURL)
+        } else if let scanId = scanId {
+            loadDataFromScanId(scanId)
+        } else {
+            loadLatestJobFromDatabase()
         }
     }
-
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Stop polling when leaving the screen
+        pollingTimer?.invalidate()
+        pollingTimer = nil
+    }
+    
+    deinit {
+        pollingTimer?.invalidate()
+    }
+    
+    // MARK: - Data Loading Methods
+    
+    private func loadDataFromResultURL(_ resultURL: String) {
+        print("Loading data directly from result URL: \(resultURL)")
+        self.resultURL = resultURL
+        
+        // Start polling for the result
+        startPollingResultURL(resultURL)
+    }
+    
+    private func startPollingResultURL(_ resultURL: String) {
+        print("Starting to poll result URL...")
+        
+        // Show processing state
+        DispatchQueue.main.async {
+            self.showProcessingState()
+        }
+        
+        // Start polling timer (every 5 seconds)
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkResultURL(resultURL)
+        }
+        
+        // First check immediately
+        checkResultURL(resultURL)
+    }
+    
+    private func checkResultURL(_ resultURL: String) {
+        print("Checking result URL: \(resultURL)")
+        
+        Task {
+            do {
+                guard let url = URL(string: resultURL) else {
+                    throw NSError(domain: "URLError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+                }
+                
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 10 // 10 second timeout
+                
+                // Make HEAD request first to check if file exists without downloading it
+                request.httpMethod = "HEAD"
+                
+                let (_, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw NSError(domain: "DownloadError", code: 2, userInfo: [NSLocalizedDescriptionKey: "No response from server"])
+                }
+                
+                print("HEAD request status code: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode == 200 {
+                    // File exists, now download it
+                    await self.downloadAndParseResult(url: url)
+                } else if httpResponse.statusCode == 404 {
+                    // File not ready yet, continue polling
+                    print("File not ready yet (404), continuing to poll...")
+                    await self.updateProcessingStatus(message: "Processing your sheet music...\nThis may take up to 60 seconds.")
+                } else {
+                    print("Unexpected status code: \(httpResponse.statusCode)")
+                    await self.updateProcessingStatus(message: "Processing... (Status: \(httpResponse.statusCode))")
+                }
+                
+            } catch {
+                print("Error checking result URL: \(error)")
+                
+                // Check if it's a timeout or connection error
+                if (error as NSError).code == NSURLErrorTimedOut ||
+                   (error as NSError).code == NSURLErrorCannotConnectToHost ||
+                   (error as NSError).code == NSURLErrorNetworkConnectionLost {
+                    
+                    await MainActor.run {
+                        self.updateProcessingStatus(message: "Connecting to server...")
+                    }
+                } else {
+                    await MainActor.run {
+                        self.updateProcessingStatus(message: "Processing...")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func downloadAndParseResult(url: URL) async {
+        print("Downloading result from: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                throw NSError(domain: "DownloadError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to download file"])
+            }
+            
+            print("Successfully downloaded data, size: \(data.count) bytes")
+            
+            // Stop polling since we got the data
+            await MainActor.run {
+                self.pollingTimer?.invalidate()
+                self.pollingTimer = nil
+                self.isProcessing = false
+                self.progressView.isHidden = true
+                self.statusLabel.isHidden = true
+                self.refreshButton.isHidden = true
+            }
+            
+            // Parse JSON
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            
+            // Extract chords and display
+            if let json = json {
+                await parseAndDisplayJSON(json)
+            } else {
+                // Try to parse as plain text
+                if let text = String(data: data, encoding: .utf8) {
+                    await MainActor.run {
+                        self.extractedChords = self.extractChordsFromText(text)
+                        self.displaySheetData(SheetMusicData(
+                            text: text,
+                            chords: self.extractedChords,
+                            timeSignature: "4/4",
+                            tempo: "120 BPM",
+                            keySignature: "C Major",
+                            jsonData: nil
+                        ))
+                    }
+                }
+            }
+            
+        } catch {
+            print("Error downloading result: \(error)")
+            await MainActor.run {
+                self.showErrorState(error: "Failed to download processed data")
+            }
+        }
+    }
+    
+    private func updateProcessingStatus(message: String) {
+        DispatchQueue.main.async {
+            self.statusLabel.text = message
+        }
+    }
+    
+    private func loadDataFromScanId(_ scanId: Int64) {
+        print("Loading data from scan ID: \(scanId)")
+        Task {
+            do {
+                // Fetch scan from database
+                let scan: Scan = try await SupabaseManager.shared.client
+                    .from("scans")
+                    .select()
+                    .eq("id", value: scanId as! PostgrestFilterValue)
+                    .single()
+                    .execute()
+                    .value
+                
+                print("Found scan: \(scan.id)")
+                
+                // Extract result URL from JSON data
+                if let jsonData = scan.jsonData?.value as? [String: Any],
+                   let resultUrl = jsonData["result_url"] as? String {
+                    print("Found result_url in scan: \(resultUrl)")
+                    
+                    // Load data from this URL
+                    await MainActor.run {
+                        self.loadDataFromResultURL(resultUrl)
+                    }
+                } else {
+                    print("No result_url found in scan JSON")
+                    await MainActor.run {
+                        self.showSampleSheetMusic()
+                    }
+                }
+                
+            } catch {
+                print("Error loading scan: \(error)")
+                await MainActor.run {
+                    self.showSampleSheetMusic()
+                }
+            }
+        }
+    }
+    
+    private func parseAndDisplayJSON(_ json: [String: Any]) async {
+        print("Parsing JSON data...")
+        
+        // Store the JSON for later use
+        self.sheetMusicJSON = json
+        
+        // Check if this is a queued response
+        if let status = json["status"] as? String, status == "queued" {
+            print("Job is still queued")
+            await MainActor.run {
+                self.updateProcessingStatus(message: "Job queued for processing...")
+            }
+            return
+        }
+        
+        // Extract chords from JSON - this depends on your API response structure
+        let chords = extractChordsFromJSON(json)
+        print("Extracted chords: \(chords)")
+        
+        // Extract other metadata
+        let timeSig = extractTimeSignature(json)
+        let keySig = extractKeySignature(json)
+        let tempoStr = extractTempo(json)
+        
+        // Create formatted text
+        let formattedText = formatJSONForDisplay(json)
+        
+        await MainActor.run {
+            self.displaySheetData(SheetMusicData(
+                text: formattedText,
+                chords: chords,
+                timeSignature: timeSig,
+                tempo: tempoStr,
+                keySignature: keySig,
+                jsonData: json
+            ))
+        }
+    }
+    
+    private func extractChordsFromJSON(_ json: [String: Any]) -> [String] {
+        var chords: [String] = []
+        
+        // Try different possible JSON structures
+        if let chordsArray = json["chords"] as? [String] {
+            chords = chordsArray
+        } else if let chordsString = json["chords"] as? String {
+            chords = chordsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        } else if let analysis = json["analysis"] as? [String: Any],
+                  let detectedChords = analysis["chords"] as? [String] {
+            chords = detectedChords
+        } else if let scorePartwise = json["score-partwise"] as? [String: Any] {
+            // MusicXML format - extract chords from measures
+            chords = extractChordsFromMusicXML(scorePartwise)
+        }
+        
+        // If no chords found, return sample chords
+        if chords.isEmpty {
+            chords = ["C", "G", "Am", "F"]
+        }
+        
+        return chords
+    }
+    
+    private func extractChordsFromMusicXML(_ scorePartwise: [String: Any]) -> [String] {
+        var chords: [String] = []
+        
+        // Extract harmony elements from MusicXML
+        if let part = scorePartwise["part"] as? [String: Any] {
+            if let measures = parseMeasures(from: part) {
+                for measure in measures {
+                    if let harmonies = measure["harmony"] {
+                        let measureChords = extractHarmonies(from: harmonies)
+                        chords.append(contentsOf: measureChords)
+                    }
+                }
+            }
+        }
+        
+        return chords
+    }
+    
+    private func extractHarmonies(from harmonies: Any) -> [String] {
+        var chordNames: [String] = []
+        
+        if let harmonyArray = harmonies as? [[String: Any]] {
+            for harmony in harmonyArray {
+                if let root = harmony["root"] as? [String: Any],
+                   let rootStep = root["root-step"] as? String {
+                    var chordName = rootStep
+                    
+                    // Add root alter if present
+                    if let rootAlter = root["root-alter"] as? String,
+                       let alterValue = Int(rootAlter) {
+                        if alterValue == 1 {
+                            chordName += "♯"
+                        } else if alterValue == -1 {
+                            chordName += "♭"
+                        }
+                    }
+                    
+                    // Add kind (chord quality)
+                    if let kind = harmony["kind"] as? String {
+                        let kindMapping: [String: String] = [
+                            "major": "",
+                            "minor": "m",
+                            "dominant": "7",
+                            "major-seventh": "maj7",
+                            "minor-seventh": "m7",
+                            "diminished": "dim",
+                            "augmented": "aug",
+                            "sus4": "sus4"
+                        ]
+                        
+                        if let quality = kindMapping[kind] {
+                            chordName += quality
+                        } else {
+                            chordName += kind
+                        }
+                    }
+                    
+                    chordNames.append(chordName)
+                }
+            }
+        } else if let harmony = harmonies as? [String: Any],
+                  let root = harmony["root"] as? [String: Any],
+                  let rootStep = root["root-step"] as? String {
+            var chordName = rootStep
+            
+            if let rootAlter = root["root-alter"] as? String,
+               let alterValue = Int(rootAlter) {
+                if alterValue == 1 {
+                    chordName += "♯"
+                } else if alterValue == -1 {
+                    chordName += "♭"
+                }
+            }
+            
+            if let kind = harmony["kind"] as? String {
+                if kind == "minor" {
+                    chordName += "m"
+                }
+            }
+            
+            chordNames.append(chordName)
+        }
+        
+        return chordNames
+    }
+    
+    private func extractChordsFromText(_ text: String) -> [String] {
+        var chords: [String] = []
+        
+        // Common chord patterns in text
+        let chordPatterns = [
+            "C", "Cm", "C♯", "C♯m", "D", "Dm", "D♯", "D♯m",
+            "E", "Em", "F", "Fm", "F♯", "F♯m", "G", "Gm",
+            "G♯", "G♯m", "A", "Am", "A♯", "A♯m", "B", "Bm"
+        ]
+        
+        for chord in chordPatterns {
+            if text.contains(chord) {
+                chords.append(chord)
+            }
+        }
+        
+        return chords.isEmpty ? ["C", "G", "Am", "F"] : chords
+    }
+    
+    private func extractTimeSignature(_ json: [String: Any]) -> String {
+        if let time = json["time_signature"] as? String {
+            return time
+        } else if let analysis = json["analysis"] as? [String: Any],
+                  let time = analysis["time_signature"] as? String {
+            return time
+        } else if let scorePartwise = json["score-partwise"] as? [String: Any],
+                  let part = scorePartwise["part"] as? [String: Any],
+                  let measures = parseMeasures(from: part),
+                  let firstMeasure = measures.first,
+                  let attributes = firstMeasure["attributes"] as? [String: Any],
+                  let time = attributes["time"] as? [String: Any] {
+            
+            if let beats = time["beats"] as? String,
+               let beatType = time["beat-type"] as? String {
+                return "\(beats)/\(beatType)"
+            } else if let beats = time["beats"] as? Int,
+                      let beatType = time["beat-type"] as? Int {
+                return "\(beats)/\(beatType)"
+            }
+        }
+        
+        return "4/4"
+    }
+    
+    private func extractKeySignature(_ json: [String: Any]) -> String {
+        if let key = json["key_signature"] as? String {
+            return key
+        } else if let analysis = json["analysis"] as? [String: Any],
+                  let key = analysis["key_signature"] as? String {
+            return key
+        } else if let scorePartwise = json["score-partwise"] as? [String: Any],
+                  let part = scorePartwise["part"] as? [String: Any],
+                  let measures = parseMeasures(from: part),
+                  let firstMeasure = measures.first,
+                  let attributes = firstMeasure["attributes"] as? [String: Any],
+                  let key = attributes["key"] as? [String: Any],
+                  let fifths = key["fifths"] as? String {
+            
+            let fifthsInt = Int(fifths) ?? 0
+            let majorKeys = ["C", "G", "D", "A", "E", "B", "F♯", "C♯"]
+            let minorKeys = ["Am", "Em", "Bm", "F♯m", "C♯m", "G♯m", "D♯m", "A♯m"]
+            
+            if fifthsInt >= 0 && fifthsInt < majorKeys.count {
+                return majorKeys[fifthsInt]
+            } else if fifthsInt < 0 && abs(fifthsInt) <= minorKeys.count {
+                return minorKeys[abs(fifthsInt) - 1]
+            }
+        }
+        
+        return "C Major"
+    }
+    
+    private func extractTempo(_ json: [String: Any]) -> String {
+        if let tempo = json["tempo"] as? String {
+            return tempo
+        } else if let analysis = json["analysis"] as? [String: Any],
+                  let tempo = analysis["tempo"] as? String {
+            return tempo
+        }
+        
+        return "120 BPM"
+    }
+    
+    private func formatJSONForDisplay(_ json: [String: Any]) -> String {
+        var result = "SHEET MUSIC ANALYSIS\n\n"
+        
+        // Add metadata
+        result += "METADATA:\n"
+        result += "• Time Signature: \(timeSignature)\n"
+        result += "• Key: \(keySignature)\n"
+        result += "• Tempo: \(tempo)\n"
+        result += "• Chords: \(extractedChords.joined(separator: ", "))\n\n"
+        
+        // Add chords progression
+        result += "CHORD PROGRESSION:\n"
+        for (index, chord) in extractedChords.enumerated() {
+            result += "  \(index + 1). \(chord)\n"
+        }
+        result += "\n"
+        
+        // Add structured data if available
+        if let scorePartwise = json["score-partwise"] as? [String: Any] {
+            result += "MUSICXML STRUCTURE:\n"
+            if let partList = scorePartwise["part-list"] as? [String: Any],
+               let scorePart = partList["score-part"] as? [String: Any],
+               let partName = scorePart["part-name"] as? String {
+                result += "• Instrument: \(partName)\n"
+            }
+            
+            if let part = scorePartwise["part"] as? [String: Any],
+               let measures = parseMeasures(from: part) {
+                result += "• Measures: \(measures.count)\n"
+                
+                // Show first few measures
+                let measuresToShow = min(3, measures.count)
+                for i in 0..<measuresToShow {
+                    if let notes = measures[i]["note"] {
+                        let noteCount = countNotes(notes)
+                        result += "  Measure \(i+1): \(noteCount) notes\n"
+                    }
+                }
+            }
+        } else {
+            // Show JSON keys for debugging
+            result += "DATA STRUCTURE:\n"
+            for key in json.keys.prefix(10) {
+                result += "• \(key)\n"
+            }
+            if json.keys.count > 10 {
+                result += "• ... and \(json.keys.count - 10) more\n"
+            }
+        }
+        
+        return result
+    }
+    
+    private func countNotes(_ notes: Any) -> Int {
+        if let noteArray = notes as? [[String: Any]] {
+            return noteArray.count
+        } else if let _ = notes as? [String: Any] {
+            return 1
+        }
+        return 0
+    }
+    
+    // MARK: - Existing Methods (with minor updates)
     
     private func loadLatestJobFromDatabase() {
         Task {
@@ -130,26 +623,27 @@ final class UploadPageNextViewController: UIViewController {
                     .value
                 
                 if let latestJob = jobs.first {
-                    self.jobData = latestJob
+                    
                     print("Found job: \(latestJob.id), status: \(latestJob.status), resultUrl: \(latestJob.resultUrl ?? "nil")")
                     
-                    Task {
-                        await self.loadUploadedPDF(from: latestJob.pdfPath)
-                    }
-
-                    // Load and display the sheet music data
-                    DispatchQueue.main.async {
-                        self.loadAndDisplaySheetMusic(from: latestJob)
+                    if let resultUrl = latestJob.resultUrl {
+                        await MainActor.run {
+                            self.loadDataFromResultURL(resultUrl)
+                        }
+                    } else {
+                        await MainActor.run {
+                            self.showSampleSheetMusic()
+                        }
                     }
                 } else {
                     print("No jobs found for user")
-                    DispatchQueue.main.async {
+                    await MainActor.run {
                         self.showSampleSheetMusic()
                     }
                 }
             } catch {
                 print("Error loading job: \(error)")
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.showSampleSheetMusic()
                 }
             }
@@ -165,168 +659,85 @@ final class UploadPageNextViewController: UIViewController {
             return nil
         }
     }
-    private func getSignedURL(from fullPath: String) async throws -> URL {
-        // Remove bucket name
-        let path = fullPath.replacingOccurrences(of: "sheet_data/", with: "")
-
-        // createSignedURL RETURNS URL directly
-        let signedURL: URL = try await SupabaseManager.shared.client
-            .storage
-            .from("sheet_data")
-            .createSignedURL(
-                path: path,
-                expiresIn: 3600
-            )
-
-        return signedURL
+    
+    // MARK: - Scan Data Model
+    struct Scan: Codable, Identifiable {
+        let id: Int64
+        let userId: UUID
+        let jsonData: AnyCodable?
+        let processingId: String?
+        let status: String?
+        let originalFilename: String?
+        let fileType: String?
+        let processedAt: String?
+        let updatedAt: String?
+        let errorMessage: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case jsonData = "json_data"
+            case processingId = "processing_id"
+            case status
+            case originalFilename = "original_filename"
+            case fileType = "file_type"
+            case processedAt = "processed_at"
+            case updatedAt = "updated_at"
+            case errorMessage = "error_message"
+        }
     }
-
-
-    private func loadAndDisplaySheetMusic(from job: Job) {
-        // Check if job is completed and has result URL
-        guard job.status == "completed", let resultUrl = job.resultUrl else {
-            if job.status == "failed" {
-                showErrorState(error: job.errorMessage ?? "Processing failed")
-            } else if job.status == "processing" {
-                showProcessingState()
+    
+    // MARK: - AnyCodable helper
+    struct AnyCodable: Codable {
+        let value: Any
+        
+        init(_ value: Any) {
+            self.value = value
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            
+            if let boolValue = try? container.decode(Bool.self) {
+                value = boolValue
+            } else if let intValue = try? container.decode(Int.self) {
+                value = intValue
+            } else if let doubleValue = try? container.decode(Double.self) {
+                value = doubleValue
+            } else if let stringValue = try? container.decode(String.self) {
+                value = stringValue
+            } else if let arrayValue = try? container.decode([AnyCodable].self) {
+                value = arrayValue.map { $0.value }
+            } else if let dictValue = try? container.decode([String: AnyCodable].self) {
+                value = dictValue.mapValues { $0.value }
             } else {
-                showSampleSheetMusic()
-            }
-            return
-        }
-        
-        // Download and parse the result JSON from bucket
-        Task {
-            do {
-                print("Downloading result from: \(resultUrl)")
-                let signedURL = try await getSignedURL(from: resultUrl)
-                let resultData = try await downloadResultFromBucket(url: signedURL.absoluteString)
-
-                // First, try to parse as JSON
-                if let json = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] {
-                    print("Successfully parsed as JSON")
-                    let sheetData = try await parseSheetMusicData(json: json)
-                    
-                    DispatchQueue.main.async {
-                        self.displaySheetData(sheetData)
-                    }
-                } else {
-                    // If not JSON, try to parse as text
-                    if let text = String(data: resultData, encoding: .utf8) {
-                        print("Parsing as text")
-                        let sheetData = SheetMusicData(
-                            text: text,
-                            chords: [],
-                            timeSignature: "4/4",
-                            tempo: "120 BPM",
-                            keySignature: "C Major"
-                        )
-                        
-                        DispatchQueue.main.async {
-                            self.displaySheetData(sheetData)
-                        }
-                    } else {
-                        throw NSError(domain: "ParseError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Unsupported file format"])
-                    }
-                }
-            } catch {
-                print("Error loading sheet music: \(error)")
-                DispatchQueue.main.async {
-                    self.showSampleSheetMusic()
-                }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable cannot decode value")
             }
         }
-    }
-    
-    private func downloadResultFromBucket(url: String) async throws -> Data {
-        guard let fileUrl = URL(string: url) else {
-            throw NSError(domain: "DownloadError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
-        }
         
-        let (data, response) = try await URLSession.shared.data(from: fileUrl)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw NSError(domain: "DownloadError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to download file"])
-        }
-        
-        return data
-    }
-    
-    // MARK: - MusicXML Parsing
-    private func parseSheetMusicData(json: [String: Any]) async throws -> SheetMusicData {
-        print("Parsing sheet music JSON...")
-        
-        // Extract from score-partwise structure (MusicXML)
-        var sheetMusicText = ""
-        var chords: [String] = []
-        var timeSig = "4/4"
-        var tempoStr = "120 BPM"
-        var keySig = "C Major"
-        
-        // Check if we have score-partwise structure
-        if let scorePartwise = json["score-partwise"] as? [String: Any] {
-            print("Found score-partwise structure")
-            sheetMusicText = formatMusicXMLData(scorePartwise)
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
             
-            // Extract time signature from first measure
-            if let part = scorePartwise["part"] as? [String: Any],
-               let measures = parseMeasures(from: part),
-               let firstMeasure = measures.first,
-               let attributes = firstMeasure["attributes"] as? [String: Any],
-               let time = attributes["time"] as? [String: Any] {
-                
-                if let beats = time["beats"] as? String,
-                   let beatType = time["beat-type"] as? String {
-                    timeSig = "\(beats)/\(beatType)"
-                } else if let beats = time["beats"] as? Int,
-                          let beatType = time["beat-type"] as? Int {
-                    timeSig = "\(beats)/\(beatType)"
-                }
-            }
-            
-            // Extract notes and chords from all measures
-            if let part = scorePartwise["part"] as? [String: Any],
-               let measures = parseMeasures(from: part) {
-                
-                var allNotes: [String] = []
-                
-                for measure in measures {
-                    if let notes = measure["note"] {
-                        let measureNotes = extractNotes(from: notes)
-                        allNotes.append(contentsOf: measureNotes)
-                    }
-                }
-                
-                // Analyze chords from collected notes
-                chords = analyzeChords(from: allNotes)
-            }
-        } else {
-            // Try other possible structures
-            sheetMusicText = "MusicXML Score\n\n"
-            
-            if let partList = json["part-list"] as? [String: Any],
-               let scorePart = partList["score-part"] as? [String: Any],
-               let partName = scorePart["part-name"] as? String {
-                sheetMusicText += "Instrument: \(partName)\n\n"
-            }
-            
-            // Add raw JSON for debugging
-            sheetMusicText += "JSON Structure:\n"
-            for key in json.keys {
-                sheetMusicText += "- \(key)\n"
+            switch value {
+            case let boolValue as Bool:
+                try container.encode(boolValue)
+            case let intValue as Int:
+                try container.encode(intValue)
+            case let doubleValue as Double:
+                try container.encode(doubleValue)
+            case let stringValue as String:
+                try container.encode(stringValue)
+            case let arrayValue as [Any]:
+                let anyCodableArray = arrayValue.map { AnyCodable($0) }
+                try container.encode(anyCodableArray)
+            case let dictValue as [String: Any]:
+                let anyCodableDict = dictValue.mapValues { AnyCodable($0) }
+                try container.encode(anyCodableDict)
+            default:
+                let context = EncodingError.Context(codingPath: container.codingPath, debugDescription: "AnyCodable cannot encode value of type \(type(of: value))")
+                throw EncodingError.invalidValue(value, context)
             }
         }
-        
-        print("Parsing complete. Time: \(timeSig), Chords: \(chords)")
-        
-        return SheetMusicData(
-            text: sheetMusicText,
-            chords: Array(Set(chords)), // Remove duplicates
-            timeSignature: timeSig,
-            tempo: tempoStr,
-            keySignature: keySig
-        )
     }
     
     private func parseMeasures(from part: [String: Any]) -> [[String: Any]]? {
@@ -338,155 +749,49 @@ final class UploadPageNextViewController: UIViewController {
         return nil
     }
     
-    private func extractNotes(from notes: Any) -> [String] {
-        var noteNames: [String] = []
+    // MARK: - UI State Methods
+    
+    private func showProcessingState() {
+        isProcessing = true
         
-        if let noteArray = notes as? [[String: Any]] {
-            for noteDict in noteArray {
-                if let pitch = noteDict["pitch"] as? [String: Any],
-                   let step = pitch["step"] as? String,
-                   let octave = pitch["octave"] as? String {
-                    let alter = pitch["alter"] as? String
-                    let accidental = alter.flatMap { Int($0) } ?? 0
-                    
-                    var noteName = step
-                    if accidental == 1 {
-                        noteName += "♯"
-                    } else if accidental == -1 {
-                        noteName += "♭"
-                    }
-                    noteName += "\(octave)"
-                    noteNames.append(noteName)
-                } else if noteDict["rest"] != nil {
-                    noteNames.append("REST")
-                }
-            }
-        } else if let noteDict = notes as? [String: Any] {
-            if let pitch = noteDict["pitch"] as? [String: Any],
-               let step = pitch["step"] as? String,
-               let octave = pitch["octave"] as? String {
-                let alter = pitch["alter"] as? String
-                let accidental = alter.flatMap { Int($0) } ?? 0
-                
-                var noteName = step
-                if accidental == 1 {
-                    noteName += "♯"
-                } else if accidental == -1 {
-                    noteName += "♭"
-                }
-                noteName += "\(octave)"
-                noteNames.append(noteName)
-            } else if noteDict["rest"] != nil {
-                noteNames.append("REST")
-            }
-        }
+        sheetMusicText = """
+        PROCESSING SHEET MUSIC
         
-        return noteNames
+        Status: Analyzing your PDF
+        Job ID: \(jobId?.uuidString ?? "Unknown")
+        
+        Please wait while we process your sheet music...
+        This usually takes 30-60 seconds.
+        
+        Features being analyzed:
+        • Chord detection
+        • Time signature
+        • Key signature
+        • Note extraction
+        
+        Check back in a moment!
+        """
+        
+        displaySheetMusic()
+        metronomeLabel.text = "Metronome: Analyzing..."
+        keyLabel.text = "Key: Analyzing..."
+        timeLabel.text = "Time: Analyzing..."
+        chordLabel.text = "Chords: Detecting..."
+        
+        progressView.isHidden = false
+        statusLabel.isHidden = false
+        refreshButton.isHidden = false
+        
+        // Start progress animation
+        animateProgress()
+        
+        tipsBodyLabel.text = "• Processing usually takes 30-60 seconds\n• Results will appear automatically\n• Check back in a moment\n• Large files may take longer"
     }
     
-    private func analyzeChords(from notes: [String]) -> [String] {
-        var chords: [String] = []
-        
-        // Group notes by measure (simplified analysis)
-        let chordMap: [String: [String]] = [
-            "C": ["C4", "E4", "G4"],
-            "G": ["G4", "B4", "D5"],
-            "Am": ["A4", "C5", "E5"],
-            "F": ["F4", "A4", "C5"],
-            "Dm": ["D4", "F4", "A4"],
-            "Em": ["E4", "G4", "B4"],
-            "A": ["A4", "C♯5", "E5"],
-            "D": ["D4", "F♯4", "A4"],
-            "E": ["E4", "G♯4", "B4"],
-            "Bm": ["B4", "D5", "F♯5"]
-        ]
-        
-        // Look for common chord patterns
-        for (chord, chordNotes) in chordMap {
-            var matchCount = 0
-            for chordNote in chordNotes {
-                if notes.contains(chordNote) {
-                    matchCount += 1
-                }
-            }
-            if matchCount >= 2 { // At least 2 matching notes for a chord
-                chords.append(chord)
-            }
+    private func animateProgress() {
+        UIView.animate(withDuration: 1.5, delay: 0, options: [.autoreverse, .repeat, .curveEaseInOut]) {
+            self.progressView.setProgress(0.7, animated: true)
         }
-        
-        // If no chords found, return common progression
-        if chords.isEmpty {
-            chords = ["C", "G", "Am", "F"]
-        }
-        
-        return chords
-    }
-    
-    private func formatMusicXMLData(_ data: [String: Any]) -> String {
-        var result = ""
-        
-        // Extract part information
-        if let partList = data["part-list"] as? [String: Any],
-           let scorePart = partList["score-part"] as? [String: Any] {
-            
-            if let partName = scorePart["part-name"] as? String {
-                result += "INSTRUMENT: \(partName)\n"
-            }
-        }
-        
-        // Extract measures
-        if let part = data["part"] as? [String: Any],
-           let measures = parseMeasures(from: part) {
-            
-            result += "TIME SIGNATURE: \(timeSignature)\n\n"
-            
-            for (index, measureDict) in measures.enumerated() {
-                let measureNum = index + 1
-                result += "=== MEASURE \(measureNum) ===\n"
-                
-                // Extract attributes for this measure
-                if let attributes = measureDict["attributes"] as? [String: Any] {
-                    if let divisions = attributes["divisions"] {
-                        result += "Divisions: \(divisions)\n"
-                    }
-                }
-                
-                // Extract notes
-                if let notes = measureDict["note"] {
-                    let noteList = extractNotes(from: notes)
-                    if !noteList.isEmpty {
-                        result += "Notes: \(noteList.joined(separator: ", "))\n"
-                    }
-                    
-                    // Extract note types and durations
-                    if let noteArray = notes as? [[String: Any]] {
-                        for noteDict in noteArray {
-                            if let type = noteDict["type"] as? String,
-                               let duration = noteDict["duration"] {
-                                if let pitch = noteDict["pitch"] as? [String: Any],
-                                   let step = pitch["step"] as? String,
-                                   let octave = pitch["octave"] as? String {
-                                    result += "  \(step)\(octave): \(type) (duration: \(duration))\n"
-                                } else if noteDict["rest"] != nil {
-                                    result += "  REST: \(type) (duration: \(duration))\n"
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Check for barline
-                if measureDict["barline"] != nil {
-                    result += "--- Barline ---\n"
-                }
-                
-                result += "\n"
-            }
-        } else {
-            result += "No measures found in the score.\n"
-        }
-        
-        return result
     }
     
     private func displaySheetData(_ data: SheetMusicData) {
@@ -495,6 +800,7 @@ final class UploadPageNextViewController: UIViewController {
         timeSignature = data.timeSignature
         tempo = data.tempo
         keySignature = data.keySignature
+        sheetMusicJSON = data.jsonData
         
         displaySheetMusic()
         metronomeLabel.text = "Metronome: \(tempo)"
@@ -502,6 +808,11 @@ final class UploadPageNextViewController: UIViewController {
         timeLabel.text = "Time: \(timeSignature)"
         chordLabel.text = "Chords: \(extractedChords.joined(separator: ", "))"
         updatePracticeTips()
+        
+        // Hide progress when data is loaded
+        progressView.isHidden = true
+        statusLabel.isHidden = true
+        refreshButton.isHidden = true
     }
     
     private func showErrorState(error: String) {
@@ -512,7 +823,7 @@ final class UploadPageNextViewController: UIViewController {
         Error: \(error)
         
         Please try uploading the sheet again.
-        Make sure the image is clear and well-lit.
+        Make sure the PDF is clear and well-lit.
         """
         
         displaySheetMusic()
@@ -521,35 +832,20 @@ final class UploadPageNextViewController: UIViewController {
         timeLabel.text = "Time: N/A"
         chordLabel.text = "Chords: N/A"
         
-        tipsBodyLabel.text = "• Check your internet connection\n• Ensure the sheet is clear\n• Try uploading again"
-    }
-    
-    private func showProcessingState() {
-        sheetMusicText = """
-        PROCESSING...
+        progressView.isHidden = true
+        statusLabel.text = "Failed to load data"
+        refreshButton.isHidden = false
         
-        Your sheet music is being analyzed.
-        This may take a few moments.
-        
-        Please wait...
-        """
-        
-        displaySheetMusic()
-        metronomeLabel.text = "Metronome: Processing"
-        keyLabel.text = "Key: Processing"
-        timeLabel.text = "Time: Processing"
-        chordLabel.text = "Chords: Processing"
-        
-        tipsBodyLabel.text = "• Processing usually takes 30-60 seconds\n• Results will appear automatically\n• Check back in a moment"
+        tipsBodyLabel.text = "• Check your internet connection\n• Ensure the PDF is valid\n• Try uploading again\n• Contact support if problem persists"
     }
     
     private func showSampleSheetMusic() {
         sheetMusicText = """
-        MUSIC SHEET ANALYSIS
+        SHEET MUSIC ANALYSIS
         
-        No recent sheet music found.
+        No sheet music data found.
         
-        Upload a sheet music image to get started!
+        Upload sheet music to get chord analysis!
         
         Features:
         • Automatic chord detection
@@ -557,10 +853,10 @@ final class UploadPageNextViewController: UIViewController {
         • Practice tips
         • Play-along mode
         
-        How to use:
-        1. Take a photo of sheet music
-        2. Upload it from the Upload screen
-        3. Get instant analysis here
+        Sample Chord Progression:
+        C → G → Am → F
+        
+        Try uploading your own sheet music!
         """
         
         extractedChords = ["C", "G", "Am", "F"]
@@ -573,6 +869,10 @@ final class UploadPageNextViewController: UIViewController {
         keyLabel.text = "Key: \(keySignature)"
         timeLabel.text = "Time: \(timeSignature)"
         chordLabel.text = "Chords: \(extractedChords.joined(separator: ", "))"
+        
+        progressView.isHidden = true
+        statusLabel.isHidden = true
+        refreshButton.isHidden = true
         
         tipsBodyLabel.text = "• Sample chords shown for demonstration\n• Upload your own sheet music for analysis\n• Practice regularly for best results"
     }
@@ -591,35 +891,37 @@ final class UploadPageNextViewController: UIViewController {
         attributedText.addAttributes(baseAttributes, range: NSRange(location: 0, length: sheetMusicText.count))
         
         // Highlight section headers
-        let sectionRegex = try! NSRegularExpression(pattern: "(INSTRUMENT:|TIME SIGNATURE:|MEASURE \\d+|Divisions:|Notes:|--- Barline ---)", options: [])
+        let sectionRegex = try! NSRegularExpression(pattern: "(SHEET MUSIC ANALYSIS|METADATA:|CHORD PROGRESSION:|MUSICXML STRUCTURE:|DATA STRUCTURE:|PROCESSING SHEET MUSIC|PROCESSING ERROR)", options: [])
         let sectionMatches = sectionRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
         
         for match in sectionMatches {
             attributedText.addAttributes([
-                .font: UIFont.monospacedSystemFont(ofSize: 15, weight: .semibold),
+                .font: UIFont.monospacedSystemFont(ofSize: 16, weight: .bold),
                 .foregroundColor: UIColor(red: 1, green: 0.8, blue: 0.4, alpha: 1)
             ], range: match.range)
         }
         
-        // Highlight notes
-        let noteRegex = try! NSRegularExpression(pattern: "\\b[A-G][#♯b♭]?\\d\\b", options: [])
-        let noteMatches = noteRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
-        
-        for match in noteMatches {
-            attributedText.addAttributes([
-                .font: UIFont.monospacedSystemFont(ofSize: 15, weight: .medium),
-                .foregroundColor: UIColor(red: 0.8, green: 1, blue: 0.6, alpha: 1)
-            ], range: match.range)
-        }
-        
-        // Highlight chords
-        let chordRegex = try! NSRegularExpression(pattern: "\\b(C|G|Am|F|Dm|Em|A|D|E|Bm)\\b", options: [])
+        // Highlight chords in the text
+        let chordPattern = "\\b(C|G|Am|F|Dm|Em|A|D|E|Bm|C♯|D♯|F♯|G♯|A♯|Cm|C♯m|Dm|D♯m|Em|Fm|F♯m|Gm|G♯m|Am|A♯m|Bm)\\b"
+        let chordRegex = try! NSRegularExpression(pattern: chordPattern, options: [])
         let chordMatches = chordRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
         
         for match in chordMatches {
             attributedText.addAttributes([
                 .font: UIFont.monospacedSystemFont(ofSize: 15, weight: .bold),
-                .foregroundColor: UIColor(red: 1, green: 0.6, blue: 0.8, alpha: 1)
+                .foregroundColor: UIColor(red: 1, green: 0.6, blue: 0.8, alpha: 1),
+                .backgroundColor: UIColor(red: 1, green: 0.6, blue: 0.8, alpha: 0.2)
+            ], range: match.range)
+        }
+        
+        // Highlight metadata labels
+        let metaRegex = try! NSRegularExpression(pattern: "(Time Signature:|Key:|Tempo:|Chords:|Measures:|Instrument:|Status:|Job ID:|Error:)", options: [])
+        let metaMatches = metaRegex.matches(in: sheetMusicText, options: [], range: NSRange(location: 0, length: sheetMusicText.count))
+        
+        for match in metaMatches {
+            attributedText.addAttributes([
+                .font: UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold),
+                .foregroundColor: UIColor(red: 0.8, green: 1, blue: 0.6, alpha: 1)
             ], range: match.range)
         }
         
@@ -659,6 +961,16 @@ final class UploadPageNextViewController: UIViewController {
         maximizeButton.addTarget(self, action: #selector(didTapMaximize), for: .touchUpInside)
         playAlongButton.addTarget(self, action: #selector(didTapPlayAlong), for: .touchUpInside)
         animationButton.addTarget(self, action: #selector(didTapAnimation), for: .touchUpInside)
+        refreshButton.addTarget(self, action: #selector(didTapRefresh), for: .touchUpInside)
+    }
+    
+    @objc private func didTapRefresh() {
+        print("Refresh button tapped")
+        if let resultURL = resultURL {
+            startPollingResultURL(resultURL)
+        } else {
+            loadLatestJobFromDatabase()
+        }
     }
 
     @objc private func didTapMaximize() {
@@ -788,6 +1100,20 @@ final class UploadPageNextViewController: UIViewController {
         musicTextView.showsVerticalScrollIndicator = false
         musicTextView.translatesAutoresizingMaskIntoConstraints = false
         
+        // Progress View
+        progressView.progressTintColor = UIColor(red: 1, green: 0.75, blue: 0.25, alpha: 1)
+        progressView.trackTintColor = UIColor.white.withAlphaComponent(0.1)
+        progressView.layer.cornerRadius = 4
+        progressView.clipsToBounds = true
+        progressView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Status Label
+        statusLabel.text = "Processing your sheet music..."
+        statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        statusLabel.textColor = .white
+        statusLabel.textAlignment = .center
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        
         infoStackView.axis = .horizontal
         infoStackView.spacing = 12
         infoStackView.distribution = .fillEqually
@@ -858,6 +1184,14 @@ final class UploadPageNextViewController: UIViewController {
         animationButton.setTitleColor(.darkGray, for: .normal)
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
         animationButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        refreshButton.setTitle("Refresh", for: .normal)
+        refreshButton.setTitleColor(.white, for: .normal)
+        refreshButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        refreshButton.backgroundColor = UIColor(red: 0.2, green: 0.6, blue: 1, alpha: 1)
+        refreshButton.layer.cornerRadius = 8
+        refreshButton.contentEdgeInsets = UIEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+        refreshButton.translatesAutoresizingMaskIntoConstraints = false
     }
 
     private func buildHierarchy() {
@@ -870,8 +1204,11 @@ final class UploadPageNextViewController: UIViewController {
         sheetContainer.addSubview(sheetImageView)
         sheetContainer.addSubview(pdfView)
         sheetContainer.addSubview(musicTextView)
+        sheetContainer.addSubview(progressView)
+        sheetContainer.addSubview(statusLabel)
         sheetContainer.addSubview(infoStackView)
         sheetContainer.addSubview(metronomeLabel)
+        sheetContainer.addSubview(refreshButton)
         
         infoStackView.addArrangedSubview(keyLabel)
         infoStackView.addArrangedSubview(timeLabel)
@@ -920,13 +1257,24 @@ final class UploadPageNextViewController: UIViewController {
             pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
             pdfView.heightAnchor.constraint(equalToConstant: 180),
 
-
             musicTextView.topAnchor.constraint(equalTo: sheetImageView.bottomAnchor, constant: 16),
             musicTextView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
             musicTextView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
             musicTextView.heightAnchor.constraint(equalToConstant: 160),
             
-            infoStackView.topAnchor.constraint(equalTo: musicTextView.bottomAnchor, constant: 12),
+            progressView.topAnchor.constraint(equalTo: musicTextView.bottomAnchor, constant: 8),
+            progressView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
+            progressView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
+            progressView.heightAnchor.constraint(equalToConstant: 4),
+            
+            statusLabel.topAnchor.constraint(equalTo: progressView.bottomAnchor, constant: 4),
+            statusLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
+            statusLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
+            
+            refreshButton.centerYAnchor.constraint(equalTo: sheetHeaderLabel.centerYAnchor),
+            refreshButton.trailingAnchor.constraint(equalTo: maximizeButton.leadingAnchor, constant: -8),
+            
+            infoStackView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
             infoStackView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
             infoStackView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
             infoStackView.heightAnchor.constraint(equalToConstant: 36),
