@@ -688,12 +688,29 @@ class UploadScreen: UIViewController {
     
     private func showUploadOptions() {
         let ac = UIAlertController(title: "Upload Content", message: nil, preferredStyle: .actionSheet)
-        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in self.presentImagePicker(sourceType: .camera) })
-        ac.addAction(UIAlertAction(title: "Choose From Library", style: .default) { _ in self.presentImagePicker(sourceType: .photoLibrary) })
+
+        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in
+            self.presentImagePicker(sourceType: .camera)
+        })
+
+        ac.addAction(UIAlertAction(title: "Choose Photo", style: .default) { _ in
+            self.presentImagePicker(sourceType: .photoLibrary)
+        })
+
+        ac.addAction(UIAlertAction(title: "Browse Files", style: .default) { _ in
+            self.openFileManager()   // ✅ THIS WAS MISSING
+        })
+
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let pop = ac.popoverPresentationController { pop.sourceView = uploadButton; pop.sourceRect = uploadButton.bounds }
+
+        if let pop = ac.popoverPresentationController {
+            pop.sourceView = uploadButton
+            pop.sourceRect = uploadButton.bounds
+        }
+
         present(ac, animated: true)
     }
+
     
     // MARK: - Recent Uploads (horizontal scroll)
     private func addRecentUploadsSection() {
@@ -812,7 +829,52 @@ class UploadScreen: UIViewController {
 }
 
 // MARK: - UIImagePickerControllerDelegate
-extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate,UIDocumentPickerDelegate {
+    
+    func openFileManager() {
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [
+                .pdf,
+                .data,
+                .item
+            ],
+            asCopy: true
+        )
+        
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+    func documentPicker(
+        _ controller: UIDocumentPickerViewController,
+        didPickDocumentsAt urls: [URL]
+    ) {
+        guard let fileURL = urls.first else { return }
+
+        do {
+            let data = try Data(contentsOf: fileURL)
+            currentUploadData = data
+            currentFileName = fileURL.lastPathComponent
+            currentFileType = "application/pdf"
+
+            uploadLabel.text = "Processing upload..."
+
+            Task {
+                try await saveUploadToDatabase(
+                    imageData: data,
+                    fileName: currentFileName,
+                    fileType: currentFileType
+                )
+            }
+        } catch {
+            print("Failed to read file:", error)
+        }
+
+        print("Type:", fileURL.pathExtension)
+
+        // Upload to server / Supabase / Firebase / API
+    }
+
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         let picked = (info[.editedImage] ?? info[.originalImage]) as? UIImage
