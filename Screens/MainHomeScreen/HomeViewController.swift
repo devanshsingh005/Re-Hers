@@ -43,7 +43,7 @@ class HomeViewController: UIViewController {
         addContinueLearningSection()
         let uploadSectionView = addUploadSection()
         contentView.setCustomSpacing(15, after: uploadSectionView)
-        contentView.addArrangedSubview(makeBrandFooter())
+       // contentView.addArrangedSubview(makeBrandFooter())
     }
 }
 
