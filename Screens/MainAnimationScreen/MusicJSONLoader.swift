@@ -2,12 +2,12 @@
 //  MusicJSONLoader.swift
 //  Re-Hearse_v1
 //
-//  FINAL – MUSICAL & TEMPO CORRECT
+//  FINAL – MUSICAL & TEMPO CORRECT (Dynamic Supabase Ready)
 //
 
 import Foundation
 
-// MARK: - Internal Event Model
+// MARK: - Internal Event Model (Not exposed)
 private struct NoteEvent {
     let noteName: String
     let staff: String        // "1" = Right hand, "2" = Left hand
@@ -19,6 +19,7 @@ private struct NoteEvent {
 enum MusicJSONLoaderError: Error {
     case notFound
     case parseError(String)
+    case networkError
 }
 
 // MARK: - Loader
@@ -38,17 +39,32 @@ struct MusicJSONLoader {
     }
 
     static func loadSongChords(
-        fromBundleFilename filename: String = "sheet_test.json",
-        defaultTempoBPM: Double = 84,     // Happy Birthday tempo
+        fromBundleFilename filename: String,
+        defaultTempoBPM: Double = 84,
         defaultDivisions: Int = 6
     ) throws -> [SongChord] {
 
-        // MARK: - Load JSON
         guard let url = Bundle.main.url(forResource: filename, withExtension: nil) else {
             throw MusicJSONLoaderError.notFound
         }
 
         let data = try Data(contentsOf: url)
+        return try loadSongChords(
+            from: data,
+            defaultTempoBPM: defaultTempoBPM,
+            defaultDivisions: defaultDivisions
+        )
+    }
+
+    // ============================================================
+    // MARK: 2️⃣ LOAD FROM DATA (Recommended for Supabase)
+    // ============================================================
+    static func loadSongChords(
+        from data: Data,
+        defaultTempoBPM: Double = 84,
+        defaultDivisions: Int = 6
+    ) throws -> [SongChord] {
+
         let json = try JSONSerialization.jsonObject(with: data)
         guard let root = json as? [String: Any] else {
             throw MusicJSONLoaderError.parseError("Root JSON is not a dictionary")
@@ -63,23 +79,60 @@ struct MusicJSONLoader {
         defaultDivisions: Int
     ) throws -> [SongChord] {
 
-        // MARK: - Locate Measures
+        return try parseRoot(
+            root,
+            defaultTempoBPM: defaultTempoBPM,
+            defaultDivisions: defaultDivisions
+        )
+    }
+
+    // ============================================================
+    // MARK: 3️⃣ LOAD FROM REMOTE URL (Supabase Signed URL)
+    // ============================================================
+    static func loadSongChords(
+        fromRemoteURL url: URL,
+        defaultTempoBPM: Double = 84,
+        defaultDivisions: Int = 6
+    ) async throws -> [SongChord] {
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw MusicJSONLoaderError.networkError
+        }
+
+        return try loadSongChords(
+            from: data,
+            defaultTempoBPM: defaultTempoBPM,
+            defaultDivisions: defaultDivisions
+        )
+    }
+
+    // ============================================================
+    // MARK: 4️⃣ CORE PARSER (Shared Logic)
+    // ============================================================
+    private static func parseRoot(
+        _ root: [String: Any],
+        defaultTempoBPM: Double,
+        defaultDivisions: Int
+    ) throws -> [SongChord] {
+
         guard let measures = findMeasures(in: root) else {
             throw MusicJSONLoaderError.parseError("Measures not found")
         }
 
-        // MARK: - Divisions
+        // Divisions
         var divisions = defaultDivisions
         if let attrs = measures.first?["attributes"] as? [String: Any],
            let d = attrs["divisions"] {
             divisions = Int("\(d)") ?? divisions
         }
 
-        // MARK: - Tempo
-        let tempoBPM = defaultTempoBPM
-        let secondsPerDivision = (60.0 / tempoBPM) / Double(divisions)
+        // Tempo math
+        let secondsPerDivision = (60.0 / defaultTempoBPM) / Double(divisions)
 
-        // MARK: - Parse Notes
+        // Parse events
         var events: [NoteEvent] = []
         var voiceTicks: [String: Int] = [:]
         var globalTick = 0
@@ -98,7 +151,6 @@ struct MusicJSONLoader {
                     ? (events.last?.startTick ?? voiceTicks[voice, default: globalTick])
                     : voiceTicks[voice, default: globalTick]
 
-                // Pitch
                 if let pitch = note["pitch"] as? [String: Any],
                    let step = pitch["step"] as? String {
 
@@ -115,7 +167,6 @@ struct MusicJSONLoader {
                     )
                 }
 
-                // Advance time per voice
                 if !isChord {
                     voiceTicks[voice, default: startTick] += duration
                     globalTick = max(globalTick, voiceTicks[voice]!)
@@ -123,11 +174,11 @@ struct MusicJSONLoader {
             }
         }
 
-        // MARK: - Group by Time
+        // Group notes by start tick
         let grouped = Dictionary(grouping: events, by: { $0.startTick })
         let sortedTicks = grouped.keys.sorted()
 
-        // MARK: - Build SongChords
+        // Build SongChords
         var songChords: [SongChord] = []
 
         for tick in sortedTicks {
@@ -138,9 +189,6 @@ struct MusicJSONLoader {
 
             let left = evts.filter { $0.staff == "2" }.map { $0.noteName }
             let right = evts.filter { $0.staff != "2" }.map { $0.noteName }
-
-            // Ignore melody-only artifacts
-           // if left.isEmpty && right.count <= 1 { continue }
 
             songChords.append(
                 SongChord(
@@ -155,8 +203,9 @@ struct MusicJSONLoader {
         return songChords
     }
 
-    // MARK: - Helpers
-
+    // ============================================================
+    // MARK: 5️⃣ HELPERS
+    // ============================================================
     private static func makeNoteName(step: String, octave: Int, alter: Int) -> String {
         var s = step.uppercased()
         if alter == 1 { s += "#" }
@@ -166,14 +215,17 @@ struct MusicJSONLoader {
 
     private static func findMeasures(in dict: [String: Any]) -> [[String: Any]]? {
         for (_, value) in dict {
+
             if let arr = value as? [[String: Any]],
                arr.first?["note"] != nil {
                 return arr
             }
+
             if let subDict = value as? [String: Any],
                let found = findMeasures(in: subDict) {
                 return found
             }
+
             if let arr = value as? [Any] {
                 for item in arr {
                     if let d = item as? [String: Any],
