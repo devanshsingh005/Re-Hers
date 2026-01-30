@@ -16,11 +16,16 @@ import UIKit
 extension HomeViewController {
     
     // MARK: - Upload Section
-     func addUploadSection() {
+ 
+    @discardableResult
+    func addUploadSection() -> UIView {
+        assert(contentView.superview != nil, "contentView is not added to scrollView yet")
+
         let container = UIView()
         container.backgroundColor = .secondaryColor
         container.layer.cornerRadius = 22
-        container.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.heightAnchor.constraint(equalToConstant: 80).isActive = true
 
         let icon = UIImageView(image: UIImage(systemName: "icloud.and.arrow.up"))
         icon.tintColor = .darkGray2
@@ -34,9 +39,9 @@ extension HomeViewController {
         stack.axis = .vertical
         stack.alignment = .center
         stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(stack)
-        stack.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
@@ -44,5 +49,6 @@ extension HomeViewController {
         ])
 
         contentView.addArrangedSubview(container)
+        return container   // ✅ CORRECT
     }
 }

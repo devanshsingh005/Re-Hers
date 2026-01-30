@@ -37,27 +37,37 @@ extension HomeViewController {
     }
 
     // MARK: - ScrollView Setup
-     func setupScrollView() {
+    func setupScrollView() {
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = false
+
         scrollView.addSubview(contentView)
         contentView.axis = .vertical
         contentView.spacing = 18
+        contentView.alignment = .fill
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
+            // ScrollView position
             scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
+
+            // ContentView defines scrollable content size
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 20),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -20),
+
+            // Content width = visible width (CRITICAL)
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40)
         ])
     }
+
+
     
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {
