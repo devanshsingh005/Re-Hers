@@ -23,6 +23,7 @@ class HomeViewController: UIViewController {
      let scrollView = UIScrollView()
      let contentView = UIStackView()
 
+ var fixedFooter: UIView!
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -33,13 +34,16 @@ class HomeViewController: UIViewController {
     private func setupUI() {
         view.backgroundColor = .appBackground
         navigationController?.navigationBar.isHidden = true
-        
+
         setupNavBar()
         setupScrollView()
+
         addDailyGoal()
         addContinueCard()
         addContinueLearningSection()
-        addUploadSection()
+        let uploadSectionView = addUploadSection()
+        contentView.setCustomSpacing(15, after: uploadSectionView)
+        contentView.addArrangedSubview(makeBrandFooter())
     }
 }
 
