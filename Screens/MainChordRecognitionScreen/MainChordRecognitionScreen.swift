@@ -15,7 +15,7 @@ final class ChordRecognitionViewController: UIViewController {
     private let useFakeMode = false
 
     // MARK: - UI Components
-    private let navBar = TopNavBar.make(title: "Note Recognition")
+    private let navBar = TopNavBar.make(title: "Chord Recognition")
 
     // Main note display
     private let noteContainerView: UIView = {
@@ -115,70 +115,27 @@ final class ChordRecognitionViewController: UIViewController {
         return btn
     }()
 
-    // MARK: - Piano Notes (C2 to C6)
-    private struct PianoNotes {
-        static let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        
-        // C2 to C6 frequencies (MIDI notes 36 to 84)
-        static let noteFrequencies: [Float] = [
-            // C2 to B2 (65.41Hz - 123.47Hz)
-            65.41, 69.30, 73.42, 77.78, 82.41, 87.31, 92.50, 98.00, 103.83, 110.00, 116.54, 123.47,
-            // C3 to B3 (130.81Hz - 246.94Hz)
-            130.81, 138.59, 146.83, 155.56, 164.81, 174.61, 185.00, 196.00, 207.65, 220.00, 233.08, 246.94,
-            // C4 to B4 (261.63Hz - 493.88Hz)
-            261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88,
-            // C5 to B5 (523.25Hz - 987.77Hz)
-            523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61, 880.00, 932.33, 987.77,
-            // C6 (1046.50Hz)
-            1046.50
-        ]
-        
-        static func noteNameForIndex(_ noteIndex: Int) -> String? {
-            guard noteIndex >= 0 && noteIndex < noteFrequencies.count else { return nil }
-            let octave = 2 + (noteIndex / 12)
-            let noteNameIndex = noteIndex % 12
-            guard noteNameIndex < noteNames.count else { return nil }
-            return "\(noteNames[noteNameIndex])\(octave)"
-        }
-        
-        static func findClosestNoteIndex(for frequency: Float) -> Int? {
-            guard frequency >= 65.0 && frequency <= 1047.0 else { return nil }
-            
-            var closestIndex = 0
-            var smallestDiff = Float.greatestFiniteMagnitude
-            
-            for (index, noteFreq) in noteFrequencies.enumerated() {
-                let diff = abs(frequency - noteFreq)
-                if diff < smallestDiff {
-                    smallestDiff = diff
-                    closestIndex = index
-                }
-            }
-            
-            return closestIndex
-        }
-    }
-
     // MARK: - Fake mode
     private var fakeTimer: Timer?
     private var sampleIndex = 0
 
-    private let fakeNotes: [String] = ["C2", "D3", "E4", "F4", "G5", "A5", "B5", "C6"]
+    private let fakeNotes: [String] = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+    private let fakeFrequencies: [Float] = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]
 
     // MARK: - Real audio / FFT
     private let audioEngine = AVAudioEngine()
     private var fftSetup: FFTSetup?
-    private let bufferSize: Int = 4096
+    private var bufferSize: Int = 4096
     private var sampleRate: Double = 44100
     private var isListening = false
     
     // MARK: - Audio processing
-    private let minMagnitudeThreshold: Float = 0.0005
+    private var detectedPeaks: [(frequency: Float, magnitude: Float)] = []
+    private let minMagnitudeThreshold: Float = 0.001
     private var frequencyHistory: [Float] = []
     private let historySize = 3
+    private var lastNote: String = ""
     private var waveUpdateCounter = 0
-    private var lastDetectedNote: String = ""
-    private var noteStableCount = 0
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -313,20 +270,26 @@ final class ChordRecognitionViewController: UIViewController {
         let centerY = height / 2
         
         // Calculate wave parameters based on frequency
-        let waveCount = max(2, min(8, Int(frequency / 100)))
+        let waveCount = Int(max(2, min(8, frequency / 100))) // Adjust wave density by frequency
         
         let path = UIBezierPath()
         
-        // Create natural-looking wave
-        let points = 120
+        // Create natural-looking wave with multiple sine components
+        let points = 200
         for i in 0...points {
             let x = CGFloat(i) * width / CGFloat(points)
             
             // Base phase
             let basePhase = CGFloat(i) * CGFloat(waveCount) * 2 * .pi / CGFloat(points)
             
-            // Simple sine wave for performance
-            let y = centerY + sin(basePhase) * amplitude * height * 0.4
+            // Multiple sine waves for natural look - only orange shades
+            let y1 = sin(basePhase) * amplitude * 0.7
+            let y2 = sin(basePhase * 2 + 0.5) * amplitude * 0.3
+            let y3 = sin(basePhase * 3 + 1.0) * amplitude * 0.15
+            
+            // Natural randomness
+            let randomFactor = CGFloat.random(in: 0.9...1.1)
+            let y = centerY + (y1 + y2 + y3) * height * 0.4 * randomFactor
             
             if i == 0 {
                 path.move(to: CGPoint(x: x, y: y))
@@ -335,24 +298,34 @@ final class ChordRecognitionViewController: UIViewController {
             }
         }
         
-        // Update wave color with different orange shades
+        // Update wave color with different orange shades based on amplitude
         waveUpdateCounter += 1
         let orangeShade: UIColor
         switch waveUpdateCounter % 4 {
         case 0:
-            orangeShade = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0)
+            orangeShade = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // Bright orange
         case 1:
-            orangeShade = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0)
+            orangeShade = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0) // Pure orange
         case 2:
-            orangeShade = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 1.0)
+            orangeShade = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 1.0) // Light orange
         default:
-            orangeShade = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1.0)
+            orangeShade = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1.0) // Dark orange
         }
         
         waveLayer.strokeColor = orangeShade.cgColor
         
-        // Simple animation
+        // Smooth animation
+        let animation = CABasicAnimation(keyPath: "path")
+        animation.duration = 0.2
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        animation.fromValue = waveLayer.path
+        animation.toValue = path.cgPath
+        
+        CATransaction.begin()
+        CATransaction.setDisableActions(false)
+        waveLayer.add(animation, forKey: "wavePath")
         waveLayer.path = path.cgPath
+        CATransaction.commit()
     }
 
     private func configureActions() {
@@ -401,16 +374,8 @@ final class ChordRecognitionViewController: UIViewController {
 
     @objc private func simulateNote() {
         let note = fakeNotes[sampleIndex % fakeNotes.count]
+        let frequency = fakeFrequencies[sampleIndex % fakeFrequencies.count]
         sampleIndex += 1
-        
-        // Get frequency for the fake note
-        var frequency: Float = 440.0
-        for i in 0..<PianoNotes.noteFrequencies.count {
-            if let noteName = PianoNotes.noteNameForIndex(i), noteName == note {
-                frequency = PianoNotes.noteFrequencies[i]
-                break
-            }
-        }
         
         updateDisplay(note: note, frequency: frequency, amplitude: CGFloat.random(in: 0.3...0.9))
         statusLabel.text = "Demo Mode"
@@ -457,7 +422,6 @@ final class ChordRecognitionViewController: UIViewController {
         let log2n = vDSP_Length(log2(Float(bufferSize)))
         fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
 
-        // Use Hann window
         var window = [Float](repeating: 0, count: bufferSize)
         vDSP_hann_window(&window, vDSP_Length(bufferSize), Int32(vDSP_HANN_NORM))
 
@@ -499,7 +463,6 @@ final class ChordRecognitionViewController: UIViewController {
         let copySize = min(Int(buffer.frameLength), bufferSize)
         memcpy(&samples, channel, copySize * MemoryLayout<Float>.size)
 
-        // Apply window
         vDSP_vmul(samples, 1, window, 1, &samples, 1, vDSP_Length(bufferSize))
 
         let half = bufferSize / 2
@@ -518,131 +481,108 @@ final class ChordRecognitionViewController: UIViewController {
         var magnitudes = [Float](repeating: 0, count: half)
         vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
         
-        // Find the strongest frequency
-        if let frequency = findStrongestFrequency(in: magnitudes) {
-            DispatchQueue.main.async {
-                self.processDetectedFrequency(frequency)
-            }
+        // Find significant peaks
+        let peaks = findSignificantPeaks(in: magnitudes)
+        detectedPeaks = peaks
+        
+        DispatchQueue.main.async {
+            self.updateDisplay(with: peaks)
         }
     }
     
-    // MARK: - Frequency Detection
-    private func findStrongestFrequency(in magnitudes: [Float]) -> Float? {
-        var maxMagnitude: Float = 0
-        var maxIndex = 0
+    // MARK: - Peak detection
+    private func findSignificantPeaks(in magnitudes: [Float]) -> [(frequency: Float, magnitude: Float)] {
+        var peaks: [(frequency: Float, magnitude: Float)] = []
         
-        // Check frequency range 65Hz to 1100Hz (C2 to C6 range)
-        let startIndex = Int(65 * Float(bufferSize) / Float(sampleRate))
-        let endIndex = Int(1100 * Float(bufferSize) / Float(sampleRate))
-        
-        for i in startIndex..<min(endIndex, magnitudes.count - 2) {
-            if magnitudes[i] > maxMagnitude {
-                maxMagnitude = magnitudes[i]
-                maxIndex = i
+        for i in 2..<magnitudes.count - 2 {
+            let mag = magnitudes[i]
+            
+            // Check if this is a peak
+            if mag > minMagnitudeThreshold &&
+               mag > magnitudes[i-2] &&
+               mag > magnitudes[i-1] &&
+               mag > magnitudes[i+1] &&
+               mag > magnitudes[i+2] {
+                
+                let frequency = Float(i) * Float(sampleRate) / Float(bufferSize)
+                
+                // Only consider audible frequencies (65 Hz to 2000 Hz)
+                if frequency >= 65 && frequency <= 2000 {
+                    // Use quadratic interpolation for better accuracy
+                    let interpolatedFreq = quadraticInterpolation(
+                        index: i,
+                        magnitudes: magnitudes,
+                        sampleRate: Float(sampleRate),
+                        fftSize: bufferSize
+                    )
+                    
+                    peaks.append((frequency: interpolatedFreq, magnitude: mag))
+                }
             }
         }
         
-        guard maxMagnitude > minMagnitudeThreshold else { return nil }
+        // Sort by magnitude
+        peaks.sort { (peak1: (frequency: Float, magnitude: Float), peak2: (frequency: Float, magnitude: Float)) -> Bool in
+            return peak1.magnitude > peak2.magnitude
+        }
         
-        // Simple interpolation for better accuracy
-        let frequency = simpleInterpolation(index: maxIndex, magnitudes: magnitudes)
-        return frequency
+        // Take only the strongest peak for note detection
+        if peaks.count > 1 {
+            return [peaks[0]]
+        }
+        
+        return peaks
     }
     
-    private func simpleInterpolation(index: Int, magnitudes: [Float]) -> Float {
+    private func quadraticInterpolation(index: Int, magnitudes: [Float], sampleRate: Float, fftSize: Int) -> Float {
         guard index > 0 && index < magnitudes.count - 1 else {
-            return Float(index) * Float(sampleRate) / Float(bufferSize)
+            return Float(index) * sampleRate / Float(fftSize)
         }
         
         let left = magnitudes[index - 1]
         let center = magnitudes[index]
         let right = magnitudes[index + 1]
         
-        // Basic parabolic interpolation
-        let delta = (right - left) / (2 * (2 * center - left - right))
-        let interpolatedIndex = Float(index) + delta
-        return interpolatedIndex * Float(sampleRate) / Float(bufferSize)
+        let p = 0.5 * (left - right) / (left - 2 * center + right)
+        let interpolatedIndex = Float(index) + p
+        return interpolatedIndex * sampleRate / Float(fftSize)
     }
     
-    // MARK: - Note Mapping
-    private func findClosestPianoNote(_ frequency: Float) -> (note: String, cents: Int)? {
-        // Check if frequency is in C2 to C6 range
-        guard frequency >= 65.0 && frequency <= 1047.0 else { return nil }
+    private func updateDisplay(with peaks: [(frequency: Float, magnitude: Float)]) {
+        guard !peaks.isEmpty else {
+            noteLabel.text = "—"
+            frequencyLabel.text = "Frequency: — Hz"
+            statusLabel.text = "No signal"
+            return
+        }
         
-        // Find closest note index
-        guard let closestIndex = PianoNotes.findClosestNoteIndex(for: frequency) else { return nil }
+        // Find the strongest frequency
+        let strongestPeak = peaks.max(by: { $0.magnitude < $1.magnitude })!
+        let frequency = strongestPeak.frequency
         
-        // Get note name
-        guard let noteName = PianoNotes.noteNameForIndex(closestIndex) else { return nil }
-        
-        // Get exact note frequency
-        let exactFreq = PianoNotes.noteFrequencies[closestIndex]
-        
-        // Calculate cents difference
-        let cents = Int(round(1200 * log2(frequency / exactFreq)))
-        
-        return (noteName, cents)
-    }
-    
-    private func processDetectedFrequency(_ frequency: Float) {
         // Update frequency history for stability
         frequencyHistory.append(frequency)
         if frequencyHistory.count > historySize {
             frequencyHistory.removeFirst()
         }
         
-        // Use average frequency
-        let stableFrequency = frequencyHistory.reduce(0, +) / Float(frequencyHistory.count)
-        
-        // Find closest piano note
-        guard let noteInfo = findClosestPianoNote(stableFrequency) else {
-            noteLabel.text = "—"
-            frequencyLabel.text = "Frequency: — Hz"
-            statusLabel.text = "Out of range"
-            return
-        }
-        
-        let noteName = noteInfo.note
-        let centsOff = noteInfo.cents
-        
-        // Simple stability check
-        if noteName == lastDetectedNote {
-            noteStableCount += 1
+        // Use average frequency for more stable display
+        let stableFrequency: Float
+        if !frequencyHistory.isEmpty {
+            stableFrequency = frequencyHistory.reduce(0, +) / Float(frequencyHistory.count)
         } else {
-            lastDetectedNote = noteName
-            noteStableCount = 0
+            stableFrequency = frequency
         }
         
-        // Only update if note is stable or just changed
-        if noteStableCount >= 2 || noteName != lastDetectedNote {
-            // Prepare display text
-            var displayText = noteName
-            if abs(centsOff) > 30 {
-                let direction = centsOff > 0 ? "+" : ""
-                displayText = "\(noteName) (\(direction)\(abs(centsOff))¢)"
-            }
-            
-            // Calculate amplitude based on stability
-            let amplitude = CGFloat(min(1.0, 0.5 + Double(noteStableCount) * 0.1))
-            
-            updateDisplay(
-                note: displayText,
-                frequency: stableFrequency,
-                amplitude: amplitude
-            )
-            
-            // Update status
-            if abs(centsOff) < 20 {
-                statusLabel.text = "✓ Live"
-            } else if abs(centsOff) < 40 {
-                statusLabel.text = "≈ Live"
-            } else {
-                statusLabel.text = "~ Live"
-            }
-        } else {
-            // Just update frequency display
-            frequencyLabel.text = String(format: "Frequency: %.1f Hz", stableFrequency)
-        }
+        // Convert frequency to note
+        let note = Self.frequencyToNoteName(stableFrequency)
+        
+        // Calculate amplitude for wave visualization
+        let maxMagnitude = peaks.map { $0.magnitude }.max() ?? 0
+        let amplitude = CGFloat(min(1.0, Double(maxMagnitude) * 500))
+        
+        updateDisplay(note: note, frequency: stableFrequency, amplitude: amplitude)
+        statusLabel.text = "Live"
     }
     
     private func updateDisplay(note: String, frequency: Float, amplitude: CGFloat) {
@@ -651,5 +591,27 @@ final class ChordRecognitionViewController: UIViewController {
         
         // Update wave with new parameters
         updateWave(with: amplitude, frequency: frequency)
+    }
+
+    // MARK: - Note Detection Helpers
+    private static func frequencyToNoteName(_ f: Float) -> String {
+        guard f > 0 else { return "—" }
+        
+        let midi = frequencyToMIDINoteNumber(f)
+        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let noteIndex = midi % 12
+        let octave = (midi / 12) - 1
+        
+        if noteIndex >= 0 && noteIndex < noteNames.count && octave >= 0 && octave <= 7 {
+            return "\(noteNames[noteIndex])\(octave)"
+        }
+        return "C4"
+    }
+
+    private static func frequencyToMIDINoteNumber(_ f: Float) -> Int {
+        guard f > 0 else { return 69 } // Default to A4
+        
+        let midi = Int(round(69 + 12 * log2(f / 440.0)))
+        return max(0, min(127, midi)) // Clamp to valid MIDI range
     }
 }
