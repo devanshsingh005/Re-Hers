@@ -5,6 +5,7 @@
 
 import UIKit
 import Supabase
+import PDFKit
 
 final class UploadPageNextViewController: UIViewController {
 
@@ -20,6 +21,8 @@ final class UploadPageNextViewController: UIViewController {
     private var keySignature: String = "C Major"
 
     private let navBar = TopNavBar()
+
+    private let pdfView = PDFView()
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -91,6 +94,20 @@ final class UploadPageNextViewController: UIViewController {
     private func loadJobData() {
         loadLatestJobFromDatabase()
     }
+    private func loadUploadedPDF(from fullPath: String) async {
+        do {
+            let signedURL = try await getSignedURL(from: fullPath)
+
+            DispatchQueue.main.async {
+                self.pdfView.document = PDFDocument(url: signedURL)
+                self.pdfView.isHidden = false
+                self.sheetImageView.isHidden = true
+            }
+        } catch {
+            print("Failed to load PDF:", error)
+        }
+    }
+
     
     private func loadLatestJobFromDatabase() {
         Task {
@@ -116,6 +133,10 @@ final class UploadPageNextViewController: UIViewController {
                     self.jobData = latestJob
                     print("Found job: \(latestJob.id), status: \(latestJob.status), resultUrl: \(latestJob.resultUrl ?? "nil")")
                     
+                    Task {
+                        await self.loadUploadedPDF(from: latestJob.pdfPath)
+                    }
+
                     // Load and display the sheet music data
                     DispatchQueue.main.async {
                         self.loadAndDisplaySheetMusic(from: latestJob)
@@ -144,7 +165,23 @@ final class UploadPageNextViewController: UIViewController {
             return nil
         }
     }
-    
+    private func getSignedURL(from fullPath: String) async throws -> URL {
+        // Remove bucket name
+        let path = fullPath.replacingOccurrences(of: "sheet_data/", with: "")
+
+        // createSignedURL RETURNS URL directly
+        let signedURL: URL = try await SupabaseManager.shared.client
+            .storage
+            .from("sheet_data")
+            .createSignedURL(
+                path: path,
+                expiresIn: 3600
+            )
+
+        return signedURL
+    }
+
+
     private func loadAndDisplaySheetMusic(from job: Job) {
         // Check if job is completed and has result URL
         guard job.status == "completed", let resultUrl = job.resultUrl else {
@@ -162,8 +199,9 @@ final class UploadPageNextViewController: UIViewController {
         Task {
             do {
                 print("Downloading result from: \(resultUrl)")
-                let resultData = try await downloadResultFromBucket(url: resultUrl)
-                
+                let signedURL = try await getSignedURL(from: resultUrl)
+                let resultData = try await downloadResultFromBucket(url: signedURL.absoluteString)
+
                 // First, try to parse as JSON
                 if let json = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] {
                     print("Successfully parsed as JSON")
@@ -734,6 +772,14 @@ final class UploadPageNextViewController: UIViewController {
         sheetImageView.image = uploadedImage
         sheetImageView.translatesAutoresizingMaskIntoConstraints = false
         
+        pdfView.autoScales = true
+        pdfView.backgroundColor = .white
+        pdfView.layer.cornerRadius = 20
+        pdfView.clipsToBounds = true
+        pdfView.translatesAutoresizingMaskIntoConstraints = false
+        pdfView.isHidden = true
+
+        
         musicTextView.isEditable = false
         musicTextView.isScrollEnabled = true
         musicTextView.backgroundColor = UIColor(white: 0.15, alpha: 1)
@@ -822,6 +868,7 @@ final class UploadPageNextViewController: UIViewController {
         sheetContainer.addSubview(sheetHeaderLabel)
         sheetContainer.addSubview(maximizeButton)
         sheetContainer.addSubview(sheetImageView)
+        sheetContainer.addSubview(pdfView)
         sheetContainer.addSubview(musicTextView)
         sheetContainer.addSubview(infoStackView)
         sheetContainer.addSubview(metronomeLabel)
@@ -867,6 +914,12 @@ final class UploadPageNextViewController: UIViewController {
             sheetImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
             sheetImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
             sheetImageView.heightAnchor.constraint(equalToConstant: 180),
+            
+            pdfView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 20),
+            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
+            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -24),
+            pdfView.heightAnchor.constraint(equalToConstant: 180),
+
 
             musicTextView.topAnchor.constraint(equalTo: sheetImageView.bottomAnchor, constant: 16),
             musicTextView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 24),
