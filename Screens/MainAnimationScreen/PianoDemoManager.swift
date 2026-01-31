@@ -8,10 +8,23 @@ final class PianoDemoManager {
     private var chords: [SongChord] = []
 
     private var jsonFilename: String
+    private var externalData: Data?
 
     // MARK: - Init
     init(loadFrom filename: String = "sheet_test.json") {
         self.jsonFilename = filename
+        self.externalData = nil
+    }
+    
+    /// Initialize with external JSON data (from URL)
+    init(withData data: Data) {
+        self.jsonFilename = ""
+        self.externalData = data
+    }
+    
+    /// Set external data to load from
+    func setExternalData(_ data: Data) {
+        self.externalData = data
     }
 
     // MARK: - Public API (USED BY VIEW CONTROLLER)
@@ -23,15 +36,27 @@ final class PianoDemoManager {
         chords.removeAll()
 
         do {
-            let loaded = try MusicJSONLoader.loadSongChords(
-                fromBundleFilename: jsonFilename,
-                defaultTempoBPM: 100,
-                defaultDivisions: 12
-            )
+            let loaded: [SongChord]
+            
+            if let data = externalData {
+                // Load from external data (URL download)
+                loaded = try MusicJSONLoader.loadSongChords(
+                    fromData: data,
+                    defaultTempoBPM: 100,
+                    defaultDivisions: 12
+                )
+            } else {
+                // Load from bundle file
+                loaded = try MusicJSONLoader.loadSongChords(
+                    fromBundleFilename: jsonFilename,
+                    defaultTempoBPM: 100,
+                    defaultDivisions: 12
+                )
+            }
 
             if !loaded.isEmpty {
                 chords = loaded
-                print("[PianoDemoManager] ✅ Loaded \(loaded.count) chords from \(jsonFilename)")
+                print("[PianoDemoManager] ✅ Loaded \(loaded.count) chords")
                 debugPrintSample(loaded)
                 return
             } else {

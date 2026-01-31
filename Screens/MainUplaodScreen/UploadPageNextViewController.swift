@@ -1006,20 +1006,78 @@ final class UploadPageNextViewController: UIViewController {
     }
     
     @objc private func didTapAnimation() {
-        let chordList = extractedChords.isEmpty ? "C, G, Am, F" : extractedChords.joined(separator: ", ")
-        let alert = UIAlertController(
-            title: "Chord Animation",
-            message: "Show finger placement for: \(chordList)",
-            preferredStyle: .actionSheet
-        )
-        
-        alert.addAction(UIAlertAction(title: "Show All Chords", style: .default))
-        
-        for chord in extractedChords {
-            alert.addAction(UIAlertAction(title: "Show \(chord) Chord", style: .default))
+        // Check if we have result URL with sheet music data
+        guard let urlString = resultURL, !urlString.isEmpty else {
+            // Check if we have cached JSON data
+            if let jsonData = sheetMusicJSON {
+                navigateToAnimation(withJSON: jsonData)
+                return
+            }
+            showAnimationError("No sheet music data available. Please upload a sheet first.")
+            return
         }
         
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        // Check if still processing
+        if isProcessing {
+            showAnimationError("Sheet music is still being processed. Please wait.")
+            return
+        }
+        
+        // If we have cached JSON, use it directly
+        if let jsonData = sheetMusicJSON {
+            navigateToAnimation(withJSON: jsonData)
+            return
+        }
+        
+        // Show loading indicator
+        let loadingAlert = UIAlertController(title: "Loading Animation", message: "Fetching sheet music data...", preferredStyle: .alert)
+        present(loadingAlert, animated: true)
+        
+        // Fetch the JSON data from result_url
+        Task {
+            do {
+                guard let url = URL(string: urlString) else {
+                    throw NSError(domain: "InvalidURL", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+                }
+                
+                let (data, _) = try await URLSession.shared.data(from: url)
+                
+                DispatchQueue.main.async {
+                    loadingAlert.dismiss(animated: true) {
+                        // Navigate to PianoAnimationViewController with the data
+                        let animationVC = PianoAnimationViewController()
+                        animationVC.sheetMusicData = data
+                        self.navigationController?.pushViewController(animationVC, animated: true)
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    loadingAlert.dismiss(animated: true) {
+                        self.showAnimationError("Failed to load animation data: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func navigateToAnimation(withJSON json: [String: Any]) {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: json, options: [])
+            let animationVC = PianoAnimationViewController()
+            animationVC.sheetMusicData = data
+            navigationController?.pushViewController(animationVC, animated: true)
+        } catch {
+            showAnimationError("Failed to prepare animation data.")
+        }
+    }
+    
+    private func showAnimationError(_ message: String) {
+        let alert = UIAlertController(
+            title: "Animation Error",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
 

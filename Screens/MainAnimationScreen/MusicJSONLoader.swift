@@ -24,6 +24,19 @@ enum MusicJSONLoaderError: Error {
 // MARK: - Loader
 struct MusicJSONLoader {
 
+    /// Load from JSON Data (for URL downloads)
+    static func loadSongChords(
+        fromData data: Data,
+        defaultTempoBPM: Double = 84,
+        defaultDivisions: Int = 6
+    ) throws -> [SongChord] {
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let root = json as? [String: Any] else {
+            throw MusicJSONLoaderError.parseError("Root JSON is not a dictionary")
+        }
+        return try parseSongChords(from: root, defaultTempoBPM: defaultTempoBPM, defaultDivisions: defaultDivisions)
+    }
+
     static func loadSongChords(
         fromBundleFilename filename: String = "sheet_test.json",
         defaultTempoBPM: Double = 84,     // Happy Birthday tempo
@@ -40,6 +53,15 @@ struct MusicJSONLoader {
         guard let root = json as? [String: Any] else {
             throw MusicJSONLoaderError.parseError("Root JSON is not a dictionary")
         }
+        
+        return try parseSongChords(from: root, defaultTempoBPM: defaultTempoBPM, defaultDivisions: defaultDivisions)
+    }
+    
+    private static func parseSongChords(
+        from root: [String: Any],
+        defaultTempoBPM: Double,
+        defaultDivisions: Int
+    ) throws -> [SongChord] {
 
         // MARK: - Locate Measures
         guard let measures = findMeasures(in: root) else {

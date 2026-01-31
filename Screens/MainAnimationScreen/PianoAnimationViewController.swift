@@ -6,7 +6,10 @@ final class PianoAnimationViewController: UIViewController {
     private let pianoKeyboard = AnimatedPianoKeyboardView()
     private let chordDisplayView = RealTimeChordDisplayView()
     private let chordDetector = ChordDetector()
-    private let demoManager = PianoDemoManager()
+    private var demoManager = PianoDemoManager()
+    
+    /// External JSON data to load (from URL)
+    var sheetMusicData: Data?
 
     private var activeNotes: Set<String> = []
     private var isPlayingDemo = false
@@ -47,6 +50,11 @@ final class PianoAnimationViewController: UIViewController {
         setupNavBar()
         setupConstraints()
         setupActions()
+        
+        // If external data is provided, use it
+        if let data = sheetMusicData {
+            demoManager = PianoDemoManager(withData: data)
+        }
 
         AudioEngineManager.shared.startEngine(loadSoundFont: "Wurlitzer210.sf2")
         startDemoSong()
