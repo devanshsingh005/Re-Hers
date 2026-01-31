@@ -932,13 +932,13 @@ final class UploadPageNextViewController: UIViewController {
         var tips = ""
         
         // Chord-based tips
-        if extractedChords.contains("F") || extractedChords.contains("Bm") {
-            tips += "• Practice barre chords for better sound\n"
-        }
-        
-        if extractedChords.contains("Am") || extractedChords.contains("Dm") || extractedChords.contains("Em") {
-            tips += "• Minor chords add emotional depth\n"
-        }
+//        if extractedChords.contains("F") || extractedChords.contains("Bm") {
+//            tips += "• Practice barre chords for better sound\n"
+//        }
+//        
+//        if extractedChords.contains("Am") || extractedChords.contains("Dm") || extractedChords.contains("Em") {
+//            tips += "• Minor chords add emotional depth\n"
+//        }
         
         // Time signature tips
         if timeSignature == "2/4" || timeSignature == "3/4" {

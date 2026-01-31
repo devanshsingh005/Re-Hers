@@ -87,6 +87,8 @@ final class PianoAnimationViewController: UIViewController {
 
     private func setupNavBar() {
         navBar.isBackButtonVisible = true
+        navBar.isWelcomeTextHidden = true
+        navBar.isStreakVisible = false
         navBar.backAction = { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
@@ -129,7 +131,7 @@ final class PianoAnimationViewController: UIViewController {
     private func startDemoSong() {
         demoManager.loadSong()
         isPlayingDemo = true
-        chordDisplayView.setSingleChord("🎵 Demo Started")
+        chordDisplayView.setSingleChord("🎵 Start")
         scheduleNextDemoChord(after: 0)
         updatePlayPauseUI()
     }
@@ -160,7 +162,7 @@ final class PianoAnimationViewController: UIViewController {
 
     private func playNextDemoChord() {
         guard isPlayingDemo, let chord = demoManager.next() else {
-            chordDisplayView.setSingleChord("Demo Complete")
+            chordDisplayView.setSingleChord("Completed")
             isPlayingDemo = false
             stopAllPlayingNotes()
             updatePlayPauseUI()
