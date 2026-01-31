@@ -7,6 +7,7 @@ import UIKit
 import AVFoundation
 import Photos
 import Supabase
+import PDFKit // Add PDFKit for PDF creation
 
 class UploadScreen: UIViewController {
     
@@ -21,6 +22,7 @@ class UploadScreen: UIViewController {
         static let carouselHeight: CGFloat = 180
         static let metaCoverSize: CGFloat = 56
         static let metaCornerRadius: CGFloat = metaCoverSize / 2 // circular
+        static let pdfPageSize = CGSize(width: 612, height: 792) // US Letter size
     }
     
     // MARK: - State / Data
@@ -29,7 +31,10 @@ class UploadScreen: UIViewController {
     private var currentUploadData: Data? // Store uploaded file data
     private var currentFileName: String = ""
     private var currentFileType: String = ""
+    private var selectedImages: [UIImage] = [] // Store multiple selected images
+    private var isMultiImageSelection = false // Track if we're in multi-image mode
     
+    // UI Element references
     private var metaTitleLbl: UILabel?
     private var metaCoverImgView: UIImageView?
     private var recentHStack: UIStackView?
@@ -474,6 +479,175 @@ class UploadScreen: UIViewController {
         }
     }
     
+    // MARK: - Image to PDF Conversion Methods
+    
+    private func convertImagesToPDF(images: [UIImage]) -> Data? {
+        guard !images.isEmpty else { return nil }
+        
+        let pdfData = NSMutableData()
+        let pdfBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
+        
+        // Create PDF context
+        UIGraphicsBeginPDFContextToData(pdfData, pdfBounds, nil)
+        
+        for (index, image) in images.enumerated() {
+            // Start a new page for each image
+            UIGraphicsBeginPDFPageWithInfo(pdfBounds, nil)
+            
+            // Calculate image size to fit within page while maintaining aspect ratio
+            let imageSize = image.size
+            let pageSize = Constants.pdfPageSize
+            
+            // Calculate scaling factor
+            let widthRatio = pageSize.width / imageSize.width
+            let heightRatio = pageSize.height / imageSize.height
+            let scaleFactor = min(widthRatio, heightRatio)
+            
+            let scaledWidth = imageSize.width * scaleFactor
+            let scaledHeight = imageSize.height * scaleFactor
+            
+            // Center the image on the page
+            let xOffset = (pageSize.width - scaledWidth) / 2
+            let yOffset = (pageSize.height - scaledHeight) / 2
+            
+            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
+            
+            // Draw the image
+            image.draw(in: imageRect)
+            
+            // Optional: Add page number
+            let pageNumberText = "Page \(index + 1)"
+            let textAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12),
+                .foregroundColor: UIColor.gray
+            ]
+            
+            let textSize = pageNumberText.size(withAttributes: textAttributes)
+            let textRect = CGRect(
+                x: (pageSize.width - textSize.width) / 2,
+                y: 20,
+                width: textSize.width,
+                height: textSize.height
+            )
+            
+            pageNumberText.draw(in: textRect, withAttributes: textAttributes)
+        }
+        
+        UIGraphicsEndPDFContext()
+        
+        return pdfData as Data
+    }
+    
+    private func createPDFFromImages() -> (Data, String, String)? {
+        guard !selectedImages.isEmpty else { return nil }
+        
+        // Convert images to PDF
+        if let pdfData = convertImagesToPDF(images: selectedImages) {
+            let timestamp = Date().timeIntervalSince1970
+            let fileName = "images_\(Int(timestamp)).pdf"
+            let fileType = "application/pdf"
+            
+            return (pdfData, fileName, fileType)
+        }
+        
+        return nil
+    }
+    
+    private func processSelectedImagesAndUpload() {
+        guard !selectedImages.isEmpty else {
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "No images selected"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    self.uploadLabel.text = "Drag & drop or tap to upload"
+                }
+            }
+            return
+        }
+        
+        // Show converting state
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+            self.uploadLabel.text = "Converting \(self.selectedImages.count) image(s) to PDF..."
+        }
+        
+        // Create PDF from images
+        guard let (pdfData, fileName, fileType) = createPDFFromImages() else {
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                self.uploadLabel.text = "Failed to create PDF"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                    self.uploadLabel.text = "Drag & drop or tap to upload"
+                }
+            }
+            return
+        }
+        
+        // Update upload data
+        currentUploadData = pdfData
+        currentFileName = fileName
+        currentFileType = fileType
+        
+        // Start upload process
+        Task {
+            do {
+                print("Starting multi-image PDF upload task...")
+                try await saveUploadToDatabase(
+                    imageData: pdfData,
+                    fileName: currentFileName,
+                    fileType: currentFileType
+                )
+                
+                print("Multi-image PDF upload completed successfully!")
+                
+                // Clear selected images
+                self.selectedImages.removeAll()
+                self.isMultiImageSelection = false
+                
+                // Refresh recent uploads
+                await self.loadRecentUploadsFromDB()
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    // Show success
+                    self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                    self.uploadLabel.text = "PDF created and uploaded!"
+                    
+                    // Reset after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                }
+            } catch {
+                print("Multi-image PDF upload failed with error: \(error)")
+                print("Error details: \(error.localizedDescription)")
+                
+                DispatchQueue.main.async {
+                    // Show error
+                    self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                    self.uploadLabel.text = "Upload failed"
+                    
+                    // Reset after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                    
+                    // Show error alert
+                    let alert = UIAlertController(
+                        title: "Upload Failed",
+                        message: "Error: \(error.localizedDescription)\n\nPlease try again.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+    
     // MARK: - Data Models
     
     // Job table models
@@ -864,12 +1038,16 @@ class UploadScreen: UIViewController {
             self.presentImagePicker(sourceType: .camera)
         })
 
-        ac.addAction(UIAlertAction(title: "Choose Photo", style: .default) { _ in
-            self.presentImagePicker(sourceType: .photoLibrary)
+        ac.addAction(UIAlertAction(title: "Choose Single Photo", style: .default) { _ in
+            self.presentSingleImagePicker(sourceType: .photoLibrary)
+        })
+        
+        ac.addAction(UIAlertAction(title: "Choose Multiple Photos", style: .default) { _ in
+            self.presentMultipleImagePicker()
         })
 
         ac.addAction(UIAlertAction(title: "Browse Files", style: .default) { _ in
-            self.openFileManager()   // ✅ THIS WAS MISSING
+            self.openFileManager()
         })
 
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -881,7 +1059,6 @@ class UploadScreen: UIViewController {
 
         present(ac, animated: true)
     }
-
     
     // MARK: - Recent Uploads (horizontal scroll)
     private func addRecentUploadsSection() {
@@ -998,37 +1175,50 @@ class UploadScreen: UIViewController {
         present(picker, animated: true)
     }
     
+    private func presentSingleImagePicker(sourceType: UIImagePickerController.SourceType) {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.allowsEditing = true
+        picker.sourceType = sourceType
+        picker.view.tag = 0
+        present(picker, animated: true)
+    }
+    
+    private func presentMultipleImagePicker() {
+        // Reset selected images
+        selectedImages.removeAll()
+        isMultiImageSelection = true
+        
+        // Show image picker for multiple selection
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.sourceType = .photoLibrary
+        picker.view.tag = 1000 // Special tag for multi-image selection
+        
+        // Present with a message
+        present(picker, animated: true) {
+            // Show an alert explaining the multi-selection process
+            let alert = UIAlertController(
+                title: "Select Multiple Images",
+                message: "Select multiple images one by one. They will be automatically converted to a PDF and uploaded.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            picker.present(alert, animated: true)
+        }
+    }
+    
     // MARK: - Navigation Helper
     private func navigateToNextPage(with scanId: Int64, resultURL: String) {
         DispatchQueue.main.async {
             let vc = UploadPageNextViewController()
-            // Pass the scan ID and result URL to the next page
-            // You need to add these properties to UploadPageNextViewController:
-            /*
-            class UploadPageNextViewController: UIViewController {
-                var scanId: Int64?
-                var resultURL: String?
-                
-                override func viewDidLoad() {
-                    super.viewDidLoad()
-                    if let scanId = scanId {
-                        print("Received scan ID: \(scanId)")
-                    }
-                    if let resultURL = resultURL {
-                        print("Received result URL: \(resultURL)")
-                    }
-                }
-                // Rest of your code...
-            }
-            */
-            // For now, we'll just navigate
             self.navigationController?.pushViewController(vc, animated: true)
         }
     }
 }
 
 // MARK: - UIImagePickerControllerDelegate
-extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate,UIDocumentPickerDelegate {
+extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
     
     func openFileManager() {
         let picker = UIDocumentPickerViewController(
@@ -1139,70 +1329,123 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             return
         }
         
-        // Normal upload flow - prepare data for database
+        if picker.view.tag == 1000 {
+            // Multi-image selection mode
+            guard let image = picked else { return }
+            
+            // Add image to selected images array
+            selectedImages.append(image)
+            
+            // Show how many images selected
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "photo.stack")
+                self.uploadLabel.text = "Selected \(self.selectedImages.count) image(s). Tap 'Upload Files' to convert to PDF."
+            }
+            
+            // Ask if user wants to add more images
+            let alert = UIAlertController(
+                title: "Add More Images?",
+                message: "Selected \(selectedImages.count) image(s). Do you want to add more images?",
+                preferredStyle: .alert
+            )
+            
+            alert.addAction(UIAlertAction(title: "Add More", style: .default) { _ in
+                self.presentMultipleImagePicker()
+            })
+            
+            alert.addAction(UIAlertAction(title: "Done", style: .default) { _ in
+                // Convert images to PDF and upload
+                self.processSelectedImagesAndUpload()
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                // Clear selected images
+                self.selectedImages.removeAll()
+                self.isMultiImageSelection = false
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "Drag & drop or tap to upload"
+            })
+            
+            self.present(alert, animated: true)
+            return
+        }
+        
+        // Normal single image upload flow
         guard let image = picked else { return }
         
-        // Convert image to Data
-        if let imageData = image.jpegData(compressionQuality: 0.8) {
-            currentUploadData = imageData
-            currentFileName = "upload_\(Date().timeIntervalSince1970).jpg"
-            currentFileType = "image/jpeg"
-            
-            // Show loading state
-            uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-            uploadLabel.text = "Processing upload..."
-            
-            // Simulate API flow and save to database
-            Task {
-                do {
-                    print("Starting upload task...")
-                    try await saveUploadToDatabase(
-                        imageData: imageData,
-                        fileName: currentFileName,
-                        fileType: currentFileType
+        // Convert single image to PDF
+        guard let pdfData = convertImagesToPDF(images: [image]) else {
+            DispatchQueue.main.async {
+                let alert = UIAlertController(
+                    title: "Error",
+                    message: "Failed to convert image to PDF.",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+            return
+        }
+        
+        // Update upload data with PDF
+        currentUploadData = pdfData
+        currentFileName = "image_\(Date().timeIntervalSince1970).pdf"
+        currentFileType = "application/pdf"
+        
+        // Show loading state
+        uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+        uploadLabel.text = "Converting image to PDF..."
+        
+        // Upload the PDF
+        Task {
+            do {
+                print("Starting single image to PDF upload task...")
+                try await saveUploadToDatabase(
+                    imageData: pdfData,
+                    fileName: currentFileName,
+                    fileType: currentFileType
+                )
+                
+                print("Single image PDF upload completed successfully!")
+                
+                // Refresh recent uploads
+                await self.loadRecentUploadsFromDB()
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    // Show success
+                    self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                    self.uploadLabel.text = "PDF created and uploaded!"
+                    
+                    // Reset after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                }
+            } catch {
+                print("Single image PDF upload failed with error: \(error)")
+                print("Error details: \(error.localizedDescription)")
+                
+                DispatchQueue.main.async {
+                    // Show error with more details
+                    self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                    self.uploadLabel.text = "Upload failed"
+                    
+                    // Reset after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                    
+                    // Show error alert with more details
+                    let alert = UIAlertController(
+                        title: "Upload Failed",
+                        message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
+                        preferredStyle: .alert
                     )
-                    
-                    print("Upload completed successfully!")
-                    
-                    // Refresh recent uploads
-                    await self.loadRecentUploadsFromDB()
-                    
-                    // Update UI on main thread
-                    DispatchQueue.main.async {
-                        // Show success
-                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                        self.uploadLabel.text = "Upload completed!"
-                        
-                        // Reset after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                    }
-                } catch {
-                    print("Upload failed with error: \(error)")
-                    print("Error details: \(error.localizedDescription)")
-                    
-                    DispatchQueue.main.async {
-                        // Show error with more details
-                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                        self.uploadLabel.text = "Upload failed"
-                        
-                        // Reset after 3 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                        
-                        // Show error alert with more details
-                        let alert = UIAlertController(
-                            title: "Upload Failed",
-                            message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
-                    }
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
                 }
             }
         }
@@ -1210,5 +1453,14 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        
+        // If in multi-image mode and no images selected, reset
+        if isMultiImageSelection && selectedImages.isEmpty {
+            isMultiImageSelection = false
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "Drag & drop or tap to upload"
+            }
+        }
     }
 }
