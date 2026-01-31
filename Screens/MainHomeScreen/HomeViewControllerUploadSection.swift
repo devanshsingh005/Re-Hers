@@ -23,22 +23,25 @@ extension HomeViewController {
 
         let container = UIView()
         container.backgroundColor = .secondaryColor
-        container.layer.cornerRadius = 22
+        container.layer.cornerRadius = 26
         container.translatesAutoresizingMaskIntoConstraints = false
-        container.heightAnchor.constraint(equalToConstant: 80).isActive = true
+        container.heightAnchor.constraint(equalToConstant: 120).isActive = true // ⬆️ increased
 
         let icon = UIImageView(image: UIImage(systemName: "icloud.and.arrow.up"))
         icon.tintColor = .darkGray2
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.widthAnchor.constraint(equalToConstant: 34).isActive = true  // ⬆️ increased
+        icon.heightAnchor.constraint(equalToConstant: 34).isActive = true // ⬆️ increased
 
         let text = UILabel()
         text.text = "Sheet to Music"
-        text.font = .systemFont(ofSize: 20, weight: .semibold)
+        text.font = .systemFont(ofSize: 24, weight: .semibold) // ⬆️ increased
         text.textColor = .darkGray2
 
         let stack = UIStackView(arrangedSubviews: [text, icon])
         stack.axis = .vertical
         stack.alignment = .center
-        stack.spacing = 8
+        stack.spacing = 14 // ⬆️ increased
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(stack)
@@ -49,6 +52,6 @@ extension HomeViewController {
         ])
 
         contentView.addArrangedSubview(container)
-        return container   // ✅ CORRECT
+        return container
     }
 }
