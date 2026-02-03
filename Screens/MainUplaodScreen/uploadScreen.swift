@@ -80,6 +80,11 @@ class UploadScreen: UIViewController {
         // Refresh recent uploads when view appears
         loadRecentUploadsFromDB()
     }
+    // MARK: - Public entry point (for Home → Upload)
+    func startUploadFlow() {
+        uploadTapped()
+    }
+
     
     // MARK: - Vision Kit Image Processing (Simplified)
     private func processImageWithVisionKit(_ image: UIImage, completion: @escaping (UIImage) -> Void) {
