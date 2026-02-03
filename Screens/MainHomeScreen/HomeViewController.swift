@@ -73,6 +73,8 @@ class HomeViewController: UIViewController {
         let uploadSectionView = addUploadSection()
         contentView.setCustomSpacing(15, after: uploadSectionView)
         contentView.addArrangedSubview(makeBrandFooter())
+        contentView.setCustomSpacing(24, after: uploadSectionView)
+
     }
     
     // MARK: - Practice Timer
@@ -94,6 +96,7 @@ class HomeViewController: UIViewController {
         practiceTimer = nil
     }
 }
+
 
 /*import UIKit
 
