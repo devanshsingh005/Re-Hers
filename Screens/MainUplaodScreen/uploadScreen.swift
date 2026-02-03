@@ -7,9 +7,15 @@ import UIKit
 import AVFoundation
 import Photos
 import Supabase
+<<<<<<< HEAD
 import PDFKit // Add PDFKit for PDF creation
 import Vision
 import VisionKit
+=======
+import PDFKit
+import VisionKit
+import Vision
+>>>>>>> develop
 
 class UploadScreen: UIViewController {
     
@@ -24,7 +30,9 @@ class UploadScreen: UIViewController {
         static let carouselHeight: CGFloat = 180
         static let metaCoverSize: CGFloat = 56
         static let metaCornerRadius: CGFloat = metaCoverSize / 2 // circular
-        static let pdfPageSize = CGSize(width: 612, height: 792) // US Letter size
+        static let pdfPageSize = CGSize(width: 612, height: 792) // US Letter size (8.5" x 11") in points
+        static let dpi: CGFloat = 300.0 // Professional scanning DPI
+        static let pdfPointsPerInch: CGFloat = 72.0 // PDF uses points (1/72 inch)
     }
     
     // MARK: - State / Data
@@ -35,6 +43,9 @@ class UploadScreen: UIViewController {
     private var currentFileType: String = ""
     private var selectedImages: [UIImage] = [] // Store multiple selected images
     private var isMultiImageSelection = false // Track if we're in multi-image mode
+    
+    // VisionKit document scanner
+    private var documentScannerController: VNDocumentCameraViewController?
     
     // UI Element references
     private var metaTitleLbl: UILabel?
@@ -81,6 +92,7 @@ class UploadScreen: UIViewController {
         loadRecentUploadsFromDB()
     }
     
+<<<<<<< HEAD
     // MARK: - Vision Kit Image Processing (Simplified)
     private func processImageWithVisionKit(_ image: UIImage, completion: @escaping (UIImage) -> Void) {
         // Process image through Core Image filters for document enhancement
@@ -494,6 +506,8 @@ class UploadScreen: UIViewController {
         }
     }
     
+=======
+>>>>>>> develop
     // MARK: - Database Methods
     
     private func loadRecentUploadsFromDB() {
@@ -742,8 +756,7 @@ class UploadScreen: UIViewController {
                 "result_url": resultURL,
                 "job_id": apiJobIdString,
                 "user_id": apiUserIdString,
-                "pdf_path": pdfPath,
-                "pdf_type": "scanned" // Mark as scanned PDF
+                "pdf_path": pdfPath
             ]
             
             // Merge API response into JSON
@@ -787,8 +800,7 @@ class UploadScreen: UIViewController {
                     "result_url": resultURL,
                     "job_id": apiJobIdString,
                     "user_id": apiUserIdString,
-                    "pdf_path": pdfPath,
-                    "pdf_type": "scanned" // Mark as scanned PDF
+                    "pdf_path": pdfPath
                 ]
                 
                 // Merge API response into JSON
@@ -893,6 +905,447 @@ class UploadScreen: UIViewController {
             let responseString = String(data: data, encoding: .utf8) ?? "No response body"
             print("External API raw response: \(responseString)")
             return ["raw_response": responseString, "status": "processed"]
+        }
+    }
+    
+    // MARK: - 300 DPI High Resolution PDF Creation
+    
+    private func convertImagesToScannedPDF(images: [UIImage]) -> Data? {
+        guard !images.isEmpty else { return nil }
+        
+        let pdfData = NSMutableData()
+        let pageBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
+        
+        // Create PDF context with 300 DPI settings
+        let pdfInfo: [AnyHashable: Any] = [
+            kCGPDFContextCreator: "Re-Hearse Scanner",
+            kCGPDFContextTitle: "Scanned Music Score",
+            kCGPDFContextSubject: "300 DPI Scanned Document"
+        ]
+        
+        // Create PDF context with proper DPI settings
+        UIGraphicsBeginPDFContextToData(pdfData, pageBounds, pdfInfo)
+        
+        let context = UIGraphicsGetCurrentContext()
+        
+        for (index, image) in images.enumerated() {
+            // Start a new page
+            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+            
+            // Apply VisionKit-like processing to create scanned effect
+            let scannedImage = processImageWithVisionKit(image) ?? applyEnhancedProcessing(to: image)
+            
+            // Scale image to fit page while maintaining aspect ratio
+            let imageSize = scannedImage.size
+            let pageSize = Constants.pdfPageSize
+            
+            // Calculate scaling to fit page
+            let widthRatio = pageSize.width / imageSize.width
+            let heightRatio = pageSize.height / imageSize.height
+            let scaleFactor = min(widthRatio, heightRatio)
+            
+            let scaledWidth = imageSize.width * scaleFactor
+            let scaledHeight = imageSize.height * scaleFactor
+            
+            // Center the image on page
+            let xOffset = (pageSize.width - scaledWidth) / 2
+            let yOffset = (pageSize.height - scaledHeight) / 2
+            
+            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
+            
+            // Draw the scanned image at 300 DPI
+            scannedImage.draw(in: imageRect)
+            
+            // Add subtle page number
+            if let context = context {
+                context.saveGState()
+                
+                let pageNumber = "Page \(index + 1)"
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 10),
+                    .foregroundColor: UIColor.gray.withAlphaComponent(0.6)
+                ]
+                
+                let textSize = pageNumber.size(withAttributes: attributes)
+                let textRect = CGRect(
+                    x: (pageSize.width - textSize.width) / 2,
+                    y: 20,
+                    width: textSize.width,
+                    height: textSize.height
+                )
+                
+                pageNumber.draw(in: textRect, withAttributes: attributes)
+                
+                context.restoreGState()
+            }
+        }
+        
+        UIGraphicsEndPDFContext()
+        
+        // Enhance PDF with 300 DPI metadata
+        return enhancePDFWithDPI(pdfData as Data)
+    }
+    
+    private func enhancePDFWithDPI(_ pdfData: Data) -> Data? {
+        guard let pdfDocument = PDFDocument(data: pdfData) else { return pdfData }
+        
+        let outputData = NSMutableData()
+        
+        // Create new PDF with DPI information
+        let pdfInfo: [AnyHashable: Any] = [
+            kCGPDFContextCreator: "Re-Hearse Scanner",
+            kCGPDFContextTitle: "300 DPI Scanned Document",
+            kCGPDFContextSubject: "Music Score",
+            kCGPDFContextKeywords: "music, score, scanned, 300dpi"
+        ]
+        
+        // Get page bounds from first page
+        guard let firstPage = pdfDocument.page(at: 0) else { return pdfData }
+        let pageBounds = firstPage.bounds(for: .mediaBox)
+        
+        UIGraphicsBeginPDFContextToData(outputData, pageBounds, pdfInfo)
+        
+        // Copy all pages to new context
+        for i in 0..<pdfDocument.pageCount {
+            guard let page = pdfDocument.page(at: i) else { continue }
+            
+            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+            
+            let context = UIGraphicsGetCurrentContext()
+            context?.saveGState()
+            
+            // Draw the page at high resolution
+            context?.translateBy(x: 0, y: pageBounds.height)
+            context?.scaleBy(x: 1.0, y: -1.0)
+            
+            page.draw(with: .mediaBox, to: context!)
+            
+            context?.restoreGState()
+        }
+        
+        UIGraphicsEndPDFContext()
+        
+        return outputData as Data
+    }
+    
+    // MARK: - VisionKit Document Scanning Methods
+    
+    private func processImageWithVisionKit(_ image: UIImage) -> UIImage? {
+        // First, scale image to ensure high resolution for scanning
+        guard let highResImage = scaleImageToHighResolution(image) else { return nil }
+        
+        // Use Vision to detect document edges
+        guard let ciImage = CIImage(image: highResImage) else { return highResImage }
+        
+        // Create Vision request for rectangle detection (document edges)
+        let request = VNDetectRectanglesRequest { [weak self] request, error in
+            guard let self = self else { return }
+            
+            if let results = request.results as? [VNRectangleObservation], let rect = results.first {
+                // If rectangle detected, we can apply perspective correction
+                self.applyPerspectiveCorrection(to: ciImage, rectangle: rect)
+            }
+        }
+        
+        request.minimumConfidence = 0.8
+        request.maximumObservations = 1
+        request.minimumAspectRatio = 0.2
+        request.maximumAspectRatio = 1.0
+        request.quadratureTolerance = 30
+        request.minimumSize = 0.2
+        
+        let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
+        
+        do {
+            try handler.perform([request])
+        } catch {
+            print("VisionKit error: \(error)")
+        }
+        
+        // Apply enhanced processing at high resolution
+        return applyEnhancedProcessing(to: highResImage)
+    }
+    
+    private func scaleImageToHighResolution(_ image: UIImage) -> UIImage? {
+        // Scale image to ensure at least 300 DPI for letter size
+        let targetWidth = 2550 // 8.5 inches * 300 DPI
+        let targetHeight = 3300 // 11 inches * 300 DPI
+        
+        let size = image.size
+        let widthRatio = CGFloat(targetWidth) / size.width
+        let heightRatio = CGFloat(targetHeight) / size.height
+        let scaleFactor = min(widthRatio, heightRatio)
+        
+        let scaledSize = CGSize(
+            width: size.width * scaleFactor,
+            height: size.height * scaleFactor
+        )
+        
+        // Create high-resolution image context
+        UIGraphicsBeginImageContextWithOptions(scaledSize, true, 1.0)
+        defer { UIGraphicsEndImageContext() }
+        
+        // Fill with white background
+        UIColor.white.setFill()
+        UIRectFill(CGRect(origin: .zero, size: scaledSize))
+        
+        // Draw image
+        image.draw(in: CGRect(origin: .zero, size: scaledSize))
+        
+        return UIGraphicsGetImageFromCurrentImageContext()
+    }
+    
+    private func applyPerspectiveCorrection(to ciImage: CIImage, rectangle: VNRectangleObservation) -> UIImage? {
+        let imageSize = ciImage.extent.size
+        
+        // Create perspective correction filter
+        let perspectiveCorrection = CIFilter(name: "CIPerspectiveCorrection")!
+        perspectiveCorrection.setValue(ciImage, forKey: kCIInputImageKey)
+        
+        // Convert Vision coordinates to Core Image coordinates
+        let topLeft = CGPoint(x: rectangle.topLeft.x * imageSize.width, y: (1 - rectangle.topLeft.y) * imageSize.height)
+        let topRight = CGPoint(x: rectangle.topRight.x * imageSize.width, y: (1 - rectangle.topRight.y) * imageSize.height)
+        let bottomLeft = CGPoint(x: rectangle.bottomLeft.x * imageSize.width, y: (1 - rectangle.bottomLeft.y) * imageSize.height)
+        let bottomRight = CGPoint(x: rectangle.bottomRight.x * imageSize.width, y: (1 - rectangle.bottomRight.y) * imageSize.height)
+        
+        perspectiveCorrection.setValue(CIVector(cgPoint: topLeft), forKey: "inputTopLeft")
+        perspectiveCorrection.setValue(CIVector(cgPoint: topRight), forKey: "inputTopRight")
+        perspectiveCorrection.setValue(CIVector(cgPoint: bottomLeft), forKey: "inputBottomLeft")
+        perspectiveCorrection.setValue(CIVector(cgPoint: bottomRight), forKey: "inputBottomRight")
+        
+        guard let outputImage = perspectiveCorrection.outputImage else { return nil }
+        
+        // Convert back to UIImage
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
+            return nil
+        }
+        
+        return UIImage(cgImage: cgImage)
+    }
+    
+    private func applyEnhancedProcessing(to image: UIImage) -> UIImage {
+        guard let ciImage = CIImage(image: image) else { return image }
+        
+        var processedImage = ciImage
+        
+        // 1. Convert to black and white with high contrast (scanned effect)
+        let bwFilter = CIFilter(name: "CIColorControls")!
+        bwFilter.setValue(processedImage, forKey: kCIInputImageKey)
+        bwFilter.setValue(0.0, forKey: kCIInputSaturationKey) // Full desaturation
+        bwFilter.setValue(1.8, forKey: kCIInputContrastKey) // High contrast for scanning
+        bwFilter.setValue(0.15, forKey: kCIInputBrightnessKey) // Slight brightness
+        
+        if let output = bwFilter.outputImage {
+            processedImage = output
+        }
+        
+        // 2. Apply document enhancer filter
+        if let documentEnhancementFilter = CIFilter(name: "CIDocumentEnhancer") {
+            documentEnhancementFilter.setValue(processedImage, forKey: kCIInputImageKey)
+            if let output = documentEnhancementFilter.outputImage {
+                processedImage = output
+            }
+        }
+        
+        // 3. Apply sharpening for clarity
+        let sharpenFilter = CIFilter(name: "CISharpenLuminance")!
+        sharpenFilter.setValue(processedImage, forKey: kCIInputImageKey)
+        sharpenFilter.setValue(0.9, forKey: kCIInputSharpnessKey) // Strong sharpening for scanned look
+        
+        if let output = sharpenFilter.outputImage {
+            processedImage = output
+        }
+        
+        // 4. Apply noise reduction
+        let noiseFilter = CIFilter(name: "CINoiseReduction")!
+        noiseFilter.setValue(processedImage, forKey: kCIInputImageKey)
+        noiseFilter.setValue(0.02, forKey: "inputNoiseLevel")
+        noiseFilter.setValue(0.6, forKey: "inputSharpness") // Higher sharpness for music notation
+        
+        if let output = noiseFilter.outputImage {
+            processedImage = output
+        }
+        
+        // 5. Apply threshold for pure black and white (optional, comment out for grayscale)
+        let thresholdFilter = CIFilter(name: "CIColorThreshold")!
+        thresholdFilter.setValue(processedImage, forKey: kCIInputImageKey)
+        thresholdFilter.setValue(0.5, forKey: "inputThreshold") // Adjust for desired black/white balance
+        
+        if let output = thresholdFilter.outputImage {
+            processedImage = output
+        }
+        
+        // Convert back to UIImage
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(processedImage, from: processedImage.extent) else {
+            return image
+        }
+        
+        return UIImage(cgImage: cgImage)
+    }
+    
+    // MARK: - Process Different Input Types
+    
+    private func processAndConvertToScannedPDF(_ input: Any) -> (Data, String, String)? {
+        if let images = input as? [UIImage] {
+            // Multiple images
+            guard !images.isEmpty else { return nil }
+            
+            if let pdfData = convertImagesToScannedPDF(images: images) {
+                let timestamp = Date().timeIntervalSince1970
+                let fileName = "scanned_300dpi_\(Int(timestamp)).pdf"
+                return (pdfData, fileName, "application/pdf")
+            }
+        } else if let image = input as? UIImage {
+            // Single image
+            if let pdfData = convertImagesToScannedPDF(images: [image]) {
+                let timestamp = Date().timeIntervalSince1970
+                let fileName = "scanned_300dpi_\(Int(timestamp)).pdf"
+                return (pdfData, fileName, "application/pdf")
+            }
+        } else if let pdfData = input as? Data {
+            // Already a PDF - we'll convert it to scanned version
+            // First extract images from PDF, then process them
+            if let images = extractImagesFromPDF(pdfData) {
+                if let scannedPDFData = convertImagesToScannedPDF(images: images) {
+                    let timestamp = Date().timeIntervalSince1970
+                    let fileName = "scanned_converted_300dpi_\(Int(timestamp)).pdf"
+                    return (scannedPDFData, fileName, "application/pdf")
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    private func extractImagesFromPDF(_ pdfData: Data) -> [UIImage]? {
+        guard let pdfDocument = PDFDocument(data: pdfData) else { return nil }
+        
+        var images: [UIImage] = []
+        
+        for pageIndex in 0..<pdfDocument.pageCount {
+            if let page = pdfDocument.page(at: pageIndex) {
+                // Get page at high resolution (300 DPI)
+                let pageBounds = page.bounds(for: .mediaBox)
+                
+                // Create high-resolution renderer
+                let format = UIGraphicsImageRendererFormat()
+                format.scale = Constants.dpi / Constants.pdfPointsPerInch // Convert 300 DPI to scale
+                format.opaque = true
+                
+                let renderer = UIGraphicsImageRenderer(size: pageBounds.size, format: format)
+                
+                let image = renderer.image { context in
+                    // Set white background
+                    UIColor.white.setFill()
+                    context.fill(CGRect(origin: .zero, size: pageBounds.size))
+                    
+                    // Draw PDF page at high resolution
+                    context.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                    context.cgContext.scaleBy(x: 1, y: -1)
+                    page.draw(with: .mediaBox, to: context.cgContext)
+                }
+                
+                images.append(image)
+            }
+        }
+        
+        return images
+    }
+    
+    private func processSelectedImagesAndUpload() {
+        guard !selectedImages.isEmpty else {
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "No images selected"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    self.uploadLabel.text = "Drag & drop or tap to upload"
+                }
+            }
+            return
+        }
+        
+        // Show scanning state
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "doc.text.viewfinder")
+            self.uploadLabel.text = "Scanning \(self.selectedImages.count) image(s) at 300 DPI..."
+        }
+        
+        // Create scanned PDF from images at 300 DPI
+        guard let (pdfData, fileName, fileType) = processAndConvertToScannedPDF(selectedImages) else {
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                self.uploadLabel.text = "Failed to create 300 DPI scanned PDF"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                    self.uploadLabel.text = "Drag & drop or tap to upload"
+                }
+            }
+            return
+        }
+        
+        // Update upload data
+        currentUploadData = pdfData
+        currentFileName = fileName
+        currentFileType = fileType
+        
+        // Start upload process
+        Task {
+            do {
+                print("Starting 300 DPI scanned PDF upload task...")
+                try await saveUploadToDatabase(
+                    imageData: pdfData,
+                    fileName: currentFileName,
+                    fileType: currentFileType
+                )
+                
+                print("300 DPI scanned PDF upload completed successfully!")
+                
+                // Clear selected images
+                self.selectedImages.removeAll()
+                self.isMultiImageSelection = false
+                
+                // Refresh recent uploads
+                await self.loadRecentUploadsFromDB()
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    // Show success
+                    self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                    self.uploadLabel.text = "300 DPI Scanned PDF created and uploaded!"
+                    
+                    // Reset after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                }
+            } catch {
+                print("300 DPI scanned PDF upload failed with error: \(error)")
+                print("Error details: \(error.localizedDescription)")
+                
+                DispatchQueue.main.async {
+                    // Show error
+                    self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                    self.uploadLabel.text = "Upload failed"
+                    
+                    // Reset after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                    
+                    // Show error alert
+                    let alert = UIAlertController(
+                        title: "Upload Failed",
+                        message: "Error: \(error.localizedDescription)\n\nPlease try again.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
         }
     }
     
@@ -1525,7 +1978,7 @@ class UploadScreen: UIViewController {
             // Show an alert explaining the multi-selection process
             let alert = UIAlertController(
                 title: "Select Multiple Images",
-                message: "Select multiple images one by one. They will be automatically converted to a scanned PDF and uploaded.",
+                message: "Select multiple images one by one. They will be automatically converted to a 300 DPI scanned PDF.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -1642,63 +2095,139 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
 
         do {
             let data = try Data(contentsOf: fileURL)
-            currentUploadData = data
-            currentFileName = fileURL.lastPathComponent
-            currentFileType = "application/pdf"
-
-            // Show loading state
-            uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-            uploadLabel.text = "Processing upload..."
-
-            Task {
-                do {
-                    print("Starting PDF upload task...")
-                    try await saveUploadToDatabase(
-                        imageData: data,
-                        fileName: currentFileName,
-                        fileType: currentFileType
-                    )
-                    
-                    print("PDF upload completed successfully!")
-                    
-                    // Refresh recent uploads
-                    await self.loadRecentUploadsFromDB()
-                    
-                    // Update UI on main thread
-                    DispatchQueue.main.async {
-                        // Show success
-                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                        self.uploadLabel.text = "Upload completed!"
+            
+            // Show scanning state
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "doc.text.viewfinder")
+                self.uploadLabel.text = "Scanning PDF document at 300 DPI..."
+            }
+            
+            // Process PDF to scanned version at 300 DPI
+            if let (scannedPDFData, fileName, fileType) = processAndConvertToScannedPDF(data) {
+                currentUploadData = scannedPDFData
+                currentFileName = fileName
+                currentFileType = fileType
+                
+                // Show uploading state
+                DispatchQueue.main.async {
+                    self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+                    self.uploadLabel.text = "Uploading 300 DPI scanned PDF..."
+                }
+                
+                Task {
+                    do {
+                        print("Starting 300 DPI scanned PDF upload task...")
+                        try await saveUploadToDatabase(
+                            imageData: scannedPDFData,
+                            fileName: currentFileName,
+                            fileType: currentFileType
+                        )
                         
-                        // Reset after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        print("300 DPI scanned PDF upload completed successfully!")
+                        
+                        // Refresh recent uploads
+                        await self.loadRecentUploadsFromDB()
+                        
+                        // Update UI on main thread
+                        DispatchQueue.main.async {
+                            // Show success
+                            self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                            self.uploadLabel.text = "300 DPI Scanned PDF uploaded!"
+                            
+                            // Reset after 2 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                                self.uploadLabel.text = "Drag & drop or tap to upload"
+                            }
+                        }
+                    } catch {
+                        print("300 DPI scanned PDF upload failed with error: \(error)")
+                        print("Error details: \(error.localizedDescription)")
+                        
+                        DispatchQueue.main.async {
+                            // Show error with more details
+                            self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                            self.uploadLabel.text = "Upload failed"
+                            
+                            // Reset after 3 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                                self.uploadLabel.text = "Drag & drop or tap to upload"
+                            }
+                            
+                            // Show error alert with more details
+                            let alert = UIAlertController(
+                                title: "Upload Failed",
+                                message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
+                                preferredStyle: .alert
+                            )
+                            alert.addAction(UIAlertAction(title: "OK", style: .default))
+                            self.present(alert, animated: true)
                         }
                     }
-                } catch {
-                    print("PDF upload failed with error: \(error)")
-                    print("Error details: \(error.localizedDescription)")
-                    
-                    DispatchQueue.main.async {
-                        // Show error with more details
-                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                        self.uploadLabel.text = "Upload failed"
-                        
-                        // Reset after 3 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                        
-                        // Show error alert with more details
-                        let alert = UIAlertController(
-                            title: "Upload Failed",
-                            message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
-                            preferredStyle: .alert
+                }
+            } else {
+                // Fallback to original PDF if scanning fails
+                currentUploadData = data
+                currentFileName = fileURL.lastPathComponent
+                currentFileType = "application/pdf"
+                
+                // Show loading state
+                DispatchQueue.main.async {
+                    self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+                    self.uploadLabel.text = "Processing upload..."
+                }
+                
+                Task {
+                    do {
+                        print("Starting PDF upload task (fallback)...")
+                        try await saveUploadToDatabase(
+                            imageData: data,
+                            fileName: currentFileName,
+                            fileType: currentFileType
                         )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
+                        
+                        print("PDF upload completed successfully!")
+                        
+                        // Refresh recent uploads
+                        await self.loadRecentUploadsFromDB()
+                        
+                        // Update UI on main thread
+                        DispatchQueue.main.async {
+                            // Show success
+                            self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                            self.uploadLabel.text = "Upload completed!"
+                            
+                            // Reset after 2 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                                self.uploadLabel.text = "Drag & drop or tap to upload"
+                            }
+                        }
+                    } catch {
+                        print("PDF upload failed with error: \(error)")
+                        print("Error details: \(error.localizedDescription)")
+                        
+                        DispatchQueue.main.async {
+                            // Show error with more details
+                            self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                            self.uploadLabel.text = "Upload failed"
+                            
+                            // Reset after 3 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                                self.uploadLabel.text = "Drag & drop or tap to upload"
+                            }
+                            
+                            // Show error alert with more details
+                            let alert = UIAlertController(
+                                title: "Upload Failed",
+                                message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
+                                preferredStyle: .alert
+                            )
+                            alert.addAction(UIAlertAction(title: "OK", style: .default))
+                            self.present(alert, animated: true)
+                        }
                     }
                 }
             }
@@ -1737,8 +2266,8 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             
             // Show how many images selected
             DispatchQueue.main.async {
-                self.uploadIcon.image = UIImage(systemName: "photo.stack")
-                self.uploadLabel.text = "Selected \(self.selectedImages.count) image(s). Tap 'Upload Files' to convert to scanned PDF."
+                self.uploadIcon.image = UIImage(systemName: "doc.text.viewfinder")
+                self.uploadLabel.text = "Selected \(self.selectedImages.count) image(s). Tap 'Upload Files' to create 300 DPI scanned PDF."
             }
             
             // Ask if user wants to add more images
@@ -1753,7 +2282,7 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             })
             
             alert.addAction(UIAlertAction(title: "Done", style: .default) { _ in
-                // Convert images to scanned PDF and upload
+                // Convert images to scanned PDF at 300 DPI and upload
                 self.processSelectedImagesAndUpload()
             })
             
@@ -1772,6 +2301,7 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
         // Normal single image upload flow
         guard let image = picked else { return }
         
+<<<<<<< HEAD
         // Show loading state
         uploadIcon.image = UIImage(systemName: "arrow.clockwise")
         uploadLabel.text = "Processing image with Vision Kit..."
@@ -1782,6 +2312,77 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             
             // Convert processed image to PDF
             guard let pdfData = self.convertImagesToPDF(images: [processedImage]) else {
+=======
+        // Show scanning state
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "doc.text.viewfinder")
+            self.uploadLabel.text = "Scanning image at 300 DPI..."
+        }
+        
+        // Process image to scanned PDF at 300 DPI
+        guard let (pdfData, fileName, fileType) = processAndConvertToScannedPDF(image) else {
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                self.uploadLabel.text = "Failed to scan image"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                    self.uploadLabel.text = "Drag & drop or tap to upload"
+                }
+                
+                let alert = UIAlertController(
+                    title: "Error",
+                    message: "Failed to scan image. Please try again.",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+            return
+        }
+        
+        // Update upload data with scanned PDF
+        currentUploadData = pdfData
+        currentFileName = fileName
+        currentFileType = fileType
+        
+        // Show uploading state
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+            self.uploadLabel.text = "Uploading 300 DPI scanned PDF..."
+        }
+        
+        // Upload the scanned PDF
+        Task {
+            do {
+                print("Starting 300 DPI scanned PDF upload task...")
+                try await saveUploadToDatabase(
+                    imageData: pdfData,
+                    fileName: currentFileName,
+                    fileType: currentFileType
+                )
+                
+                print("300 DPI scanned PDF upload completed successfully!")
+                
+                // Refresh recent uploads
+                await self.loadRecentUploadsFromDB()
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    // Show success
+                    self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                    self.uploadLabel.text = "300 DPI Scanned PDF uploaded!"
+                    
+                    // Reset after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                }
+            } catch {
+                print("300 DPI scanned PDF upload failed with error: \(error)")
+                print("Error details: \(error.localizedDescription)")
+                
+>>>>>>> develop
                 DispatchQueue.main.async {
                     let alert = UIAlertController(
                         title: "Error",
