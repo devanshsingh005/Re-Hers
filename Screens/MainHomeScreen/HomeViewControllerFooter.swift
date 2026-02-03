@@ -21,8 +21,20 @@ extension HomeViewController {
         bgImage.alpha = 0.12
         bgImage.translatesAutoresizingMaskIntoConstraints = false
 
+      func italicFont(size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+          let baseFont = UIFont.systemFont(ofSize: size, weight: weight)
+          let descriptor = baseFont.fontDescriptor.withSymbolicTraits(.traitItalic)!
+          return UIFont(descriptor: descriptor, size: size)
+      }
+
+      
+      
+      
+      
+      
         let hashtag = UILabel()
         hashtag.text = "#LetsReHearse"
+      
         hashtag.font = .systemFont(ofSize: 22, weight: .bold)
         hashtag.textColor = .secondaryLabel
 
@@ -35,6 +47,12 @@ extension HomeViewController {
         line2.text = "❤️ Crafted in Chennai"
         line2.font = .systemFont(ofSize: 13)
         line2.textColor = .secondaryLabel
+
+     
+      hashtag.font = italicFont(size: 22, weight: .bold)
+
+//      line1.font = italicFont(size: 13)
+//      line2.font = italicFont(size: 13)
 
         let textStack = UIStackView(arrangedSubviews: [hashtag, line1, line2])
         textStack.axis = .vertical
