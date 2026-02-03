@@ -7,7 +7,7 @@ extension HomeViewController {
         // MARK: Container (full-width section)
         let footer = UIView()
         footer.translatesAutoresizingMaskIntoConstraints = false
-        footer.backgroundColor = .secondarySystemBackground
+        footer.backgroundColor = .white
 
         // Height (website footer is taller)
        
@@ -28,7 +28,7 @@ extension HomeViewController {
         // MARK: Overlay for readability
         let overlay = UIView()
         overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.6)
+        overlay.backgroundColor = UIColor.white.withAlphaComponent(0.9)
 
         // MARK: Font Helper
         func italicFont(size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
