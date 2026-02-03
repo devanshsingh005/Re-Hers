@@ -8,6 +8,8 @@ import AVFoundation
 import Photos
 import Supabase
 import PDFKit // Add PDFKit for PDF creation
+import Vision
+import VisionKit
 
 class UploadScreen: UIViewController {
     
@@ -77,6 +79,49 @@ class UploadScreen: UIViewController {
         super.viewWillAppear(animated)
         // Refresh recent uploads when view appears
         loadRecentUploadsFromDB()
+    }
+    
+    // MARK: - Vision Kit Image Processing (Simplified)
+    private func processImageWithVisionKit(_ image: UIImage, completion: @escaping (UIImage) -> Void) {
+        // Process image through Core Image filters for document enhancement
+        let enhancedImage = enhanceImageWithCoreImage(image)
+        DispatchQueue.main.async {
+            completion(enhancedImage)
+        }
+    }
+    
+    // Enhance image using Core Image filters for document-like quality
+    private func enhanceImageWithCoreImage(_ image: UIImage) -> UIImage {
+        guard let ciImage = CIImage(image: image) else { return image }
+        
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        var outputImage = ciImage
+        
+        // 1. Remove shadows with highlight/shadow adjustment
+        if let shadowFilter = CIFilter(name: "CIHighlightShadowAdjust") {
+            shadowFilter.setValue(outputImage, forKey: kCIInputImageKey)
+            shadowFilter.setValue(1.0, forKey: "inputShadowAmount") // Remove shadows completely
+            shadowFilter.setValue(0.0, forKey: "inputHighlightAmount") // Keep highlights neutral
+            if let result = shadowFilter.outputImage {
+                outputImage = result
+            }
+        }
+        
+        // 2. Apply exposure adjustment to brighten
+        if let exposureFilter = CIFilter(name: "CIExposureAdjust") {
+            exposureFilter.setValue(outputImage, forKey: kCIInputImageKey)
+            exposureFilter.setValue(0.05, forKey: kCIInputEVKey) // Subtle brightness to remove shadow remnants
+            if let result = exposureFilter.outputImage {
+                outputImage = result
+            }
+        }
+        
+        // Render to final image
+        if let finalCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
+            return UIImage(cgImage: finalCGImage)
+        }
+        
+        return image
     }
     
     // MARK: - Image Processing for Scanned PDF Look
@@ -355,83 +400,97 @@ class UploadScreen: UIViewController {
         // Show converting state
         DispatchQueue.main.async {
             self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-            self.uploadLabel.text = "Processing \(self.selectedImages.count) image(s) for scanned PDF..."
+            self.uploadLabel.text = "Processing \(self.selectedImages.count) image(s) with Vision Kit..."
         }
         
-        // Create PDF from images with scanning effect
-        guard let (pdfData, fileName, fileType) = createPDFFromImages() else {
-            DispatchQueue.main.async {
-                self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                self.uploadLabel.text = "Failed to create scanned PDF"
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                    self.uploadLabel.text = "Drag & drop or tap to upload"
-                }
-            }
-            return
-        }
-        
-        // Update upload data
-        currentUploadData = pdfData
-        currentFileName = fileName
-        currentFileType = fileType
-        
-        // Start upload process
-        Task {
-            do {
-                print("Starting multi-image scanned PDF upload task...")
-                try await saveUploadToDatabase(
-                    imageData: pdfData,
-                    fileName: currentFileName,
-                    fileType: currentFileType
-                )
-                
-                print("Multi-image scanned PDF upload completed successfully!")
-                
-                // Clear selected images
-                self.selectedImages.removeAll()
-                self.isMultiImageSelection = false
-                
-                // Refresh recent uploads
-                await self.loadRecentUploadsFromDB()
-                
-                // Update UI on main thread
+        // Process all images through Vision Kit
+        processImagesWithVisionKit(selectedImages) { [weak self] processedImages in
+            guard let self = self else { return }
+            
+            // Create PDF from Vision Kit processed images
+            guard let pdfData = self.convertImagesToPDF(images: processedImages) else {
                 DispatchQueue.main.async {
-                    // Show success
-                    self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                    self.uploadLabel.text = "Scanned PDF created and uploaded!"
-                    
-                    // Reset after 2 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                        self.uploadLabel.text = "Drag & drop or tap to upload"
-                    }
-                }
-            } catch {
-                print("Multi-image scanned PDF upload failed with error: \(error)")
-                print("Error details: \(error.localizedDescription)")
-                
-                DispatchQueue.main.async {
-                    // Show error
                     self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                    self.uploadLabel.text = "Upload failed"
-                    
-                    // Reset after 3 seconds
+                    self.uploadLabel.text = "Failed to create PDF"
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                         self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
                         self.uploadLabel.text = "Drag & drop or tap to upload"
                     }
-                    
-                    // Show error alert
-                    let alert = UIAlertController(
-                        title: "Upload Failed",
-                        message: "Error: \(error.localizedDescription)\n\nPlease try again.",
-                        preferredStyle: .alert
+                }
+                return
+            }
+            
+            // Update upload data
+            self.currentUploadData = pdfData
+            self.currentFileName = "vision_multi_\(Date().timeIntervalSince1970).pdf"
+            self.currentFileType = "application/pdf"
+            
+            DispatchQueue.main.async {
+                self.uploadLabel.text = "Uploading processed PDF..."
+            }
+            
+            // Start upload process
+            Task {
+                do {
+                    print("Starting Vision Kit multi-image PDF upload...")
+                    try await self.saveUploadToDatabase(
+                        imageData: pdfData,
+                        fileName: self.currentFileName,
+                        fileType: self.currentFileType
                     )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
+                    
+                    print("Vision Kit multi-image PDF upload completed!")
+                    
+                    // Clear selected images
+                    self.selectedImages.removeAll()
+                    self.isMultiImageSelection = false
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Processed and uploaded!"
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("Vision Kit multi-image upload failed: \(error)")
+                    
+                    DispatchQueue.main.async {
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
                 }
             }
+        }
+    }
+    
+    // Process multiple images with Vision Kit
+    private func processImagesWithVisionKit(_ images: [UIImage], completion: @escaping ([UIImage]) -> Void) {
+        // Process all images through Core Image enhancement
+        let processedImages = images.map { image in
+            enhanceImageWithCoreImage(image)
+        }
+        DispatchQueue.main.async {
+            completion(processedImages)
         }
     }
     
@@ -1223,6 +1282,10 @@ class UploadScreen: UIViewController {
     private func showUploadOptions() {
         let ac = UIAlertController(title: "Upload Content", message: nil, preferredStyle: .actionSheet)
 
+        ac.addAction(UIAlertAction(title: "Scan with Camera", style: .default) { _ in
+            self.presentDocumentScanner()
+        })
+
         ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in
             self.presentImagePicker(sourceType: .camera)
         })
@@ -1247,6 +1310,79 @@ class UploadScreen: UIViewController {
         }
 
         present(ac, animated: true)
+    }
+    
+    // MARK: - Vision Kit Document Scanner
+    private func presentDocumentScanner() {
+        if VNDocumentCameraViewController.isSupported {
+            let documentCamera = VNDocumentCameraViewController()
+            documentCamera.delegate = self
+            present(documentCamera, animated: true)
+        } else {
+            let alert = UIAlertController(
+                title: "Not Supported",
+                message: "Document scanning is not supported on this device.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
+    }
+    
+    // MARK: - Create PDF from Vision Kit Scan
+    private func createPDFFromVisionKitScan(_ scan: VNDocumentCameraScan) -> Data? {
+        let pdfData = NSMutableData()
+        let pdfBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
+        
+        UIGraphicsBeginPDFContextToData(pdfData, pdfBounds, nil)
+        
+        for pageIndex in 0..<scan.pageCount {
+            UIGraphicsBeginPDFPageWithInfo(pdfBounds, nil)
+            
+            // Get the scanned image from Vision Kit (already processed with edge detection, perspective correction, etc.)
+            let scannedImage = scan.imageOfPage(at: pageIndex)
+            
+            // Calculate image size to fit within page while maintaining aspect ratio
+            let imageSize = scannedImage.size
+            let pageSize = Constants.pdfPageSize
+            
+            let widthRatio = pageSize.width / imageSize.width
+            let heightRatio = pageSize.height / imageSize.height
+            let scaleFactor = min(widthRatio, heightRatio, 1.0)
+            
+            let scaledWidth = imageSize.width * scaleFactor
+            let scaledHeight = imageSize.height * scaleFactor
+            
+            // Center the image on the page
+            let xOffset = (pageSize.width - scaledWidth) / 2
+            let yOffset = (pageSize.height - scaledHeight) / 2
+            
+            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
+            
+            // Draw the Vision Kit scanned image (high quality)
+            scannedImage.draw(in: imageRect)
+            
+            // Optional: Add page number
+            let pageNumberText = "\(pageIndex + 1)"
+            let textAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 10, weight: .regular),
+                .foregroundColor: UIColor.gray
+            ]
+            
+            let textSize = pageNumberText.size(withAttributes: textAttributes)
+            let textRect = CGRect(
+                x: (pageSize.width - textSize.width) / 2,
+                y: 10,
+                width: textSize.width,
+                height: textSize.height
+            )
+            
+            pageNumberText.draw(in: textRect, withAttributes: textAttributes)
+        }
+        
+        UIGraphicsEndPDFContext()
+        
+        return pdfData as Data
     }
     
     // MARK: - Recent Uploads (horizontal scroll)
@@ -1406,6 +1542,80 @@ class UploadScreen: UIViewController {
     }
 }
 
+// MARK: - Vision Kit Document Camera Delegate
+extension UploadScreen: VNDocumentCameraViewControllerDelegate {
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
+        controller.dismiss(animated: true)
+        
+        // Process scanned pages
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+            self.uploadLabel.text = "Processing \(scan.pageCount) page(s) with Vision Kit..."
+        }
+        
+        // Convert Vision Kit scans to PDFData
+        Task {
+            if let pdfData = self.createPDFFromVisionKitScan(scan) {
+                self.currentUploadData = pdfData
+                self.currentFileName = "vision_scanned_\(Date().timeIntervalSince1970).pdf"
+                self.currentFileType = "application/pdf"
+                
+                // Upload the high-quality PDF
+                do {
+                    print("Starting Vision Kit scanned PDF upload...")
+                    try await self.saveUploadToDatabase(
+                        imageData: pdfData,
+                        fileName: self.currentFileName,
+                        fileType: self.currentFileType
+                    )
+                    
+                    print("Vision Kit PDF upload completed successfully!")
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    DispatchQueue.main.async {
+                        // Show success
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Scanned and uploaded!"
+                        
+                        // Reset after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("Vision Kit upload failed: \(error)")
+                    DispatchQueue.main.async {
+                        // Show error
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        // Reset after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        // Show error alert
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)\n\nPlease try again.",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
+        }
+    }
+    
+    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+        controller.dismiss(animated: true)
+    }
+}
 // MARK: - UIImagePickerControllerDelegate
 extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
     
@@ -1562,87 +1772,84 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
         // Normal single image upload flow
         guard let image = picked else { return }
         
-        // Process image for scanned look
-        let processedImage: UIImage
-        if let thresholdedImage = applySimpleThreshold(image, threshold: 0.6) {
-            processedImage = thresholdedImage
-        } else {
-            processedImage = processImageForScanLook(image)
-        }
-        
-        // Convert single processed image to scanned PDF
-        guard let pdfData = convertImagesToPDF(images: [processedImage]) else {
-            DispatchQueue.main.async {
-                let alert = UIAlertController(
-                    title: "Error",
-                    message: "Failed to convert image to scanned PDF.",
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(alert, animated: true)
-            }
-            return
-        }
-        
-        // Update upload data with PDF
-        currentUploadData = pdfData
-        currentFileName = "scanned_image_\(Date().timeIntervalSince1970).pdf"
-        currentFileType = "application/pdf"
-        
         // Show loading state
         uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-        uploadLabel.text = "Processing image to scanned PDF..."
+        uploadLabel.text = "Processing image with Vision Kit..."
         
-        // Upload the PDF
-        Task {
-            do {
-                print("Starting single image to scanned PDF upload task...")
-                try await saveUploadToDatabase(
-                    imageData: pdfData,
-                    fileName: currentFileName,
-                    fileType: currentFileType
-                )
-                
-                print("Single image scanned PDF upload completed successfully!")
-                
-                // Refresh recent uploads
-                await self.loadRecentUploadsFromDB()
-                
-                // Update UI on main thread
+        // Process image through Vision Kit for better quality
+        processImageWithVisionKit(image) { [weak self] processedImage in
+            guard let self = self else { return }
+            
+            // Convert processed image to PDF
+            guard let pdfData = self.convertImagesToPDF(images: [processedImage]) else {
                 DispatchQueue.main.async {
-                    // Show success
-                    self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                    self.uploadLabel.text = "Scanned PDF created and uploaded!"
-                    
-                    // Reset after 2 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                        self.uploadLabel.text = "Drag & drop or tap to upload"
-                    }
-                }
-            } catch {
-                print("Single image scanned PDF upload failed with error: \(error)")
-                print("Error details: \(error.localizedDescription)")
-                
-                DispatchQueue.main.async {
-                    // Show error with more details
-                    self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                    self.uploadLabel.text = "Upload failed"
-                    
-                    // Reset after 3 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                        self.uploadLabel.text = "Drag & drop or tap to upload"
-                    }
-                    
-                    // Show error alert with more details
                     let alert = UIAlertController(
-                        title: "Upload Failed",
-                        message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
+                        title: "Error",
+                        message: "Failed to convert image to PDF.",
                         preferredStyle: .alert
                     )
                     alert.addAction(UIAlertAction(title: "OK", style: .default))
                     self.present(alert, animated: true)
+                }
+                return
+            }
+            
+            // Update upload data with PDF
+            self.currentUploadData = pdfData
+            self.currentFileName = "vision_processed_\(Date().timeIntervalSince1970).pdf"
+            self.currentFileType = "application/pdf"
+            
+            DispatchQueue.main.async {
+                self.uploadLabel.text = "Uploading processed PDF..."
+            }
+            
+            // Upload the PDF
+            Task {
+                do {
+                    print("Starting Vision Kit processed image upload...")
+                    try await self.saveUploadToDatabase(
+                        imageData: pdfData,
+                        fileName: self.currentFileName,
+                        fileType: self.currentFileType
+                    )
+                    
+                    print("Vision Kit processed image upload completed!")
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        // Show success
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Processed and uploaded!"
+                        
+                        // Reset after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("Vision Kit image upload failed: \(error)")
+                    
+                    DispatchQueue.main.async {
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
                 }
             }
         }
