@@ -42,7 +42,7 @@ final class PianoDemoManager {
                 // Load from external data (URL download)
                 loaded = try MusicJSONLoader.loadSongChords(
                     fromData: data,
-                    defaultTempoBPM: 120,
+                    defaultTempoBPM: 100,
                     defaultDivisions: 12
                 )
             } else {

@@ -37,10 +37,34 @@ final class PianoAnimationViewController: UIViewController {
         return b
     }()
 
+    // MARK: - Tempo UI
+    private let tempoContainer = UIView()
+    private let tempoLabel = UILabel()
+    private let tempoSlider = UISlider()
+    
+    private var tempoMultiplier: Float = 1.0 {
+        didSet {
+            tempoLabel.text = String(format: "Tempo %.2fx", tempoMultiplier)
+        }
+    }
+
     // Scheduling
     private var nextWorkItem: DispatchWorkItem?
     private var scheduledStopWorkItems: [DispatchWorkItem] = []
     private var currentlyPlayingMIDINotes: Set<UInt8> = []
+
+    // MARK: - Orientation Support
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return .landscape
+    }
+    
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        return .landscapeRight
+    }
+    
+    override var shouldAutorotate: Bool {
+        return true
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -58,6 +82,21 @@ final class PianoAnimationViewController: UIViewController {
 
         AudioEngineManager.shared.startEngine(loadSoundFont: "Wurlitzer210.sf2")
         startDemoSong()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Force landscape orientation
+        let value = UIInterfaceOrientation.landscapeRight.rawValue
+        UIDevice.current.setValue(value, forKey: "orientation")
+        UIViewController.attemptRotationToDeviceOrientation()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Reset to portrait when leaving
+        let value = UIInterfaceOrientation.portrait.rawValue
+        UIDevice.current.setValue(value, forKey: "orientation")
     }
 
     override func viewDidLayoutSubviews() {
@@ -83,6 +122,53 @@ final class PianoAnimationViewController: UIViewController {
         navBar.translatesAutoresizingMaskIntoConstraints = false
         chordDisplayView.translatesAutoresizingMaskIntoConstraints = false
         pianoKeyboard.translatesAutoresizingMaskIntoConstraints = false
+        
+        setupTempoUI()
+    }
+    
+    // MARK: - Tempo UI Setup
+    private func setupTempoUI() {
+        tempoContainer.translatesAutoresizingMaskIntoConstraints = false
+        chordDisplayView.addSubview(tempoContainer)
+
+        NSLayoutConstraint.activate([
+            tempoContainer.trailingAnchor.constraint(equalTo: chordDisplayView.trailingAnchor, constant: -60),
+            tempoContainer.centerYAnchor.constraint(equalTo: chordDisplayView.centerYAnchor),
+            tempoContainer.widthAnchor.constraint(equalToConstant: 160),
+            tempoContainer.heightAnchor.constraint(equalToConstant: 80)
+        ])
+
+        tempoLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        tempoLabel.textColor = .white
+        tempoLabel.textAlignment = .right
+        tempoLabel.text = "Tempo 1.00x"
+        tempoLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        tempoSlider.minimumValue = 0.5
+        tempoSlider.maximumValue = 1.5
+        tempoSlider.value = 1.0
+        tempoSlider.minimumTrackTintColor = .systemBlue
+        tempoSlider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.3)
+        tempoSlider.addTarget(self, action: #selector(tempoChanged(_:)), for: .valueChanged)
+        tempoSlider.translatesAutoresizingMaskIntoConstraints = false
+
+        tempoContainer.addSubview(tempoLabel)
+        tempoContainer.addSubview(tempoSlider)
+
+        NSLayoutConstraint.activate([
+            tempoLabel.topAnchor.constraint(equalTo: tempoContainer.topAnchor),
+            tempoLabel.trailingAnchor.constraint(equalTo: tempoContainer.trailingAnchor),
+
+            tempoSlider.topAnchor.constraint(equalTo: tempoLabel.bottomAnchor, constant: 4),
+            tempoSlider.leadingAnchor.constraint(equalTo: tempoContainer.leadingAnchor),
+            tempoSlider.trailingAnchor.constraint(equalTo: tempoContainer.trailingAnchor),
+            tempoSlider.bottomAnchor.constraint(equalTo: tempoContainer.bottomAnchor)
+        ])
+    }
+    
+    // MARK: - Tempo Action
+    @objc private func tempoChanged(_ sender: UISlider) {
+        tempoMultiplier = sender.value
     }
 
     private func setupNavBar() {
@@ -186,6 +272,9 @@ final class PianoAnimationViewController: UIViewController {
             }
         }
 
+        // Apply tempo multiplier to duration (lower multiplier = slower = longer duration)
+        let adjustedDuration = chord.duration / Double(tempoMultiplier)
+        
         let stopWork = DispatchWorkItem { [weak self] in
             allNotes.forEach {
                 if let midi = AudioEngineManager.shared.midiNumber(from: $0) {
@@ -196,10 +285,10 @@ final class PianoAnimationViewController: UIViewController {
         }
 
         scheduledStopWorkItems.append(stopWork)
-        DispatchQueue.main.asyncAfter(deadline: .now() + chord.duration, execute: stopWork)
+        DispatchQueue.main.asyncAfter(deadline: .now() + adjustedDuration, execute: stopWork)
 
         chordDisplayView.setSingleChord("🎹 \(chord.chordName)")
-        scheduleNextDemoChord(after: chord.duration)
+        scheduleNextDemoChord(after: adjustedDuration)
     }
 
     // MARK: - Hand-Specific Animations

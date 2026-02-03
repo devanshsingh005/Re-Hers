@@ -81,7 +81,7 @@ extension HomeViewController {
         
         // Image
         let image = UIImageView()
-        image.image = UIImage(named: "ride_home") ?? UIImage(systemName: "music.note")
+        image.image = UIImage(named: "Image") ?? UIImage(systemName: "music.note")
         image.layer.cornerRadius = 10
         image.clipsToBounds = true
         image.contentMode = .scaleAspectFill
@@ -89,7 +89,7 @@ extension HomeViewController {
         
         // Title + Subtitle
         let title = UILabel()
-        title.text = "Continue: Ride Home"
+        title.text = "Beliver"
         title.textColor = .white
         title.font = .systemFont(ofSize: 19, weight: .bold)
         
