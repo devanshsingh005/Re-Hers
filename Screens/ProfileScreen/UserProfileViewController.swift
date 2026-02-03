@@ -770,6 +770,9 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
                 self.currentProfile?.daily_goal_minutes = minutes
                 
                 await MainActor.run {
+                    // Update DailyGoalManager to sync with home screen
+                    DailyGoalManager.shared.dailyGoalMinutes = minutes
+                    
                     self.dailyGoalTimeLabel.text = "\(minutes) mins"
                     self.showAlert(title: "Success", message: "Daily goal updated!")
                 }
@@ -819,9 +822,10 @@ private extension UserProfileViewController {
                         self.usernameLabel.text = "@username"
                     }
                     
-                    // Set daily goal
+                    // Set daily goal and sync with DailyGoalManager
                     if let goalMinutes = profile.daily_goal_minutes {
                         self.currentDailyGoalMinutes = goalMinutes
+                        DailyGoalManager.shared.dailyGoalMinutes = goalMinutes
                         self.dailyGoalTimeLabel.text = "\(goalMinutes) mins"
                         self.dailyGoalProgressView.progress = Float(self.currentDailyProgressMinutes) / Float(goalMinutes)
                     }
