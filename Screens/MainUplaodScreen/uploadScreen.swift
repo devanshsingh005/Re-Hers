@@ -141,7 +141,7 @@ class UploadScreen: UIViewController {
         guard let grayscaleFilter = CIFilter(name: "CIColorControls") else { return image }
         grayscaleFilter.setValue(ciImage, forKey: kCIInputImageKey)
         grayscaleFilter.setValue(0.0, forKey: kCIInputSaturationKey) // Remove color
-        grayscaleFilter.setValue(1.1, forKey: kCIInputContrastKey) // Increase contrast
+        grayscaleFilter.setValue(0.5, forKey: kCIInputContrastKey) // Increase contrast
         grayscaleFilter.setValue(0.1, forKey: kCIInputBrightnessKey) // Adjust brightness
         
         guard let grayscaleOutput = grayscaleFilter.outputImage else { return image }
@@ -1291,17 +1291,17 @@ class UploadScreen: UIViewController {
             self.presentDocumentScanner()
         })
 
-        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in
-            self.presentImagePicker(sourceType: .camera)
-        })
+//        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in
+//            self.presentImagePicker(sourceType: .camera)
+//        })
 
-        ac.addAction(UIAlertAction(title: "Choose Single Photo", style: .default) { _ in
-            self.presentSingleImagePicker(sourceType: .photoLibrary)
-        })
-        
-        ac.addAction(UIAlertAction(title: "Choose Multiple Photos", style: .default) { _ in
-            self.presentMultipleImagePicker()
-        })
+//        ac.addAction(UIAlertAction(title: "Choose Single Photo", style: .default) { _ in
+//            self.presentSingleImagePicker(sourceType: .photoLibrary)
+//        })
+//        
+//        ac.addAction(UIAlertAction(title: "Choose Multiple Photos", style: .default) { _ in
+//            self.presentMultipleImagePicker()
+//        })
 
         ac.addAction(UIAlertAction(title: "Browse Files", style: .default) { _ in
             self.openFileManager()
