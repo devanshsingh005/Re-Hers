@@ -74,17 +74,25 @@ class MainTabBarController: UITabBarController {
         if #available(iOS 15.0, *) {
             let appearance = UITabBarAppearance()
             appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = .systemGray6
+            appearance.backgroundColor = .white
+            
+            // Remove separator line
+            appearance.shadowColor = .clear
+            appearance.shadowImage = nil
             
             // Set the same appearance for both normal and scroll edge
             tabBar.standardAppearance = appearance
             tabBar.scrollEdgeAppearance = appearance
         } else {
             // Fallback for earlier iOS versions
-            tabBar.backgroundColor = .systemGray6
-            tabBar.barTintColor = .systemGray6
+            tabBar.backgroundColor = .white
+            tabBar.barTintColor = .white
             tabBar.isTranslucent = false
         }
+        
+        // Ensure the tab bar background extends to the bottom edge
+        tabBar.isTranslucent = false
+        tabBar.clipsToBounds = false
     }
 }
 

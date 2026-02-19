@@ -1,75 +1,121 @@
-// PianoDemoManager.swift (updated - debugable & reloadable)
 import Foundation
 
-class PianoDemoManager {
+// MARK: - PianoDemoManager
+final class PianoDemoManager {
 
-    private var index = 0
-    private(set) var demoChords: [SongChord] = []
-    private(set) var isUsingJSON: Bool = false
-    private var jsonFilename: String = "sheet_test.json"
+    // MARK: - State
+    private var index: Int = 0
+    private var chords: [SongChord] = []
 
+    private var jsonFilename: String
+    private var externalData: Data?
+
+    // MARK: - Init
     init(loadFrom filename: String = "sheet_test.json") {
         self.jsonFilename = filename
-        loadInitialChords()
+        self.externalData = nil
+    }
+    
+    /// Initialize with external JSON data (from URL)
+    init(withData data: Data) {
+        self.jsonFilename = ""
+        self.externalData = data
+    }
+    
+    /// Set external data to load from
+    func setExternalData(_ data: Data) {
+        self.externalData = data
     }
 
-    private func loadInitialChords() {
+    // MARK: - Public API (USED BY VIEW CONTROLLER)
+
+    /// Loads / reloads the demo song from JSON.
+    /// Call this whenever tempo or sheet data changes.
+    func loadSong() {
         index = 0
-        isUsingJSON = false
-        demoChords.removeAll()
+        chords.removeAll()
 
         do {
-            let loaded = try MusicJSONLoader.loadSongChords(fromBundleFilename: jsonFilename,
-                                                            defaultTempoBPM: 90,
-                                                            defaultDivisions: 6)
+            let loaded: [SongChord]
+            
+            if let data = externalData {
+                // Load from external data (URL download)
+                loaded = try MusicJSONLoader.loadSongChords(
+                    fromData: data,
+                    defaultTempoBPM: 100,
+                    defaultDivisions: 12
+                )
+            } else {
+                // Load from bundle file
+                loaded = try MusicJSONLoader.loadSongChords(
+                    fromBundleFilename: jsonFilename,
+                    defaultTempoBPM: 100,
+                    defaultDivisions: 12
+                )
+            }
+
             if !loaded.isEmpty {
-                demoChords = loaded
-                isUsingJSON = true
-                print("[PianoDemoManager] ✅ Loaded \(loaded.count) chords from JSON (\(jsonFilename)).")
-                if loaded.count <= 10 {
-                    print("[PianoDemoManager] chords: \(loaded.map { $0.chordName })")
-                } else {
-                    print("[PianoDemoManager] first 8 chords: \(loaded.prefix(8).map { $0.chordName })")
-                }
+                chords = loaded
+                print("[PianoDemoManager] ✅ Loaded \(loaded.count) chords")
+                debugPrintSample(loaded)
                 return
             } else {
-                print("[PianoDemoManager] ⚠️ JSON loader returned empty array for \(jsonFilename). Falling back to built-in demo.")
+                print("[PianoDemoManager] ⚠️ JSON returned empty list. Using fallback.")
             }
-        } catch MusicJSONLoaderError.notFound {
-            print("[PianoDemoManager] ❌ \(jsonFilename) not found in bundle.")
         } catch {
-            print("[PianoDemoManager] ❌ JSON load error: \(error). Falling back to built-in demo.")
+            print("[PianoDemoManager] ❌ Failed to load JSON:", error)
         }
 
-        // FALLBACK static list (kept as original fallback)
-        demoChords = [
-            SongChord(leftHandNotes: ["A2"], rightHandNotes: ["E4","A4","C5"], chordName: "A Minor", duration: 1.1),
-            SongChord(leftHandNotes: ["E2"], rightHandNotes: ["E4","G4","B4"], chordName: "E Minor", duration: 1.1),
-           
-        ]
-        isUsingJSON = false
-        print("[PianoDemoManager] Using fallback demo with \(demoChords.count) chords.")
+       // loadFallback()
+    
+
     }
 
-    // Public API: reload from bundle filename at runtime (useful while debugging)
-    func reload(from filename: String? = nil) {
-        if let f = filename { self.jsonFilename = f }
-        loadInitialChords()
-        reset()
-    }
-
+    /// Returns the next chord in sequence
     func next() -> SongChord? {
-        guard index < demoChords.count else { return nil }
-        let chord = demoChords[index]
+        guard index < chords.count else { return nil }
+        let chord = chords[index]
         index += 1
         return chord
     }
 
+    /// Reset playback index
     func reset() {
         index = 0
     }
 
+    /// Indicates demo completion
     var isFinished: Bool {
-        return index >= demoChords.count
+        index >= chords.count
+    }
+
+    // MARK: - Private Helpers
+
+    private func loadFallback() {
+        chords = [
+            SongChord(
+                leftHandNotes: ["A2"],
+                rightHandNotes: ["E4", "A4", "C5"],
+                chordName: "A Minor",
+                duration: 1.1
+            ),
+            SongChord(
+                leftHandNotes: ["E2"],
+                rightHandNotes: ["E4", "G4", "B4"],
+                chordName: "E Minor",
+                duration: 1.1
+            )
+        ]
+        index = 0
+        print("[PianoDemoManager] ⚠️ Using fallback demo (\(chords.count) chords)")
+    }
+
+    private func debugPrintSample(_ chords: [SongChord]) {
+        if chords.count <= 8 {
+            print("[PianoDemoManager] chords:", chords.map { $0.chordName })
+        } else {
+            print("[PianoDemoManager] first 8 chords:",
+                  chords.prefix(8).map { $0.chordName })
+        }
     }
 }

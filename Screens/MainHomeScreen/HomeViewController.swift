@@ -23,25 +23,80 @@ class HomeViewController: UIViewController {
      let scrollView = UIScrollView()
      let contentView = UIStackView()
 
+ var fixedFooter: UIView!
+    
+    // MARK: - Daily Goal UI Properties
+    var dailyGoalProgressView: UIProgressView?
+    var dailyGoalTimeLabel: UILabel?
+    var dailyGoalContainer: UIView?
+    
+    // MARK: - Timer for Practice Time
+    private var practiceTimer: Timer?
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        startPracticeTimer()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Refresh daily goal when view appears (in case profile was updated)
+        updateDailyGoalUI()
+        // Resume timer
+        startPracticeTimer()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Pause timer when leaving
+        stopPracticeTimer()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        stopPracticeTimer()
     }
 
     // MARK: - Setup UI
     private func setupUI() {
         view.backgroundColor = .appBackground
         navigationController?.navigationBar.isHidden = true
-        
+
         setupNavBar()
         setupScrollView()
+
         addDailyGoal()
         addContinueCard()
         addContinueLearningSection()
-        addUploadSection()
+        let uploadSectionView = addUploadSection()
+        contentView.setCustomSpacing(15, after: uploadSectionView)
+        contentView.addArrangedSubview(makeBrandFooter())
+        contentView.setCustomSpacing(24, after: uploadSectionView)
+
+    }
+    
+    // MARK: - Practice Timer
+    private func startPracticeTimer() {
+        // Invalidate any existing timer
+        stopPracticeTimer()
+        
+        // Create new timer that increments practice time every 60 seconds (1 minute)
+        practiceTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            DailyGoalManager.shared.checkAndResetIfNewDay()
+            DailyGoalManager.shared.practiceTimeMinutesToday += 1
+        }
+    }
+    
+    private func stopPracticeTimer() {
+        practiceTimer?.invalidate()
+        practiceTimer = nil
     }
 }
+
 
 /*import UIKit
 

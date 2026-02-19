@@ -11,6 +11,7 @@ struct Profile: Decodable {
     var username: String?
     var avatar_url: String?
     var bio: String?
+    var daily_goal_minutes: Int?
 }
 
 final class UserProfileViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -30,22 +31,50 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
     private let bioLabel = UILabel()
     private let editButton = UIButton(type: .system)
     
+    // Background gradient
+    private let backgroundGradient = CAGradientLayer()
+    
+    // Daily goal UI elements
+    private let dailyGoalProgressView = UIProgressView()
+    private let dailyGoalTimeLabel = UILabel()
+    
     // Data
     private var currentProfile: Profile?
+    private var currentDailyGoalMinutes: Int = 20
+    private var currentDailyProgressMinutes: Int = 14
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = UIColor.systemGroupedBackground
+        view.backgroundColor = UIColor(red: 0.96, green: 0.94, blue: 0.90, alpha: 1.0) // Light cream/beige
         navigationController?.navigationBar.isHidden = true
 
+        setupGradientBackground()
         setupNavBar()
         setupScroll()
         buildUI()
         view.bringSubviewToFront(navBar)
         
         loadProfile()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        backgroundGradient.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: view.bounds.height * 0.45)
+    }
+    
+    // MARK: - Gradient Background
+    private func setupGradientBackground() {
+        backgroundGradient.colors = [
+            UIColor(red: 1.0, green: 0.78, blue: 0.36, alpha: 1.0).cgColor,  // Warm orange/gold
+            UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1.0).cgColor,  // Lighter gold
+            UIColor(red: 0.96, green: 0.94, blue: 0.90, alpha: 1.0).cgColor  // Fade to cream
+        ]
+        backgroundGradient.locations = [0.0, 0.5, 1.0]
+        backgroundGradient.startPoint = CGPoint(x: 0.5, y: 0)
+        backgroundGradient.endPoint = CGPoint(x: 0.5, y: 1)
+        view.layer.insertSublayer(backgroundGradient, at: 0)
     }
 
     // MARK: - NAVBAR
@@ -54,22 +83,23 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         navBar.translatesAutoresizingMaskIntoConstraints = false
         navBar.backgroundColor = .clear
 
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        backButton.tintColor = .label
+        // Back button - simple chevron without background
+        backButton.setImage(UIImage(systemName: "chevron.left", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)), for: .normal)
+        backButton.tintColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
         backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
         backButton.translatesAutoresizingMaskIntoConstraints = false
         navBar.addSubview(backButton)
 
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 50),
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 68),
+            navBar.heightAnchor.constraint(equalToConstant: 56),
 
-            backButton.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 16),
-            backButton.centerYAnchor.constraint(equalTo: navBar.centerYAnchor, constant: 8),
-            backButton.widthAnchor.constraint(equalToConstant: 36),
-            backButton.heightAnchor.constraint(equalToConstant: 36)
+            backButton.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backButton.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
+            backButton.widthAnchor.constraint(equalToConstant: 40),
+            backButton.heightAnchor.constraint(equalToConstant: 40)
         ])
     }
 
@@ -93,7 +123,7 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         contentView.alignment = .fill
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -108,16 +138,24 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
 
     // MARK: - Build Screen UI
     private func buildUI() {
-        // Add profile header FIRST
-        contentView.addArrangedSubview(buildHeader())
-        contentView.setCustomSpacing(20, after: contentView.arrangedSubviews.last!)
-
-        // Then add stats section
-        contentView.addArrangedSubview(buildStatsSection())
-        contentView.setCustomSpacing(20, after: contentView.arrangedSubviews.last!)
-
-        // Then add saved section
-        contentView.addArrangedSubview(buildSavedSection())
+        // Avatar with edit button (compact header)
+        contentView.addArrangedSubview(buildCompactHeader())
+        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
+        
+        // Daily goal section
+        contentView.addArrangedSubview(buildDailyGoalSection())
+        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
+        
+        // Practice graph section
+        contentView.addArrangedSubview(buildPracticeGraphSection())
+        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
+        
+        // Stats section (Days Streak & Hours Spent)
+        contentView.addArrangedSubview(buildAchievementsSection())
+        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
+        
+        // Most played section
+        contentView.addArrangedSubview(buildMostPlayedSection())
 
         // Add bottom spacer
         let spacer = UIView()
@@ -125,309 +163,626 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         contentView.addArrangedSubview(spacer)
     }
 
-    // MARK: - HEADER (DYNAMIC, NICER DESIGN)
-    private func buildHeader() -> UIView {
+    // MARK: - COMPACT HEADER (Avatar + Edit)
+    private func buildCompactHeader() -> UIView {
         let container = UIView()
         
-        let header = GradientHeaderView()
-        header.layer.cornerRadius = 24
-        header.layer.masksToBounds = true
-        
+        let header = UIView()
+        header.backgroundColor = .clear
+        header.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(header)
         
-        // Avatar container in center
-        let avatarWrapper = UIView()
-        
-        // Profile image
+        // Profile image - larger and more prominent
         profileImageView.image = UIImage(systemName: "person.fill")
         profileImageView.tintColor = .white
         profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
-        profileImageView.layer.cornerRadius = 52
+        profileImageView.layer.cornerRadius = 40
         profileImageView.clipsToBounds = true
-        profileImageView.layer.borderColor = UIColor.white.withAlphaComponent(0.8).cgColor
+        profileImageView.layer.borderColor = UIColor.white.cgColor
         profileImageView.layer.borderWidth = 3
+        profileImageView.layer.shadowColor = UIColor.black.cgColor
+        profileImageView.layer.shadowOpacity = 0.15
+        profileImageView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        profileImageView.layer.shadowRadius = 8
         profileImageView.isUserInteractionEnabled = true
         profileImageView.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
         )
+        profileImageView.translatesAutoresizingMaskIntoConstraints = false
         
-        // Camera badge overlay (FOR IMAGE UPLOAD ONLY)
-        cameraBadgeView.backgroundColor = .white
-        cameraBadgeView.layer.cornerRadius = 16
+        // Camera badge overlay
+        cameraBadgeView.backgroundColor = UIColor.systemOrange
+        cameraBadgeView.layer.cornerRadius = 14
         cameraBadgeView.layer.shadowColor = UIColor.black.cgColor
-        cameraBadgeView.layer.shadowOpacity = 0.15
+        cameraBadgeView.layer.shadowOpacity = 0.2
         cameraBadgeView.layer.shadowOffset = CGSize(width: 0, height: 2)
         cameraBadgeView.layer.shadowRadius = 4
         cameraBadgeView.isUserInteractionEnabled = true
         cameraBadgeView.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
         )
+        cameraBadgeView.translatesAutoresizingMaskIntoConstraints = false
         
         let cameraIcon = UIImageView(image: UIImage(systemName: "camera.fill"))
-        cameraIcon.tintColor = UIColor.systemOrange
+        cameraIcon.tintColor = .white
         cameraIcon.contentMode = .scaleAspectFit
         cameraBadgeView.addSubview(cameraIcon)
+        cameraIcon.translatesAutoresizingMaskIntoConstraints = false
         
-        avatarWrapper.addSubview(profileImageView)
-        avatarWrapper.addSubview(cameraBadgeView)
-        
-        // Name
+        // Name and username in vertical stack
         nameLabel.text = "Loading..."
-        nameLabel.font = .systemFont(ofSize: 22, weight: .semibold)
-        nameLabel.textColor = .label
-        nameLabel.textAlignment = .center
+        nameLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        nameLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Username
         usernameLabel.text = "@username"
         usernameLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        usernameLabel.textColor = .secondaryLabel
-        usernameLabel.textAlignment = .center
+        usernameLabel.textColor = UIColor(red: 0.4, green: 0.4, blue: 0.4, alpha: 1.0)
+        usernameLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Bio
-        bioLabel.text = "Add a short bio about your music journey."
-        bioLabel.font = .systemFont(ofSize: 13)
-        bioLabel.textColor = .secondaryLabel
-        bioLabel.textAlignment = .center
-        bioLabel.numberOfLines = 2
+        let textStack = UIStackView(arrangedSubviews: [nameLabel, usernameLabel])
+        textStack.axis = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 4
+        textStack.translatesAutoresizingMaskIntoConstraints = false
         
-        // Edit pencil button (FOR EDITING NAME/USERNAME/PASSWORD)
+        // Edit button - pill shape
         editButton.setImage(UIImage(systemName: "pencil"), for: .normal)
         editButton.tintColor = .white
         editButton.backgroundColor = UIColor.systemOrange
-        editButton.layer.cornerRadius = 16
-        editButton.contentEdgeInsets = .init(top: 8, left: 8, bottom: 8, right: 8)
+        editButton.layer.cornerRadius = 20
+        editButton.layer.shadowColor = UIColor.systemOrange.cgColor
+        editButton.layer.shadowOpacity = 0.4
+        editButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        editButton.layer.shadowRadius = 8
         editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
-        
-        let textStack = UIStackView(arrangedSubviews: [nameLabel, usernameLabel, bioLabel])
-        textStack.axis = .vertical
-        textStack.alignment = .center
-        textStack.spacing = 4
-        
-        header.addSubview(avatarWrapper)
-        header.addSubview(textStack)
-        header.addSubview(editButton)
-        
-        // Enable Auto Layout
-        header.translatesAutoresizingMaskIntoConstraints = false
-        avatarWrapper.translatesAutoresizingMaskIntoConstraints = false
-        profileImageView.translatesAutoresizingMaskIntoConstraints = false
-        cameraBadgeView.translatesAutoresizingMaskIntoConstraints = false
-        cameraIcon.translatesAutoresizingMaskIntoConstraints = false
-        textStack.translatesAutoresizingMaskIntoConstraints = false
         editButton.translatesAutoresizingMaskIntoConstraints = false
         
+        header.addSubviews(profileImageView, cameraBadgeView, textStack, editButton)
+        
         NSLayoutConstraint.activate([
-            // Header constraints
-            header.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            header.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            header.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            header.topAnchor.constraint(equalTo: container.topAnchor),
+            header.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            header.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
             header.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            header.heightAnchor.constraint(equalToConstant: 300),
+            header.heightAnchor.constraint(equalToConstant: 80),
             
-            // Avatar wrapper
-            avatarWrapper.centerXAnchor.constraint(equalTo: header.centerXAnchor),
-            avatarWrapper.topAnchor.constraint(equalTo: header.topAnchor, constant: 40),
+            profileImageView.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            profileImageView.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            profileImageView.widthAnchor.constraint(equalToConstant: 80),
+            profileImageView.heightAnchor.constraint(equalToConstant: 80),
             
-            // Profile image
-            profileImageView.topAnchor.constraint(equalTo: avatarWrapper.topAnchor),
-            profileImageView.leadingAnchor.constraint(equalTo: avatarWrapper.leadingAnchor),
-            profileImageView.trailingAnchor.constraint(equalTo: avatarWrapper.trailingAnchor),
-            profileImageView.heightAnchor.constraint(equalToConstant: 104),
-            profileImageView.widthAnchor.constraint(equalToConstant: 104),
-            
-            // Camera badge
-            cameraBadgeView.widthAnchor.constraint(equalToConstant: 32),
-            cameraBadgeView.heightAnchor.constraint(equalToConstant: 32),
+            cameraBadgeView.widthAnchor.constraint(equalToConstant: 28),
+            cameraBadgeView.heightAnchor.constraint(equalToConstant: 28),
             cameraBadgeView.trailingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 4),
             cameraBadgeView.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 4),
             
-            // Camera icon inside badge
             cameraIcon.centerXAnchor.constraint(equalTo: cameraBadgeView.centerXAnchor),
             cameraIcon.centerYAnchor.constraint(equalTo: cameraBadgeView.centerYAnchor),
-            cameraIcon.widthAnchor.constraint(equalToConstant: 16),
-            cameraIcon.heightAnchor.constraint(equalToConstant: 16),
+            cameraIcon.widthAnchor.constraint(equalToConstant: 14),
+            cameraIcon.heightAnchor.constraint(equalToConstant: 14),
             
-            // Avatar wrapper bottom
-            avatarWrapper.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor),
+            textStack.leadingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 16),
+            textStack.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             
-            // Text stack
-            textStack.topAnchor.constraint(equalTo: avatarWrapper.bottomAnchor, constant: 20),
-            textStack.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 24),
-            textStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -24),
-            
-            // Edit button
-            editButton.topAnchor.constraint(equalTo: textStack.bottomAnchor, constant: 16),
-            editButton.centerXAnchor.constraint(equalTo: header.centerXAnchor),
-            editButton.widthAnchor.constraint(equalToConstant: 80),
-            editButton.heightAnchor.constraint(equalToConstant: 32),
-            editButton.bottomAnchor.constraint(lessThanOrEqualTo: header.bottomAnchor, constant: -24)
+            editButton.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            editButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            editButton.widthAnchor.constraint(equalToConstant: 44),
+            editButton.heightAnchor.constraint(equalToConstant: 44)
         ])
         
         return container
     }
-
-    // MARK: - STATS
-    private func buildStatsSection() -> UIView {
+    
+    // MARK: - DAILY GOAL SECTION
+    private func buildDailyGoalSection() -> UIView {
         let container = UIView()
         
         let card = UIView()
-        card.backgroundColor = .white
-        card.layer.cornerRadius = 18
+        card.backgroundColor = UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 0.95) // Dark charcoal
+        card.layer.cornerRadius = 20
         card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.06
-        card.layer.shadowRadius = 10
+        card.layer.shadowOpacity = 0.15
         card.layer.shadowOffset = CGSize(width: 0, height: 4)
-        
-        container.addSubview(card)
-        
-        let playlist = statView(number: "23", label: "PLAYLISTS")
-        let followers = statView(number: "58", label: "FOLLOWERS")
-        let following = statView(number: "43", label: "FOLLOWING")
-
-        let stack = UIStackView(arrangedSubviews: [playlist, followers, following])
-        stack.axis = .horizontal
-        stack.distribution = .fillEqually
-        stack.alignment = .center
-        stack.spacing = 0
-
-        card.addSubview(stack)
-        
-        // Enable Auto Layout
+        card.layer.shadowRadius = 12
         card.translatesAutoresizingMaskIntoConstraints = false
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        
-        NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: container.topAnchor),
-            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
-        ])
-
-        return container
-    }
-
-    private func statView(number: String, label: String) -> UIView {
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 4
-
-        let num = UILabel()
-        num.text = number
-        num.font = .systemFont(ofSize: 18, weight: .semibold)
-        num.textColor = .label
-
-        let lbl = UILabel()
-        lbl.text = label
-        lbl.font = .systemFont(ofSize: 11, weight: .medium)
-        lbl.textColor = .secondaryLabel
-
-        stack.addArrangedSubview(num)
-        stack.addArrangedSubview(lbl)
-        return stack
-    }
-
-    // MARK: - SAVED SECTION
-    private func buildSavedSection() -> UIView {
-        let container = UIView()
-
-        let card = UIView()
-        card.backgroundColor = .white
-        card.layer.cornerRadius = 18
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.04
-        card.layer.shadowRadius = 10
-        card.layer.shadowOffset = CGSize(width: 0, height: 4)
-        
         container.addSubview(card)
         
         let label = UILabel()
-        label.text = "Saved"
-        label.font = .systemFont(ofSize: 18, weight: .semibold)
+        label.text = "Daily goal"
+        label.font = .systemFont(ofSize: 15, weight: .medium)
+        label.textColor = UIColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1.0) // Cream white
+        label.translatesAutoresizingMaskIntoConstraints = false
         
-        let stack = UIStackView(arrangedSubviews: [
-            label,
-            savedRow(title: "Shazam", likes: "7 likes"),
-            savedRow(title: "Roadtrip", likes: "4 likes")
-        ])
-        stack.axis = .vertical
-        stack.spacing = 14
-
-        card.addSubview(stack)
+        dailyGoalProgressView.progress = 0.7
+        dailyGoalProgressView.progressTintColor = UIColor(red: 0.3, green: 0.75, blue: 0.45, alpha: 1.0) // Fresh green
+        dailyGoalProgressView.trackTintColor = UIColor.white.withAlphaComponent(0.15)
+        dailyGoalProgressView.layer.cornerRadius = 4
+        dailyGoalProgressView.clipsToBounds = true
+        dailyGoalProgressView.translatesAutoresizingMaskIntoConstraints = false
         
-        // Enable Auto Layout
-        card.translatesAutoresizingMaskIntoConstraints = false
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        // Make progress bar thicker
+        dailyGoalProgressView.transform = CGAffineTransform(scaleX: 1.0, y: 2.0)
+        
+        // Add tap to edit
+        let tapCard = UITapGestureRecognizer(target: self, action: #selector(editDailyGoalTapped))
+        card.addGestureRecognizer(tapCard)
+        card.isUserInteractionEnabled = true
+        
+        dailyGoalTimeLabel.text = "20 mins"
+        dailyGoalTimeLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        dailyGoalTimeLabel.textColor = UIColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1.0)
+        dailyGoalTimeLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        card.addSubviews(label, dailyGoalProgressView, dailyGoalTimeLabel)
         
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: container.topAnchor),
-            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            card.heightAnchor.constraint(equalToConstant: 56),
+            
+            label.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            label.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            
+            dailyGoalProgressView.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 16),
+            dailyGoalProgressView.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            dailyGoalProgressView.trailingAnchor.constraint(equalTo: dailyGoalTimeLabel.leadingAnchor, constant: -16),
+            
+            dailyGoalTimeLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            dailyGoalTimeLabel.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            dailyGoalTimeLabel.widthAnchor.constraint(equalToConstant: 60)
+        ])
+        
+        return container
+    }
+
+    // MARK: - PRACTICE GRAPH SECTION
+    private func buildPracticeGraphSection() -> UIView {
+        let container = UIView()
+        
+        let card = UIView()
+        card.backgroundColor = UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 0.95) // Dark charcoal
+        card.layer.cornerRadius = 20
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.15
+        card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        card.layer.shadowRadius = 12
+        // Dashed border effect
+        card.layer.borderWidth = 1.5
+        card.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        card.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(card)
+        
+        // Title
+        let titleLabel = UILabel()
+        titleLabel.text = "Practice Graph"
+        titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
+        titleLabel.textColor = .white
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Toggle buttons container
+        let toggleContainer = UIView()
+        toggleContainer.backgroundColor = UIColor.white.withAlphaComponent(0.1)
+        toggleContainer.layer.cornerRadius = 10
+        toggleContainer.translatesAutoresizingMaskIntoConstraints = false
+        
+        let sevenDaysBtn = UIButton(type: .system)
+        sevenDaysBtn.setTitle("7 Days", for: .normal)
+        sevenDaysBtn.backgroundColor = .white
+        sevenDaysBtn.layer.cornerRadius = 8
+        sevenDaysBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
+        sevenDaysBtn.setTitleColor(UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0), for: .normal)
+        sevenDaysBtn.translatesAutoresizingMaskIntoConstraints = false
+        
+        let oneMonthBtn = UIButton(type: .system)
+        oneMonthBtn.setTitle("1 Month", for: .normal)
+        oneMonthBtn.backgroundColor = .clear
+        oneMonthBtn.layer.cornerRadius = 8
+        oneMonthBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
+        oneMonthBtn.setTitleColor(.white, for: .normal)
+        oneMonthBtn.translatesAutoresizingMaskIntoConstraints = false
+        
+        toggleContainer.addSubview(sevenDaysBtn)
+        toggleContainer.addSubview(oneMonthBtn)
+        
+        // Y-axis labels
+        let yAxisStack = UIStackView()
+        yAxisStack.axis = .vertical
+        yAxisStack.distribution = .equalSpacing
+        yAxisStack.alignment = .trailing
+        yAxisStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        for minutes in ["30m", "25m", "20m", "15m", "10m", "5m", "0m"] {
+            let label = UILabel()
+            label.text = minutes
+            label.font = .systemFont(ofSize: 9, weight: .regular)
+            label.textColor = UIColor.white.withAlphaComponent(0.5)
+            yAxisStack.addArrangedSubview(label)
+        }
+        
+        // Simple static graph
+        let graphView = buildStaticPracticeGraph()
+        
+        card.addSubviews(titleLabel, toggleContainer, yAxisStack, graphView)
+        
+        NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: container.topAnchor),
+            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            card.heightAnchor.constraint(equalToConstant: 300),
+            
+            titleLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            
+            toggleContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            toggleContainer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            toggleContainer.heightAnchor.constraint(equalToConstant: 32),
+            toggleContainer.widthAnchor.constraint(equalToConstant: 140),
+            
+            sevenDaysBtn.leadingAnchor.constraint(equalTo: toggleContainer.leadingAnchor, constant: 3),
+            sevenDaysBtn.topAnchor.constraint(equalTo: toggleContainer.topAnchor, constant: 3),
+            sevenDaysBtn.bottomAnchor.constraint(equalTo: toggleContainer.bottomAnchor, constant: -3),
+            sevenDaysBtn.widthAnchor.constraint(equalToConstant: 64),
+            
+            oneMonthBtn.trailingAnchor.constraint(equalTo: toggleContainer.trailingAnchor, constant: -3),
+            oneMonthBtn.topAnchor.constraint(equalTo: toggleContainer.topAnchor, constant: 3),
+            oneMonthBtn.bottomAnchor.constraint(equalTo: toggleContainer.bottomAnchor, constant: -3),
+            oneMonthBtn.widthAnchor.constraint(equalToConstant: 64),
+            
+            yAxisStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+            yAxisStack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
+            yAxisStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -50),
+            yAxisStack.widthAnchor.constraint(equalToConstant: 28),
+            
+            graphView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
+            graphView.leadingAnchor.constraint(equalTo: yAxisStack.trailingAnchor, constant: 8),
+            graphView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            graphView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
+        ])
+        
+        return container
+    }
+    
+    private func buildStaticPracticeGraph() -> UIView {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        
+        let days = ["mon", "tues", "wed", "thurs", "fri", "sat", "sun"]
+        let values: [CGFloat] = [0, 0, 18, 22, 16, 25, 28] // minutes - first two days no activity
+        let maxValue: CGFloat = 30
+        
+        let graphHeight: CGFloat = 160
+        let barWidth: CGFloat = 30
+        let spacing: CGFloat = 10
+        
+        for (index, day) in days.enumerated() {
+            let value = values[index]
+            let barHeight = max((value / maxValue) * graphHeight, value > 0 ? 20 : 0)
+            
+            // Bar with gradient look
+            let bar = UIView()
+            if value > 0 {
+                bar.backgroundColor = UIColor.systemOrange
+                bar.layer.cornerRadius = 4
+            } else {
+                bar.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+                bar.layer.cornerRadius = 4
+            }
+            bar.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(bar)
+            
+            // Day label
+            let label = UILabel()
+            label.text = day
+            label.font = .systemFont(ofSize: 10, weight: .medium)
+            label.textColor = UIColor.white.withAlphaComponent(0.6)
+            label.textAlignment = .center
+            label.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(label)
+            
+            let xPos = CGFloat(index) * (barWidth + spacing)
+            
+            NSLayoutConstraint.activate([
+                bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: xPos),
+                bar.widthAnchor.constraint(equalToConstant: barWidth),
+                bar.heightAnchor.constraint(equalToConstant: barHeight),
+                bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -28),
+                
+                label.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
+                label.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: 8)
+            ])
+        }
+        
+        return container
+    }
+    
+    // MARK: - ACHIEVEMENTS SECTION (Days Streak & Hours Spent)
+    private func buildAchievementsSection() -> UIView {
+        let container = UIView()
+        
+        let streakCard = UIView()
+        streakCard.backgroundColor = .white
+        streakCard.layer.cornerRadius = 20
+        streakCard.layer.shadowColor = UIColor.black.cgColor
+        streakCard.layer.shadowOpacity = 0.08
+        streakCard.layer.shadowRadius = 12
+        streakCard.layer.shadowOffset = CGSize(width: 0, height: 4)
+        streakCard.translatesAutoresizingMaskIntoConstraints = false
+        
+        let hoursCard = UIView()
+        hoursCard.backgroundColor = .white
+        hoursCard.layer.cornerRadius = 20
+        hoursCard.layer.shadowColor = UIColor.black.cgColor
+        hoursCard.layer.shadowOpacity = 0.08
+        hoursCard.layer.shadowRadius = 12
+        hoursCard.layer.shadowOffset = CGSize(width: 0, height: 4)
+        hoursCard.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Streak card content
+        let streakIcon = UIImageView(image: UIImage(systemName: "flame.fill"))
+        streakIcon.tintColor = UIColor(red: 1.0, green: 0.4, blue: 0.3, alpha: 1.0)
+        streakIcon.contentMode = .scaleAspectFit
+        streakIcon.translatesAutoresizingMaskIntoConstraints = false
+        
+        let streakNumber = UILabel()
+        streakNumber.text = "5"
+        streakNumber.font = .systemFont(ofSize: 42, weight: .bold)
+        streakNumber.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        streakNumber.textAlignment = .center
+        streakNumber.translatesAutoresizingMaskIntoConstraints = false
+        
+        let streakLabel = UILabel()
+        streakLabel.text = "Days Streak"
+        streakLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        streakLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
+        streakLabel.textAlignment = .center
+        streakLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        streakCard.addSubviews(streakIcon, streakNumber, streakLabel)
+        
+        // Hours card content
+        let hoursIcon = UIImageView(image: UIImage(systemName: "stopwatch.fill"))
+        hoursIcon.tintColor = .systemOrange
+        hoursIcon.contentMode = .scaleAspectFit
+        hoursIcon.translatesAutoresizingMaskIntoConstraints = false
+        
+        let hoursNumber = UILabel()
+        hoursNumber.text = "24"
+        hoursNumber.font = .systemFont(ofSize: 42, weight: .bold)
+        hoursNumber.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        hoursNumber.textAlignment = .center
+        hoursNumber.translatesAutoresizingMaskIntoConstraints = false
+        
+        let hoursLabel = UILabel()
+        hoursLabel.text = "Hours Spent"
+        hoursLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        hoursLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
+        hoursLabel.textAlignment = .center
+        hoursLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        hoursCard.addSubviews(hoursIcon, hoursNumber, hoursLabel)
+        
+        // Layout cards side by side
+        container.addSubviews(streakCard, hoursCard)
+        
+        NSLayoutConstraint.activate([
+            streakCard.topAnchor.constraint(equalTo: container.topAnchor),
+            streakCard.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            streakCard.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            streakCard.heightAnchor.constraint(equalToConstant: 150),
+            
+            hoursCard.topAnchor.constraint(equalTo: container.topAnchor),
+            hoursCard.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            hoursCard.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            hoursCard.heightAnchor.constraint(equalToConstant: 150),
+            
+            streakCard.trailingAnchor.constraint(equalTo: hoursCard.leadingAnchor, constant: -16),
+            streakCard.widthAnchor.constraint(equalTo: hoursCard.widthAnchor),
+            
+            // Streak card contents
+            streakIcon.topAnchor.constraint(equalTo: streakCard.topAnchor, constant: 18),
+            streakIcon.centerXAnchor.constraint(equalTo: streakCard.centerXAnchor),
+            streakIcon.widthAnchor.constraint(equalToConstant: 36),
+            streakIcon.heightAnchor.constraint(equalToConstant: 36),
+            
+            streakNumber.topAnchor.constraint(equalTo: streakIcon.bottomAnchor, constant: 8),
+            streakNumber.centerXAnchor.constraint(equalTo: streakCard.centerXAnchor),
+            
+            streakLabel.topAnchor.constraint(equalTo: streakNumber.bottomAnchor, constant: 4),
+            streakLabel.centerXAnchor.constraint(equalTo: streakCard.centerXAnchor),
+            
+            // Hours card contents
+            hoursIcon.topAnchor.constraint(equalTo: hoursCard.topAnchor, constant: 18),
+            hoursIcon.centerXAnchor.constraint(equalTo: hoursCard.centerXAnchor),
+            hoursIcon.widthAnchor.constraint(equalToConstant: 36),
+            hoursIcon.heightAnchor.constraint(equalToConstant: 36),
+            
+            hoursNumber.topAnchor.constraint(equalTo: hoursIcon.bottomAnchor, constant: 8),
+            hoursNumber.centerXAnchor.constraint(equalTo: hoursCard.centerXAnchor),
+            
+            hoursLabel.topAnchor.constraint(equalTo: hoursNumber.bottomAnchor, constant: 4),
+            hoursLabel.centerXAnchor.constraint(equalTo: hoursCard.centerXAnchor)
+        ])
+        
+        return container
+    }
+    
+    // MARK: - MOST PLAYED SECTION
+    private func buildMostPlayedSection() -> UIView {
+        let container = UIView()
+        
+        // Section header
+        let headerLabel = UILabel()
+        headerLabel.text = "Most Played"
+        headerLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        headerLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        headerLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(headerLabel)
+        
+        let card = UIView()
+        card.backgroundColor = .white
+        card.layer.cornerRadius = 20
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.06
+        card.layer.shadowRadius = 12
+        card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        card.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(card)
+        
+        let stack = UIStackView(arrangedSubviews: [
+            mostPlayedRow(title: "Go Away", artist: "Weezer", plays: "23\nTimes"),
+            mostPlayedRow(title: "Ride Home", artist: "Weezer", plays: "16\nTimes")
+        ])
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        card.addSubview(stack)
+        
+        NSLayoutConstraint.activate([
+            headerLabel.topAnchor.constraint(equalTo: container.topAnchor),
+            headerLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            
+            card.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 16),
+            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
             card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
         ])
 
         return container
     }
-
-    private func savedRow(title: String, likes: String) -> UIView {
+    
+    private func mostPlayedRow(title: String, artist: String, plays: String) -> UIView {
         let row = UIView()
 
-        let icon = UIImageView(image: UIImage(systemName: "music.note.list"))
-        icon.tintColor = .systemOrange
-        icon.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.12)
-        icon.layer.cornerRadius = 12
-        icon.clipsToBounds = true
-        icon.contentMode = .center
-
-        let t = UILabel()
-        t.text = title
-        t.font = .systemFont(ofSize: 16, weight: .medium)
-
-        let l = UILabel()
-        l.text = likes
-        l.font = .systemFont(ofSize: 12)
-        l.textColor = .secondaryLabel
-
-        let textStack = UIStackView(arrangedSubviews: [t, l])
-        textStack.axis = .vertical
-        textStack.spacing = 2
-
-        let arrow = UIImageView(image: UIImage(systemName: "chevron.right"))
-        arrow.tintColor = .tertiaryLabel
-
-        row.addSubviews(icon, textStack, arrow)
+        // Album art placeholder
+        let albumArt = UIView()
+        albumArt.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.15)
+        albumArt.layer.cornerRadius = 12
+        albumArt.clipsToBounds = true
+        albumArt.translatesAutoresizingMaskIntoConstraints = false
         
-        // Enable Auto Layout
-        icon.translatesAutoresizingMaskIntoConstraints = false
+        let musicIcon = UIImageView(image: UIImage(systemName: "music.note"))
+        musicIcon.tintColor = .systemOrange
+        musicIcon.contentMode = .scaleAspectFit
+        musicIcon.translatesAutoresizingMaskIntoConstraints = false
+        albumArt.addSubview(musicIcon)
+
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        titleLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let artistLabel = UILabel()
+        artistLabel.text = artist
+        artistLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        artistLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
+        artistLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, artistLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 4
         textStack.translatesAutoresizingMaskIntoConstraints = false
-        arrow.translatesAutoresizingMaskIntoConstraints = false
+
+        let playsLabel = UILabel()
+        playsLabel.text = plays
+        playsLabel.font = .systemFont(ofSize: 16, weight: .bold)
+        playsLabel.textColor = UIColor(red: 0.3, green: 0.3, blue: 0.3, alpha: 1.0)
+        playsLabel.numberOfLines = 2
+        playsLabel.textAlignment = .right
+        playsLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        row.addSubviews(albumArt, textStack, playsLabel)
         
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: row.leadingAnchor),
-            icon.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-            icon.heightAnchor.constraint(equalToConstant: 44),
-            icon.widthAnchor.constraint(equalToConstant: 44),
+            albumArt.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            albumArt.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            albumArt.heightAnchor.constraint(equalToConstant: 56),
+            albumArt.widthAnchor.constraint(equalToConstant: 56),
+            
+            musicIcon.centerXAnchor.constraint(equalTo: albumArt.centerXAnchor),
+            musicIcon.centerYAnchor.constraint(equalTo: albumArt.centerYAnchor),
+            musicIcon.widthAnchor.constraint(equalToConstant: 24),
+            musicIcon.heightAnchor.constraint(equalToConstant: 24),
 
-            textStack.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
+            textStack.leadingAnchor.constraint(equalTo: albumArt.trailingAnchor, constant: 14),
             textStack.centerYAnchor.constraint(equalTo: row.centerYAnchor),
 
-            arrow.trailingAnchor.constraint(equalTo: row.trailingAnchor),
-            arrow.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            playsLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            playsLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            playsLabel.widthAnchor.constraint(equalToConstant: 60),
 
-            row.heightAnchor.constraint(equalToConstant: 60)
+            row.heightAnchor.constraint(equalToConstant: 72)
         ])
 
         return row
+    }
+
+    @objc private func editDailyGoalTapped() {
+        let alert = UIAlertController(title: "Set Daily Goal",
+                                      message: "Enter your daily practice goal in minutes",
+                                      preferredStyle: .alert)
+        
+        alert.addTextField { tf in
+            tf.placeholder = "Minutes"
+            tf.text = "\(self.currentDailyGoalMinutes)"
+            tf.keyboardType = .numberPad
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        alert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
+            if let minutesStr = alert.textFields?[0].text,
+               let minutes = Int(minutesStr),
+               minutes > 0 {
+                self.currentDailyGoalMinutes = minutes
+                self.updateDailyGoal(minutes: minutes)
+            } else {
+                self.showAlert(title: "Invalid Input", message: "Please enter a valid number")
+            }
+        }))
+        
+        present(alert, animated: true)
+    }
+    
+    private func updateDailyGoal(minutes: Int) {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            
+            do {
+                let updates: [String: Int] = ["daily_goal_minutes": minutes]
+                
+                _ = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .update(updates)
+                    .eq("id", value: user.id.uuidString)
+                    .execute()
+                
+                self.currentProfile?.daily_goal_minutes = minutes
+                
+                await MainActor.run {
+                    // Update DailyGoalManager to sync with home screen
+                    DailyGoalManager.shared.dailyGoalMinutes = minutes
+                    
+                    self.dailyGoalTimeLabel.text = "\(minutes) mins"
+                    self.showAlert(title: "Success", message: "Daily goal updated!")
+                }
+            } catch {
+                print("Error updating daily goal:", error)
+                await MainActor.run {
+                    self.showAlert(title: "Error", message: error.localizedDescription)
+                }
+            }
+        }
     }
 }
 
@@ -455,8 +810,11 @@ private extension UserProfileViewController {
                 
                 self.currentProfile = profile
                 
+                // Update name with user's name
+                let displayName = profile.full_name?.isEmpty == false ? profile.full_name ?? "User" : "User"
+                
                 await MainActor.run {
-                    self.nameLabel.text = profile.full_name?.isEmpty == false ? profile.full_name : "No Name"
+                    self.nameLabel.text = displayName
                     
                     if let username = profile.username, !username.isEmpty {
                         self.usernameLabel.text = "@\(username)"
@@ -464,8 +822,12 @@ private extension UserProfileViewController {
                         self.usernameLabel.text = "@username"
                     }
                     
-                    if let bio = profile.bio, !bio.isEmpty {
-                        self.bioLabel.text = bio
+                    // Set daily goal and sync with DailyGoalManager
+                    if let goalMinutes = profile.daily_goal_minutes {
+                        self.currentDailyGoalMinutes = goalMinutes
+                        DailyGoalManager.shared.dailyGoalMinutes = goalMinutes
+                        self.dailyGoalTimeLabel.text = "\(goalMinutes) mins"
+                        self.dailyGoalProgressView.progress = Float(self.currentDailyProgressMinutes) / Float(goalMinutes)
                     }
                     
                     self.updateAvatar(with: profile.avatar_url)
@@ -654,7 +1016,8 @@ private extension UserProfileViewController {
                     full_name: fullName.isEmpty ? nil : fullName,
                     username: username.isEmpty ? nil : username,
                     avatar_url: self.currentProfile?.avatar_url,
-                    bio: self.currentProfile?.bio
+                    bio: self.currentProfile?.bio,
+                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes
                 )
                 
                 await MainActor.run {
@@ -772,7 +1135,8 @@ extension UserProfileViewController {
                     full_name: self.currentProfile?.full_name,
                     username: self.currentProfile?.username,
                     avatar_url: nil,
-                    bio: self.currentProfile?.bio
+                    bio: self.currentProfile?.bio,
+                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes
                 )
                 
                 await MainActor.run {
@@ -910,7 +1274,8 @@ extension UserProfileViewController {
                     full_name: self.currentProfile?.full_name,
                     username: self.currentProfile?.username,
                     avatar_url: publicURL,
-                    bio: self.currentProfile?.bio
+                    bio: self.currentProfile?.bio,
+                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes
                 )
                 
                 await MainActor.run {
