@@ -1,199 +1,174 @@
 //
-//  ChordRecognitionViewController.swift
+//  MainChordRecognitionScreen.swift
 //  Re-Hearse_v1
-//
-//  Unified file — UI + Fake audio mode (default) + commented Real AV code
 //
 
 import UIKit
-// If you want real microphone + FFT later, uncomment these:
-// import AVFoundation
-// import Accelerate
+import AVFoundation
+import Accelerate
 
 final class ChordRecognitionViewController: UIViewController {
 
     // MARK: - Toggle mode
-    // true = use fake/static data (works on Mac without a device)
-    // false = use real microphone (you must uncomment the AVFoundation/Accelerate imports
-    // and the AV audio sections below)
-    private let useFakeMode = true
+    // true  = fake mode (Mac / Simulator)
+    // false = real microphone + FFT (iPhone)
+    private let useFakeMode = false
 
-    // MARK: - UI
-    private let navBar = TopNavBar.make(
-    title: "Chord Recognition",
-    )
+    // MARK: - UI Components
+    private let navBar = TopNavBar.make(title: "Chord Recognition")
 
-    private let chordLabel: UILabel = {
+    // Main note display
+    private let noteContainerView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .white
+        view.layer.cornerRadius = 24
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.1
+        view.layer.shadowOffset = CGSize(width: 0, height: 4)
+        view.layer.shadowRadius = 12
+        return view
+    }()
+    
+    private let noteLabel: UILabel = {
         let l = UILabel()
         l.text = "—"
-        l.font = .systemFont(ofSize: 46, weight: .bold)
+        l.font = .systemFont(ofSize: 64, weight: .heavy)
+        l.textColor = .black
+        l.textAlignment = .center
+        l.adjustsFontSizeToFitWidth = true
+        l.minimumScaleFactor = 0.5
+        return l
+    }()
+    
+    private let noteTypeLabel: UILabel = {
+        let l = UILabel()
+        l.text = "DETECTED NOTE"
+        l.font = .systemFont(ofSize: 13, weight: .semibold)
         l.textColor = .black
         l.textAlignment = .center
         return l
     }()
-
-    private let noteLabel: UILabel = {
+    
+    // Status display
+    private let statusLabel: UILabel = {
         let l = UILabel()
-        l.text = ""
-        l.font = .systemFont(ofSize: 20, weight: .medium)
-        l.textColor = .darkGray
+        l.text = "Tap to start"
+        l.font = .systemFont(ofSize: 16, weight: .medium)
+        l.textColor = .black
         l.textAlignment = .center
         return l
     }()
-
-    private let confidenceLabel: UILabel = {
+    
+    private let frequencyLabel: UILabel = {
         let l = UILabel()
-        l.text = ""
-        l.font = .systemFont(ofSize: 13, weight: .regular)
-        l.textColor = .gray
+        l.font = .monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+        l.textColor = .black
         l.textAlignment = .center
+        l.text = "Frequency: — Hz"
         return l
     }()
 
-    private let waveView = ChordWaveView() // included below
-   
+    // Original wave view with orange theme
+    private let waveView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .white
+        view.layer.cornerRadius = 12
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.3).cgColor
+        return view
+    }()
+    
+    private var waveLayer: CAShapeLayer?
+    
+    // Control buttons container
+    private let controlContainerView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .white
+        view.layer.cornerRadius = 28
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.15
+        view.layer.shadowOffset = CGSize(width: 0, height: 6)
+        view.layer.shadowRadius = 16
+        return view
+    }()
 
-    // Cancel button → stop listening (does NOT pop)
-    private let cancelButton: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Cancel", for: .normal)
-        btn.backgroundColor = UIColor(white: 0.92, alpha: 1)
-        btn.setTitleColor(.black, for: .normal)
-        btn.layer.cornerRadius = 36
-        btn.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+    private let micButton: UIButton = {
+        let b = UIButton(type: .custom)
+        b.setImage(UIImage(systemName: "mic.circle.fill"), for: .normal)
+        b.tintColor = .white
+        b.backgroundColor = .systemGreen
+        b.layer.cornerRadius = 40
+        b.imageView?.contentMode = .scaleAspectFit
+        b.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        return b
+    }()
+    
+    private let stopButton: UIButton = {
+        let btn = UIButton(type: .custom)
+        btn.setImage(UIImage(systemName: "stop.circle.fill"), for: .normal)
+        btn.tintColor = .white
+        btn.backgroundColor = .systemRed
+        btn.layer.cornerRadius = 40
+        btn.imageView?.contentMode = .scaleAspectFit
+        btn.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        btn.alpha = 0.7
         return btn
     }()
 
-    // Mic button → start/stop listening (fake or real)
-    private let micButton: UIButton = {
-        let b = UIButton(type: .system)
-        b.setImage(UIImage(systemName: "mic.fill"), for: .normal)
-        b.tintColor = .white
-        b.backgroundColor = .systemGreen
-        b.layer.cornerRadius = 36
-        return b
-    }()
-
- 
-
-    // MARK: - Fake audio simulation (for local testing)
+    // MARK: - Fake mode
     private var fakeTimer: Timer?
     private var sampleIndex = 0
-    // A short cyclic fake frequency dataset (Hz)
-   
 
-        private let fakeFrequencies: [[Float]] = [
-            [261.63, 329.63, 392.00],   // C major
-            [293.66, 369.99, 440.00],   // D major
-            [329.63, 415.30, 493.88],   // E major
-            [349.23, 440.00, 523.25],   // F major
-            [392.00, 493.88, 587.33],   // G major
-            [440.00, 554.37, 659.25],   // A major
-            [493.88, 622.25, 739.99]    // B major
-          ]
-        
-    private func colorForChord(_ chord: String) -> UIColor {
-        switch chord {
-        case "Cmaj", "C":
-            return UIColor.black
-        case "Dmaj", "D":
-            return UIColor.systemPurple
-        case "Emaj", "E":
-            return UIColor.systemRed
-        case "Fmaj", "F":
-            return UIColor.systemTeal
-        case "Gmaj", "G":
-            return UIColor.systemYellow
-        case "Amaj", "A":
-            return UIColor.systemGreen
-        case "Bmaj", "B":
-            return UIColor.systemOrange
+    private let fakeNotes: [String] = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+    private let fakeFrequencies: [Float] = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]
 
-        case "Am":
-            return UIColor.systemMint
-        case "Dm":
-            return UIColor.systemPink
-        case "Em":
-            return UIColor.systemRed
-        case "Gm":
-            return UIColor.brown
-
-        default:
-            return UIColor.lightGray
-        }
-    }
-    private func updateWaveColor(for chord: String) {
-        let color = colorForChord(chord)
-        waveView.setWaveColor(color)
-    }
-
-
-    // MARK: - (Optional) Real audio / FFT properties (commented)
-    /*
+    // MARK: - Real audio / FFT
     private let audioEngine = AVAudioEngine()
     private var fftSetup: FFTSetup?
-    private var log2n: vDSP_Length = 0
     private var bufferSize: Int = 4096
     private var sampleRate: Double = 44100
     private var isListening = false
-    private var smoothedAmplitude: CGFloat = 0.01
-    */
+    
+    // MARK: - Audio processing
+    private var detectedPeaks: [(frequency: Float, magnitude: Float)] = []
+    private let minMagnitudeThreshold: Float = 0.001
+    private var frequencyHistory: [Float] = []
+    private let historySize = 3
+    private var lastNote: String = ""
+    private var waveUpdateCounter = 0
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
-
         setupNavBar()
         setupUI()
         configureActions()
-
-        if !useFakeMode {
-            // If you want to use real mode now, change useFakeMode = false and
-            // uncomment the AV code blocks near the bottom of this file.
-            // For now we default to fake mode so it works on Mac without a device.
+        setupWaveLayer()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            print("Mic permission granted:", granted)
         }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopFakeAudio()
-        // stopListening() // enable when real mode enabled
+        stopListening()
     }
 
-    // MARK: - Setup UI / NavBar
+    // MARK: - Setup
     private func setupNavBar() {
         navBar.isWelcomeTextHidden = true
         navBar.isStreakVisible = false
         navBar.isChordIconVisible = false
         navBar.isBackButtonVisible = true
-        // Optional: allow dayBadgeAction to act as a "back" affordance
-        navBar.dayBadgeAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-            self?.navBar.chordAction = { [weak self] in
-                let vc = ChordRecognitionViewController()
-                self?.navigationController?.pushViewController(vc, animated: true)
-            }
-
-        }
         navBar.backAction = { [weak self] in
-            if let nav = self?.navigationController {
-                nav.popViewController(animated: true)
-            } else {
-                self?.dismiss(animated: true)
-            }
+            self?.navigationController?.popViewController(animated: true)
         }
-
-        navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = UserProfileViewController()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
-
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
 
         view.addSubview(navBar)
         navBar.translatesAutoresizingMaskIntoConstraints = false
@@ -204,361 +179,439 @@ final class ChordRecognitionViewController: UIViewController {
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-
-        // If the selected tab is NOT the tab that owns this VC → close it
-        if let tab = tabBarController,
-           let nav = navigationController,
-           tab.selectedViewController !== nav {
-
-            nav.popViewController(animated: false)
-        }
-    }
-
 
     private func setupUI() {
-        // Add subviews
-        [chordLabel, noteLabel, confidenceLabel, waveView, micButton, cancelButton].forEach {
+        [noteContainerView, statusLabel, frequencyLabel, waveView, controlContainerView].forEach {
             view.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
+        
+        // Add content to note container
+        noteContainerView.addSubview(noteLabel)
+        noteContainerView.addSubview(noteTypeLabel)
+        
+        // Add buttons to control container
+        controlContainerView.addSubview(micButton)
+        controlContainerView.addSubview(stopButton)
+        
+        // Set translatesAutoresizingMaskIntoConstraints
+        [noteLabel, noteTypeLabel, micButton, stopButton].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
 
-        // Layout constraints — all in same view hierarchy
         NSLayoutConstraint.activate([
-            chordLabel.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 36),
-            chordLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            // Note container
+            noteContainerView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 40),
+            noteContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            noteContainerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.85),
+            noteContainerView.heightAnchor.constraint(equalToConstant: 160),
+            
+            noteLabel.centerXAnchor.constraint(equalTo: noteContainerView.centerXAnchor),
+            noteLabel.centerYAnchor.constraint(equalTo: noteContainerView.centerYAnchor),
+            noteLabel.leadingAnchor.constraint(greaterThanOrEqualTo: noteContainerView.leadingAnchor, constant: 20),
+            noteLabel.trailingAnchor.constraint(lessThanOrEqualTo: noteContainerView.trailingAnchor, constant: -20),
+            
+            noteTypeLabel.centerXAnchor.constraint(equalTo: noteContainerView.centerXAnchor),
+            noteTypeLabel.bottomAnchor.constraint(equalTo: noteContainerView.bottomAnchor, constant: -20),
+            
+            // Status label
+            statusLabel.topAnchor.constraint(equalTo: noteContainerView.bottomAnchor, constant: 20),
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            
+            // Frequency label
+            frequencyLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
+            frequencyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            noteLabel.topAnchor.constraint(equalTo: chordLabel.bottomAnchor, constant: 8),
-            noteLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            // Wave view
+            waveView.topAnchor.constraint(equalTo: frequencyLabel.bottomAnchor, constant: 30),
+            waveView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            waveView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            waveView.heightAnchor.constraint(equalToConstant: 120),
 
-            confidenceLabel.topAnchor.constraint(equalTo: noteLabel.bottomAnchor, constant: 6),
-            confidenceLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            waveView.topAnchor.constraint(equalTo: confidenceLabel.bottomAnchor, constant: 28),
-            waveView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            waveView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            waveView.heightAnchor.constraint(equalToConstant: 140),
-
-            // cancel & mic side-by-side centered around centerX
-            cancelButton.topAnchor.constraint(equalTo: waveView.bottomAnchor, constant: 40),
-            cancelButton.trailingAnchor.constraint(equalTo: view.centerXAnchor, constant: -28),
-            cancelButton.widthAnchor.constraint(equalToConstant: 92),
-            cancelButton.heightAnchor.constraint(equalToConstant: 92),
-
-            micButton.centerYAnchor.constraint(equalTo: cancelButton.centerYAnchor),
-            micButton.leadingAnchor.constraint(equalTo: view.centerXAnchor, constant: 28),
-            micButton.widthAnchor.constraint(equalToConstant: 92),
-            micButton.heightAnchor.constraint(equalToConstant: 92),
-
-//            // back button below controls
-//            backButton.topAnchor.constraint(equalTo: cancelButton.bottomAnchor, constant: 20),
-//            backButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            backButton.widthAnchor.constraint(equalToConstant: 200),
-//            backButton.heightAnchor.constraint(equalToConstant: 60)
+            // Control container
+            controlContainerView.topAnchor.constraint(equalTo: waveView.bottomAnchor, constant: 40),
+            controlContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            controlContainerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.9),
+            controlContainerView.heightAnchor.constraint(equalToConstant: 100),
+            
+            // Mic button
+            micButton.centerYAnchor.constraint(equalTo: controlContainerView.centerYAnchor),
+            micButton.centerXAnchor.constraint(equalTo: controlContainerView.centerXAnchor),
+            micButton.widthAnchor.constraint(equalToConstant: 80),
+            micButton.heightAnchor.constraint(equalToConstant: 80),
+            
+            // Stop button
+            stopButton.centerYAnchor.constraint(equalTo: controlContainerView.centerYAnchor),
+            stopButton.centerXAnchor.constraint(equalTo: controlContainerView.centerXAnchor),
+            stopButton.widthAnchor.constraint(equalToConstant: 80),
+            stopButton.heightAnchor.constraint(equalToConstant: 80),
         ])
+        
+        // Initially hide stop button
+        stopButton.isHidden = true
+    }
+    
+    private func setupWaveLayer() {
+        let waveLayer = CAShapeLayer()
+        waveLayer.fillColor = UIColor.clear.cgColor
+        waveLayer.strokeColor = UIColor.systemOrange.cgColor
+        waveLayer.lineWidth = 3.0
+        waveLayer.lineCap = .round
+        waveLayer.lineJoin = .round
+        waveView.layer.addSublayer(waveLayer)
+        self.waveLayer = waveLayer
+    }
+    
+    private func updateWave(with amplitude: CGFloat, frequency: Float) {
+        guard let waveLayer = waveLayer else { return }
+        
+        let width = waveView.bounds.width
+        let height = waveView.bounds.height
+        let centerY = height / 2
+        
+        // Calculate wave parameters based on frequency
+        let waveCount = Int(max(2, min(8, frequency / 100))) // Adjust wave density by frequency
+        
+        let path = UIBezierPath()
+        
+        // Create natural-looking wave with multiple sine components
+        let points = 200
+        for i in 0...points {
+            let x = CGFloat(i) * width / CGFloat(points)
+            
+            // Base phase
+            let basePhase = CGFloat(i) * CGFloat(waveCount) * 2 * .pi / CGFloat(points)
+            
+            // Multiple sine waves for natural look - only orange shades
+            let y1 = sin(basePhase) * amplitude * 0.7
+            let y2 = sin(basePhase * 2 + 0.5) * amplitude * 0.3
+            let y3 = sin(basePhase * 3 + 1.0) * amplitude * 0.15
+            
+            // Natural randomness
+            let randomFactor = CGFloat.random(in: 0.9...1.1)
+            let y = centerY + (y1 + y2 + y3) * height * 0.4 * randomFactor
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        
+        // Update wave color with different orange shades based on amplitude
+        waveUpdateCounter += 1
+        let orangeShade: UIColor
+        switch waveUpdateCounter % 4 {
+        case 0:
+            orangeShade = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // Bright orange
+        case 1:
+            orangeShade = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0) // Pure orange
+        case 2:
+            orangeShade = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 1.0) // Light orange
+        default:
+            orangeShade = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1.0) // Dark orange
+        }
+        
+        waveLayer.strokeColor = orangeShade.cgColor
+        
+        // Smooth animation
+        let animation = CABasicAnimation(keyPath: "path")
+        animation.duration = 0.2
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        animation.fromValue = waveLayer.path
+        animation.toValue = path.cgPath
+        
+        CATransaction.begin()
+        CATransaction.setDisableActions(false)
+        waveLayer.add(animation, forKey: "wavePath")
+        waveLayer.path = path.cgPath
+        CATransaction.commit()
     }
 
     private func configureActions() {
         micButton.addTarget(self, action: #selector(micTapped), for: .touchUpInside)
-        cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
- 
+        stopButton.addTarget(self, action: #selector(stopTapped), for: .touchUpInside)
     }
-
-    @objc private func backTapped() {
-        stopFakeAudio()
-        // stopListening() // for real mode
-        navigationController?.popViewController(animated: true)
-    }
-
-    // MARK: - Fake audio simulation (default mode)
-    @objc private func micTapped() {
-        if useFakeMode {
-            if fakeTimer == nil {
-                startFakeAudio()
-            } else {
-                stopFakeAudio()
-            }
-        } else {
-            // Real mode: start/stop audio engine
-            // toggleListening()
+    
+    private func showStopButton(_ show: Bool) {
+        UIView.animate(withDuration: 0.3) {
+            self.micButton.isHidden = show
+            self.stopButton.isHidden = !show
+            self.stopButton.alpha = show ? 1.0 : 0.7
         }
     }
 
-    private func startFakeAudio() {
-        stopFakeAudio()
-        sampleIndex = 0
-        // schedule timer
-        fakeTimer = Timer.scheduledTimer(timeInterval: 0.15,
-                                         target: self,
-                                         selector: #selector(simulateFrequency),
-                                         userInfo: nil,
-                                         repeats: true)
-        // show visual "listening" state
-        micButton.backgroundColor = UIColor(red: 1.0, green: 0.88, blue: 0.5, alpha: 1)
+    // MARK: - Mic logic
+    @objc private func micTapped() {
+        if useFakeMode {
+            fakeTimer == nil ? startFakeAudio() : stopFakeAudio()
+        } else {
+            isListening ? stopListening() : startListening()
+        }
     }
 
-    @objc private func stopFakeAudio() {
+    @objc private func stopTapped() {
+        stopFakeAudio()
+        stopListening()
+        showStopButton(false)
+    }
+
+    // MARK: - Fake mode
+    private func startFakeAudio() {
+        fakeTimer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(simulateNote), userInfo: nil, repeats: true)
+        micButton.backgroundColor = .systemYellow
+        showStopButton(true)
+        statusLabel.text = "Demo Mode"
+    }
+
+    private func stopFakeAudio() {
         fakeTimer?.invalidate()
         fakeTimer = nil
         micButton.backgroundColor = .systemGreen
-
-        // reset UI
-        chordLabel.text = "—"
-        noteLabel.text = ""
-        confidenceLabel.text = ""
-        waveView.updateAmplitude(0.02)
+        showStopButton(false)
+        statusLabel.text = "Stopped"
     }
 
-    @objc private func cancelTapped() {
-        // Cancel should stop listening but NOT navigate away
-        stopFakeAudio()
-        // if real mode: stopListening()
-    }
-
-    @objc private func simulateFrequency() {
-        let freqs = fakeFrequencies[sampleIndex % fakeFrequencies.count]
+    @objc private func simulateNote() {
+        let note = fakeNotes[sampleIndex % fakeNotes.count]
+        let frequency = fakeFrequencies[sampleIndex % fakeFrequencies.count]
         sampleIndex += 1
-
-        // Use the first frequency in the triad as the representative/root
-        guard let rootFreq = freqs.first else { return }
-        let note = Self.frequencyToNoteName(rootFreq)
-        let chord = Self.guessChord(from: note)
-
-        // update UI
-        chordLabel.text = chord
-        let freqText = freqs.map { String(Int($0)) }.joined(separator: ", ")
-        noteLabel.text = "\(note) — [\(freqText)] Hz"
-        confidenceLabel.text = "Confidence: 100%"
-       
-        // amplitude proportional-ish to frequency value (simple mapping)
-        // higher frequency → slightly higher amplitude (just for demo)
-        // ADD THIS ↓↓↓
-            let amp = CGFloat.random(in: 0.1...1.0)
-            waveView.updateAmplitude(amp)
-
-            // UPDATE WAVE COLOR ALSO
-            let color = colorForChord(chord)
-            waveView.setWaveColor(color)
         
-        
+        updateDisplay(note: note, frequency: frequency, amplitude: CGFloat.random(in: 0.3...0.9))
+        statusLabel.text = "Demo Mode"
     }
 
-    // MARK: - Simple mapping for fake data
-    private static func frequencyToNoteName(_ f: Float) -> String {
-        switch f {
-        case 250...275: return "C4"
-        case 320...350: return "E4"
-        case 380...410: return "G4"
-        case 430...450: return "A4"
-        default: return "—"
-        }
-    }
-
-    private static func guessChord(from note: String) -> String {
-        switch note {
-        case "C4": return "Cmaj"
-        case "E4": return "Cmaj"
-        case "G4": return "Cmaj"
-        case "A4": return "Am"
-        default: return "—"
-        }
-    }
-
-    // MARK: - (OPTIONAL) Real audio + FFT code
-    /*
-    // If you later want to enable the microphone + FFT:
-    // 1) Set useFakeMode = false
-    // 2) Uncomment imports at top (AVFoundation + Accelerate)
-    // 3) Uncomment the properties at top that relate to audioEngine, fft
-    // 4) Uncomment startListening(), stopListening(), process(buffer:window:) implementation below
-    // 5) Make sure you request microphone permission (AVAudioSession) before starting
-
-    private func toggleListening() {
-        isListening ? stopListening() : startListening()
-    }
-
+    // MARK: - Real audio + FFT
     private func startListening() {
-        guard !isListening else { return }
+        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+            guard let self = self else { return }
+
+            if !granted {
+                print("❌ Microphone permission denied")
+                return
+            }
+
+            DispatchQueue.main.async {
+                do {
+                    try self.configureAudioSession()
+                    self.startEngine()
+                } catch {
+                    print("❌ Audio session error:", error)
+                    self.statusLabel.text = "Audio Error"
+                }
+            }
+        }
+    }
+    
+    private func configureAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(
+            .playAndRecord,
+            mode: .measurement,
+            options: [.defaultToSpeaker, .allowBluetooth]
+        )
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+    }
+
+    private func startEngine() {
+        guard !audioEngine.isRunning else { return }
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
         sampleRate = format.sampleRate
-        bufferSize = 4096
-        log2n = vDSP_Length(log2(Float(bufferSize)))
+
+        let log2n = vDSP_Length(log2(Float(bufferSize)))
         fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
 
         var window = [Float](repeating: 0, count: bufferSize)
         vDSP_hann_window(&window, vDSP_Length(bufferSize), Int32(vDSP_HANN_NORM))
 
-        input.installTap(onBus: 0,
-                         bufferSize: AVAudioFrameCount(bufferSize),
-                         format: format) { [weak self] buffer, _ in
-            guard let self = self else { return }
-            self.process(buffer: buffer, window: window)
+        input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(bufferSize), format: format) {
+            [weak self] buffer, _ in
+            self?.process(buffer: buffer, window: window)
         }
 
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.record, mode: .measurement, options: .duckOthers)
-            try AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
-            try audioEngine.start()
-            isListening = true
-            DispatchQueue.main.async { self.micButton.backgroundColor = UIColor(red: 1.0, green: 0.88, blue: 0.5, alpha: 1) }
-        } catch {
-            print("Audio engine start failed:", error)
-        }
+        try? AVAudioSession.sharedInstance().setCategory(.record, mode: .measurement)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        try? audioEngine.start()
+
+        isListening = true
+        micButton.backgroundColor = .systemYellow
+        showStopButton(true)
+        statusLabel.text = "Listening..."
     }
 
     private func stopListening() {
-        guard isListening else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
-        if let setup = fftSetup {
-            vDSP_destroy_fftsetup(setup)
-            fftSetup = nil
-        }
+        if let setup = fftSetup { vDSP_destroy_fftsetup(setup) }
+        fftSetup = nil
         isListening = false
-        DispatchQueue.main.async { self.micButton.backgroundColor = .systemGreen }
+        micButton.backgroundColor = .systemGreen
+        showStopButton(false)
+        statusLabel.text = "Stopped"
+        
+        // Clear wave
+        if let waveLayer = waveLayer {
+            waveLayer.path = nil
+        }
     }
 
     private func process(buffer: AVAudioPCMBuffer, window: [Float]) {
-        guard let channelData = buffer.floatChannelData?[0], let setup = fftSetup else { return }
-        let frameLength = Int(buffer.frameLength)
-        var input = [Float](repeating: 0, count: bufferSize)
-        memcpy(&input, channelData, min(frameLength, bufferSize) * MemoryLayout<Float>.size)
+        guard let channel = buffer.floatChannelData?[0], let setup = fftSetup else { return }
 
-        vDSP_vmul(input, 1, window, 1, &input, 1, vDSP_Length(bufferSize))
+        var samples = [Float](repeating: 0, count: bufferSize)
+        let copySize = min(Int(buffer.frameLength), bufferSize)
+        memcpy(&samples, channel, copySize * MemoryLayout<Float>.size)
+
+        vDSP_vmul(samples, 1, window, 1, &samples, 1, vDSP_Length(bufferSize))
 
         let half = bufferSize / 2
-        var realp = [Float](repeating: 0, count: half)
-        var imagp = [Float](repeating: 0, count: half)
-        var split = DSPSplitComplex(realp: &realp, imagp: &imagp)
+        var real = [Float](repeating: 0, count: half)
+        var imag = [Float](repeating: 0, count: half)
+        var split = DSPSplitComplex(realp: &real, imagp: &imag)
 
-        // pack interleaved
-        var interleaved = [DSPComplex](repeating: DSPComplex(real: 0, imag: 0), count: half)
-        for i in 0..<half {
-            interleaved[i] = DSPComplex(real: input[2*i], imag: input[2*i+1])
-        }
-
-        interleaved.withUnsafeBufferPointer { ptr in
-            var tmp = split
-            vDSP_ctoz(ptr.baseAddress!, 2, &tmp, 1, vDSP_Length(half))
-        }
-
-        vDSP_fft_zrip(setup, &split, 1, log2n, FFTDirection(FFT_FORWARD))
-
-        var scale: Float = 1.0 / Float(2 * half)
-        vDSP_vsmul(split.realp, 1, &scale, split.realp, 1, vDSP_Length(half))
-        vDSP_vsmul(split.imagp, 1, &scale, split.imagp, 1, vDSP_Length(half))
-
-        var mags = [Float](repeating: 0, count: half)
-        vDSP_zvabs(&split, 1, &mags, 1, vDSP_Length(half))
-
-        // find peak
-        let maxIndex = mags.indices.dropFirst().max(by: { mags[$0] < mags[$1] }) ?? 1
-        let maxMag = mags[maxIndex]
-        let freq = Float(maxIndex) * Float(sampleRate) / Float(bufferSize)
-
-        DispatchQueue.main.async {
-            self.chordLabel.text = "\(Int(freq)) Hz"
-            let amp = CGFloat(min(1.0, Double(maxMag) / 15000.0))
-            self.smoothedAmplitude = self.smoothedAmplitude * 0.85 + amp * 0.15
-            self.waveView.updateAmplitude(self.smoothedAmplitude)
-        }
-    }
-    */
-
-    // MARK: - Helpers (static mapping for fake mode)
-    private static func frequencyToMIDINoteNumber(_ frequency: Float) -> Int {
-        guard frequency > 0 else { return 0 }
-        let midi = 69 + 12 * log2f(frequency / 440.0)
-        return Int(roundf(midi))
-    }
-
-    private static func midiToNoteName(_ midi: Int) -> String {
-        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        let pitchClass = (midi % 12 + 12) % 12
-        let octave = (midi / 12) - 1
-        return "\(names[pitchClass])\(octave)"
-    }
-}
-
-// MARK: - ChordWaveView: simple waveform that reacts to amplitude
-final class ChordWaveView: UIView {
-    private let shapeLayer = CAShapeLayer()
-    private var amplitude: CGFloat = 0.05
-    private var displayLink: CADisplayLink?
-    private var phase: CGFloat = 0
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        commonInit()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        commonInit()
-    }
-
-    private func commonInit() {
-        backgroundColor = .clear
-        shapeLayer.fillColor = UIColor.clear.cgColor
-        shapeLayer.strokeColor = UIColor.systemBlue.cgColor
-        shapeLayer.lineWidth = 2.0
-        layer.addSublayer(shapeLayer)
-
-        displayLink = CADisplayLink(target: self, selector: #selector(step))
-        displayLink?.add(to: .main, forMode: .common)
-        displayLink?.isPaused = true // start paused until amplitude > small threshold
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        shapeLayer.frame = bounds
-    }
-
-    @objc private func step() {
-        phase += 0.05
-        shapeLayer.path = waveformPath().cgPath
-    }
-
-    func updateAmplitude(_ amp: CGFloat) {
-        // smooth and clamp
-        amplitude = max(0.01, min(1.2, amp))
-        displayLink?.isPaused = amplitude < 0.02
-        // force immediate redraw
-        shapeLayer.path = waveformPath().cgPath
-    }
-
-    func setWaveColor(_ color: UIColor) {
-        // Update the stroke color of the waveform
-        shapeLayer.strokeColor = color.cgColor
-    }
-
-    private func waveformPath() -> UIBezierPath {
-        let path = UIBezierPath()
-        let w = bounds.width
-        let h = bounds.height
-        guard w > 0 && h > 0 else { return path }
-
-        let midY = h / 2
-        let wavelength: CGFloat = w / 1.2   // smooth long wave
-        let ampPx = amplitude * (h / 2) * 0.8   // amplitude controls height only
-
-        for x in stride(from: 0, through: w, by: 1) {
-            let y = sin((x / wavelength) * .pi * 2 + phase) * ampPx + midY
-            let pt = CGPoint(x: x, y: y)
-            if x == 0 {
-                path.move(to: pt)
-            } else {
-                path.addLine(to: pt)
+        samples.withUnsafeBufferPointer {
+            $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
+                vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
             }
         }
 
-        return path
+        vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
+
+        var magnitudes = [Float](repeating: 0, count: half)
+        vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
+        
+        // Find significant peaks
+        let peaks = findSignificantPeaks(in: magnitudes)
+        detectedPeaks = peaks
+        
+        DispatchQueue.main.async {
+            self.updateDisplay(with: peaks)
+        }
+    }
+    
+    // MARK: - Peak detection
+    private func findSignificantPeaks(in magnitudes: [Float]) -> [(frequency: Float, magnitude: Float)] {
+        var peaks: [(frequency: Float, magnitude: Float)] = []
+        
+        for i in 2..<magnitudes.count - 2 {
+            let mag = magnitudes[i]
+            
+            // Check if this is a peak
+            if mag > minMagnitudeThreshold &&
+               mag > magnitudes[i-2] &&
+               mag > magnitudes[i-1] &&
+               mag > magnitudes[i+1] &&
+               mag > magnitudes[i+2] {
+                
+                let frequency = Float(i) * Float(sampleRate) / Float(bufferSize)
+                
+                // Only consider audible frequencies (65 Hz to 2000 Hz)
+                if frequency >= 65 && frequency <= 2000 {
+                    // Use quadratic interpolation for better accuracy
+                    let interpolatedFreq = quadraticInterpolation(
+                        index: i,
+                        magnitudes: magnitudes,
+                        sampleRate: Float(sampleRate),
+                        fftSize: bufferSize
+                    )
+                    
+                    peaks.append((frequency: interpolatedFreq, magnitude: mag))
+                }
+            }
+        }
+        
+        // Sort by magnitude
+        peaks.sort { (peak1: (frequency: Float, magnitude: Float), peak2: (frequency: Float, magnitude: Float)) -> Bool in
+            return peak1.magnitude > peak2.magnitude
+        }
+        
+        // Take only the strongest peak for note detection
+        if peaks.count > 1 {
+            return [peaks[0]]
+        }
+        
+        return peaks
+    }
+    
+    private func quadraticInterpolation(index: Int, magnitudes: [Float], sampleRate: Float, fftSize: Int) -> Float {
+        guard index > 0 && index < magnitudes.count - 1 else {
+            return Float(index) * sampleRate / Float(fftSize)
+        }
+        
+        let left = magnitudes[index - 1]
+        let center = magnitudes[index]
+        let right = magnitudes[index + 1]
+        
+        let p = 0.5 * (left - right) / (left - 2 * center + right)
+        let interpolatedIndex = Float(index) + p
+        return interpolatedIndex * sampleRate / Float(fftSize)
+    }
+    
+    private func updateDisplay(with peaks: [(frequency: Float, magnitude: Float)]) {
+        guard !peaks.isEmpty else {
+            noteLabel.text = "—"
+            frequencyLabel.text = "Frequency: — Hz"
+            statusLabel.text = "No signal"
+            return
+        }
+        
+        // Find the strongest frequency
+        let strongestPeak = peaks.max(by: { $0.magnitude < $1.magnitude })!
+        let frequency = strongestPeak.frequency
+        
+        // Update frequency history for stability
+        frequencyHistory.append(frequency)
+        if frequencyHistory.count > historySize {
+            frequencyHistory.removeFirst()
+        }
+        
+        // Use average frequency for more stable display
+        let stableFrequency: Float
+        if !frequencyHistory.isEmpty {
+            stableFrequency = frequencyHistory.reduce(0, +) / Float(frequencyHistory.count)
+        } else {
+            stableFrequency = frequency
+        }
+        
+        // Convert frequency to note
+        let note = Self.frequencyToNoteName(stableFrequency)
+        
+        // Calculate amplitude for wave visualization
+        let maxMagnitude = peaks.map { $0.magnitude }.max() ?? 0
+        let amplitude = CGFloat(min(1.0, Double(maxMagnitude) * 500))
+        
+        updateDisplay(note: note, frequency: stableFrequency, amplitude: amplitude)
+        statusLabel.text = "Live"
+    }
+    
+    private func updateDisplay(note: String, frequency: Float, amplitude: CGFloat) {
+        noteLabel.text = note
+        frequencyLabel.text = String(format: "Frequency: %.1f Hz", frequency)
+        
+        // Update wave with new parameters
+        updateWave(with: amplitude, frequency: frequency)
     }
 
-    deinit {
-        displayLink?.invalidate()
+    // MARK: - Note Detection Helpers
+    private static func frequencyToNoteName(_ f: Float) -> String {
+        guard f > 0 else { return "—" }
+        
+        let midi = frequencyToMIDINoteNumber(f)
+        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let noteIndex = midi % 12
+        let octave = (midi / 12) - 1
+        
+        if noteIndex >= 0 && noteIndex < noteNames.count && octave >= 0 && octave <= 7 {
+            return "\(noteNames[noteIndex])\(octave)"
+        }
+        return "C4"
+    }
+
+    private static func frequencyToMIDINoteNumber(_ f: Float) -> Int {
+        guard f > 0 else { return 69 } // Default to A4
+        
+        let midi = Int(round(69 + 12 * log2(f / 440.0)))
+        return max(0, min(127, midi)) // Clamp to valid MIDI range
     }
 }
-

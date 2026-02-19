@@ -37,10 +37,19 @@ public final class TopNavBar: UIView {
     private let appLabel: UILabel = {
         let label = UILabel()
         label.text = "Re-Hearse"
-        label.font = .boldSystemFont(ofSize: 22)
+
+        let baseFont = UIFont.preferredFont(forTextStyle: .title1)
+        label.font = UIFont.systemFont(
+            ofSize: baseFont.pointSize,
+            weight: .medium
+        )
+
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .label
         return label
     }()
+
+
 
     private let dayBadge: UIButton = {
         let btn = UIButton(type: .system)

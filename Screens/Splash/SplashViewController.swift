@@ -30,10 +30,24 @@ class SplashViewController: UIViewController {
 
         // Button Styling
         getStartedButton.layer.cornerRadius = 24
-        getStartedButton.layer.masksToBounds = true
-        getStartedButton.backgroundColor = .secondaryColor   // ✔ Updated
+        getStartedButton.backgroundColor = .secondaryColor
         getStartedButton.setTitleColor(.black, for: .normal)
-        getStartedButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 18)
+        getStartedButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+
+        // Add touch feedback
+        getStartedButton.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
+        getStartedButton.addTarget(self, action: #selector(buttonTouchUp(_:)), for: [.touchUpInside, .touchDragExit, .touchCancel])
+    }
+    @objc private func buttonTouchDown(_ sender: UIButton) {
+        UIView.animate(withDuration: 0.1) {
+            sender.transform = CGAffineTransform(scaleX: 0.98, y: 0.98)
+        }
+    }
+
+    @objc private func buttonTouchUp(_ sender: UIButton) {
+        UIView.animate(withDuration: 0.1) {
+            sender.transform = .identity
+        }
     }
 
     private func applyGradient() {

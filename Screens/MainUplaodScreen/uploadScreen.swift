@@ -7,6 +7,9 @@ import UIKit
 import AVFoundation
 import Photos
 import Supabase
+import PDFKit // Add PDFKit for PDF creation
+import Vision
+import VisionKit
 
 class UploadScreen: UIViewController {
     
@@ -21,6 +24,7 @@ class UploadScreen: UIViewController {
         static let carouselHeight: CGFloat = 180
         static let metaCoverSize: CGFloat = 56
         static let metaCornerRadius: CGFloat = metaCoverSize / 2 // circular
+        static let pdfPageSize = CGSize(width: 612, height: 792) // US Letter size
     }
     
     // MARK: - State / Data
@@ -29,7 +33,10 @@ class UploadScreen: UIViewController {
     private var currentUploadData: Data? // Store uploaded file data
     private var currentFileName: String = ""
     private var currentFileType: String = ""
+    private var selectedImages: [UIImage] = [] // Store multiple selected images
+    private var isMultiImageSelection = false // Track if we're in multi-image mode
     
+    // UI Element references
     private var metaTitleLbl: UILabel?
     private var metaCoverImgView: UIImageView?
     private var recentHStack: UIStackView?
@@ -38,6 +45,9 @@ class UploadScreen: UIViewController {
     private var supabase: SupabaseClient {
         return SupabaseManager.shared.client
     }
+    
+    // Supabase storage base URL
+    private let supabaseStorageBaseURL = "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/public"
     
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(title: "Upload")
@@ -63,6 +73,430 @@ class UploadScreen: UIViewController {
         
         // Load real recent uploads from database
         loadRecentUploadsFromDB()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Refresh recent uploads when view appears
+        loadRecentUploadsFromDB()
+    }
+    // MARK: - Public entry point (for Home → Upload)
+    func startUploadFlow() {
+        uploadTapped()
+    }
+
+    
+    // MARK: - Vision Kit Image Processing (Simplified)
+    private func processImageWithVisionKit(_ image: UIImage, completion: @escaping (UIImage) -> Void) {
+        // Process image through Core Image filters for document enhancement
+        let enhancedImage = enhanceImageWithCoreImage(image)
+        DispatchQueue.main.async {
+            completion(enhancedImage)
+        }
+    }
+    
+    // Enhance image using Core Image filters for document-like quality
+    private func enhanceImageWithCoreImage(_ image: UIImage) -> UIImage {
+        guard let ciImage = CIImage(image: image) else { return image }
+        
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        var outputImage = ciImage
+        
+        // 1. Remove shadows with highlight/shadow adjustment
+        if let shadowFilter = CIFilter(name: "CIHighlightShadowAdjust") {
+            shadowFilter.setValue(outputImage, forKey: kCIInputImageKey)
+            shadowFilter.setValue(1.0, forKey: "inputShadowAmount") // Remove shadows completely
+            shadowFilter.setValue(0.0, forKey: "inputHighlightAmount") // Keep highlights neutral
+            if let result = shadowFilter.outputImage {
+                outputImage = result
+            }
+        }
+        
+        // 2. Apply minimal exposure adjustment
+        if let exposureFilter = CIFilter(name: "CIExposureAdjust") {
+            exposureFilter.setValue(outputImage, forKey: kCIInputImageKey)
+            exposureFilter.setValue(0.1, forKey: kCIInputEVKey) // Very subtle brightness boost
+            if let result = exposureFilter.outputImage {
+                outputImage = result
+            }
+        }
+        
+        // Render to final image
+        if let finalCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
+            return UIImage(cgImage: finalCGImage)
+        }
+        
+        return image
+    }
+    
+    // MARK: - Image Processing for Scanned PDF Look
+    private func processImageForScanLook(_ image: UIImage) -> UIImage {
+        // Convert to grayscale first
+        guard let ciImage = CIImage(image: image) else { return image }
+        
+        // Apply filters to make it look like a scanned document
+        let context = CIContext(options: nil)
+        
+        // 1. Convert to grayscale
+        guard let grayscaleFilter = CIFilter(name: "CIColorControls") else { return image }
+        grayscaleFilter.setValue(ciImage, forKey: kCIInputImageKey)
+        grayscaleFilter.setValue(0.0, forKey: kCIInputSaturationKey) // Remove color
+        grayscaleFilter.setValue(0.5, forKey: kCIInputContrastKey) // Increase contrast
+        grayscaleFilter.setValue(0.1, forKey: kCIInputBrightnessKey) // Adjust brightness
+        
+        guard let grayscaleOutput = grayscaleFilter.outputImage else { return image }
+        
+        // 2. Apply threshold (black and white effect)
+        guard let thresholdFilter = CIFilter(name: "CIColorThreshold") else {
+            // Fallback to simpler approach if threshold filter not available
+            if let cgImage = context.createCGImage(grayscaleOutput, from: grayscaleOutput.extent) {
+                return UIImage(cgImage: cgImage)
+            }
+            return image
+        }
+        thresholdFilter.setValue(grayscaleOutput, forKey: kCIInputImageKey)
+        thresholdFilter.setValue(0.5, forKey: "inputThreshold") // Adjust threshold level
+        
+        guard let thresholdOutput = thresholdFilter.outputImage else {
+            if let cgImage = context.createCGImage(grayscaleOutput, from: grayscaleOutput.extent) {
+                return UIImage(cgImage: cgImage)
+            }
+            return image
+        }
+        
+        // 3. Apply noise reduction
+        guard let noiseFilter = CIFilter(name: "CINoiseReduction") else {
+            if let cgImage = context.createCGImage(thresholdOutput, from: thresholdOutput.extent) {
+                return UIImage(cgImage: cgImage)
+            }
+            return image
+        }
+        noiseFilter.setValue(thresholdOutput, forKey: kCIInputImageKey)
+        noiseFilter.setValue(0.02, forKey: "inputNoiseLevel")
+        noiseFilter.setValue(0.40, forKey: "inputSharpness")
+        
+        // 4. Apply sharpen filter for crisp text
+        guard let sharpenFilter = CIFilter(name: "CISharpenLuminance") else {
+            if let cgImage = context.createCGImage(thresholdOutput, from: thresholdOutput.extent) {
+                return UIImage(cgImage: cgImage)
+            }
+            return image
+        }
+        sharpenFilter.setValue(noiseFilter.outputImage ?? thresholdOutput, forKey: kCIInputImageKey)
+        sharpenFilter.setValue(0.5, forKey: kCIInputSharpnessKey)
+        
+        guard let finalOutput = sharpenFilter.outputImage else {
+            if let cgImage = context.createCGImage(thresholdOutput, from: thresholdOutput.extent) {
+                return UIImage(cgImage: cgImage)
+            }
+            return image
+        }
+        
+        // Render the final image
+        if let cgImage = context.createCGImage(finalOutput, from: finalOutput.extent) {
+            return UIImage(cgImage: cgImage)
+        }
+        
+        return image
+    }
+    
+    // Alternative method using CoreGraphics for more reliable grayscale+threshold
+    private func convertToScannedLook(_ image: UIImage) -> UIImage {
+        let originalSize = image.size
+        let scale: CGFloat = 2.0 // Use higher resolution for better quality
+        let newSize = CGSize(width: originalSize.width * scale, height: originalSize.height * scale)
+        
+        UIGraphicsBeginImageContextWithOptions(newSize, false, scale)
+        defer { UIGraphicsEndImageContext() }
+        
+        guard let context = UIGraphicsGetCurrentContext() else { return image }
+        
+        // Draw the original image
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        
+        // Get the image data
+        guard let cgImage = context.makeImage() else { return image }
+        
+        // Create a grayscale color space
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.genericGrayGamma2_2) else { return image }
+        
+        // Create bitmap context
+        let bitmapInfo = CGImageAlphaInfo.none.rawValue
+        guard let grayContext = CGContext(
+            data: nil,
+            width: Int(newSize.width),
+            height: Int(newSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { return image }
+        
+        // Draw the image into the grayscale context
+        grayContext.draw(cgImage, in: CGRect(origin: .zero, size: newSize))
+        
+        // Apply contrast and brightness adjustments manually
+        if let grayImage = grayContext.makeImage() {
+            // Convert back to UIImage
+            return UIImage(cgImage: grayImage, scale: scale, orientation: .up)
+        }
+        
+        return image
+    }
+    
+    // Simple thresholding for black and white effect
+    private func applySimpleThreshold(_ image: UIImage, threshold: CGFloat = 0.6) -> UIImage? {
+        guard let cgImage = image.cgImage else { return nil }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        let bytesPerPixel = 1
+        let bytesPerRow = bytesPerPixel * width
+        let bitsPerComponent = 8
+        
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: bitsPerComponent,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        
+        guard let pixelData = context.data else { return nil }
+        
+        let thresholdValue = UInt8(threshold * 255)
+        let buffer = pixelData.bindMemory(to: UInt8.self, capacity: width * height)
+        
+        for y in 0..<height {
+            for x in 0..<width {
+                let offset = y * width + x
+                let pixel = buffer[offset]
+                // Simple threshold: black or white
+                buffer[offset] = pixel > thresholdValue ? 255 : 0
+            }
+        }
+        
+        if let newCGImage = context.makeImage() {
+            return UIImage(cgImage: newCGImage)
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Image to PDF Conversion Methods with Scanning Effect
+    
+    private func convertImagesToPDF(images: [UIImage]) -> Data? {
+        guard !images.isEmpty else { return nil }
+        
+        let pdfData = NSMutableData()
+        let pdfBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
+        
+        // Create PDF context with better quality settings
+        UIGraphicsBeginPDFContextToData(pdfData, pdfBounds, nil)
+        let rendererFormat = UIGraphicsImageRendererFormat.default()
+        rendererFormat.opaque = true
+        rendererFormat.scale = 2.0 // Higher resolution
+        
+        for (index, image) in images.enumerated() {
+            // Start a new page for each image
+            UIGraphicsBeginPDFPageWithInfo(pdfBounds, nil)
+            
+            // Convert image to scanned look
+            let processedImage: UIImage
+            if let thresholdedImage = applySimpleThreshold(image, threshold: 0.6) {
+                processedImage = thresholdedImage
+            } else {
+                // Fallback to processed image
+                processedImage = processImageForScanLook(image)
+            }
+            
+            // Calculate image size to fit within page while maintaining aspect ratio
+            let imageSize = processedImage.size
+            let pageSize = Constants.pdfPageSize
+            
+            // Calculate scaling factor to fit the page
+            let widthRatio = pageSize.width / imageSize.width
+            let heightRatio = pageSize.height / imageSize.height
+            let scaleFactor = min(widthRatio, heightRatio, 1.0) // Don't scale up
+            
+            let scaledWidth = imageSize.width * scaleFactor
+            let scaledHeight = imageSize.height * scaleFactor
+            
+            // Center the image on the page
+            let xOffset = (pageSize.width - scaledWidth) / 2
+            let yOffset = (pageSize.height - scaledHeight) / 2
+            
+            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
+            
+            // Draw the processed (scanned-looking) image
+            processedImage.draw(in: imageRect)
+            
+            // Optional: Add subtle border like a scanned document
+            let borderRect = imageRect.insetBy(dx: -1, dy: -1)
+            let borderPath = UIBezierPath(rect: borderRect)
+            borderPath.lineWidth = 0.5
+            UIColor.lightGray.setStroke()
+            borderPath.stroke()
+            
+            // Optional: Add page number (small and discreet)
+            let pageNumberText = "\(index + 1)"
+            let textAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 10, weight: .regular),
+                .foregroundColor: UIColor.gray
+            ]
+            
+            let textSize = pageNumberText.size(withAttributes: textAttributes)
+            let textRect = CGRect(
+                x: (pageSize.width - textSize.width) / 2,
+                y: 10,
+                width: textSize.width,
+                height: textSize.height
+            )
+            
+            pageNumberText.draw(in: textRect, withAttributes: textAttributes)
+        }
+        
+        UIGraphicsEndPDFContext()
+        
+        return pdfData as Data
+    }
+    
+    private func createPDFFromImages() -> (Data, String, String)? {
+        guard !selectedImages.isEmpty else { return nil }
+        
+        // Process all images for scanned look
+        let processedImages = selectedImages.map { image -> UIImage in
+            if let thresholdedImage = self.applySimpleThreshold(image, threshold: 0.6) {
+                return thresholdedImage
+            } else {
+                return self.processImageForScanLook(image)
+            }
+        }
+        
+        // Convert processed images to PDF
+        if let pdfData = convertImagesToPDF(images: processedImages) {
+            let timestamp = Date().timeIntervalSince1970
+            let fileName = "scanned_\(Int(timestamp)).pdf"
+            let fileType = "application/pdf"
+            
+            return (pdfData, fileName, fileType)
+        }
+        
+        return nil
+    }
+    
+    private func processSelectedImagesAndUpload() {
+        guard !selectedImages.isEmpty else {
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "No images selected"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    self.uploadLabel.text = "Drag & drop or tap to upload"
+                }
+            }
+            return
+        }
+        
+        // Show converting state
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+            self.uploadLabel.text = "Processing \(self.selectedImages.count) image(s) with Vision Kit..."
+        }
+        
+        // Process all images through Vision Kit
+        processImagesWithVisionKit(selectedImages) { [weak self] processedImages in
+            guard let self = self else { return }
+            
+            // Create PDF from Vision Kit processed images
+            guard let pdfData = self.convertImagesToPDF(images: processedImages) else {
+                DispatchQueue.main.async {
+                    self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                    self.uploadLabel.text = "Failed to create PDF"
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                        self.uploadLabel.text = "Drag & drop or tap to upload"
+                    }
+                }
+                return
+            }
+            
+            // Update upload data
+            self.currentUploadData = pdfData
+            self.currentFileName = "vision_multi_\(Date().timeIntervalSince1970).pdf"
+            self.currentFileType = "application/pdf"
+            
+            DispatchQueue.main.async {
+                self.uploadLabel.text = "Uploading processed PDF..."
+            }
+            
+            // Start upload process
+            Task {
+                do {
+                    print("Starting Vision Kit multi-image PDF upload...")
+                    try await self.saveUploadToDatabase(
+                        imageData: pdfData,
+                        fileName: self.currentFileName,
+                        fileType: self.currentFileType
+                    )
+                    
+                    print("Vision Kit multi-image PDF upload completed!")
+                    
+                    // Clear selected images
+                    self.selectedImages.removeAll()
+                    self.isMultiImageSelection = false
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Processed and uploaded!"
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("Vision Kit multi-image upload failed: \(error)")
+                    
+                    DispatchQueue.main.async {
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
+        }
+    }
+    
+    // Process multiple images with Vision Kit
+    private func processImagesWithVisionKit(_ images: [UIImage], completion: @escaping ([UIImage]) -> Void) {
+        // Process all images through Core Image enhancement
+        let processedImages = images.map { image in
+            enhanceImageWithCoreImage(image)
+        }
+        DispatchQueue.main.async {
+            completion(processedImages)
+        }
     }
     
     // MARK: - Database Methods
@@ -111,7 +545,20 @@ class UploadScreen: UIViewController {
                 .value
             
             print("Successfully fetched \(response.count) scans")
-            return response
+            
+            // Remove duplicates by ID to prevent showing same data multiple times
+            var uniqueScans: [Scan] = []
+            var seenIDs: Set<Int64> = []
+            
+            for scan in response {
+                if !seenIDs.contains(scan.id) {
+                    seenIDs.insert(scan.id)
+                    uniqueScans.append(scan)
+                }
+            }
+            
+            print("After removing duplicates: \(uniqueScans.count) unique scans")
+            return uniqueScans
         } catch {
             print("Error fetching scans: \(error)")
             throw error
@@ -128,6 +575,17 @@ class UploadScreen: UIViewController {
             return nil
         }
     }
+    
+    private func getSupabaseAuthToken() async -> String? {
+        do {
+            let session = try await supabase.auth.session
+            return session.accessToken
+        } catch {
+            print("Error getting auth token: \(error)")
+            return nil
+        }
+    }
+    
     private func displayRecentUploads(_ scans: [Scan]) {
         guard let hStack = recentHStack else { return }
         
@@ -166,10 +624,7 @@ class UploadScreen: UIViewController {
     private func saveUploadToDatabase(imageData: Data, fileName: String, fileType: String) async throws {
         print("Starting upload process...")
         
-        // 1. Create a unique processing ID
-        let processingId = "proc_\(UUID().uuidString)"
-        
-        // 2. Get user ID
+        // 1. Get user ID
         guard let userIdString = await getCurrentUserId(),
               let userId = UUID(uuidString: userIdString) else {
             throw NSError(domain: "UploadError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
@@ -177,104 +632,339 @@ class UploadScreen: UIViewController {
         
         print("User ID: \(userId)")
         
-        // 3. Create JSON data
-        let jsonDict: [String: Any] = [
-            "status": "processing",
-            "filename": fileName,
-            "uploaded_at": ISO8601DateFormatter().string(from: Date())
-        ]
+        // 2. Get Supabase auth token for the external API
+        print("Getting Supabase auth token...")
+        guard let authToken = await getSupabaseAuthToken() else {
+            throw NSError(domain: "UploadError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
+        }
         
-        let initialScan = ScanInsert(
-            userId: userId,
-            jsonData: AnyCodable(jsonDict),
-            processingId: processingId,
-            status: "processing",
-            originalFilename: fileName,
-            fileType: fileType
+        print("Auth token obtained, calling external API...")
+        
+        // 3. Call external conversion API with the image
+        let apiResponse: [String: Any] = try await callExternalConversionAPI(
+            imageData: imageData,
+            fileName: fileName,
+            fileType: fileType,
+            authToken: authToken
         )
         
-        print("Inserting scan record...")
+        print("External API response received")
         
-        do {
-            let response: Scan = try await supabase
+        // 4. Extract job_id and user_id from API response
+        guard let apiJobIdString = apiResponse["job_id"] as? String,
+              let apiJobId = UUID(uuidString: apiJobIdString),
+              let apiUserIdString = apiResponse["user_id"] as? String,
+              let apiUserId = UUID(uuidString: apiUserIdString) else {
+            throw NSError(domain: "UploadError", code: 5, userInfo: [NSLocalizedDescriptionKey: "Missing job_id or user_id in API response"])
+        }
+        
+        print("Job ID from API: \(apiJobId)")
+        print("User ID from API: \(apiUserId)")
+        
+        // 5. Construct the result URL
+        let resultURL = "\(supabaseStorageBaseURL)/sheet_data/\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/output.json"
+        print("Constructed result URL: \(resultURL)")
+        
+        // 6. Create PDF path (based on the actual job ID from API)
+        let pdfPath = "uploads/\(apiUserIdString)/\(apiJobIdString)/\(fileName)"
+        
+        // 7. First, check if a job with this ID already exists
+        let existingJobs: [Job] = try await supabase
+            .from("jobs")
+            .select()
+            .eq("id", value: apiJobId)
+            .execute()
+            .value
+        
+        if existingJobs.isEmpty {
+            // 8. Create a job record in the jobs table with the API's job ID
+            print("Creating job record with API job ID: \(apiJobId)")
+            
+            let jobInsert = JobInsert(
+                id: apiJobId,
+                userId: apiUserId,
+                pdfPath: pdfPath,
+                resultUrl: resultURL,
+                status: "completed"
+            )
+            
+            do {
+                let jobResponse: Job = try await supabase
+                    .from("jobs")
+                    .insert(jobInsert)
+                    .select()
+                    .single()
+                    .execute()
+                    .value
+                
+                print("Job record inserted successfully with ID: \(jobResponse.id)")
+            } catch {
+                print("Error inserting job record: \(error)")
+                // Continue even if job insertion fails
+            }
+        } else {
+            print("Job already exists with ID: \(apiJobId)")
+            
+            // Update existing job with result URL
+            let jobUpdate = JobUpdate(
+                resultUrl: resultURL,
+                status: "completed",
+                errorMessage: nil,
+                updatedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            try await supabase
+                .from("jobs")
+                .update(jobUpdate)
+                .eq("id", value: apiJobId)
+                .execute()
+            
+            print("Updated existing job with result URL")
+        }
+        
+        // 9. Check if a scan record already exists for this job
+        let existingScans: [Scan] = try await supabase
+            .from("scans")
+            .select()
+            .eq("user_id", value: userId)
+            .like("json_data->>'job_id'", pattern: "%\(apiJobIdString)%")
+            .execute()
+            .value
+        
+        if existingScans.isEmpty {
+            // 10. Create a scan record in the scans table
+            print("Creating scan record...")
+            
+            // Create processing ID for scan
+            let processingId = "proc_\(UUID().uuidString)"
+            
+            // Create JSON data for scan
+            var jsonDict: [String: Any] = [
+                "status": "completed",
+                "filename": fileName,
+                "uploaded_at": ISO8601DateFormatter().string(from: Date()),
+                "title": uploadTitle,
+                "result_url": resultURL,
+                "job_id": apiJobIdString,
+                "user_id": apiUserIdString,
+                "pdf_path": pdfPath,
+                "pdf_type": "scanned" // Mark as scanned PDF
+            ]
+            
+            // Merge API response into JSON
+            for (key, value) in apiResponse {
+                jsonDict[key] = value
+            }
+            
+            let scanInsert = ScanInsert(
+                userId: userId,
+                jsonData: AnyCodable(jsonDict),
+                processingId: processingId,
+                status: "completed",
+                originalFilename: fileName,
+                fileType: fileType,
+                processedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            let scanResponse: Scan = try await supabase
                 .from("scans")
-                .insert(initialScan)
+                .insert(scanInsert)
                 .select()
                 .single()
                 .execute()
                 .value
             
-            print("Scan record inserted successfully with ID: \(response.id)")
+            print("Scan record inserted successfully with ID: \(scanResponse.id)")
             
-            let createdScan = response
-            
-            // 4. Simulate API call to external cloud processing
-            print("Simulating API call to cloud processing service...")
-            
-            // Simulate processing delay
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            
-            // 5. Simulate getting JSON response from cloud
-            let mockJsonResponse: [String: Any] = [
-                "title": uploadTitle,
-                "documentType": "image_scan",
-                "filename": fileName,
-                "fileType": fileType,
-                "size": imageData.count,
-                "processedAt": ISO8601DateFormatter().string(from: Date()),
-                "confidence": 0.95,
-                "status": "completed",
-                "analysis": [
-                    "chords": ["C", "G", "Am", "F"],
-                    "key": "C Major",
-                    "tempo": "120 BPM"
+            // 11. Now we can navigate to next page immediately
+            DispatchQueue.main.async {
+                self.navigateToNextPage(with: scanResponse.id, resultURL: resultURL)
+            }
+        } else {
+            print("Scan already exists for job ID: \(apiJobIdString)")
+            // Update existing scan
+            if let existingScan = existingScans.first {
+                var jsonDict: [String: Any] = [
+                    "status": "completed",
+                    "filename": fileName,
+                    "uploaded_at": ISO8601DateFormatter().string(from: Date()),
+                    "title": uploadTitle,
+                    "result_url": resultURL,
+                    "job_id": apiJobIdString,
+                    "user_id": apiUserIdString,
+                    "pdf_path": pdfPath,
+                    "pdf_type": "scanned" // Mark as scanned PDF
                 ]
-            ]
-            
-            print("Updating scan with processing results...")
-            
-            // 6. Update the database with the JSON result
-            try await updateScanInDatabase(
-                scanId: createdScan.id,
-                jsonData: mockJsonResponse,
-                processingId: processingId
-            )
-            
-            print("Scan updated successfully!")
-            
-        } catch {
-            print("Error in saveUploadToDatabase: \(error)")
-            throw error
+                
+                // Merge API response into JSON
+                for (key, value) in apiResponse {
+                    jsonDict[key] = value
+                }
+                
+                let scanUpdate = ScanUpdate(
+                    jsonData: AnyCodable(jsonDict),
+                    status: "completed",
+                    processedAt: ISO8601DateFormatter().string(from: Date()),
+                    updatedAt: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("scans")
+                    .update(scanUpdate)
+                    .eq("id", value: existingScan.id as! PostgrestFilterValue)
+                    .execute()
+                
+                print("Updated existing scan with ID: \(existingScan.id)")
+                
+                // Navigate with existing scan ID
+                DispatchQueue.main.async {
+                    self.navigateToNextPage(with: existingScan.id, resultURL: resultURL)
+                }
+            }
         }
-        
-        // 7. Refresh recent uploads
-        await loadRecentUploadsFromDB()
     }
     
-    private func updateScanInDatabase(scanId: Int64, jsonData: [String: Any], processingId: String) async throws {
-        let updateData = UpdateScanData(
-            jsonData: AnyCodable(jsonData),
-            status: "completed",
-            processedAt: ISO8601DateFormatter().string(from: Date()),
-            processingId: processingId,
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
+    // MARK: - External API Call
+    private func callExternalConversionAPI(
+        imageData: Data,
+        fileName: String,
+        fileType: String,
+        authToken: String
+    ) async throws -> [String: Any] {
+        let url = URL(string: "https://localhost:8000/convert")!
         
+        // Create boundary for multipart form
+        let boundary = UUID().uuidString
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60 // 60 second timeout for file upload
+        
+        // Build multipart form data
+        var body = Data()
+        
+        // Add file part
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(fileType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        
+        // Close boundary
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        print("Making API request to: \(url.absoluteString)")
+        print("File size: \(imageData.count) bytes")
+        print("File name: \(fileName)")
+        print("File type: \(fileType)")
+        
+        // Make the API call
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "APIError", code: 0,
+                         userInfo: [NSLocalizedDescriptionKey: "No response from server"])
+        }
+        
+        print("API Response Status Code: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let responseBody = String(data: data, encoding: .utf8) ?? "No response body"
+            print("API Error Response: \(responseBody)")
+            throw NSError(domain: "APIError", code: httpResponse.statusCode,
+                         userInfo: [NSLocalizedDescriptionKey: "API request failed with status \(httpResponse.statusCode): \(responseBody)"])
+        }
+        
+        // Parse JSON response
         do {
-            try await supabase
-                .from("scans")
-                .update(updateData)
-                .eq("id", value: String(scanId))
-                .execute()
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
             
-            print("Database update successful for scan ID: \(scanId)")
+            if let dict = jsonObject as? [String: Any] {
+                print("External API returned: \(dict)")
+                return dict
+            } else if let array = jsonObject as? [[String: Any]], let first = array.first {
+                print("External API returned array: using first element")
+                return first
+            } else {
+                // If response is not a dictionary or array of dictionaries, wrap it
+                return ["api_response": jsonObject, "status": "success"]
+            }
         } catch {
-            print("Error updating scan in database: \(error)")
-            throw error
+            // If JSON parsing fails, return raw response as string
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("External API raw response: \(responseString)")
+            return ["raw_response": responseString, "status": "processed"]
         }
     }
     
     // MARK: - Data Models
+    
+    // Job table models
+    struct Job: Codable, Identifiable {
+        let id: UUID
+        let userId: UUID
+        let pdfPath: String
+        let resultUrl: String?
+        let status: String
+        let errorMessage: String?
+        let createdAt: String?
+        let updatedAt: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case pdfPath = "pdf_path"
+            case resultUrl = "result_url"
+            case status
+            case errorMessage = "error_message"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+    
+    struct JobInsert: Encodable {
+        let id: UUID
+        let userId: UUID
+        let pdfPath: String
+        let resultUrl: String?
+        let status: String
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case userId = "user_id"
+            case pdfPath = "pdf_path"
+            case resultUrl = "result_url"
+            case status
+        }
+    }
+    
+    struct JobUpdate: Encodable {
+        let resultUrl: String?
+        let status: String?
+        let errorMessage: String?
+        let updatedAt: String
+        
+        enum CodingKeys: String, CodingKey {
+            case resultUrl = "result_url"
+            case status
+            case errorMessage = "error_message"
+            case updatedAt = "updated_at"
+        }
+        
+        // Add initializer with default values
+        init(resultUrl: String? = nil, status: String? = nil, errorMessage: String? = nil, updatedAt: String) {
+            self.resultUrl = resultUrl
+            self.status = status
+            self.errorMessage = errorMessage
+            self.updatedAt = updatedAt
+        }
+    }
+    
+    // Scan table models
     struct Scan: Codable, Identifiable {
         let id: Int64
         let userId: UUID
@@ -308,6 +998,7 @@ class UploadScreen: UIViewController {
         let status: String
         let originalFilename: String?
         let fileType: String?
+        let processedAt: String?
         
         enum CodingKeys: String, CodingKey {
             case userId = "user_id"
@@ -316,21 +1007,20 @@ class UploadScreen: UIViewController {
             case status
             case originalFilename = "original_filename"
             case fileType = "file_type"
+            case processedAt = "processed_at"
         }
     }
     
-    struct UpdateScanData: Encodable {
+    struct ScanUpdate: Encodable {
         let jsonData: AnyCodable
         let status: String
         let processedAt: String
-        let processingId: String
         let updatedAt: String
         
         enum CodingKeys: String, CodingKey {
             case jsonData = "json_data"
             case status
             case processedAt = "processed_at"
-            case processingId = "processing_id"
             case updatedAt = "updated_at"
         }
     }
@@ -596,11 +1286,108 @@ class UploadScreen: UIViewController {
     
     private func showUploadOptions() {
         let ac = UIAlertController(title: "Upload Content", message: nil, preferredStyle: .actionSheet)
-        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in self.presentImagePicker(sourceType: .camera) })
-        ac.addAction(UIAlertAction(title: "Choose From Library", style: .default) { _ in self.presentImagePicker(sourceType: .photoLibrary) })
+
+        ac.addAction(UIAlertAction(title: "Scan with Camera", style: .default) { _ in
+            self.presentDocumentScanner()
+        })
+
+//        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in
+//            self.presentImagePicker(sourceType: .camera)
+//        })
+
+//        ac.addAction(UIAlertAction(title: "Choose Single Photo", style: .default) { _ in
+//            self.presentSingleImagePicker(sourceType: .photoLibrary)
+//        })
+//        
+//        ac.addAction(UIAlertAction(title: "Choose Multiple Photos", style: .default) { _ in
+//            self.presentMultipleImagePicker()
+//        })
+
+        ac.addAction(UIAlertAction(title: "Browse Files", style: .default) { _ in
+            self.openFileManager()
+        })
+
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let pop = ac.popoverPresentationController { pop.sourceView = uploadButton; pop.sourceRect = uploadButton.bounds }
+
+        if let pop = ac.popoverPresentationController {
+            pop.sourceView = uploadButton
+            pop.sourceRect = uploadButton.bounds
+        }
+
         present(ac, animated: true)
+    }
+    
+    // MARK: - Vision Kit Document Scanner
+    private func presentDocumentScanner() {
+        if VNDocumentCameraViewController.isSupported {
+            let documentCamera = VNDocumentCameraViewController()
+            documentCamera.delegate = self
+            present(documentCamera, animated: true)
+        } else {
+            let alert = UIAlertController(
+                title: "Not Supported",
+                message: "Document scanning is not supported on this device.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
+    }
+    
+    // MARK: - Create PDF from Vision Kit Scan
+    private func createPDFFromVisionKitScan(_ scan: VNDocumentCameraScan) -> Data? {
+        let pdfData = NSMutableData()
+        let pdfBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
+        
+        UIGraphicsBeginPDFContextToData(pdfData, pdfBounds, nil)
+        
+        for pageIndex in 0..<scan.pageCount {
+            UIGraphicsBeginPDFPageWithInfo(pdfBounds, nil)
+            
+            // Get the scanned image from Vision Kit (already processed with edge detection, perspective correction, etc.)
+            let scannedImage = scan.imageOfPage(at: pageIndex)
+            
+            // Calculate image size to fit within page while maintaining aspect ratio
+            let imageSize = scannedImage.size
+            let pageSize = Constants.pdfPageSize
+            
+            let widthRatio = pageSize.width / imageSize.width
+            let heightRatio = pageSize.height / imageSize.height
+            let scaleFactor = min(widthRatio, heightRatio, 1.0)
+            
+            let scaledWidth = imageSize.width * scaleFactor
+            let scaledHeight = imageSize.height * scaleFactor
+            
+            // Center the image on the page
+            let xOffset = (pageSize.width - scaledWidth) / 2
+            let yOffset = (pageSize.height - scaledHeight) / 2
+            
+            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
+            
+            // Draw the Vision Kit scanned image (high quality)
+            scannedImage.draw(in: imageRect)
+            
+            // Optional: Add page number
+            let pageNumberText = "\(pageIndex + 1)"
+            let textAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 10, weight: .regular),
+                .foregroundColor: UIColor.gray
+            ]
+            
+            let textSize = pageNumberText.size(withAttributes: textAttributes)
+            let textRect = CGRect(
+                x: (pageSize.width - textSize.width) / 2,
+                y: 10,
+                width: textSize.width,
+                height: textSize.height
+            )
+            
+            pageNumberText.draw(in: textRect, withAttributes: textAttributes)
+        }
+        
+        UIGraphicsEndPDFContext()
+        
+        return pdfData as Data
     }
     
     // MARK: - Recent Uploads (horizontal scroll)
@@ -717,46 +1504,170 @@ class UploadScreen: UIViewController {
         picker.view.tag = forCover ? 999 : 0
         present(picker, animated: true)
     }
+    
+    private func presentSingleImagePicker(sourceType: UIImagePickerController.SourceType) {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.allowsEditing = true
+        picker.sourceType = sourceType
+        picker.view.tag = 0
+        present(picker, animated: true)
+    }
+    
+    private func presentMultipleImagePicker() {
+        // Reset selected images
+        selectedImages.removeAll()
+        isMultiImageSelection = true
+        
+        // Show image picker for multiple selection
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.sourceType = .photoLibrary
+        picker.view.tag = 1000 // Special tag for multi-image selection
+        
+        // Present with a message
+        present(picker, animated: true) {
+            // Show an alert explaining the multi-selection process
+            let alert = UIAlertController(
+                title: "Select Multiple Images",
+                message: "Select multiple images one by one. They will be automatically converted to a scanned PDF and uploaded.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            picker.present(alert, animated: true)
+        }
+    }
+    
+    // MARK: - Navigation Helper
+    private func navigateToNextPage(with scanId: Int64, resultURL: String) {
+        DispatchQueue.main.async {
+            let vc = UploadPageNextViewController()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+    }
 }
 
-// MARK: - UIImagePickerControllerDelegate
-extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-    func imagePickerController(_ picker: UIImagePickerController,
-                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        let picked = (info[.editedImage] ?? info[.originalImage]) as? UIImage
-        picker.dismiss(animated: true)
+// MARK: - Vision Kit Document Camera Delegate
+extension UploadScreen: VNDocumentCameraViewControllerDelegate {
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
+        controller.dismiss(animated: true)
         
-        if picker.view.tag == 999 {
-            // user changed the meta cover image
-            uploadCoverImage = picked
-            metaCoverImgView?.image = uploadCoverImage
-            return
+        // Process scanned pages
+        DispatchQueue.main.async {
+            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+            self.uploadLabel.text = "Processing \(scan.pageCount) page(s) with Vision Kit..."
         }
         
-        // Normal upload flow - prepare data for database
-        guard let image = picked else { return }
+        // Convert Vision Kit scans to PDFData
+        Task {
+            if let pdfData = self.createPDFFromVisionKitScan(scan) {
+                self.currentUploadData = pdfData
+                self.currentFileName = "vision_scanned_\(Date().timeIntervalSince1970).pdf"
+                self.currentFileType = "application/pdf"
+                
+                // Upload the high-quality PDF
+                do {
+                    print("Starting Vision Kit scanned PDF upload...")
+                    try await self.saveUploadToDatabase(
+                        imageData: pdfData,
+                        fileName: self.currentFileName,
+                        fileType: self.currentFileType
+                    )
+                    
+                    print("Vision Kit PDF upload completed successfully!")
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    DispatchQueue.main.async {
+                        // Show success
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Scanned and uploaded!"
+                        
+                        // Reset after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("Vision Kit upload failed: \(error)")
+                    DispatchQueue.main.async {
+                        // Show error
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        // Reset after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        // Show error alert
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)\n\nPlease try again.",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
+        }
+    }
+    
+    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+        controller.dismiss(animated: true)
+    }
+}
+// MARK: - UIImagePickerControllerDelegate
+extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
+    
+    func openFileManager() {
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [
+                .pdf,
+                .data,
+                .item
+            ],
+            asCopy: true
+        )
         
-        // Convert image to Data
-        if let imageData = image.jpegData(compressionQuality: 0.8) {
-            currentUploadData = imageData
-            currentFileName = "upload_\(Date().timeIntervalSince1970).jpg"
-            currentFileType = "image/jpeg"
-            
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+    
+    func documentPicker(
+        _ controller: UIDocumentPickerViewController,
+        didPickDocumentsAt urls: [URL]
+    ) {
+        guard let fileURL = urls.first else { return }
+
+        do {
+            let data = try Data(contentsOf: fileURL)
+            currentUploadData = data
+            currentFileName = fileURL.lastPathComponent
+            currentFileType = "application/pdf"
+
             // Show loading state
             uploadIcon.image = UIImage(systemName: "arrow.clockwise")
             uploadLabel.text = "Processing upload..."
-            
-            // Simulate API flow and save to database
+
             Task {
                 do {
-                    print("Starting upload task...")
+                    print("Starting PDF upload task...")
                     try await saveUploadToDatabase(
-                        imageData: imageData,
+                        imageData: data,
                         fileName: currentFileName,
                         fileType: currentFileType
                     )
                     
-                    print("Upload completed successfully!")
+                    print("PDF upload completed successfully!")
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
                     
                     // Update UI on main thread
                     DispatchQueue.main.async {
@@ -769,18 +1680,9 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
                             self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
                             self.uploadLabel.text = "Drag & drop or tap to upload"
                         }
-                        
-                        // Navigate to next page
-                        let vc = UploadPageNextViewController()
-                        if let nav = self.navigationController {
-                            nav.pushViewController(vc, animated: true)
-                        } else {
-                            vc.modalPresentationStyle = .fullScreen
-                            self.present(vc, animated: true)
-                        }
                     }
                 } catch {
-                    print("Upload failed with error: \(error)")
+                    print("PDF upload failed with error: \(error)")
                     print("Error details: \(error.localizedDescription)")
                     
                     DispatchQueue.main.async {
@@ -805,10 +1707,169 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
                     }
                 }
             }
+        } catch {
+            print("Failed to read file:", error)
+            DispatchQueue.main.async {
+                let alert = UIAlertController(
+                    title: "Error",
+                    message: "Failed to read file: \(error.localizedDescription)",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
+    }
+
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        let picked = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+        picker.dismiss(animated: true)
+        
+        if picker.view.tag == 999 {
+            // user changed the meta cover image
+            uploadCoverImage = picked
+            metaCoverImgView?.image = uploadCoverImage
+            return
+        }
+        
+        if picker.view.tag == 1000 {
+            // Multi-image selection mode
+            guard let image = picked else { return }
+            
+            // Add image to selected images array
+            selectedImages.append(image)
+            
+            // Show how many images selected
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "photo.stack")
+                self.uploadLabel.text = "Selected \(self.selectedImages.count) image(s). Tap 'Upload Files' to convert to scanned PDF."
+            }
+            
+            // Ask if user wants to add more images
+            let alert = UIAlertController(
+                title: "Add More Images?",
+                message: "Selected \(selectedImages.count) image(s). Do you want to add more images?",
+                preferredStyle: .alert
+            )
+            
+            alert.addAction(UIAlertAction(title: "Add More", style: .default) { _ in
+                self.presentMultipleImagePicker()
+            })
+            
+            alert.addAction(UIAlertAction(title: "Done", style: .default) { _ in
+                // Convert images to scanned PDF and upload
+                self.processSelectedImagesAndUpload()
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                // Clear selected images
+                self.selectedImages.removeAll()
+                self.isMultiImageSelection = false
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "Drag & drop or tap to upload"
+            })
+            
+            self.present(alert, animated: true)
+            return
+        }
+        
+        // Normal single image upload flow
+        guard let image = picked else { return }
+        
+        // Show loading state
+        uploadIcon.image = UIImage(systemName: "arrow.clockwise")
+        uploadLabel.text = "Processing image with Vision Kit..."
+        
+        // Process image through Vision Kit for better quality
+        processImageWithVisionKit(image) { [weak self] processedImage in
+            guard let self = self else { return }
+            
+            // Convert processed image to PDF
+            guard let pdfData = self.convertImagesToPDF(images: [processedImage]) else {
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: "Error",
+                        message: "Failed to convert image to PDF.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+                return
+            }
+            
+            // Update upload data with PDF
+            self.currentUploadData = pdfData
+            self.currentFileName = "vision_processed_\(Date().timeIntervalSince1970).pdf"
+            self.currentFileType = "application/pdf"
+            
+            DispatchQueue.main.async {
+                self.uploadLabel.text = "Uploading processed PDF..."
+            }
+            
+            // Upload the PDF
+            Task {
+                do {
+                    print("Starting Vision Kit processed image upload...")
+                    try await self.saveUploadToDatabase(
+                        imageData: pdfData,
+                        fileName: self.currentFileName,
+                        fileType: self.currentFileType
+                    )
+                    
+                    print("Vision Kit processed image upload completed!")
+                    
+                    // Refresh recent uploads
+                    await self.loadRecentUploadsFromDB()
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        // Show success
+                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
+                        self.uploadLabel.text = "Processed and uploaded!"
+                        
+                        // Reset after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                    }
+                } catch {
+                    print("Vision Kit image upload failed: \(error)")
+                    
+                    DispatchQueue.main.async {
+                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
+                        self.uploadLabel.text = "Upload failed"
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                        }
+                        
+                        let alert = UIAlertController(
+                            title: "Upload Failed",
+                            message: "Error: \(error.localizedDescription)",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
         }
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        
+        // If in multi-image mode and no images selected, reset
+        if isMultiImageSelection && selectedImages.isEmpty {
+            isMultiImageSelection = false
+            DispatchQueue.main.async {
+                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
+                self.uploadLabel.text = "Drag & drop or tap to upload"
+            }
+        }
     }
 }
