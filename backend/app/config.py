@@ -23,3 +23,11 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "300"))
 
 # Max file size (in bytes)
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "104857600"))  # 100MB
+
+# CORS — comma-separated list of allowed origins; leave empty to disallow all cross-origin requests
+_allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
+
+# Admin access — comma-separated list of user IDs that may call admin endpoints
+_admin_ids_env = os.getenv("ADMIN_USER_IDS", "")
+ADMIN_USER_IDS = {uid.strip() for uid in _admin_ids_env.split(",") if uid.strip()}

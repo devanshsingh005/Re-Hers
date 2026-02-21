@@ -22,3 +22,6 @@ Packages/
 # App-specific
 *.log
 temp/
+
+# Secrets — copy Config.plist.example to Config.plist and fill in your credentials
+Re-Hearse_v1/Config.plist

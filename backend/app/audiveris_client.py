@@ -1,9 +1,8 @@
-
 """Client for calling Audiveris HTTP API."""
 import requests
 import logging
 from typing import Dict, Any
-from app.config import AUDIVERIS_API_URL
+from app.config import AUDIVERIS_API_URL, REQUEST_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ def run_audiveris(pdf_path: str) -> Dict[str, Any]:
             files = {'file': (pdf_path.split('/')[-1], pdf_file, 'application/pdf')}
             
             logger.debug(f"Sending PDF to Audiveris: {pdf_path}")
-            response = requests.post(url, files=files)
+            response = requests.post(url, files=files, timeout=REQUEST_TIMEOUT)
             
             logger.info(f"Audiveris response status: {response.status_code}")
     except FileNotFoundError as e:

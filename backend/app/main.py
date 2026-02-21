@@ -2,7 +2,7 @@
 import os
 import uuid
 import logging
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.models import job_store, JobStatus
@@ -12,20 +12,22 @@ from app.auth import get_current_user
 from app.database import DatabaseClient
 from app.storage import StorageManager
 from app.orphan_detector import OrphanDetector
-from app.config import SUPABASE_URL, SUPABASE_KEY
+from app.config import SUPABASE_URL, SUPABASE_KEY, ALLOWED_ORIGINS, ADMIN_USER_IDS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Audiveris PDF Conversion API with User Isolation")
 
-# Add CORS middleware
+# Add CORS middleware — credentials are not needed because auth uses Bearer tokens in headers
+# When ALLOWED_ORIGINS is not set, all origins are permitted (useful for development).
+# Set ALLOWED_ORIGINS to a comma-separated list of origins to restrict access in production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Initialize managers
@@ -195,8 +197,8 @@ async def get_sheet_json(
 @app.get("/jobs")
 async def list_user_jobs(
     user: dict = Depends(get_current_user),
-    limit: int = 50,
-    offset: int = 0
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0)
 ):
     """List all jobs for authenticated user.
     
@@ -251,34 +253,38 @@ async def delete_sheet(
 
 
 # Admin endpoints (should be protected separately in production)
+def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    """Dependency that raises 403 unless the caller is a configured admin."""
+    if not ADMIN_USER_IDS or user["id"] not in ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 @app.get("/admin/orphans/detect")
-async def detect_orphans(user: dict = Depends(get_current_user)):
-    """Detect orphaned files (admin only).
-    
-    Note: In production, add proper admin role verification
-    """
+async def detect_orphans(user: dict = Depends(require_admin)):
+    """Detect orphaned files (admin only)."""
     try:
         report = await orphan_detector.detect_orphans()
         return report
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error detecting orphans: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/admin/orphans/cleanup")
 async def cleanup_orphans(
     dry_run: bool = True,
-    user: dict = Depends(get_current_user)
+    user: dict = Depends(require_admin)
 ):
     """Clean up orphaned files (admin only).
     
     Args:
         dry_run: If true, only report without deleting
-    
-    Note: In production, add proper admin role verification
     """
     try:
         result = await orphan_detector.cleanup_orphans(dry_run)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error cleaning up orphans: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 

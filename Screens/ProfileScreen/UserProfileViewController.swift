@@ -1252,9 +1252,8 @@ extension UserProfileViewController {
             }
             
             // If we get here, upload was successful
-            // Get the correct public URL
-            let projectRef = "djqgmowfjxsnjdffdohw" // REPLACE WITH YOUR PROJECT REF
-            let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
+            // Get the correct public URL derived from the shared Supabase manager
+            let publicURL = "\(SupabaseManager.shared.client.supabaseURL.absoluteString)/storage/v1/object/public/useprofile/\(fileName)"
             
             // Save URL in profiles.avatar_url
             let updates: [String: String] = [

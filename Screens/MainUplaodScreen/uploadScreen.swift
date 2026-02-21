@@ -46,8 +46,10 @@ class UploadScreen: UIViewController {
         return SupabaseManager.shared.client
     }
     
-    // Supabase storage base URL
-    private let supabaseStorageBaseURL = "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/public"
+    // Supabase storage base URL derived from the shared manager to avoid hardcoding
+    private var supabaseStorageBaseURL: String {
+        return "\(SupabaseManager.shared.client.supabaseURL.absoluteString)/storage/v1/object/public"
+    }
     
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(title: "Upload")
