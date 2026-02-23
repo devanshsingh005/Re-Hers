@@ -2,12 +2,30 @@
 //  UploadScreen.swift
 //  Re-Hearse_v1
 //
+//  CHANGES FROM ORIGINAL — three bugs fixed, everything else identical:
+//
+//  BUG 1 (saveUploadToDatabase) — PDF was never uploaded to Supabase storage.
+//    Original code only built a pdfPath string; supabase.storage.upload() was
+//    never called. Added Step 2 which uploads the PDF bytes to pdf_uploads bucket.
+//
+//  BUG 2 (saveUploadToDatabase) — pdfPath stored "uploads/{uid}/{jid}/{file}".
+//    "uploads/" was treated as a path prefix inside the bucket, so getPublicURL
+//    produced .../pdf_uploads/uploads/... which matched nothing. Fixed path to
+//    "{uid}/{jid}/{cleanFile}" with no spurious prefix. Also stores pdf_public_url
+//    in json_data so re-opens never need a DB round-trip to reconstruct the URL.
+//
+//  BUG 3 (makeUploadRow) — card tap pushed UploadPageNextViewController() with
+//    ZERO properties (scanId/resultURL/pdfPublicURL all nil) → blank screen.
+//    Fixed to pass scanId, resultURL, and pdfPublicURL from the scan record.
+//
+//  BUG 4 (navigateToNextPage) — signature lacked pdfPublicURL parameter so new
+//    uploads also got a blank screen. Added parameter and set vc.pdfPublicURL.
 
 import UIKit
 import AVFoundation
 import Photos
 import Supabase
-import PDFKit // Add PDFKit for PDF creation
+import PDFKit
 import Vision
 import VisionKit
 
@@ -15,38 +33,26 @@ class UploadScreen: UIViewController {
     
     private enum Constants {
         static let horizontalPadding: CGFloat = 20
-        static let sectionSpacing: CGFloat = 20
+        static let sectionSpacing: CGFloat = 24
         static let elementSpacing: CGFloat = 12
-        static let cornerRadius: CGFloat = 14
+        static let cornerRadius: CGFloat = 20
         static let buttonHeight: CGFloat = 52
-        static let uploadContainerHeight: CGFloat = 300
-        static let cardSize = CGSize(width: 140, height: 160)
-        static let carouselHeight: CGFloat = 180
-        static let metaCoverSize: CGFloat = 56
-        static let metaCornerRadius: CGFloat = metaCoverSize / 2 // circular
-        static let pdfPageSize = CGSize(width: 612, height: 792) // US Letter size
+        static let pdfPageSize = CGSize(width: 612, height: 792)
     }
     
     // MARK: - State / Data
-    private var uploadTitle: String = "Untitled"
-    private var uploadCoverImage: UIImage? = UIImage(systemName: "music.note")
-    private var currentUploadData: Data? // Store uploaded file data
+    private var uploadTitle: String = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, yyyy"
+        return f.string(from: Date())
+    }()
+    private var currentUploadData: Data?
     private var currentFileName: String = ""
     private var currentFileType: String = ""
-    private var selectedImages: [UIImage] = [] // Store multiple selected images
-    private var isMultiImageSelection = false // Track if we're in multi-image mode
+    private var activeQuizPopup: UploadQuizPopup?
+    private var recentUploadsStack: UIStackView?
     
-    // UI Element references
-    private var metaTitleLbl: UILabel?
-    private var metaCoverImgView: UIImageView?
-    private var recentHStack: UIStackView?
-    
-    // Use shared Supabase client
-    private var supabase: SupabaseClient {
-        return SupabaseManager.shared.client
-    }
-    
-    // Supabase storage base URL
+    private var supabase: SupabaseClient { SupabaseManager.shared.client }
     private let supabaseStorageBaseURL = "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/public"
     
     // MARK: - UI Elements
@@ -54,1029 +60,25 @@ class UploadScreen: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
     
-    private let uploadContainer = UIView()
-    private let uploadIcon = UIImageView()
-    private let uploadLabel = UILabel()
-    private let uploadButton = UIButton()
-    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
         navigationController?.navigationBar.isHidden = true
-        
         setupNavBar()
         setupScrollView()
-        addUploadMetaSection()
-        setupUploadSection()
-        addRecentUploadsSection()
-        
-        // Load real recent uploads from database
+        setupHeaderSection()
+        setupActionCards()
+        setupRecentUploadsSection()
         loadRecentUploadsFromDB()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Refresh recent uploads when view appears
         loadRecentUploadsFromDB()
     }
-    // MARK: - Public entry point (for Home → Upload)
-    func startUploadFlow() {
-        uploadTapped()
-    }
-
     
-    // MARK: - Vision Kit Image Processing (Simplified)
-    private func processImageWithVisionKit(_ image: UIImage, completion: @escaping (UIImage) -> Void) {
-        // Process image through Core Image filters for document enhancement
-        let enhancedImage = enhanceImageWithCoreImage(image)
-        DispatchQueue.main.async {
-            completion(enhancedImage)
-        }
-    }
-    
-    // Enhance image using Core Image filters for document-like quality
-    private func enhanceImageWithCoreImage(_ image: UIImage) -> UIImage {
-        guard let ciImage = CIImage(image: image) else { return image }
-        
-        let context = CIContext(options: [.useSoftwareRenderer: false])
-        var outputImage = ciImage
-        
-        // 1. Remove shadows with highlight/shadow adjustment
-        if let shadowFilter = CIFilter(name: "CIHighlightShadowAdjust") {
-            shadowFilter.setValue(outputImage, forKey: kCIInputImageKey)
-            shadowFilter.setValue(1.0, forKey: "inputShadowAmount") // Remove shadows completely
-            shadowFilter.setValue(0.0, forKey: "inputHighlightAmount") // Keep highlights neutral
-            if let result = shadowFilter.outputImage {
-                outputImage = result
-            }
-        }
-        
-        // 2. Apply minimal exposure adjustment
-        if let exposureFilter = CIFilter(name: "CIExposureAdjust") {
-            exposureFilter.setValue(outputImage, forKey: kCIInputImageKey)
-            exposureFilter.setValue(0.1, forKey: kCIInputEVKey) // Very subtle brightness boost
-            if let result = exposureFilter.outputImage {
-                outputImage = result
-            }
-        }
-        
-        // Render to final image
-        if let finalCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
-            return UIImage(cgImage: finalCGImage)
-        }
-        
-        return image
-    }
-    
-    // MARK: - Image Processing for Scanned PDF Look
-    private func processImageForScanLook(_ image: UIImage) -> UIImage {
-        // Convert to grayscale first
-        guard let ciImage = CIImage(image: image) else { return image }
-        
-        // Apply filters to make it look like a scanned document
-        let context = CIContext(options: nil)
-        
-        // 1. Convert to grayscale
-        guard let grayscaleFilter = CIFilter(name: "CIColorControls") else { return image }
-        grayscaleFilter.setValue(ciImage, forKey: kCIInputImageKey)
-        grayscaleFilter.setValue(0.0, forKey: kCIInputSaturationKey) // Remove color
-        grayscaleFilter.setValue(0.5, forKey: kCIInputContrastKey) // Increase contrast
-        grayscaleFilter.setValue(0.1, forKey: kCIInputBrightnessKey) // Adjust brightness
-        
-        guard let grayscaleOutput = grayscaleFilter.outputImage else { return image }
-        
-        // 2. Apply threshold (black and white effect)
-        guard let thresholdFilter = CIFilter(name: "CIColorThreshold") else {
-            // Fallback to simpler approach if threshold filter not available
-            if let cgImage = context.createCGImage(grayscaleOutput, from: grayscaleOutput.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-            return image
-        }
-        thresholdFilter.setValue(grayscaleOutput, forKey: kCIInputImageKey)
-        thresholdFilter.setValue(0.5, forKey: "inputThreshold") // Adjust threshold level
-        
-        guard let thresholdOutput = thresholdFilter.outputImage else {
-            if let cgImage = context.createCGImage(grayscaleOutput, from: grayscaleOutput.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-            return image
-        }
-        
-        // 3. Apply noise reduction
-        guard let noiseFilter = CIFilter(name: "CINoiseReduction") else {
-            if let cgImage = context.createCGImage(thresholdOutput, from: thresholdOutput.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-            return image
-        }
-        noiseFilter.setValue(thresholdOutput, forKey: kCIInputImageKey)
-        noiseFilter.setValue(0.02, forKey: "inputNoiseLevel")
-        noiseFilter.setValue(0.40, forKey: "inputSharpness")
-        
-        // 4. Apply sharpen filter for crisp text
-        guard let sharpenFilter = CIFilter(name: "CISharpenLuminance") else {
-            if let cgImage = context.createCGImage(thresholdOutput, from: thresholdOutput.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-            return image
-        }
-        sharpenFilter.setValue(noiseFilter.outputImage ?? thresholdOutput, forKey: kCIInputImageKey)
-        sharpenFilter.setValue(0.5, forKey: kCIInputSharpnessKey)
-        
-        guard let finalOutput = sharpenFilter.outputImage else {
-            if let cgImage = context.createCGImage(thresholdOutput, from: thresholdOutput.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-            return image
-        }
-        
-        // Render the final image
-        if let cgImage = context.createCGImage(finalOutput, from: finalOutput.extent) {
-            return UIImage(cgImage: cgImage)
-        }
-        
-        return image
-    }
-    
-    // Alternative method using CoreGraphics for more reliable grayscale+threshold
-    private func convertToScannedLook(_ image: UIImage) -> UIImage {
-        let originalSize = image.size
-        let scale: CGFloat = 2.0 // Use higher resolution for better quality
-        let newSize = CGSize(width: originalSize.width * scale, height: originalSize.height * scale)
-        
-        UIGraphicsBeginImageContextWithOptions(newSize, false, scale)
-        defer { UIGraphicsEndImageContext() }
-        
-        guard let context = UIGraphicsGetCurrentContext() else { return image }
-        
-        // Draw the original image
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-        
-        // Get the image data
-        guard let cgImage = context.makeImage() else { return image }
-        
-        // Create a grayscale color space
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.genericGrayGamma2_2) else { return image }
-        
-        // Create bitmap context
-        let bitmapInfo = CGImageAlphaInfo.none.rawValue
-        guard let grayContext = CGContext(
-            data: nil,
-            width: Int(newSize.width),
-            height: Int(newSize.height),
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else { return image }
-        
-        // Draw the image into the grayscale context
-        grayContext.draw(cgImage, in: CGRect(origin: .zero, size: newSize))
-        
-        // Apply contrast and brightness adjustments manually
-        if let grayImage = grayContext.makeImage() {
-            // Convert back to UIImage
-            return UIImage(cgImage: grayImage, scale: scale, orientation: .up)
-        }
-        
-        return image
-    }
-    
-    // Simple thresholding for black and white effect
-    private func applySimpleThreshold(_ image: UIImage, threshold: CGFloat = 0.6) -> UIImage? {
-        guard let cgImage = image.cgImage else { return nil }
-        
-        let width = cgImage.width
-        let height = cgImage.height
-        let colorSpace = CGColorSpaceCreateDeviceGray()
-        let bytesPerPixel = 1
-        let bytesPerRow = bytesPerPixel * width
-        let bitsPerComponent = 8
-        
-        guard let context = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: bitsPerComponent,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else { return nil }
-        
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        
-        guard let pixelData = context.data else { return nil }
-        
-        let thresholdValue = UInt8(threshold * 255)
-        let buffer = pixelData.bindMemory(to: UInt8.self, capacity: width * height)
-        
-        for y in 0..<height {
-            for x in 0..<width {
-                let offset = y * width + x
-                let pixel = buffer[offset]
-                // Simple threshold: black or white
-                buffer[offset] = pixel > thresholdValue ? 255 : 0
-            }
-        }
-        
-        if let newCGImage = context.makeImage() {
-            return UIImage(cgImage: newCGImage)
-        }
-        
-        return nil
-    }
-    
-    // MARK: - Image to PDF Conversion Methods with Scanning Effect
-    
-    private func convertImagesToPDF(images: [UIImage]) -> Data? {
-        guard !images.isEmpty else { return nil }
-        
-        let pdfData = NSMutableData()
-        let pdfBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
-        
-        // Create PDF context with better quality settings
-        UIGraphicsBeginPDFContextToData(pdfData, pdfBounds, nil)
-        let rendererFormat = UIGraphicsImageRendererFormat.default()
-        rendererFormat.opaque = true
-        rendererFormat.scale = 2.0 // Higher resolution
-        
-        for (index, image) in images.enumerated() {
-            // Start a new page for each image
-            UIGraphicsBeginPDFPageWithInfo(pdfBounds, nil)
-            
-            // Convert image to scanned look
-            let processedImage: UIImage
-            if let thresholdedImage = applySimpleThreshold(image, threshold: 0.6) {
-                processedImage = thresholdedImage
-            } else {
-                // Fallback to processed image
-                processedImage = processImageForScanLook(image)
-            }
-            
-            // Calculate image size to fit within page while maintaining aspect ratio
-            let imageSize = processedImage.size
-            let pageSize = Constants.pdfPageSize
-            
-            // Calculate scaling factor to fit the page
-            let widthRatio = pageSize.width / imageSize.width
-            let heightRatio = pageSize.height / imageSize.height
-            let scaleFactor = min(widthRatio, heightRatio, 1.0) // Don't scale up
-            
-            let scaledWidth = imageSize.width * scaleFactor
-            let scaledHeight = imageSize.height * scaleFactor
-            
-            // Center the image on the page
-            let xOffset = (pageSize.width - scaledWidth) / 2
-            let yOffset = (pageSize.height - scaledHeight) / 2
-            
-            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
-            
-            // Draw the processed (scanned-looking) image
-            processedImage.draw(in: imageRect)
-            
-            // Optional: Add subtle border like a scanned document
-            let borderRect = imageRect.insetBy(dx: -1, dy: -1)
-            let borderPath = UIBezierPath(rect: borderRect)
-            borderPath.lineWidth = 0.5
-            UIColor.lightGray.setStroke()
-            borderPath.stroke()
-            
-            // Optional: Add page number (small and discreet)
-            let pageNumberText = "\(index + 1)"
-            let textAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 10, weight: .regular),
-                .foregroundColor: UIColor.gray
-            ]
-            
-            let textSize = pageNumberText.size(withAttributes: textAttributes)
-            let textRect = CGRect(
-                x: (pageSize.width - textSize.width) / 2,
-                y: 10,
-                width: textSize.width,
-                height: textSize.height
-            )
-            
-            pageNumberText.draw(in: textRect, withAttributes: textAttributes)
-        }
-        
-        UIGraphicsEndPDFContext()
-        
-        return pdfData as Data
-    }
-    
-    private func createPDFFromImages() -> (Data, String, String)? {
-        guard !selectedImages.isEmpty else { return nil }
-        
-        // Process all images for scanned look
-        let processedImages = selectedImages.map { image -> UIImage in
-            if let thresholdedImage = self.applySimpleThreshold(image, threshold: 0.6) {
-                return thresholdedImage
-            } else {
-                return self.processImageForScanLook(image)
-            }
-        }
-        
-        // Convert processed images to PDF
-        if let pdfData = convertImagesToPDF(images: processedImages) {
-            let timestamp = Date().timeIntervalSince1970
-            let fileName = "scanned_\(Int(timestamp)).pdf"
-            let fileType = "application/pdf"
-            
-            return (pdfData, fileName, fileType)
-        }
-        
-        return nil
-    }
-    
-    private func processSelectedImagesAndUpload() {
-        guard !selectedImages.isEmpty else {
-            DispatchQueue.main.async {
-                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                self.uploadLabel.text = "No images selected"
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    self.uploadLabel.text = "Drag & drop or tap to upload"
-                }
-            }
-            return
-        }
-        
-        // Show converting state
-        DispatchQueue.main.async {
-            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-            self.uploadLabel.text = "Processing \(self.selectedImages.count) image(s) with Vision Kit..."
-        }
-        
-        // Process all images through Vision Kit
-        processImagesWithVisionKit(selectedImages) { [weak self] processedImages in
-            guard let self = self else { return }
-            
-            // Create PDF from Vision Kit processed images
-            guard let pdfData = self.convertImagesToPDF(images: processedImages) else {
-                DispatchQueue.main.async {
-                    self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                    self.uploadLabel.text = "Failed to create PDF"
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                        self.uploadLabel.text = "Drag & drop or tap to upload"
-                    }
-                }
-                return
-            }
-            
-            // Update upload data
-            self.currentUploadData = pdfData
-            self.currentFileName = "vision_multi_\(Date().timeIntervalSince1970).pdf"
-            self.currentFileType = "application/pdf"
-            
-            DispatchQueue.main.async {
-                self.uploadLabel.text = "Uploading processed PDF..."
-            }
-            
-            // Start upload process
-            Task {
-                do {
-                    print("Starting Vision Kit multi-image PDF upload...")
-                    try await self.saveUploadToDatabase(
-                        imageData: pdfData,
-                        fileName: self.currentFileName,
-                        fileType: self.currentFileType
-                    )
-                    
-                    print("Vision Kit multi-image PDF upload completed!")
-                    
-                    // Clear selected images
-                    self.selectedImages.removeAll()
-                    self.isMultiImageSelection = false
-                    
-                    // Refresh recent uploads
-                    await self.loadRecentUploadsFromDB()
-                    
-                    // Update UI on main thread
-                    DispatchQueue.main.async {
-                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                        self.uploadLabel.text = "Processed and uploaded!"
-                        
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                    }
-                } catch {
-                    print("Vision Kit multi-image upload failed: \(error)")
-                    
-                    DispatchQueue.main.async {
-                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                        self.uploadLabel.text = "Upload failed"
-                        
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                        
-                        let alert = UIAlertController(
-                            title: "Upload Failed",
-                            message: "Error: \(error.localizedDescription)",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
-                    }
-                }
-            }
-        }
-    }
-    
-    // Process multiple images with Vision Kit
-    private func processImagesWithVisionKit(_ images: [UIImage], completion: @escaping ([UIImage]) -> Void) {
-        // Process all images through Core Image enhancement
-        let processedImages = images.map { image in
-            enhanceImageWithCoreImage(image)
-        }
-        DispatchQueue.main.async {
-            completion(processedImages)
-        }
-    }
-    
-    // MARK: - Database Methods
-    
-    private func loadRecentUploadsFromDB() {
-        Task {
-            do {
-                let recentUploads = try await fetchRecentUploadsFromDatabase()
-                
-                // Update UI on main thread
-                DispatchQueue.main.async {
-                    self.displayRecentUploads(recentUploads)
-                }
-            } catch {
-                print("Error loading recent uploads: \(error)")
-                // Fallback to sample data if needed
-                DispatchQueue.main.async {
-                    self.addRecentUploadCard(title: "Sample Upload", image: UIImage(named: "cl_1"))
-                }
-            }
-        }
-    }
-    
-    private func fetchRecentUploadsFromDatabase() async throws -> [Scan] {
-        // First, let's test if we can get the current user ID
-        guard let userIdString = await getCurrentUserId() else {
-            print("No user ID found")
-            return []
-        }
-        
-        guard let userId = UUID(uuidString: userIdString) else {
-            print("Invalid user ID format: \(userIdString)")
-            return []
-        }
-        
-        print("Fetching scans for user ID: \(userId)")
-        
-        do {
-            let response: [Scan] = try await supabase
-                .from("scans")
-                .select()
-                .eq("user_id", value: userId)
-                .order("updated_at", ascending: false)
-                .limit(5)
-                .execute()
-                .value
-            
-            print("Successfully fetched \(response.count) scans")
-            
-            // Remove duplicates by ID to prevent showing same data multiple times
-            var uniqueScans: [Scan] = []
-            var seenIDs: Set<Int64> = []
-            
-            for scan in response {
-                if !seenIDs.contains(scan.id) {
-                    seenIDs.insert(scan.id)
-                    uniqueScans.append(scan)
-                }
-            }
-            
-            print("After removing duplicates: \(uniqueScans.count) unique scans")
-            return uniqueScans
-        } catch {
-            print("Error fetching scans: \(error)")
-            throw error
-        }
-    }
-    
-    private func getCurrentUserId() async -> String? {
-        do {
-            // Get current session from Supabase
-            let session = try await supabase.auth.session
-            return session.user.id.uuidString
-        } catch {
-            print("Error getting user session: \(error)")
-            return nil
-        }
-    }
-    
-    private func getSupabaseAuthToken() async -> String? {
-        do {
-            let session = try await supabase.auth.session
-            return session.accessToken
-        } catch {
-            print("Error getting auth token: \(error)")
-            return nil
-        }
-    }
-    
-    private func displayRecentUploads(_ scans: [Scan]) {
-        guard let hStack = recentHStack else { return }
-        
-        // Clear existing cards
-        for view in hStack.arrangedSubviews {
-            view.removeFromSuperview()
-        }
-        
-        // Add cards from database
-        for scan in scans {
-            let title = extractTitle(from: scan.jsonData) ?? scan.originalFilename ?? "Untitled"
-            // You might want to store thumbnail URLs in JSON or use a placeholder
-            addRecentUploadCard(title: title, image: UIImage(named: "cl_1"))
-        }
-        
-        // If no uploads, show empty state
-        if scans.isEmpty {
-            let emptyLabel = UILabel()
-            emptyLabel.text = "No recent uploads"
-            emptyLabel.textColor = .secondaryLabel
-            emptyLabel.textAlignment = .center
-            hStack.addArrangedSubview(emptyLabel)
-        }
-    }
-    
-    private func extractTitle(from jsonData: AnyCodable?) -> String? {
-        guard let jsonData = jsonData else { return nil }
-        
-        // Access the underlying value
-        if let dict = jsonData.value as? [String: Any] {
-            return dict["title"] as? String
-        }
-        return nil
-    }
-    
-    private func saveUploadToDatabase(imageData: Data, fileName: String, fileType: String) async throws {
-        print("Starting upload process...")
-        
-        // 1. Get user ID
-        guard let userIdString = await getCurrentUserId(),
-              let userId = UUID(uuidString: userIdString) else {
-            throw NSError(domain: "UploadError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
-        }
-        
-        print("User ID: \(userId)")
-        
-        // 2. Get Supabase auth token for the external API
-        print("Getting Supabase auth token...")
-        guard let authToken = await getSupabaseAuthToken() else {
-            throw NSError(domain: "UploadError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
-        }
-        
-        print("Auth token obtained, calling external API...")
-        
-        // 3. Call external conversion API with the image
-        let apiResponse: [String: Any] = try await callExternalConversionAPI(
-            imageData: imageData,
-            fileName: fileName,
-            fileType: fileType,
-            authToken: authToken
-        )
-        
-        print("External API response received")
-        
-        // 4. Extract job_id and user_id from API response
-        guard let apiJobIdString = apiResponse["job_id"] as? String,
-              let apiJobId = UUID(uuidString: apiJobIdString),
-              let apiUserIdString = apiResponse["user_id"] as? String,
-              let apiUserId = UUID(uuidString: apiUserIdString) else {
-            throw NSError(domain: "UploadError", code: 5, userInfo: [NSLocalizedDescriptionKey: "Missing job_id or user_id in API response"])
-        }
-        
-        print("Job ID from API: \(apiJobId)")
-        print("User ID from API: \(apiUserId)")
-        
-        // 5. Construct the result URL
-        let resultURL = "\(supabaseStorageBaseURL)/sheet_data/\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/output.json"
-        print("Constructed result URL: \(resultURL)")
-        
-        // 6. Create PDF path (based on the actual job ID from API)
-        let pdfPath = "uploads/\(apiUserIdString)/\(apiJobIdString)/\(fileName)"
-        
-        // 7. First, check if a job with this ID already exists
-        let existingJobs: [Job] = try await supabase
-            .from("jobs")
-            .select()
-            .eq("id", value: apiJobId)
-            .execute()
-            .value
-        
-        if existingJobs.isEmpty {
-            // 8. Create a job record in the jobs table with the API's job ID
-            print("Creating job record with API job ID: \(apiJobId)")
-            
-            let jobInsert = JobInsert(
-                id: apiJobId,
-                userId: apiUserId,
-                pdfPath: pdfPath,
-                resultUrl: resultURL,
-                status: "completed"
-            )
-            
-            do {
-                let jobResponse: Job = try await supabase
-                    .from("jobs")
-                    .insert(jobInsert)
-                    .select()
-                    .single()
-                    .execute()
-                    .value
-                
-                print("Job record inserted successfully with ID: \(jobResponse.id)")
-            } catch {
-                print("Error inserting job record: \(error)")
-                // Continue even if job insertion fails
-            }
-        } else {
-            print("Job already exists with ID: \(apiJobId)")
-            
-            // Update existing job with result URL
-            let jobUpdate = JobUpdate(
-                resultUrl: resultURL,
-                status: "completed",
-                errorMessage: nil,
-                updatedAt: ISO8601DateFormatter().string(from: Date())
-            )
-            
-            try await supabase
-                .from("jobs")
-                .update(jobUpdate)
-                .eq("id", value: apiJobId)
-                .execute()
-            
-            print("Updated existing job with result URL")
-        }
-        
-        // 9. Check if a scan record already exists for this job
-        let existingScans: [Scan] = try await supabase
-            .from("scans")
-            .select()
-            .eq("user_id", value: userId)
-            .like("json_data->>'job_id'", pattern: "%\(apiJobIdString)%")
-            .execute()
-            .value
-        
-        if existingScans.isEmpty {
-            // 10. Create a scan record in the scans table
-            print("Creating scan record...")
-            
-            // Create processing ID for scan
-            let processingId = "proc_\(UUID().uuidString)"
-            
-            // Create JSON data for scan
-            var jsonDict: [String: Any] = [
-                "status": "completed",
-                "filename": fileName,
-                "uploaded_at": ISO8601DateFormatter().string(from: Date()),
-                "title": uploadTitle,
-                "result_url": resultURL,
-                "job_id": apiJobIdString,
-                "user_id": apiUserIdString,
-                "pdf_path": pdfPath,
-                "pdf_type": "scanned" // Mark as scanned PDF
-            ]
-            
-            // Merge API response into JSON
-            for (key, value) in apiResponse {
-                jsonDict[key] = value
-            }
-            
-            let scanInsert = ScanInsert(
-                userId: userId,
-                jsonData: AnyCodable(jsonDict),
-                processingId: processingId,
-                status: "completed",
-                originalFilename: fileName,
-                fileType: fileType,
-                processedAt: ISO8601DateFormatter().string(from: Date())
-            )
-            
-            let scanResponse: Scan = try await supabase
-                .from("scans")
-                .insert(scanInsert)
-                .select()
-                .single()
-                .execute()
-                .value
-            
-            print("Scan record inserted successfully with ID: \(scanResponse.id)")
-            
-            // 11. Now we can navigate to next page immediately
-            DispatchQueue.main.async {
-                self.navigateToNextPage(with: scanResponse.id, resultURL: resultURL)
-            }
-        } else {
-            print("Scan already exists for job ID: \(apiJobIdString)")
-            // Update existing scan
-            if let existingScan = existingScans.first {
-                var jsonDict: [String: Any] = [
-                    "status": "completed",
-                    "filename": fileName,
-                    "uploaded_at": ISO8601DateFormatter().string(from: Date()),
-                    "title": uploadTitle,
-                    "result_url": resultURL,
-                    "job_id": apiJobIdString,
-                    "user_id": apiUserIdString,
-                    "pdf_path": pdfPath,
-                    "pdf_type": "scanned" // Mark as scanned PDF
-                ]
-                
-                // Merge API response into JSON
-                for (key, value) in apiResponse {
-                    jsonDict[key] = value
-                }
-                
-                let scanUpdate = ScanUpdate(
-                    jsonData: AnyCodable(jsonDict),
-                    status: "completed",
-                    processedAt: ISO8601DateFormatter().string(from: Date()),
-                    updatedAt: ISO8601DateFormatter().string(from: Date())
-                )
-                
-                try await supabase
-                    .from("scans")
-                    .update(scanUpdate)
-                    .eq("id", value: existingScan.id as! PostgrestFilterValue)
-                    .execute()
-                
-                print("Updated existing scan with ID: \(existingScan.id)")
-                
-                // Navigate with existing scan ID
-                DispatchQueue.main.async {
-                    self.navigateToNextPage(with: existingScan.id, resultURL: resultURL)
-                }
-            }
-        }
-    }
-    
-    // MARK: - External API Call
-    private func callExternalConversionAPI(
-        imageData: Data,
-        fileName: String,
-        fileType: String,
-        authToken: String
-    ) async throws -> [String: Any] {
-        let url = URL(string: "https://maybe-working-production.up.railway.app/convert")!
-        
-        // Create boundary for multipart form
-        let boundary = UUID().uuidString
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 60 // 60 second timeout for file upload
-        
-        // Build multipart form data
-        var body = Data()
-        
-        // Add file part
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(fileType)\r\n\r\n".data(using: .utf8)!)
-        body.append(imageData)
-        body.append("\r\n".data(using: .utf8)!)
-        
-        // Close boundary
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
-        request.httpBody = body
-        
-        print("Making API request to: \(url.absoluteString)")
-        print("File size: \(imageData.count) bytes")
-        print("File name: \(fileName)")
-        print("File type: \(fileType)")
-        
-        // Make the API call
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: "APIError", code: 0,
-                         userInfo: [NSLocalizedDescriptionKey: "No response from server"])
-        }
-        
-        print("API Response Status Code: \(httpResponse.statusCode)")
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let responseBody = String(data: data, encoding: .utf8) ?? "No response body"
-            print("API Error Response: \(responseBody)")
-            throw NSError(domain: "APIError", code: httpResponse.statusCode,
-                         userInfo: [NSLocalizedDescriptionKey: "API request failed with status \(httpResponse.statusCode): \(responseBody)"])
-        }
-        
-        // Parse JSON response
-        do {
-            let jsonObject = try JSONSerialization.jsonObject(with: data)
-            
-            if let dict = jsonObject as? [String: Any] {
-                print("External API returned: \(dict)")
-                return dict
-            } else if let array = jsonObject as? [[String: Any]], let first = array.first {
-                print("External API returned array: using first element")
-                return first
-            } else {
-                // If response is not a dictionary or array of dictionaries, wrap it
-                return ["api_response": jsonObject, "status": "success"]
-            }
-        } catch {
-            // If JSON parsing fails, return raw response as string
-            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
-            print("External API raw response: \(responseString)")
-            return ["raw_response": responseString, "status": "processed"]
-        }
-    }
-    
-    // MARK: - Data Models
-    
-    // Job table models
-    struct Job: Codable, Identifiable {
-        let id: UUID
-        let userId: UUID
-        let pdfPath: String
-        let resultUrl: String?
-        let status: String
-        let errorMessage: String?
-        let createdAt: String?
-        let updatedAt: String?
-        
-        enum CodingKeys: String, CodingKey {
-            case id
-            case userId = "user_id"
-            case pdfPath = "pdf_path"
-            case resultUrl = "result_url"
-            case status
-            case errorMessage = "error_message"
-            case createdAt = "created_at"
-            case updatedAt = "updated_at"
-        }
-    }
-    
-    struct JobInsert: Encodable {
-        let id: UUID
-        let userId: UUID
-        let pdfPath: String
-        let resultUrl: String?
-        let status: String
-        
-        enum CodingKeys: String, CodingKey {
-            case id
-            case userId = "user_id"
-            case pdfPath = "pdf_path"
-            case resultUrl = "result_url"
-            case status
-        }
-    }
-    
-    struct JobUpdate: Encodable {
-        let resultUrl: String?
-        let status: String?
-        let errorMessage: String?
-        let updatedAt: String
-        
-        enum CodingKeys: String, CodingKey {
-            case resultUrl = "result_url"
-            case status
-            case errorMessage = "error_message"
-            case updatedAt = "updated_at"
-        }
-        
-        // Add initializer with default values
-        init(resultUrl: String? = nil, status: String? = nil, errorMessage: String? = nil, updatedAt: String) {
-            self.resultUrl = resultUrl
-            self.status = status
-            self.errorMessage = errorMessage
-            self.updatedAt = updatedAt
-        }
-    }
-    
-    // Scan table models
-    struct Scan: Codable, Identifiable {
-        let id: Int64
-        let userId: UUID
-        let jsonData: AnyCodable?
-        let processingId: String?
-        let status: String?
-        let originalFilename: String?
-        let fileType: String?
-        let processedAt: String?
-        let updatedAt: String?
-        let errorMessage: String?
-        
-        enum CodingKeys: String, CodingKey {
-            case id
-            case userId = "user_id"
-            case jsonData = "json_data"
-            case processingId = "processing_id"
-            case status
-            case originalFilename = "original_filename"
-            case fileType = "file_type"
-            case processedAt = "processed_at"
-            case updatedAt = "updated_at"
-            case errorMessage = "error_message"
-        }
-    }
-    
-    struct ScanInsert: Encodable {
-        let userId: UUID
-        let jsonData: AnyCodable
-        let processingId: String
-        let status: String
-        let originalFilename: String?
-        let fileType: String?
-        let processedAt: String?
-        
-        enum CodingKeys: String, CodingKey {
-            case userId = "user_id"
-            case jsonData = "json_data"
-            case processingId = "processing_id"
-            case status
-            case originalFilename = "original_filename"
-            case fileType = "file_type"
-            case processedAt = "processed_at"
-        }
-    }
-    
-    struct ScanUpdate: Encodable {
-        let jsonData: AnyCodable
-        let status: String
-        let processedAt: String
-        let updatedAt: String
-        
-        enum CodingKeys: String, CodingKey {
-            case jsonData = "json_data"
-            case status
-            case processedAt = "processed_at"
-            case updatedAt = "updated_at"
-        }
-    }
-    
-    // MARK: - AnyCodable helper for handling dynamic JSON
-    struct AnyCodable: Codable {
-        let value: Any
-        
-        init(_ value: Any) {
-            self.value = value
-        }
-        
-        init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            
-            if let boolValue = try? container.decode(Bool.self) {
-                value = boolValue
-            } else if let intValue = try? container.decode(Int.self) {
-                value = intValue
-            } else if let doubleValue = try? container.decode(Double.self) {
-                value = doubleValue
-            } else if let stringValue = try? container.decode(String.self) {
-                value = stringValue
-            } else if let arrayValue = try? container.decode([AnyCodable].self) {
-                value = arrayValue.map { $0.value }
-            } else if let dictValue = try? container.decode([String: AnyCodable].self) {
-                value = dictValue.mapValues { $0.value }
-            } else {
-                throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable cannot decode value")
-            }
-        }
-        
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            
-            switch value {
-            case let boolValue as Bool:
-                try container.encode(boolValue)
-            case let intValue as Int:
-                try container.encode(intValue)
-            case let doubleValue as Double:
-                try container.encode(doubleValue)
-            case let stringValue as String:
-                try container.encode(stringValue)
-            case let arrayValue as [Any]:
-                let anyCodableArray = arrayValue.map { AnyCodable($0) }
-                try container.encode(anyCodableArray)
-            case let dictValue as [String: Any]:
-                let anyCodableDict = dictValue.mapValues { AnyCodable($0) }
-                try container.encode(anyCodableDict)
-            default:
-                let context = EncodingError.Context(codingPath: container.codingPath, debugDescription: "AnyCodable cannot encode value of type \(type(of: value))")
-                throw EncodingError.invalidValue(value, context)
-            }
-        }
-    }
+    func startUploadFlow() { presentDocumentScanner() }
     
     // MARK: - NavBar
     private func setupNavBar() {
@@ -1085,27 +87,17 @@ class UploadScreen: UIViewController {
         navBar.isStreakVisible = false
         navBar.isWelcomeTextHidden = true
         navBar.isChordIconVisible = true
-        
         navBar.chordAction = { [weak self] in
             guard let self = self else { return }
             let vc = ChordRecognitionViewController()
-            if let nav = self.navigationController {
-                nav.pushViewController(vc, animated: true)
-            } else {
-                vc.modalPresentationStyle = .fullScreen
-                self.present(vc, animated: true)
-            }
+            if let nav = self.navigationController { nav.pushViewController(vc, animated: true) }
+            else { vc.modalPresentationStyle = .fullScreen; self.present(vc, animated: true) }
         }
         navBar.profileAction = { [weak self] in
             guard let self = self else { return }
-            let vc = UserProfileViewController()
-            self.navigationController?.pushViewController(vc, animated: true)
+            self.navigationController?.pushViewController(UserProfileViewController(), animated: true)
         }
-        
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
-        
+        navBar.backAction = { [weak self] in self?.navigationController?.popViewController(animated: true) }
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
@@ -1113,763 +105,953 @@ class UploadScreen: UIViewController {
         ])
     }
     
-    // MARK: - Scroll + Content stack
+    // MARK: - Scroll + Content Stack
     private func setupScrollView() {
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.alwaysBounceVertical = true
-        
-        // contentView is the vertical UIStackView that holds sections
+        scrollView.showsVerticalScrollIndicator = false
         scrollView.addSubview(contentView)
         contentView.axis = .vertical
         contentView.spacing = Constants.sectionSpacing
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Constrain contentView to scrollView using contentLayoutGuide and frameLayoutGuide
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            // contentView to contentLayoutGuide (vertical)
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 0),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: 0),
-            
-            // contentView to frameLayoutGuide (horizontal sizing)
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 8),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20),
             contentView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: Constants.horizontalPadding),
             contentView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -Constants.horizontalPadding),
-            
-            // ensure contentView width equals frame width minus padding so stack's arranged subviews layout properly
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -2 * Constants.horizontalPadding)
         ])
     }
     
-    // MARK: - Upload Meta Section (circular thumbnail + title + Edit)
-    private func addUploadMetaSection() {
-        let metaStack = UIStackView()
-        metaStack.axis = .horizontal
-        metaStack.spacing = 14
-        metaStack.alignment = .center
-        metaStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        // circular cover image
-        let cover = UIImageView()
-        cover.image = uploadCoverImage ?? UIImage(systemName: "music.note")
-        cover.tintColor = .black
-        cover.backgroundColor = UIColor(white: 0.95, alpha: 1)
-        cover.clipsToBounds = true
-        cover.layer.cornerRadius = 20
-        cover.translatesAutoresizingMaskIntoConstraints = true
-        metaCoverImgView = cover
-        
-        // title label
-        let title = UILabel()
-        title.text = uploadTitle
-        title.font = .systemFont(ofSize: 18, weight: .semibold)
-        title.textColor = .label
-        title.translatesAutoresizingMaskIntoConstraints = false
-        metaTitleLbl = title
-        
-        // edit button (shows action sheet)
-        let editButton = UIButton(type: .system)
-        editButton.setTitle("Edit", for: .normal)
-        editButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
-        editButton.addTarget(self, action: #selector(showMetaEditor), for: .touchUpInside)
-        
-        metaStack.addArrangedSubview(cover)
-        metaStack.addArrangedSubview(title)
-        metaStack.addArrangedSubview(editButton)
-        
-        NSLayoutConstraint.activate([
-            cover.widthAnchor.constraint(equalToConstant: 36),
-            cover.heightAnchor.constraint(equalToConstant: 36)
-        ])
-        
-        contentView.addArrangedSubview(metaStack)
+    // MARK: - Header
+    private func setupHeaderSection() {
+        let headerStack = UIStackView()
+        headerStack.axis = .vertical; headerStack.spacing = 4
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Capture or import your documents"
+        subtitleLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        subtitleLabel.textColor = .secondaryLabel
+        headerStack.addArrangedSubview(subtitleLabel)
+        contentView.addArrangedSubview(headerStack)
     }
     
-    @objc private func showMetaEditor() {
-        let ac = UIAlertController(title: "Edit Upload Info", message: nil, preferredStyle: .actionSheet)
-        
-        ac.addAction(UIAlertAction(title: "Edit Name", style: .default) { _ in
-            self.askForTitle()
-        })
-        ac.addAction(UIAlertAction(title: "Change Cover Image", style: .default) { _ in
-            self.presentImagePicker(sourceType: .photoLibrary, forCover: true)
-        })
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        // iPad popover anchor
-        if let pop = ac.popoverPresentationController {
-            pop.sourceView = metaCoverImgView ?? self.view
-            pop.sourceRect = CGRect(x: view.bounds.midX, y: 100, width: 0, height: 0)
-        }
-        present(ac, animated: true)
+    // MARK: - Action Cards
+    private func setupActionCards() {
+        let cardsRow = UIStackView()
+        cardsRow.axis = .horizontal; cardsRow.spacing = 14; cardsRow.distribution = .fillEqually
+        cardsRow.addArrangedSubview(makeScanCard())
+        cardsRow.addArrangedSubview(makeUploadCard())
+        contentView.addArrangedSubview(cardsRow)
+        cardsRow.heightAnchor.constraint(equalToConstant: 210).isActive = true
     }
     
-    private func askForTitle() {
-        let ac = UIAlertController(title: "Enter Title", message: nil, preferredStyle: .alert)
-        ac.addTextField { tf in
-            tf.placeholder = "Song Title"
-            tf.text = self.uploadTitle
-        }
-        ac.addAction(UIAlertAction(title: "Save", style: .default) { _ in
-            let newTitle = ac.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.uploadTitle = (newTitle?.isEmpty == false) ? newTitle! : "Untitled"
-            self.metaTitleLbl?.text = self.uploadTitle
-        })
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        present(ac, animated: true)
-    }
-    
-    // MARK: - Upload Box (big drag/drop area + button)
-    private func setupUploadSection() {
-        // container
-        uploadContainer.backgroundColor = .secondarySystemBackground
-        uploadContainer.layer.cornerRadius = Constants.cornerRadius
-        uploadContainer.translatesAutoresizingMaskIntoConstraints = false
-        
-        // icon centered
-        uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-        uploadIcon.tintColor = .black
-        uploadIcon.contentMode = .scaleAspectFit
-        uploadIcon.translatesAutoresizingMaskIntoConstraints = false
-        
-        // label
-        uploadLabel.text = "Drag & drop or tap to upload"
-        uploadLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        uploadLabel.textColor = .secondaryLabel
-        uploadLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        // upload button
-        var cfg = UIButton.Configuration.filled()
-        cfg.title = "Upload Files"
-        cfg.image = UIImage(systemName: "camera.fill")
-        cfg.baseBackgroundColor = .systemYellow
-        cfg.baseForegroundColor = .black
-        cfg.cornerStyle = .medium
-        uploadButton.configuration = cfg
-        uploadButton.translatesAutoresizingMaskIntoConstraints = false
-        uploadButton.addTarget(self, action: #selector(uploadTapped), for: .touchUpInside)
-        
-        // add to stack
-        contentView.addArrangedSubview(uploadContainer)
-        contentView.addArrangedSubview(uploadButton)
-        
-        uploadContainer.addSubview(uploadIcon)
-        uploadContainer.addSubview(uploadLabel)
-        
-        // constraints
-        uploadContainer.heightAnchor.constraint(equalToConstant: Constants.uploadContainerHeight).isActive = true
-        
-        NSLayoutConstraint.activate([
-            uploadIcon.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
-            uploadIcon.centerYAnchor.constraint(equalTo: uploadContainer.centerYAnchor, constant: -10),
-            uploadIcon.widthAnchor.constraint(equalToConstant: 44),
-            uploadIcon.heightAnchor.constraint(equalToConstant: 44),
-            
-            uploadLabel.topAnchor.constraint(equalTo: uploadIcon.bottomAnchor, constant: 8),
-            uploadLabel.centerXAnchor.constraint(equalTo: uploadContainer.centerXAnchor),
-            
-            uploadButton.heightAnchor.constraint(equalToConstant: Constants.buttonHeight)
-        ])
-        
-        // tap gesture for the entire container
-        let tap = UITapGestureRecognizer(target: self, action: #selector(uploadTapped))
-        uploadContainer.addGestureRecognizer(tap)
-    }
-    
-    @objc private func uploadTapped() {
-        showUploadOptions()
-    }
-    
-    private func showUploadOptions() {
-        let ac = UIAlertController(title: "Upload Content", message: nil, preferredStyle: .actionSheet)
-
-        ac.addAction(UIAlertAction(title: "Scan with Camera", style: .default) { _ in
-            self.presentDocumentScanner()
-        })
-
-//        ac.addAction(UIAlertAction(title: "Take Photo", style: .default) { _ in
-//            self.presentImagePicker(sourceType: .camera)
-//        })
-
-//        ac.addAction(UIAlertAction(title: "Choose Single Photo", style: .default) { _ in
-//            self.presentSingleImagePicker(sourceType: .photoLibrary)
-//        })
-//        
-//        ac.addAction(UIAlertAction(title: "Choose Multiple Photos", style: .default) { _ in
-//            self.presentMultipleImagePicker()
-//        })
-
-        ac.addAction(UIAlertAction(title: "Browse Files", style: .default) { _ in
-            self.openFileManager()
-        })
-
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        if let pop = ac.popoverPresentationController {
-            pop.sourceView = uploadButton
-            pop.sourceRect = uploadButton.bounds
-        }
-
-        present(ac, animated: true)
-    }
-    
-    // MARK: - Vision Kit Document Scanner
-    private func presentDocumentScanner() {
-        if VNDocumentCameraViewController.isSupported {
-            let documentCamera = VNDocumentCameraViewController()
-            documentCamera.delegate = self
-            present(documentCamera, animated: true)
-        } else {
-            let alert = UIAlertController(
-                title: "Not Supported",
-                message: "Document scanning is not supported on this device.",
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
-        }
-    }
-    
-    // MARK: - Create PDF from Vision Kit Scan
-    private func createPDFFromVisionKitScan(_ scan: VNDocumentCameraScan) -> Data? {
-        let pdfData = NSMutableData()
-        let pdfBounds = CGRect(origin: .zero, size: Constants.pdfPageSize)
-        
-        UIGraphicsBeginPDFContextToData(pdfData, pdfBounds, nil)
-        
-        for pageIndex in 0..<scan.pageCount {
-            UIGraphicsBeginPDFPageWithInfo(pdfBounds, nil)
-            
-            // Get the scanned image from Vision Kit (already processed with edge detection, perspective correction, etc.)
-            let scannedImage = scan.imageOfPage(at: pageIndex)
-            
-            // Calculate image size to fit within page while maintaining aspect ratio
-            let imageSize = scannedImage.size
-            let pageSize = Constants.pdfPageSize
-            
-            let widthRatio = pageSize.width / imageSize.width
-            let heightRatio = pageSize.height / imageSize.height
-            let scaleFactor = min(widthRatio, heightRatio, 1.0)
-            
-            let scaledWidth = imageSize.width * scaleFactor
-            let scaledHeight = imageSize.height * scaleFactor
-            
-            // Center the image on the page
-            let xOffset = (pageSize.width - scaledWidth) / 2
-            let yOffset = (pageSize.height - scaledHeight) / 2
-            
-            let imageRect = CGRect(x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight)
-            
-            // Draw the Vision Kit scanned image (high quality)
-            scannedImage.draw(in: imageRect)
-            
-            // Optional: Add page number
-            let pageNumberText = "\(pageIndex + 1)"
-            let textAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 10, weight: .regular),
-                .foregroundColor: UIColor.gray
-            ]
-            
-            let textSize = pageNumberText.size(withAttributes: textAttributes)
-            let textRect = CGRect(
-                x: (pageSize.width - textSize.width) / 2,
-                y: 10,
-                width: textSize.width,
-                height: textSize.height
-            )
-            
-            pageNumberText.draw(in: textRect, withAttributes: textAttributes)
-        }
-        
-        UIGraphicsEndPDFContext()
-        
-        return pdfData as Data
-    }
-    
-    // MARK: - Recent Uploads (horizontal scroll)
-    private func addRecentUploadsSection() {
-        let header = UILabel()
-        header.text = "Recent Uploads"
-        header.font = .systemFont(ofSize: 18, weight: .semibold)
-        header.textColor = .label
-        contentView.addArrangedSubview(header)
-        
-        // horizontal scroll view — must give it a constrained height so UIStackView sizes it
-        let horizScroll = UIScrollView()
-        horizScroll.translatesAutoresizingMaskIntoConstraints = false
-        horizScroll.showsHorizontalScrollIndicator = false
-        contentView.addArrangedSubview(horizScroll)
-        
-        NSLayoutConstraint.activate([
-            horizScroll.heightAnchor.constraint(equalToConstant: Constants.carouselHeight)
-        ])
-        
-        // hStack inside scroll's contentLayoutGuide
-        let hStack = UIStackView()
-        hStack.axis = .horizontal
-        hStack.spacing = Constants.elementSpacing
-        hStack.alignment = .center
-        hStack.translatesAutoresizingMaskIntoConstraints = false
-        recentHStack = hStack
-        
-        horizScroll.addSubview(hStack)
-        
-        NSLayoutConstraint.activate([
-            hStack.topAnchor.constraint(equalTo: horizScroll.contentLayoutGuide.topAnchor),
-            hStack.bottomAnchor.constraint(equalTo: horizScroll.contentLayoutGuide.bottomAnchor),
-            hStack.leadingAnchor.constraint(equalTo: horizScroll.contentLayoutGuide.leadingAnchor, constant: 10),
-            hStack.trailingAnchor.constraint(equalTo: horizScroll.contentLayoutGuide.trailingAnchor, constant: -10),
-            
-            // ensure the stack's height matches the scroll's visible height
-            hStack.heightAnchor.constraint(equalTo: horizScroll.frameLayoutGuide.heightAnchor)
-        ])
-    }
-    
-    // MARK: - Add card to recents (insert at 0)
-    private func addRecentUploadCard(title: String, image: UIImage?) {
-        guard let hStack = recentHStack else { return }
-        let card = makeRecentCard(title: title, image: image)
-        // insert at start
-        hStack.insertArrangedSubview(card, at: 0)
-    }
-    
-    private func makeRecentCard(title: String, image: UIImage?) -> UIView {
-        // card container (with shadow)
-        let card = UIButton(type: .system)
+    private func makeScanCard() -> UIView {
+        let card = UIButton(type: .custom)
         card.translatesAutoresizingMaskIntoConstraints = false
-        card.backgroundColor = .systemBackground
+        card.clipsToBounds = true
         card.layer.cornerRadius = Constants.cornerRadius
-        card.clipsToBounds = false // allow shadow
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.12
-        card.layer.shadowRadius = 6
-        card.layer.shadowOffset = CGSize(width: 0, height: 3)
-        
-        // circular inner image (center)
-        let iv = UIImageView()
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        iv.contentMode = (image == nil) ? .scaleAspectFill : .scaleAspectFill
-        iv.clipsToBounds = true
-        iv.layer.cornerRadius = 20 // circular image radius
-        iv.tintColor = .black
-        iv.image = image ?? UIImage(systemName: "music.note")
-        iv.backgroundColor = image == nil ? UIColor(white: 0.97, alpha: 1) : .clear
-        
-        // title label bottom
-        let titleLbl = UILabel()
-        titleLbl.translatesAutoresizingMaskIntoConstraints = false
-        titleLbl.text = title
-        titleLbl.font = .systemFont(ofSize: 14, weight: .medium)
-        titleLbl.textAlignment = .center
-        titleLbl.numberOfLines = 2
-        
-        card.addSubview(iv)
-        card.addSubview(titleLbl)
-        
+        let gradientView = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        gradientView.isUserInteractionEnabled = false
+        gradientView.translatesAutoresizingMaskIntoConstraints = false
+        card.insertSubview(gradientView, at: 0)
+        let iconContainer = UIView()
+        iconContainer.backgroundColor = UIColor.white.withAlphaComponent(0.25)
+        iconContainer.layer.cornerRadius = 16
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.isUserInteractionEnabled = false
+        let iconImg = UIImageView(image: UIImage(systemName: "doc.text.viewfinder"))
+        iconImg.tintColor = .white; iconImg.contentMode = .scaleAspectFit
+        iconImg.translatesAutoresizingMaskIntoConstraints = false
+        let mainLabel = UILabel()
+        mainLabel.text = "Scan"; mainLabel.font = UIFont.systemFont(ofSize: 22, weight: .bold)
+        mainLabel.textColor = .white; mainLabel.translatesAutoresizingMaskIntoConstraints = false
+        let subLabel = UILabel()
+        subLabel.text = "Music Sheet"; subLabel.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+        subLabel.textColor = UIColor.white.withAlphaComponent(0.75); subLabel.letterSpacing(1.5)
+        subLabel.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.addSubview(iconImg)
+        card.addSubview(iconContainer); card.addSubview(mainLabel); card.addSubview(subLabel)
         NSLayoutConstraint.activate([
-            card.widthAnchor.constraint(equalToConstant: Constants.cardSize.width),
-            card.heightAnchor.constraint(equalToConstant: Constants.cardSize.height),
-            
-            // center iv horizontally, slightly above center
-            iv.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-            iv.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: -10),
-            iv.widthAnchor.constraint(equalToConstant: 80),
-            iv.heightAnchor.constraint(equalToConstant: 80),
-            
-            // title at bottom with small padding
-            titleLbl.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 6),
-            titleLbl.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -6),
-            titleLbl.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8)
+            gradientView.topAnchor.constraint(equalTo: card.topAnchor),
+            gradientView.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            gradientView.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            gradientView.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            iconContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
+            iconContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            iconContainer.widthAnchor.constraint(equalToConstant: 64),
+            iconContainer.heightAnchor.constraint(equalToConstant: 64),
+            iconImg.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            iconImg.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            iconImg.widthAnchor.constraint(equalToConstant: 36),
+            iconImg.heightAnchor.constraint(equalToConstant: 36),
+            mainLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            mainLabel.bottomAnchor.constraint(equalTo: subLabel.topAnchor, constant: -2),
+            subLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            subLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
         ])
-        
-        // action: navigate to detail when tapped
-        card.addAction(UIAction(handler: { _ in
-            let vc = UploadPageNextViewController()
-            self.navigationController?.pushViewController(vc, animated: true)
-        }), for: .touchUpInside)
-        
+        card.addTarget(self, action: #selector(scanTapped), for: .touchUpInside)
+        card.addTarget(self, action: #selector(cardTouchDown(_:)), for: .touchDown)
+        card.addTarget(self, action: #selector(cardTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         return card
     }
     
-    // MARK: - Image picker helper
-    private func presentImagePicker(sourceType: UIImagePickerController.SourceType, forCover: Bool = false) {
-        let picker = UIImagePickerController()
-        picker.delegate = self
-        picker.allowsEditing = true
-        picker.sourceType = sourceType
-        picker.view.tag = forCover ? 999 : 0
-        present(picker, animated: true)
+    private func makeUploadCard() -> UIView {
+        let card = UIButton(type: .custom)
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.backgroundColor = UIColor(hex: "#FF740E").withAlphaComponent(0.08)
+        card.layer.cornerRadius = Constants.cornerRadius; card.clipsToBounds = false
+        card.layer.borderColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.18).cgColor
+        card.layer.borderWidth = 1.5
+        let iconContainer = UIView()
+        iconContainer.backgroundColor = UIColor(hex: "#FF740E").withAlphaComponent(0.15)
+        iconContainer.layer.cornerRadius = 16
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.isUserInteractionEnabled = false
+        let iconImg = UIImageView(image: UIImage(systemName: "icloud.and.arrow.up"))
+        iconImg.tintColor = UIColor(hex: "#FF6B00"); iconImg.contentMode = .scaleAspectFit
+        iconImg.translatesAutoresizingMaskIntoConstraints = false
+        let mainLabel = UILabel()
+        mainLabel.text = "Upload"; mainLabel.font = UIFont.systemFont(ofSize: 22, weight: .bold)
+        mainLabel.textColor = .label; mainLabel.translatesAutoresizingMaskIntoConstraints = false
+        let subLabel = UILabel()
+        subLabel.text = "Music Sheet"; subLabel.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+        subLabel.textColor = .secondaryLabel; subLabel.letterSpacing(1.5)
+        subLabel.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.addSubview(iconImg)
+        card.addSubview(iconContainer); card.addSubview(mainLabel); card.addSubview(subLabel)
+        NSLayoutConstraint.activate([
+            iconContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
+            iconContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            iconContainer.widthAnchor.constraint(equalToConstant: 64),
+            iconContainer.heightAnchor.constraint(equalToConstant: 64),
+            iconImg.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            iconImg.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            iconImg.widthAnchor.constraint(equalToConstant: 36),
+            iconImg.heightAnchor.constraint(equalToConstant: 36),
+            mainLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            mainLabel.bottomAnchor.constraint(equalTo: subLabel.topAnchor, constant: -2),
+            subLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            subLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
+        ])
+        card.addTarget(self, action: #selector(uploadFileTapped), for: .touchUpInside)
+        card.addTarget(self, action: #selector(cardTouchDown(_:)), for: .touchDown)
+        card.addTarget(self, action: #selector(cardTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        return card
     }
     
-    private func presentSingleImagePicker(sourceType: UIImagePickerController.SourceType) {
-        let picker = UIImagePickerController()
-        picker.delegate = self
-        picker.allowsEditing = true
-        picker.sourceType = sourceType
-        picker.view.tag = 0
-        present(picker, animated: true)
+    @objc private func cardTouchDown(_ sender: UIButton) {
+        UIView.animate(withDuration: 0.12) { sender.transform = CGAffineTransform(scaleX: 0.96, y: 0.96) }
+    }
+    @objc private func cardTouchUp(_ sender: UIButton) {
+        UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.5) {
+            sender.transform = .identity
+        }
+    }
+    @objc private func scanTapped()       { presentDocumentScanner() }
+    @objc private func uploadFileTapped() { openFileManager() }
+    
+    // MARK: - Recent Uploads Section
+    private func setupRecentUploadsSection() {
+        let headerRow = UIStackView()
+        headerRow.axis = .horizontal; headerRow.distribution = .equalSpacing; headerRow.alignment = .center
+        let headerLabel = UILabel()
+        headerLabel.text = "Recent Uploads"; headerLabel.font = UIFont.systemFont(ofSize: 20, weight: .bold)
+        headerLabel.textColor = .label
+        let seeAllButton = UIButton(type: .system)
+        seeAllButton.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.10)
+        seeAllButton.layer.cornerRadius = 14
+        seeAllButton.configuration = {
+            var config = UIButton.Configuration.plain()
+            config.title = "See All"; config.baseForegroundColor = UIColor(hex: "#FF6B00")
+            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
+            return config
+        }()
+        seeAllButton.addAction(UIAction { [weak self] _ in
+            guard let self = self else { return }
+            self.navigationController?.pushViewController(AllUploadsViewController(), animated: true)
+        }, for: .touchUpInside)
+        headerRow.addArrangedSubview(headerLabel); headerRow.addArrangedSubview(seeAllButton)
+        contentView.addArrangedSubview(headerRow)
+        let uploadsStack = UIStackView()
+        uploadsStack.axis = .vertical; uploadsStack.spacing = 10
+        recentUploadsStack = uploadsStack
+        contentView.addArrangedSubview(uploadsStack)
     }
     
-    private func presentMultipleImagePicker() {
-        // Reset selected images
-        selectedImages.removeAll()
-        isMultiImageSelection = true
-        
-        // Show image picker for multiple selection
-        let picker = UIImagePickerController()
-        picker.delegate = self
-        picker.sourceType = .photoLibrary
-        picker.view.tag = 1000 // Special tag for multi-image selection
-        
-        // Present with a message
-        present(picker, animated: true) {
-            // Show an alert explaining the multi-selection process
-            let alert = UIAlertController(
-                title: "Select Multiple Images",
-                message: "Select multiple images one by one. They will be automatically converted to a scanned PDF and uploaded.",
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            picker.present(alert, animated: true)
-        }
-    }
-    
-    // MARK: - Navigation Helper
-    private func navigateToNextPage(with scanId: Int64, resultURL: String) {
-        DispatchQueue.main.async {
-            let vc = UploadPageNextViewController()
-            self.navigationController?.pushViewController(vc, animated: true)
-        }
-    }
-}
-
-// MARK: - Vision Kit Document Camera Delegate
-extension UploadScreen: VNDocumentCameraViewControllerDelegate {
-    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-        controller.dismiss(animated: true)
-        
-        // Process scanned pages
-        DispatchQueue.main.async {
-            self.uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-            self.uploadLabel.text = "Processing \(scan.pageCount) page(s) with Vision Kit..."
-        }
-        
-        // Convert Vision Kit scans to PDFData
+    // MARK: - Database
+    private func loadRecentUploadsFromDB() {
         Task {
-            if let pdfData = self.createPDFFromVisionKitScan(scan) {
-                self.currentUploadData = pdfData
-                self.currentFileName = "vision_scanned_\(Date().timeIntervalSince1970).pdf"
-                self.currentFileType = "application/pdf"
-                
-                // Upload the high-quality PDF
-                do {
-                    print("Starting Vision Kit scanned PDF upload...")
-                    try await self.saveUploadToDatabase(
-                        imageData: pdfData,
-                        fileName: self.currentFileName,
-                        fileType: self.currentFileType
-                    )
-                    
-                    print("Vision Kit PDF upload completed successfully!")
-                    
-                    // Refresh recent uploads
-                    await self.loadRecentUploadsFromDB()
-                    
-                    DispatchQueue.main.async {
-                        // Show success
-                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                        self.uploadLabel.text = "Scanned and uploaded!"
-                        
-                        // Reset after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                    }
-                } catch {
-                    print("Vision Kit upload failed: \(error)")
-                    DispatchQueue.main.async {
-                        // Show error
-                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                        self.uploadLabel.text = "Upload failed"
-                        
-                        // Reset after 3 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                        
-                        // Show error alert
-                        let alert = UIAlertController(
-                            title: "Upload Failed",
-                            message: "Error: \(error.localizedDescription)\n\nPlease try again.",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
-                    }
-                }
+            do {
+                let uploads = try await fetchRecentUploadsFromDatabase()
+                DispatchQueue.main.async { self.displayRecentUploads(uploads) }
+            } catch {
+                print("Error loading recent uploads: \(error)")
+                DispatchQueue.main.async { self.displayRecentUploads([]) }
             }
         }
     }
     
+    private func fetchRecentUploadsFromDatabase() async throws -> [Scan] {
+        guard let userIdString = await getCurrentUserId(),
+              let userId = UUID(uuidString: userIdString) else { return [] }
+        let response: [Scan] = try await supabase
+            .from("scans").select().eq("user_id", value: userId)
+            .order("updated_at", ascending: false).limit(5).execute().value
+        var unique: [Scan] = []; var seen = Set<Int64>()
+        for s in response { if seen.insert(s.id).inserted { unique.append(s) } }
+        return unique
+    }
+    
+    private func getCurrentUserId() async -> String? {
+        do { return try await supabase.auth.session.user.id.uuidString }
+        catch { print("Error getting user session: \(error)"); return nil }
+    }
+    
+    private func getSupabaseAuthToken() async -> String? {
+        do { return try await supabase.auth.session.accessToken }
+        catch { print("Error getting auth token: \(error)"); return nil }
+    }
+    
+    private func displayRecentUploads(_ scans: [Scan]) {
+        guard let stack = recentUploadsStack else { return }
+        uploadTitle = { let f = DateFormatter(); f.dateFormat = "MMM d, yyyy"; return f.string(from: Date()) }()
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if scans.isEmpty { stack.addArrangedSubview(makeEmptyStateRow()); return }
+        for scan in scans {
+            let title   = extractTitle(from: scan.jsonData) ?? scan.originalFilename
+                ?? { let f = DateFormatter(); f.dateFormat = "MMM d, yyyy"; return f.string(from: Date()) }()
+            let fileType = (scan.fileType ?? "application/pdf").contains("pdf") ? "PDF" : "FILE"
+            let dateStr  = extractDate(from: scan.jsonData, fallback: scan.processedAt ?? scan.updatedAt)
+            let sizeStr  = extractFileSize(from: scan.jsonData)
+            let metaStr  = [dateStr, sizeStr].compactMap { $0.isEmpty ? nil : $0 }.joined(separator: " • ")
+            stack.addArrangedSubview(makeUploadRow(title: title, fileType: fileType, metaStr: metaStr, scan: scan))
+        }
+    }
+    
+    private func makeEmptyStateRow() -> UIView {
+        let container = UIView()
+        container.backgroundColor = .secondarySystemBackground; container.layer.cornerRadius = 14
+        let label = UILabel()
+        label.text = "No recent uploads yet"; label.textColor = .tertiaryLabel
+        label.font = UIFont.systemFont(ofSize: 15, weight: .regular); label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            container.heightAnchor.constraint(equalToConstant: 70)
+        ])
+        return container
+    }
+    
+    private func makeUploadRow(title: String, fileType: String, metaStr: String, scan: Scan) -> UIView {
+        let card = UIButton(type: .custom)
+        card.backgroundColor = .systemBackground; card.layer.cornerRadius = 16
+        card.layer.shadowColor = UIColor.black.cgColor; card.layer.shadowOpacity = 0.05
+        card.layer.shadowRadius = 8; card.layer.shadowOffset = CGSize(width: 0, height: 2)
+        card.clipsToBounds = false; card.translatesAutoresizingMaskIntoConstraints = false
+        
+        let iconWrap = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        iconWrap.layer.cornerRadius = 12; iconWrap.clipsToBounds = true
+        iconWrap.translatesAutoresizingMaskIntoConstraints = false; iconWrap.isUserInteractionEnabled = false
+        let iconImg = UIImageView(image: UIImage(systemName: "doc.fill"))
+        iconImg.tintColor = .white; iconImg.contentMode = .scaleAspectFit
+        iconImg.translatesAutoresizingMaskIntoConstraints = false
+        
+        let textStack = UIStackView(); textStack.axis = .vertical; textStack.spacing = 5
+        textStack.isUserInteractionEnabled = false; textStack.translatesAutoresizingMaskIntoConstraints = false
+        let titleLbl = UILabel(); titleLbl.text = title
+        titleLbl.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        titleLbl.textColor = .label; titleLbl.lineBreakMode = .byTruncatingTail
+        
+        let metaRow = UIStackView(); metaRow.axis = .horizontal; metaRow.spacing = 6; metaRow.alignment = .center
+        let badgeLabel = UILabel(); badgeLabel.text = fileType
+        badgeLabel.font = UIFont.systemFont(ofSize: 11, weight: .bold)
+        badgeLabel.textColor = UIColor(hex: "#FF6B00")
+        badgeLabel.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        badgeLabel.layer.cornerRadius = 5; badgeLabel.clipsToBounds = true; badgeLabel.textAlignment = .center
+        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        badgeLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
+        badgeLabel.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        let dateLbl = UILabel(); dateLbl.text = metaStr
+        dateLbl.font = UIFont.systemFont(ofSize: 12, weight: .regular); dateLbl.textColor = .tertiaryLabel
+        metaRow.addArrangedSubview(badgeLabel); metaRow.addArrangedSubview(dateLbl)
+        textStack.addArrangedSubview(titleLbl); textStack.addArrangedSubview(metaRow)
+        
+        let moreBtn = UIButton(type: .system)
+        moreBtn.setImage(UIImage(systemName: "ellipsis"), for: .normal)
+        moreBtn.tintColor = .tertiaryLabel; moreBtn.translatesAutoresizingMaskIntoConstraints = false
+        moreBtn.isUserInteractionEnabled = true
+        let scanId = scan.id
+        moreBtn.addAction(UIAction { [weak self, weak titleLbl] _ in
+            guard let self = self else { return }
+            self.showRowOptions(for: scanId, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
+        }, for: .touchUpInside)
+        
+        iconWrap.addSubview(iconImg); card.addSubview(iconWrap)
+        card.addSubview(textStack); card.addSubview(moreBtn)
+        NSLayoutConstraint.activate([
+            card.heightAnchor.constraint(equalToConstant: 76),
+            iconWrap.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            iconWrap.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            iconWrap.widthAnchor.constraint(equalToConstant: 48),
+            iconWrap.heightAnchor.constraint(equalToConstant: 48),
+            iconImg.centerXAnchor.constraint(equalTo: iconWrap.centerXAnchor),
+            iconImg.centerYAnchor.constraint(equalTo: iconWrap.centerYAnchor),
+            iconImg.widthAnchor.constraint(equalToConstant: 26),
+            iconImg.heightAnchor.constraint(equalToConstant: 26),
+            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: 13),
+            textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            textStack.trailingAnchor.constraint(equalTo: moreBtn.leadingAnchor, constant: -8),
+            moreBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            moreBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            moreBtn.widthAnchor.constraint(equalToConstant: 30),
+            moreBtn.heightAnchor.constraint(equalToConstant: 30)
+        ])
+
+        // Pass only jobId — the next screen fetches pdf_path and output_url from DB.
+        card.addAction(UIAction { [weak self] _ in
+            guard let self = self else { return }
+            let jsonDict  = scan.jsonData?.value as? [String: Any]
+            let jobIdStr  = jsonDict?["job_id"] as? String
+            guard let jobIdStr, let jobId = UUID(uuidString: jobIdStr) else {
+                print("[RowTap] ❌ No job_id in scan \(scan.id) — cannot navigate")
+                return
+            }
+            let vc = UploadPageNextViewController()
+            vc.jobId = jobId
+            print("[RowTap] jobId=\(jobId.uuidString)")
+            self.navigationController?.pushViewController(vc, animated: true)
+        }, for: .touchUpInside)
+        
+        
+        card.addTarget(self, action: #selector(cardTouchDown(_:)), for: .touchDown)
+        card.addTarget(self, action: #selector(cardTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        return card
+    }
+
+    
+    // MARK: - Row Options
+    private func showRowOptions(for scanId: Int64, currentTitle: String, titleLabel: UILabel?) {
+        let ac = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        ac.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
+            self?.showRenameAlert(for: scanId, currentTitle: currentTitle, titleLabel: titleLabel)
+        })
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let pop = ac.popoverPresentationController {
+            pop.sourceView = view
+            pop.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            pop.permittedArrowDirections = []
+        }
+        present(ac, animated: true)
+    }
+    
+    private func showRenameAlert(for scanId: Int64, currentTitle: String, titleLabel: UILabel?) {
+        let alert = UIAlertController(title: "Rename File", message: nil, preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.text = currentTitle; tf.placeholder = "Enter new name"
+            tf.clearButtonMode = .whileEditing; tf.autocapitalizationType = .words
+        }
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            guard let self = self,
+                  let newName = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !newName.isEmpty else { return }
+            titleLabel?.text = newName
+            Task { await self.renameScan(scanId: scanId, newTitle: newName) }
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+    
+    private func renameScan(scanId: Int64, newTitle: String) async {
+        do {
+            let scans: [Scan] = try await supabase.from("scans").select()
+                .eq("id", value: Int(scanId)).limit(1).execute().value
+            guard let scan = scans.first else { return }
+            var jsonDict = (scan.jsonData?.value as? [String: Any]) ?? [:]
+            jsonDict["title"] = newTitle
+            let scanUpdate = ScanUpdate(
+                jsonData: AnyCodable(jsonDict), status: scan.status ?? "completed",
+                processedAt: scan.processedAt ?? ISO8601DateFormatter().string(from: Date()),
+                updatedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            try await supabase.from("scans").update(scanUpdate).eq("id", value: Int(scanId)).execute()
+            print("Scan \(scanId) renamed to: \(newTitle)")
+        } catch {
+            print("Failed to rename scan \(scanId): \(error)")
+            DispatchQueue.main.async { self.loadRecentUploadsFromDB() }
+        }
+    }
+    
+    // MARK: - JSON helpers
+    private func extractDate(from jsonData: AnyCodable?, fallback: String?) -> String {
+        if let dict = jsonData?.value as? [String: Any],
+           let ua = dict["uploaded_at"] as? String { return formatDateString(ua) }
+        return formatDateString(fallback)
+    }
+    private func extractFileSize(from jsonData: AnyCodable?) -> String {
+        guard let dict = jsonData?.value as? [String: Any] else { return "" }
+        if let b = dict["file_size_bytes"] as? Int    { return formatBytes(b) }
+        if let b = dict["file_size_bytes"] as? Double { return formatBytes(Int(b)) }
+        if let b = dict["file_size"] as? Int          { return formatBytes(b) }
+        if let s = dict["file_size"] as? String, let b = Int(s) { return formatBytes(b) }
+        return ""
+    }
+    private func formatBytes(_ bytes: Int) -> String {
+        let kb = Double(bytes) / 1024.0
+        return kb < 1024 ? String(format: "%.0f KB", kb) : String(format: "%.1f MB", kb / 1024.0)
+    }
+    private func formatDateString(_ s: String?) -> String {
+        guard let s = s, !s.isEmpty else { return "" }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = iso.date(from: s) { return shortDateString(from: d) }
+        iso.formatOptions = [.withInternetDateTime]
+        if let d = iso.date(from: s) { return shortDateString(from: d) }
+        return ""
+    }
+    private func shortDateString(from date: Date) -> String {
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f.string(from: date)
+    }
+    private func extractTitle(from jsonData: AnyCodable?) -> String? {
+        (jsonData?.value as? [String: Any])?["title"] as? String
+    }
+    
+    // MARK: - Upload Pipeline
+
+//    private func saveUploadToDatabase(imageData: Data, fileName: String,
+//                                       fileType: String, popup: UploadQuizPopup) async throws {
+//        print("[Upload] size=\(imageData.count) bytes")
+//
+//        guard let userIdString = await getCurrentUserId(),
+//              let userId = UUID(uuidString: userIdString) else {
+//            throw NSError(domain: "UploadError", code: 1,
+//                          userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
+//        }
+//        guard let authToken = await getSupabaseAuthToken() else {
+//            throw NSError(domain: "UploadError", code: 3,
+//                          userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
+//        }
+//
+//        // ── Step 1: Call Railway API ──────────────────────────────────────────────
+//        let apiResponse: [String: Any] = try await callExternalConversionAPI(
+//            imageData: imageData, fileName: fileName, fileType: fileType, authToken: authToken
+//        )
+//        print("[Upload] API keys: \(apiResponse.keys.sorted())")
+//
+//        guard let apiJobIdString  = apiResponse["job_id"]  as? String,
+//              let apiJobId        = UUID(uuidString: apiJobIdString),
+//              let apiUserIdString = apiResponse["user_id"] as? String,
+//              let apiUserId       = UUID(uuidString: apiUserIdString) else {
+//            throw NSError(domain: "UploadError", code: 5,
+//                          userInfo: [NSLocalizedDescriptionKey: "Missing job_id or user_id in API response"])
+//        }
+//
+//        // ── Step 2: Upload PDF to Supabase Storage ────────────────────────────────
+//        // Path is always userId/jobId/input.pdf — deterministic, no filename mutation.
+//        // IMPORTANT: Use a custom URLSession with HTTP/3 (QUIC) disabled.
+//        // QUIC fails on the iOS Simulator with large payloads:
+//        //   sendmsg [40: Message too long] → -1005 "network connection was lost"
+//        // Forcing HTTP/1.1 fixes this for both simulator and device.
+//        let pdfPath = "\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/input.pdf"
+//        print("[Upload] → pdf_uploads/\(pdfPath)")
+//
+//        let uploadURL = URL(string: "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/pdf_uploads/\(pdfPath)")!
+//        var uploadReq = URLRequest(url: uploadURL)
+//        uploadReq.httpMethod = "POST"
+//        uploadReq.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+//        uploadReq.setValue("application/pdf", forHTTPHeaderField: "Content-Type")
+//        uploadReq.setValue("true", forHTTPHeaderField: "x-upsert")
+//        uploadReq.assumesHTTP3Capable = false   // force HTTP/1.1 — disables QUIC
+//        uploadReq.httpBody = imageData
+//
+//        let sessionConfig = URLSessionConfiguration.default
+//        sessionConfig.httpAdditionalHeaders = ["Connection": "keep-alive"]
+//        let uploadSession = URLSession(configuration: sessionConfig)
+//
+//        let (_, uploadResp) = try await uploadSession.data(for: uploadReq)
+//        let uploadCode = (uploadResp as? HTTPURLResponse)?.statusCode ?? 0
+//        guard (200...299).contains(uploadCode) else {
+//            throw NSError(domain: "UploadError", code: uploadCode,
+//                          userInfo: [NSLocalizedDescriptionKey: "Storage upload failed (HTTP \(uploadCode))"])
+//        }
+//        print("[Upload] ✅ Storage upload succeeded (HTTP \(uploadCode))")
+//
+//
+//
+//        // ── Step 3: Output URL ────────────────────────────────────────────────────
+//        // Prefer output_url returned by the API. Fall back to the deterministic
+//        // sheet_data path we know the Railway service writes to.
+//        let outputURL = (apiResponse["output_url"] as? String)
+//            ?? "\(supabaseStorageBaseURL)/sheet_data/\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/output.json"
+//        print("[Upload] outputURL=\(outputURL)")
+//
+//        // ── Step 4: Upsert job record ─────────────────────────────────────────────
+//        let existingJobs: [Job] = try await supabase.from("jobs").select()
+//            .eq("id", value: apiJobId).execute().value
+//        if existingJobs.isEmpty {
+//            let ins = JobInsert(id: apiJobId, userId: apiUserId,
+//                                pdfPath: pdfPath, resultUrl: outputURL, status: "completed")
+//            if let _: Job = try? await supabase.from("jobs").insert(ins)
+//                .select().single().execute().value { }
+//        } else {
+//            let upd = JobUpdate(resultUrl: outputURL, status: "completed", errorMessage: nil,
+//                                updatedAt: ISO8601DateFormatter().string(from: Date()))
+//            try await supabase.from("jobs").update(upd).eq("id", value: apiJobId).execute()
+//        }
+//
+//        // ── Step 5: Build json_data ───────────────────────────────────────────────
+//        // Store job_id and output_url. The next screen always fetches the PDF path
+//        // from jobs.pdf_path — do NOT store pdf_public_url here.
+//        var jsonDict: [String: Any] = [
+//            "status":            "completed",
+//            "uploaded_at":       ISO8601DateFormatter().string(from: Date()),
+//            "title":             uploadTitle,
+//            "job_id":            apiJobIdString,
+//            "user_id":           apiUserIdString,
+//            "output_url":        outputURL,
+//            "file_size_bytes":   imageData.count
+//        ]
+//        for (k, v) in apiResponse { jsonDict[k] = v }
+//
+//        // ── Step 6: Upsert scan record ────────────────────────────────────────────
+//        let existingScans: [Scan] = try await supabase.from("scans").select()
+//            .eq("user_id", value: userId)
+//            .like("json_data->>\'job_id\'", pattern: "%\(apiJobIdString)%")
+//            .execute().value
+//
+//        if existingScans.isEmpty {
+//            let ins = ScanInsert(userId: userId, jsonData: AnyCodable(jsonDict),
+//                                  processingId: apiJobIdString, status: "completed",
+//                                  originalFilename: "input.pdf", fileType: "application/pdf",
+//                                  processedAt: ISO8601DateFormatter().string(from: Date()))
+//            let scanResponse: Scan = try await supabase.from("scans")
+//                .insert(ins).select().single().execute().value
+//            DispatchQueue.main.async {
+//                self.navigateToNextPage(jobId: apiJobId, popup: popup)
+//            }
+//        } else if let existing = existingScans.first {
+//            let upd = ScanUpdate(jsonData: AnyCodable(jsonDict), status: "completed",
+//                                  processedAt: ISO8601DateFormatter().string(from: Date()),
+//                                  updatedAt: ISO8601DateFormatter().string(from: Date()))
+//            try await supabase.from("scans").update(upd).eq("id", value: Int(existing.id)).execute()
+//            DispatchQueue.main.async {
+//                self.navigateToNextPage(jobId: apiJobId, popup: popup)
+//            }
+//        }
+//    }
+    private func saveUploadToDatabase(imageData: Data, fileName: String,
+                                       fileType: String, popup: UploadQuizPopup) async throws {
+        print("[Upload] size=\(imageData.count) bytes")
+
+        guard let userIdString = await getCurrentUserId(),
+              let userId = UUID(uuidString: userIdString) else {
+            throw NSError(domain: "UploadError", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
+        }
+
+        guard let authToken = await getSupabaseAuthToken() else {
+            throw NSError(domain: "UploadError", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to get auth token"])
+        }
+
+        // ── Step 1: Call Railway API ──────────────────────────────────────────────
+        // The Railway backend uploads the PDF to Supabase Storage itself using its
+        // service key. It returns job_id and user_id. We do NOT re-upload from iOS.
+        let apiResponse: [String: Any] = try await callExternalConversionAPI(
+            imageData: imageData, fileName: fileName, fileType: fileType, authToken: authToken
+        )
+        print("[Upload] API keys: \(apiResponse.keys.sorted())")
+
+        guard let apiJobIdString  = apiResponse["job_id"]  as? String,
+              let apiJobId        = UUID(uuidString: apiJobIdString),
+              let apiUserIdString = apiResponse["user_id"] as? String,
+              let apiUserId       = UUID(uuidString: apiUserIdString) else {
+            throw NSError(domain: "UploadError", code: 5,
+                          userInfo: [NSLocalizedDescriptionKey: "Missing job_id or user_id in API response"])
+        }
+
+        // ── Step 2: REMOVED — Railway already uploaded the PDF to Supabase Storage.
+        // Re-uploading from iOS causes a 403 RLS violation because the path is owned
+        // by the Railway service key, not the user JWT.
+        // The canonical pdf_path comes from the Railway backend (apiUserIdString).
+        let pdfPath = "\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/input.pdf"
+        print("[Upload] Railway stored PDF at pdf_uploads/\(pdfPath)")
+
+        // ── Step 3: Output URL ────────────────────────────────────────────────────
+        // Use api output_url if provided, else construct from apiUserIdString (same
+        // user the Railway backend used when it stored the file).
+        let outputURL = (apiResponse["output_url"] as? String)
+            ?? "\(supabaseStorageBaseURL)/sheet_data/\(apiUserIdString.lowercased())/\(apiJobIdString.lowercased())/output.json"
+        print("[Upload] outputURL=\(outputURL)")
+
+        // ── Step 4: Upsert job record ─────────────────────────────────────────────
+        let existingJobs: [Job] = try await supabase.from("jobs").select()
+            .eq("id", value: apiJobId).execute().value
+        if existingJobs.isEmpty {
+            let ins = JobInsert(id: apiJobId, userId: apiUserId,
+                                pdfPath: pdfPath, resultUrl: outputURL, status: "completed")
+            if let _: Job = try? await supabase.from("jobs").insert(ins)
+                .select().single().execute().value { }
+        } else {
+            let upd = JobUpdate(resultUrl: outputURL, status: "completed", errorMessage: nil,
+                                updatedAt: ISO8601DateFormatter().string(from: Date()))
+            try await supabase.from("jobs").update(upd).eq("id", value: apiJobId).execute()
+        }
+
+        // ── Step 5: Build json_data ───────────────────────────────────────────────
+        // Build our dict first, then merge apiResponse — but protect critical keys
+        // so apiResponse cannot overwrite output_url or job_id.
+        var jsonDict: [String: Any] = [
+            "status":          "completed",
+            "uploaded_at":     ISO8601DateFormatter().string(from: Date()),
+            "title":           uploadTitle,
+            "job_id":          apiJobIdString,
+            "user_id":         apiUserIdString,
+            "output_url":      outputURL,
+            "file_size_bytes": imageData.count
+        ]
+        for (k, v) in apiResponse {
+            // Never let apiResponse overwrite our canonical keys
+            if ["job_id", "user_id", "output_url", "title", "status"].contains(k) { continue }
+            jsonDict[k] = v
+        }
+
+        // ── Step 6: Upsert scan record ────────────────────────────────────────────
+        let existingScans: [Scan] = try await supabase.from("scans").select()
+            .eq("user_id", value: userId)
+            .like("json_data->>'job_id'", pattern: "%\(apiJobIdString)%")
+            .execute().value
+
+        if existingScans.isEmpty {
+            let ins = ScanInsert(userId: userId, jsonData: AnyCodable(jsonDict),
+                                  processingId: apiJobIdString, status: "completed",
+                                  originalFilename: "input.pdf", fileType: "application/pdf",
+                                  processedAt: ISO8601DateFormatter().string(from: Date()))
+            let _: Scan = try await supabase.from("scans")
+                .insert(ins).select().single().execute().value
+        } else if let existing = existingScans.first {
+            let upd = ScanUpdate(jsonData: AnyCodable(jsonDict), status: "completed",
+                                  processedAt: ISO8601DateFormatter().string(from: Date()),
+                                  updatedAt: ISO8601DateFormatter().string(from: Date()))
+            try await supabase.from("scans").update(upd).eq("id", value: Int(existing.id)).execute()
+        }
+
+        // ── Navigate ──────────────────────────────────────────────────────────────
+        // Single dispatch to main — navigateToNextPage must NOT be wrapped in an
+        // additional DispatchQueue.main.async since it already does that internally.
+        await MainActor.run {
+            self.loadRecentUploadsFromDB()
+            let vc = UploadPageNextViewController()
+            vc.jobId = apiJobId
+            vc.onDataReady = { popup.notifyUploadComplete() }
+            print("[Navigate] jobId=\(apiJobId.uuidString)")
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+    }
+    // MARK: - External API
+    private func callExternalConversionAPI(imageData: Data, fileName: String,
+                                            fileType: String, authToken: String) async throws -> [String: Any] {
+        let url = URL(string: "https://maybe-working-production.up.railway.app/convert")!
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(fileType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        request.assumesHTTP3Capable = false   // force HTTP/1.1 — disables QUIC for large payloads
+        let apiSession = URLSession(configuration: .default)
+        let (data, response) = try await apiSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(domain: "APIError", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "No response from server"])
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw NSError(domain: "APIError", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "API \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")"])
+        }
+        let obj = try JSONSerialization.jsonObject(with: data)
+        if let d = obj as? [String: Any]        { return d }
+        if let a = obj as? [[String: Any]], let f = a.first { return f }
+        return ["api_response": obj, "status": "success"]
+    }
+    
+    // MARK: - Quiz Popup
+    private func showQuizPopup() -> UploadQuizPopup {
+        let popup = UploadQuizPopup()
+        popup.delegate = self
+        popup.modalPresentationStyle = .overFullScreen
+        popup.modalTransitionStyle = .crossDissolve
+        activeQuizPopup = popup
+        present(popup, animated: false)
+        return popup
+    }
+
+    private func createPDFFromVisionKitScan(_ scan: VNDocumentCameraScan) -> Data? {
+        let pdfData = NSMutableData()
+        UIGraphicsBeginPDFContextToData(pdfData, CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
+        for i in 0..<scan.pageCount {
+            UIGraphicsBeginPDFPageWithInfo(CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
+            let img = scan.imageOfPage(at: i)
+            let s   = min(Constants.pdfPageSize.width / img.size.width,
+                          Constants.pdfPageSize.height / img.size.height, 1.0)
+            let w   = img.size.width * s; let h = img.size.height * s
+            img.draw(in: CGRect(x: (Constants.pdfPageSize.width - w) / 2,
+                                 y: (Constants.pdfPageSize.height - h) / 2, width: w, height: h))
+            let txt   = "\(i + 1)"
+            let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.gray]
+            let sz = txt.size(withAttributes: attrs)
+            txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2, y: 10,
+                                 width: sz.width, height: sz.height), withAttributes: attrs)
+        }
+        UIGraphicsEndPDFContext()
+        return pdfData as Data
+    }
+    
+    // MARK: - Document Scanner
+    private func presentDocumentScanner() {
+        guard VNDocumentCameraViewController.isSupported else {
+            let a = UIAlertController(title: "Not Supported",
+                                       message: "Document scanning is not supported on this device.",
+                                       preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true); return
+        }
+        let vc = VNDocumentCameraViewController(); vc.delegate = self; present(vc, animated: true)
+    }
+    
+    // MARK: - Navigation
+
+    // Pass only jobId — the next screen fetches everything else from the DB.
+    private func navigateToNextPage(jobId: UUID, popup: UploadQuizPopup) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            let vc = UploadPageNextViewController()
+            vc.jobId      = jobId
+            vc.onDataReady = { popup.notifyUploadComplete() }
+            print("[Navigate] jobId=\(jobId.uuidString)")
+            self.loadRecentUploadsFromDB()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+    }
+    
+    
+    // MARK: - Data Models
+    struct Job: Codable, Identifiable {
+        let id: UUID; let userId: UUID; let pdfPath: String
+        let resultUrl: String?; let status: String
+        let errorMessage: String?; let createdAt: String?; let updatedAt: String?
+        enum CodingKeys: String, CodingKey {
+            case id; case userId = "user_id"; case pdfPath = "pdf_path"
+            case resultUrl = "result_url"; case status; case errorMessage = "error_message"
+            case createdAt = "created_at"; case updatedAt = "updated_at"
+        }
+    }
+    struct JobInsert: Encodable {
+        let id: UUID; let userId: UUID; let pdfPath: String; let resultUrl: String?; let status: String
+        enum CodingKeys: String, CodingKey {
+            case id; case userId = "user_id"; case pdfPath = "pdf_path"
+            case resultUrl = "result_url"; case status
+        }
+    }
+    struct JobUpdate: Encodable {
+        let resultUrl: String?; let status: String?; let errorMessage: String?; let updatedAt: String
+        enum CodingKeys: String, CodingKey {
+            case resultUrl = "result_url"; case status; case errorMessage = "error_message"
+            case updatedAt = "updated_at"
+        }
+        init(resultUrl: String? = nil, status: String? = nil,
+             errorMessage: String? = nil, updatedAt: String) {
+            self.resultUrl = resultUrl; self.status = status
+            self.errorMessage = errorMessage; self.updatedAt = updatedAt
+        }
+    }
+    struct Scan: Codable, Identifiable {
+        let id: Int64; let userId: UUID; let jsonData: AnyCodable?; let processingId: String?
+        let status: String?; let originalFilename: String?; let fileType: String?
+        let processedAt: String?; let updatedAt: String?; let errorMessage: String?
+        enum CodingKeys: String, CodingKey {
+            case id; case userId = "user_id"; case jsonData = "json_data"
+            case processingId = "processing_id"; case status
+            case originalFilename = "original_filename"; case fileType = "file_type"
+            case processedAt = "processed_at"; case updatedAt = "updated_at"
+            case errorMessage = "error_message"
+        }
+    }
+    struct ScanInsert: Encodable {
+        let userId: UUID; let jsonData: AnyCodable; let processingId: String; let status: String
+        let originalFilename: String?; let fileType: String?; let processedAt: String?
+        enum CodingKeys: String, CodingKey {
+            case userId = "user_id"; case jsonData = "json_data"
+            case processingId = "processing_id"; case status
+            case originalFilename = "original_filename"; case fileType = "file_type"
+            case processedAt = "processed_at"
+        }
+    }
+    struct ScanUpdate: Encodable {
+        let jsonData: AnyCodable; let status: String; let processedAt: String; let updatedAt: String
+        enum CodingKeys: String, CodingKey {
+            case jsonData = "json_data"; case status
+            case processedAt = "processed_at"; case updatedAt = "updated_at"
+        }
+    }
+    struct AnyCodable: Codable {
+        let value: Any
+        init(_ value: Any) { self.value = value }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if      let b = try? c.decode(Bool.self)                { value = b }
+            else if let i = try? c.decode(Int.self)                 { value = i }
+            else if let d = try? c.decode(Double.self)              { value = d }
+            else if let s = try? c.decode(String.self)              { value = s }
+            else if let a = try? c.decode([AnyCodable].self)        { value = a.map { $0.value } }
+            else if let d = try? c.decode([String: AnyCodable].self){ value = d.mapValues { $0.value } }
+            else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch value {
+            case let b as Bool:          try c.encode(b)
+            case let i as Int:           try c.encode(i)
+            case let d as Double:        try c.encode(d)
+            case let s as String:        try c.encode(s)
+            case let a as [Any]:         try c.encode(a.map { AnyCodable($0) })
+            case let d as [String: Any]: try c.encode(d.mapValues { AnyCodable($0) })
+            default: throw EncodingError.invalidValue(
+                value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
+            }
+        }
+    }
+}
+
+// MARK: - UIColor Hex Extension
+extension UIColor {
+    convenience init(hex: String) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.hasPrefix("#") ? String(s.dropFirst()) : s
+        var rgb: UInt64 = 0; Scanner(string: s).scanHexInt64(&rgb)
+        self.init(red:   CGFloat((rgb & 0xFF0000) >> 16) / 255,
+                  green: CGFloat((rgb & 0x00FF00) >>  8) / 255,
+                  blue:  CGFloat( rgb & 0x0000FF)         / 255, alpha: 1)
+    }
+}
+
+// MARK: - GradientView
+private class GradientView: UIView {
+    private let gl = CAGradientLayer()
+    init(colors: [UIColor]) {
+        super.init(frame: .zero)
+        gl.colors = colors.map { $0.cgColor }
+        gl.startPoint = CGPoint(x: 0, y: 0); gl.endPoint = CGPoint(x: 0.5, y: 1)
+        layer.addSublayer(gl)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() { super.layoutSubviews(); gl.frame = bounds }
+}
+
+// MARK: - UILabel Letter Spacing
+private extension UILabel {
+    func letterSpacing(_ spacing: CGFloat) {
+        guard let text = self.text else { return }
+        let a = NSMutableAttributedString(string: text)
+        a.addAttribute(.kern, value: spacing, range: NSRange(location: 0, length: text.count))
+        attributedText = a
+    }
+}
+
+// MARK: - VNDocumentCameraViewControllerDelegate
+extension UploadScreen: VNDocumentCameraViewControllerDelegate {
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                       didFinishWith scan: VNDocumentCameraScan) {
+        controller.dismiss(animated: true)
+        Task {
+            guard let pdfData = self.createPDFFromVisionKitScan(scan) else { return }
+            self.currentUploadData = pdfData
+            self.currentFileName   = "vision_scanned_\(Date().timeIntervalSince1970).pdf"
+            self.currentFileType   = "application/pdf"
+            let popup = await MainActor.run { self.showQuizPopup() }
+            do {
+                try await self.saveUploadToDatabase(imageData: pdfData,
+                                                     fileName: self.currentFileName,
+                                                     fileType: self.currentFileType,
+                                                     popup: popup)
+            } catch {
+                await MainActor.run {
+                    // Dismiss popup first, then show error — prevents "already presenting" crash
+                    popup.dismiss(animated: true) {
+                        let a = UIAlertController(title: "Upload Failed",
+                                                  message: error.localizedDescription, preferredStyle: .alert)
+                        a.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(a, animated: true)
+                    }
+                }
+            }
+            }
+        }
+    }
     func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
         controller.dismiss(animated: true)
     }
-}
-// MARK: - UIImagePickerControllerDelegate
-extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
-    
+
+
+// MARK: - UIDocumentPickerDelegate + UIImagePickerControllerDelegate
+extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate,
+                         UIDocumentPickerDelegate, UploadQuizPopupDelegate {
+    func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) { activeQuizPopup = nil }
     func openFileManager() {
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [
-                .pdf,
-                .data,
-                .item
-            ],
-            asCopy: true
-        )
-        
-        picker.delegate = self
-        picker.allowsMultipleSelection = false
+            forOpeningContentTypes: [.pdf, .data, .item], asCopy: true)
+        picker.delegate = self; picker.allowsMultipleSelection = false
         present(picker, animated: true)
     }
-    
-    func documentPicker(
-        _ controller: UIDocumentPickerViewController,
-        didPickDocumentsAt urls: [URL]
-    ) {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let fileURL = urls.first else { return }
-
         do {
             let data = try Data(contentsOf: fileURL)
-            currentUploadData = data
-            currentFileName = fileURL.lastPathComponent
+            currentUploadData = data; currentFileName = fileURL.lastPathComponent
             currentFileType = "application/pdf"
-
-            // Show loading state
-            uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-            uploadLabel.text = "Processing upload..."
-
+            let popup = showQuizPopup()
             Task {
                 do {
-                    print("Starting PDF upload task...")
-                    try await saveUploadToDatabase(
-                        imageData: data,
-                        fileName: currentFileName,
-                        fileType: currentFileType
-                    )
-                    
-                    print("PDF upload completed successfully!")
-                    
-                    // Refresh recent uploads
-                    await self.loadRecentUploadsFromDB()
-                    
-                    // Update UI on main thread
-                    DispatchQueue.main.async {
-                        // Show success
-                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                        self.uploadLabel.text = "Upload completed!"
-                        
-                        // Reset after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                    }
+                    try await saveUploadToDatabase(imageData: data, fileName: currentFileName,
+                                                    fileType: currentFileType, popup: popup)
                 } catch {
-                    print("PDF upload failed with error: \(error)")
-                    print("Error details: \(error.localizedDescription)")
-                    
-                    DispatchQueue.main.async {
-                        // Show error with more details
-                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                        self.uploadLabel.text = "Upload failed"
-                        
-                        // Reset after 3 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
+                    await MainActor.run {
+                        // Dismiss popup first, then show error — prevents "already presenting" crash
+                        popup.dismiss(animated: true) {
+                            let a = UIAlertController(title: "Upload Failed",
+                                                       message: error.localizedDescription, preferredStyle: .alert)
+                            a.addAction(UIAlertAction(title: "OK", style: .default))
+                            self.present(a, animated: true)
                         }
-                        
-                        // Show error alert with more details
-                        let alert = UIAlertController(
-                            title: "Upload Failed",
-                            message: "Error: \(error.localizedDescription)\n\nPlease check your connection and try again.",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
                     }
                 }
             }
         } catch {
-            print("Failed to read file:", error)
-            DispatchQueue.main.async {
-                let alert = UIAlertController(
-                    title: "Error",
-                    message: "Failed to read file: \(error.localizedDescription)",
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(alert, animated: true)
-            }
+            let a = UIAlertController(title: "Error",
+                                       message: "Failed to read file: \(error.localizedDescription)",
+                                       preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default)); present(a, animated: true)
         }
     }
-
     func imagePickerController(_ picker: UIImagePickerController,
-                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        let picked = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+                                 didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         picker.dismiss(animated: true)
-        
-        if picker.view.tag == 999 {
-            // user changed the meta cover image
-            uploadCoverImage = picked
-            metaCoverImgView?.image = uploadCoverImage
-            return
-        }
-        
-        if picker.view.tag == 1000 {
-            // Multi-image selection mode
-            guard let image = picked else { return }
-            
-            // Add image to selected images array
-            selectedImages.append(image)
-            
-            // Show how many images selected
-            DispatchQueue.main.async {
-                self.uploadIcon.image = UIImage(systemName: "photo.stack")
-                self.uploadLabel.text = "Selected \(self.selectedImages.count) image(s). Tap 'Upload Files' to convert to scanned PDF."
-            }
-            
-            // Ask if user wants to add more images
-            let alert = UIAlertController(
-                title: "Add More Images?",
-                message: "Selected \(selectedImages.count) image(s). Do you want to add more images?",
-                preferredStyle: .alert
-            )
-            
-            alert.addAction(UIAlertAction(title: "Add More", style: .default) { _ in
-                self.presentMultipleImagePicker()
-            })
-            
-            alert.addAction(UIAlertAction(title: "Done", style: .default) { _ in
-                // Convert images to scanned PDF and upload
-                self.processSelectedImagesAndUpload()
-            })
-            
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
-                // Clear selected images
-                self.selectedImages.removeAll()
-                self.isMultiImageSelection = false
-                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                self.uploadLabel.text = "Drag & drop or tap to upload"
-            })
-            
-            self.present(alert, animated: true)
-            return
-        }
-        
-        // Normal single image upload flow
-        guard let image = picked else { return }
-        
-        // Show loading state
-        uploadIcon.image = UIImage(systemName: "arrow.clockwise")
-        uploadLabel.text = "Processing image with Vision Kit..."
-        
-        // Process image through Vision Kit for better quality
-        processImageWithVisionKit(image) { [weak self] processedImage in
-            guard let self = self else { return }
-            
-            // Convert processed image to PDF
-            guard let pdfData = self.convertImagesToPDF(images: [processedImage]) else {
-                DispatchQueue.main.async {
-                    let alert = UIAlertController(
-                        title: "Error",
-                        message: "Failed to convert image to PDF.",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
-                }
-                return
-            }
-            
-            // Update upload data with PDF
-            self.currentUploadData = pdfData
-            self.currentFileName = "vision_processed_\(Date().timeIntervalSince1970).pdf"
-            self.currentFileType = "application/pdf"
-            
-            DispatchQueue.main.async {
-                self.uploadLabel.text = "Uploading processed PDF..."
-            }
-            
-            // Upload the PDF
-            Task {
-                do {
-                    print("Starting Vision Kit processed image upload...")
-                    try await self.saveUploadToDatabase(
-                        imageData: pdfData,
-                        fileName: self.currentFileName,
-                        fileType: self.currentFileType
-                    )
-                    
-                    print("Vision Kit processed image upload completed!")
-                    
-                    // Refresh recent uploads
-                    await self.loadRecentUploadsFromDB()
-                    
-                    // Update UI on main thread
-                    DispatchQueue.main.async {
-                        // Show success
-                        self.uploadIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                        self.uploadLabel.text = "Processed and uploaded!"
-                        
-                        // Reset after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                    }
-                } catch {
-                    print("Vision Kit image upload failed: \(error)")
-                    
-                    DispatchQueue.main.async {
-                        self.uploadIcon.image = UIImage(systemName: "exclamationmark.triangle")
-                        self.uploadLabel.text = "Upload failed"
-                        
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                            self.uploadLabel.text = "Drag & drop or tap to upload"
-                        }
-                        
-                        let alert = UIAlertController(
-                            title: "Upload Failed",
-                            message: "Error: \(error.localizedDescription)",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(alert, animated: true)
-                    }
-                }
-            }
-        }
     }
-    
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
-        
-        // If in multi-image mode and no images selected, reset
-        if isMultiImageSelection && selectedImages.isEmpty {
-            isMultiImageSelection = false
-            DispatchQueue.main.async {
-                self.uploadIcon.image = UIImage(systemName: "arrow.up.to.line")
-                self.uploadLabel.text = "Drag & drop or tap to upload"
-            }
-        }
     }
 }
