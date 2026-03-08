@@ -232,8 +232,8 @@ class UploadQuizPopup: UIViewController {
         cardView.addSubview(subtitleLabel)
         
         // Progress bar
-        progressBar.progressTintColor = UIColor(hex: "#FF6B00")
-        progressBar.trackTintColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.15)
+        progressBar.progressTintColor = UIColor(hex: "#EF9408")
+        progressBar.trackTintColor = UIColor(hex: "#EF9408").withAlphaComponent(0.15)
         progressBar.layer.cornerRadius = 3
         progressBar.clipsToBounds = true
         progressBar.setProgress(0.15, animated: false)
