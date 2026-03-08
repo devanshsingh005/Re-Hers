@@ -49,7 +49,9 @@ class DatabaseClient:
         user_id: str,
         status: str,
         result_url: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        label_status: Optional[str] = None,
+        label_warning: Optional[str] = None
     ) -> Dict[str, Any]:
         """Update job status (only if owned by user)."""
         update_data = {"status": status, "updated_at": "now()"}
@@ -58,6 +60,10 @@ class DatabaseClient:
             update_data["result_url"] = result_url
         if error_message:
             update_data["error_message"] = error_message
+        if label_status:
+            update_data["label_status"] = label_status
+        if label_warning:
+            update_data["label_warning"] = label_warning
         
         response = self.client.table("jobs").update(
             update_data

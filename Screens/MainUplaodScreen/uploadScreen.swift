@@ -758,7 +758,7 @@ class UploadScreen: UIViewController {
     // MARK: - External API
     private func callExternalConversionAPI(imageData: Data, fileName: String,
                                             fileType: String, authToken: String) async throws -> [String: Any] {
-        let url = URL(string: "https://maybe-working-production.up.railway.app/convert")!
+        let url = URL(string: "http://localhost:8000/convert")!
         let boundary = UUID().uuidString
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

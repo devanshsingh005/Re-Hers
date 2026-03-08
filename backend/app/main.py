@@ -3,7 +3,7 @@ import os
 import uuid
 import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.models import job_store, JobStatus
 from app.queue import job_queue
@@ -282,3 +282,89 @@ async def cleanup_orphans(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/sheets/{job_id}/pdf")
+async def get_labeled_pdf(
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Download labeled PDF with note labels overlaid.
+    
+    Args:
+        job_id: Job ID
+        user: Authenticated user (from JWT token)
+    
+    Returns:
+        PDF file bytes with Content-Type: application/pdf
+    """
+    user_id = user["id"]
+    
+    try:
+        # Download labeled PDF (validates user ownership via RLS)
+        pdf_content = await storage_manager.get_labeled_pdf_for_user(user_id, job_id)
+        
+        return FileResponse(
+            content=pdf_content,
+            media_type="application/pdf",
+            filename=f"labeled_{job_id}.pdf"
+        )
+    
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Labeled PDF not found")
+    except Exception as e:
+        logger.error(f"Error fetching labeled PDF {job_id} for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error downloading PDF")
+
+
+@app.get("/sheets/{job_id}/status")
+async def get_job_status_details(
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get detailed job status including labeling status.
+    
+    Args:
+        job_id: Job ID
+        user: Authenticated user (from JWT token)
+    
+    Returns:
+        JSON with status, json_ready, pdf_ready, and any warnings
+    """
+    user_id = user["id"]
+    
+    try:
+        # Query DB scoped by user_id (RLS enforced)
+        job = await db_client.get_job(job_id, user_id)
+        
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        response = {
+            "job_id": job_id,
+            "status": job["status"],
+            "user_id": user_id,
+            "json_ready": job["status"] in ["completed", "completed_with_warning"],
+            "pdf_ready": job.get("label_status") == "success",
+            "created_at": job["created_at"],
+            "updated_at": job["updated_at"]
+        }
+        
+        # Include error/warning messages if present
+        if job.get("error_message"):
+            response["error"] = job["error_message"]
+        
+        if job.get("label_warning"):
+            response["warning"] = job["label_warning"]
+        
+        if job.get("label_status"):
+            response["label_status"] = job["label_status"]
+        
+        return response
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching job status {job_id} for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching job status")

@@ -7,3 +7,4 @@ supabase==2.0.0
 redis==5.0.1
 pydantic==2.5.0
 pyjwt==2.8.0
+pymupdf==1.23.8
