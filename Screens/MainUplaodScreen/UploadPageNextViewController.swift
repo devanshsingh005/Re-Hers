@@ -686,7 +686,7 @@ final class UploadPageNextViewController: UIViewController {
         guard let data = try? JSONSerialization.data(withJSONObject: json) else {
             showAnimationError("Failed to prepare data."); return
         }
-        let vc = PianoAnimationViewController()
+        let vc = AnimationViewController()
         vc.sheetMusicData = data
         navigationController?.pushViewController(vc, animated: true)
     }
@@ -794,6 +794,7 @@ final class UploadPageNextViewController: UIViewController {
         infoStackView.axis         = .horizontal
         infoStackView.spacing      = 10
         infoStackView.distribution = .fillEqually
+        infoStackView.alignment    = .center   // ← ADD THIS LINE
         infoStackView.translatesAutoresizingMaskIntoConstraints = false
         for lbl in [keyLabel, timeLabel, chordLabel] {
             lbl.font              = .systemFont(ofSize: 12, weight: .medium)

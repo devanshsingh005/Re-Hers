@@ -2,8 +2,6 @@
 //  SongDetailsPage.swift
 //  Re-Hearse_v1
 //
-//  Created by Devvvv on 24/11/25.
-//
 
 import UIKit
 import Foundation
@@ -64,10 +62,8 @@ class SongDetailViewController: UIViewController {
     // MARK: - Apply Passed Data
     private func applyPassedData() {
         let img = passedImage ?? UIImage(named: "ride_home")
-
         albumArtBackgroundView.image = img
         albumArtCardView.image = img
-        
         songTitleLabel.text = passedSongTitle ?? "Unknown Song"
         artistLabel.text = passedArtist ?? "Unknown Artist"
     }
@@ -90,23 +86,18 @@ class SongDetailViewController: UIViewController {
         navBar.isWelcomeTextHidden = true
         navBar.setTitle("")
         
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
         navBar.chordAction = { [weak self] in
             let vc = ChordRecognitionViewController()
             self?.navigationController?.pushViewController(vc, animated: true)
         }
         navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = UserProfileViewController()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
-
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
+            let vc = UserProfileViewController()
+            self?.navigationController?.pushViewController(vc, animated: true)
+        }
+        navBar.backAction = { [weak self] in
+            self?.navigationController?.popViewController(animated: true)
+        }
+        
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
@@ -137,10 +128,8 @@ class SongDetailViewController: UIViewController {
         ])
     }
     
-    
     // MARK: - UI Content Setup
     private func setupContent() {
-        
         albumArtBackgroundContainer.layer.cornerRadius = 24
         albumArtBackgroundContainer.clipsToBounds = true
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -172,8 +161,6 @@ class SongDetailViewController: UIViewController {
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
         
-        
-        // MARK: - Updated Buttons
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.layer.cornerRadius = 12
         playAlongButton.setTitleColor(.white, for: .normal)
@@ -192,16 +179,13 @@ class SongDetailViewController: UIViewController {
         animationButton.layer.shadowRadius = 6
         animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
         
-        
-        // MARK: - Increased spacing between buttons
         buttonStack.axis = .horizontal
-        buttonStack.spacing = 26        // ⬅️ Increased spacing here
+        buttonStack.spacing = 26
         buttonStack.distribution = .fillEqually
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
         buttonStack.addArrangedSubview(playAlongButton)
         buttonStack.addArrangedSubview(animationButton)
         contentView.addSubview(buttonStack)
-        
         
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(sheetContainer)
@@ -227,11 +211,9 @@ class SongDetailViewController: UIViewController {
         contentView.addSubview(bottomSpacer)
     }
     
-    
     // MARK: - Constraints
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            
             albumArtBackgroundContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
             albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -288,60 +270,75 @@ class SongDetailViewController: UIViewController {
         ])
     }
     
-    
     // MARK: - Actions
     private func setupActions() {
-        playAlongButton.addTarget(self, action: #selector(tabPlayAlong), for: .touchUpInside)
+        playAlongButton.addTarget(self, action: #selector(openPlayAlongVC), for: .touchUpInside)
         animationButton.addTarget(self, action: #selector(openPianoAnimationVC), for: .touchUpInside)
         bookmarkButton.addTarget(self, action: #selector(bookmarkTapped), for: .touchUpInside)
         pageNextButton.addTarget(self, action: #selector(nextPageTapped), for: .touchUpInside)
     }
 
-    @objc func openPianoAnimationVC() {
-        let vc = PianoAnimationViewController()
-        vc.modalPresentationStyle = .fullScreen
-        present(vc, animated: true)
+    // MARK: - Navigation Actions
+
+    @objc private func openPlayAlongVC() {
+        // Update button visual state
+        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
+        playAlongButton.setTitleColor(.white, for: .normal)
+        animationButton.backgroundColor = .systemGray5
+        animationButton.setTitleColor(.darkGray, for: .normal)
+
+        let vc = PlayAlongViewController()
+        navigationController?.pushViewController(vc, animated: true)
     }
-    
-    
+
+    @objc private func openPianoAnimationVC() {
+        // Update button visual state
+        animationButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
+        animationButton.setTitleColor(.white, for: .normal)
+        playAlongButton.backgroundColor = .systemGray5
+        playAlongButton.setTitleColor(.darkGray, for: .normal)
+
+        let vc = AnimationViewController()
+        vc.songTitle = passedSongTitle ?? "Animation"
+
+        // Fix 1: Wrap in a landscape-forcing navigation controller so rotation works
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
+
     // MARK: - Page Flip
     private func updatePage() {
         pageLabel.text = "\(currentPage)/\(totalPages)"
         sheetImageView.image = UIImage(named: "sheet\(currentPage).png")
     }
-    
+
     @objc private func nextPageTapped() {
         currentPage += 1
         if currentPage > totalPages { currentPage = 1 }
-        
+
         let transition = CATransition()
         transition.type = .push
         transition.subtype = .fromRight
         transition.duration = 0.3
         sheetImageView.layer.add(transition, forKey: "flip")
-        
+
         updatePage()
     }
-    
-    
-    // MARK: - Button States
-    @objc private func tabPlayAlong() {
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        playAlongButton.setTitleColor(.white, for: .normal)
-        animationButton.backgroundColor = .systemGray5
-        animationButton.setTitleColor(.darkGray, for: .normal)
-    }
-    
-    @objc private func tabAnimation() {
-        animationButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        animationButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = .systemGray5
-        playAlongButton.setTitleColor(.darkGray, for: .normal)
-    }
-    
+
     @objc private func bookmarkTapped() {
         let bookmarked = bookmarkButton.tintColor == .systemYellow
         bookmarkButton.tintColor = bookmarked ? .systemGray : .systemYellow
         bookmarkButton.setImage(UIImage(systemName: bookmarked ? "bookmark" : "bookmark.fill"), for: .normal)
     }
 }
+
+// MARK: - LandscapeNavigationController
+// Forces landscape for AnimationViewController presentation.
+final class LandscapeNavigationController: UINavigationController {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
+    override var shouldAutorotate: Bool { true }
+    override var prefersStatusBarHidden: Bool { topViewController?.prefersStatusBarHidden ?? true }
+}
+

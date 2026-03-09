@@ -70,8 +70,7 @@ extension HomeViewController {
 
     
     // MARK: - Navigation to Piano Page
-    @objc func openPianoPage() {
-        let vc = PianoAnimationViewController()
+    @objc func openPianoPage() {let vc = AnimationViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
     @objc func playAlongTapped() {

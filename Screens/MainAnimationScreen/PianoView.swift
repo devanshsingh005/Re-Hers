@@ -1,86 +1,122 @@
 import UIKit
 
 // MARK: - Enums
-
-enum HandType { case left, right }
-
-enum KeyboardMode {
-    case animation
-    case playAlong
-}
+enum HandType   { case left, right }
+enum KeyboardMode { case animation, playAlong }
 
 // MARK: - Piano Key View
-
 final class AnimatedPianoKeyView: UIView {
 
     enum KeyType { case white, black }
 
-    let keyType: KeyType
+    let keyType:  KeyType
     let midiNote: UInt8
     let noteName: String
+    var currentHand: HandType? = nil
 
     private var isPressed = false
     var onTouchStateChanged: ((UInt8, Bool) -> Void)?
 
+    private let noteLabel = UILabel()
+
     init(keyType: KeyType, midiNote: UInt8, noteName: String) {
-        self.keyType = keyType
+        self.keyType  = keyType
         self.midiNote = midiNote
         self.noteName = noteName
         super.init(frame: .zero)
-        setupView()
-        isUserInteractionEnabled = true
-        isMultipleTouchEnabled = true
+        setupAppearance()
+        setupKeyLabel()
     }
+    required init?(coder: NSCoder) { fatalError() }
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) not supported")
-    }
-
-    private func setupView() {
-        layer.cornerRadius = 4
-
-        switch keyType {
-        case .white:
-            backgroundColor = UIColor(white: 0.98, alpha: 1)
-            layer.borderWidth = 0.5
-            layer.borderColor = UIColor(white: 0.8, alpha: 1).cgColor
-        case .black:
-            backgroundColor = UIColor(white: 0.1, alpha: 1)
+    private func setupAppearance() {
+        layer.cornerRadius = keyType == .white ? 6 : 4
+        clipsToBounds = false
+        resetAppearance()
+        // 3D depth shadow for keys
+        if keyType == .white {
+            layer.shadowColor = UIColor.black.cgColor
+            layer.shadowOpacity = 0.18
+            layer.shadowRadius = 2.5
+            layer.shadowOffset = CGSize(width: 0, height: 2)
+        } else {
+            layer.shadowColor = UIColor.black.cgColor
+            layer.shadowOpacity = 0.45
+            layer.shadowRadius = 3
+            layer.shadowOffset = CGSize(width: 0, height: 3)
         }
     }
 
-    // MARK: - Animations
+    // MARK: - Plain Text Key Label
+    private func setupKeyLabel() {
+        noteLabel.text = noteName
+        noteLabel.font = .systemFont(ofSize: keyType == .white ? 7 : 5.5, weight: .bold)
+        noteLabel.textColor = keyType == .white ? UIColor.darkGray : UIColor.lightGray
+        noteLabel.textAlignment = .center
+        noteLabel.isUserInteractionEnabled = false
+        noteLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(noteLabel)
 
-    func animatePress(hand: HandType? = nil) {
-        UIView.animate(withDuration: 0.1) {
-            self.transform = CGAffineTransform(scaleX: 0.97, y: 0.97)
-            self.alpha = 0.7
+        if keyType == .white {
+            NSLayoutConstraint.activate([
+                noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            ])
+        }
+    }
+
+    // MARK: - Colours
+    // LEFT hand = blue, RIGHT hand = red
+
+    static let leftColor  = UIColor.systemBlue   // blue for left hand
+    static let rightColor = UIColor.systemRed     // red for right hand
+
+    func animatePress(hand: HandType) {
+        currentHand = hand
+        let color = hand == .left ? AnimatedPianoKeyView.leftColor
+                                  : AnimatedPianoKeyView.rightColor
+        UIView.animate(withDuration: 0.08) {
+            // Use softer opacity for a calmer, silent feel
+            self.backgroundColor = color.withAlphaComponent(self.keyType == .white ? 0.35 : 0.55)
+            self.transform = CGAffineTransform(scaleX: 0.97, y: 0.98)
         }
     }
 
     func animateRelease() {
-        UIView.animate(withDuration: 0.15) {
+        currentHand = nil
+        UIView.animate(withDuration: 0.18) {
+            self.resetAppearance()
             self.transform = .identity
-            self.alpha = 1.0
         }
     }
 
-    // MARK: - Touch Handling
+    func resetAppearance() {
+        switch keyType {
+        case .white:
+            backgroundColor       = UIColor(white: 0.97, alpha: 1)
+            layer.borderWidth     = 0.5
+            layer.borderColor     = UIColor(white: 0.82, alpha: 1).cgColor
+        case .black:
+            backgroundColor       = UIColor(white: 0.08, alpha: 1)
+            layer.borderWidth     = 0.5
+            layer.borderColor     = UIColor(white: 0.22, alpha: 1).cgColor
+        }
+    }
 
+    // MARK: - Touch
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard !isPressed else { return }
         isPressed = true
-        animatePress()
+        animatePress(hand: .right)
         onTouchStateChanged?(midiNote, true)
     }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        release()
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        release()
-    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { release() }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { release() }
 
     private func release() {
         guard isPressed else { return }
@@ -91,58 +127,44 @@ final class AnimatedPianoKeyView: UIView {
 }
 
 // MARK: - Keyboard View
-
 final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
 
-    var mode: KeyboardMode = .animation {
-        didSet { updateInteractionMode() }
-    }
+    var mode: KeyboardMode = .animation { didSet { updateInteraction() } }
+    var onKeyPressed: ((String, Bool) -> Void)?
 
     private var whiteKeys: [AnimatedPianoKeyView] = []
     private var blackKeys: [AnimatedPianoKeyView] = []
-    private let scrollView = UIScrollView()
+    private let scrollView  = UIScrollView()
     private let contentView = UIView()
-    
-    // Key size controls
-    private var keySizeMultiplier: CGFloat = 1.0
-    private let minKeySizeMultiplier: CGFloat = 0.5
-    private let maxKeySizeMultiplier: CGFloat = 2.0
-    private let keySizeStep: CGFloat = 0.1
-    
-    // Constants for layout
-    private let standardWhiteKeyWidth: CGFloat = 40
-    private let standardBlackKeyWidth: CGFloat = 24
-    private let blackKeyHeightRatio: CGFloat = 0.65
-    
-    var onKeyPressed: ((String, Bool) -> Void)?
+
+    private var whiteKeyW: CGFloat {
+        guard !whiteKeys.isEmpty, bounds.width > 0 else { return 38 }
+        return bounds.width / CGFloat(whiteKeys.count)
+    }
+    private var blackKeyW: CGFloat { whiteKeyW * 0.58 }
+    private let blackHRatio: CGFloat = 0.62
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        setupScrollView()
-        setupKeyboard()
-        updateInteractionMode()
+        buildScrollView()
+        buildKeys()
+        updateInteraction()
         isMultipleTouchEnabled = true
     }
+    required init?(coder: NSCoder) { fatalError() }
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) not supported")
-    }
-
-    // MARK: - Scroll View Setup
-
-    private func setupScrollView() {
-        scrollView.delegate = self
-        scrollView.showsHorizontalScrollIndicator = true
-        scrollView.showsVerticalScrollIndicator = false
+    // MARK: - Scroll View
+    private func buildScrollView() {
+        scrollView.showsHorizontalScrollIndicator = false
         scrollView.bounces = true
         scrollView.alwaysBounceHorizontal = true
-        scrollView.isDirectionalLockEnabled = true
+        scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scrollView)
-        
+
         contentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
-        
+
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -151,253 +173,152 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
         ])
     }
 
-    // MARK: - Keyboard Setup (A0 → C8)
+    // MARK: - Build keys (A0=21 … C8=108)
+    private func buildKeys() {
+        let whiteOffsets = Set([0,2,4,5,7,9,11])
+        let blackOffsets = Set([1,3,6,8,10])
 
-    private func setupKeyboard() {
-        let whiteMIDIs = generateWhiteKeys()
-        let blackMIDIs = generateBlackKeys()
-
-        for midi in whiteMIDIs {
-            let key = AnimatedPianoKeyView(
-                keyType: .white,
-                midiNote: midi,
-                noteName: midiToName(midi)
-            )
-            configureKey(key)
-            whiteKeys.append(key)
-            contentView.addSubview(key)
-        }
-
-        for midi in blackMIDIs {
-            let key = AnimatedPianoKeyView(
-                keyType: .black,
-                midiNote: midi,
-                noteName: midiToName(midi)
-            )
-            configureKey(key)
-            blackKeys.append(key)
-            contentView.addSubview(key)
-        }
-    }
-
-    private func configureKey(_ key: AnimatedPianoKeyView) {
-        key.onTouchStateChanged = { [weak self] midi, pressed in
-            guard let self else { return }
-
-            self.onKeyPressed?(key.noteName, pressed)
-
-            guard self.mode == .playAlong else { return }
-
-            if pressed {
-                AudioEngineManager.shared.startNote(midi: midi)
-            } else {
-                AudioEngineManager.shared.stopNote(midi: midi)
+        for midi in 21...108 {
+            let pc = midi % 12
+            let name = midiToName(UInt8(midi))
+            if whiteOffsets.contains(pc) {
+                let k = AnimatedPianoKeyView(keyType: .white, midiNote: UInt8(midi), noteName: name)
+                wire(k); whiteKeys.append(k); contentView.addSubview(k)
+            } else if blackOffsets.contains(pc) {
+                let k = AnimatedPianoKeyView(keyType: .black, midiNote: UInt8(midi), noteName: name)
+                wire(k); blackKeys.append(k); contentView.addSubview(k)
             }
         }
     }
 
-    private func updateInteractionMode() {
-        let enabled = (mode == .playAlong)
+    private func wire(_ key: AnimatedPianoKeyView) {
+        key.onTouchStateChanged = { [weak self, weak key] midi, pressed in
+            guard let self, let key else { return }
+            self.onKeyPressed?(key.noteName, pressed)
+            guard self.mode == .playAlong else { return }
+            if pressed { AudioEngineManager.shared.startNote(midi: midi) }
+            else       { AudioEngineManager.shared.stopNote(midi: midi) }
+        }
+    }
+
+    private func updateInteraction() {
+        let enabled = mode == .playAlong
         (whiteKeys + blackKeys).forEach { $0.isUserInteractionEnabled = enabled }
     }
 
     // MARK: - Layout
-
     override func layoutSubviews() {
         super.layoutSubviews()
-        
-        // Calculate total width needed for all white keys
-        let whiteKeyWidth = standardWhiteKeyWidth * keySizeMultiplier
-        let blackKeyWidth = standardBlackKeyWidth * keySizeMultiplier
-        let totalWhiteKeysWidth = whiteKeyWidth * CGFloat(whiteKeys.count)
-        
-        // Update content view size
-        contentView.frame = CGRect(x: 0, y: 0,
-                                  width: totalWhiteKeysWidth,
-                                  height: bounds.height)
-        scrollView.contentSize = CGSize(width: totalWhiteKeysWidth, height: bounds.height)
-        
-        // Position white keys
+        let totalW = whiteKeyW * CGFloat(whiteKeys.count)
+        contentView.frame        = CGRect(x: 0, y: 0, width: totalW, height: bounds.height)
+        scrollView.contentSize   = CGSize(width: totalW, height: bounds.height)
+
+        // White keys — fill full height (extended +20 to hide bottom corner radius)
         for (i, key) in whiteKeys.enumerated() {
-            key.frame = CGRect(
-                x: CGFloat(i) * whiteKeyWidth,
-                y: 0,
-                width: whiteKeyWidth,
-                height: bounds.height
-            )
+            key.frame = CGRect(x: CGFloat(i) * whiteKeyW, y: 0,
+                               width: whiteKeyW - 0.5, height: bounds.height + 20)
         }
 
-        // Position black keys
-        let blackKeyHeight = bounds.height * blackKeyHeightRatio
-        
+        // Black keys — centred on the boundary between white keys
+        let blackH = bounds.height * blackHRatio
         for black in blackKeys {
-            if let index = indexForBlackKey(black.midiNote) {
-                let whiteKey = whiteKeys[index]
-                black.frame = CGRect(
-                    x: whiteKey.frame.maxX - blackKeyWidth / 2,
-                    y: 0,
-                    width: blackKeyWidth,
-                    height: blackKeyHeight
-                )
+            if let idx = whiteIndexBeforeBlack(black.midiNote) {
+                let wx = CGFloat(idx) * whiteKeyW
+                black.frame = CGRect(x: wx + whiteKeyW - blackKeyW/2, y: 0,
+                                     width: blackKeyW, height: blackH)
                 contentView.bringSubviewToFront(black)
             }
         }
-        
-        // Ensure content view constraints are updated
-        contentView.frame.size = CGSize(width: totalWhiteKeysWidth, height: bounds.height)
     }
 
-    // MARK: - Key Size Controls
-    
-    func increaseKeySize() {
-        guard keySizeMultiplier < maxKeySizeMultiplier else { return }
-        keySizeMultiplier += keySizeStep
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
-    
-    func decreaseKeySize() {
-        guard keySizeMultiplier > minKeySizeMultiplier else { return }
-        keySizeMultiplier -= keySizeStep
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
-    
-    func resetKeySize() {
-        keySizeMultiplier = 1.0
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
-    
-    var currentKeySizePercentage: Int {
-        return Int((keySizeMultiplier - minKeySizeMultiplier) / (maxKeySizeMultiplier - minKeySizeMultiplier) * 100)
-    }
-    
-    func scrollToNote(_ noteName: String) {
-        guard let key = findKey(named: noteName) else { return }
-        
-        let scrollPosition = key.frame.origin.x - (scrollView.bounds.width / 2) + (key.frame.width / 2)
-        let minOffset: CGFloat = 0
-        let maxOffset = scrollView.contentSize.width - scrollView.bounds.width
-        
-        let clampedOffset = max(minOffset, min(scrollPosition, maxOffset))
-        
-        UIView.animate(withDuration: 0.3) {
-            self.scrollView.contentOffset = CGPoint(x: clampedOffset, y: 0)
-        }
-    }
+    // MARK: - Public API
 
-    // Resets all key visuals to their default state
-    func resetAllKeys() {
-        let allKeys = whiteKeys + blackKeys
-        for key in allKeys {
-            // Reset transform and alpha
-            key.transform = .identity
-            key.alpha = 1.0
-            
-            // Reset background color depending on key type
-            switch key.keyType {
-            case .white:
-                key.backgroundColor = UIColor(white: 0.98, alpha: 1)
-                key.layer.borderWidth = 0.5
-                key.layer.borderColor = UIColor(white: 0.8, alpha: 1).cgColor
-            case .black:
-                key.backgroundColor = UIColor(white: 0.1, alpha: 1)
-            }
-        }
-    }
-
-    // MARK: - Public API (USED BY CONTROLLER)
-
-    /// ✅ FINAL API used by PianoAnimationViewController
+    /// Highlight keys — left=blue, right=cyan-blue (all look blue as in Image 2)
     func playChord(leftHand: [String], rightHand: [String]) {
         resetAllKeys()
+        for n in leftHand  { findKey(n)?.animatePress(hand: .left) }
+        for n in rightHand { findKey(n)?.animatePress(hand: .right) }
+    }
 
-        for note in leftHand {
-            findKey(named: note)?.animatePress(hand: .left)
-        }
+    func resetAllKeys() {
+        (whiteKeys + blackKeys).forEach { $0.animateRelease() }
+    }
 
-        for note in rightHand {
-            findKey(named: note)?.animatePress(hand: .right)
+    func scrollToNote(_ name: String) {
+        guard let key = findKey(name) else { return }
+        let mid     = key.frame.midX
+        let target  = mid - scrollView.bounds.width / 2
+        let maxOff  = scrollView.contentSize.width - scrollView.bounds.width
+        UIView.animate(withDuration: 0.3) {
+            self.scrollView.contentOffset = CGPoint(x: max(0, min(target, maxOff)), y: 0)
         }
+    }
+
+    /// Snap instantly to centre on a note — call after layout for initial position
+    func centerOn(note: String) {
+        layoutIfNeeded()
+        guard let key = findKey(note) else { return }
+        let mid    = key.frame.midX
+        let target = mid - scrollView.bounds.width / 2
+        let maxOff = scrollView.contentSize.width - scrollView.bounds.width
+        scrollView.setContentOffset(CGPoint(x: max(0, min(target, maxOff)), y: 0), animated: false)
+    }
+
+    func findKey(_ name: String) -> AnimatedPianoKeyView? {
+        // normalise: "F#4" and "Gb4" both should match correctly
+        let norm = normalise(name)
+        return (whiteKeys + blackKeys).first { normalise($0.noteName) == norm }
     }
 
     // MARK: - Helpers
-
-    func findKey(named name: String) -> AnimatedPianoKeyView? {
-        (whiteKeys + blackKeys).first { $0.noteName == name }
-    }
-
-    // MARK: - MIDI Helpers
-
-    private func generateWhiteKeys() -> [UInt8] {
-        let whiteOffsets = [0, 2, 4, 5, 7, 9, 11]
-        return (21...108).compactMap {
-            whiteOffsets.contains(Int($0 % 12)) ? UInt8($0) : nil
+    private func normalise(_ n: String) -> String {
+        // Convert flat to sharp enharmonic equivalent for comparison
+        let flatMap: [String:String] = ["Db":"C#","Eb":"D#","Gb":"F#","Ab":"G#","Bb":"A#"]
+        var s = n
+        for (flat, sharp) in flatMap where s.hasPrefix(flat) {
+            s = sharp + s.dropFirst(flat.count); break
         }
-    }
-
-    private func generateBlackKeys() -> [UInt8] {
-        let blackOffsets = [1, 3, 6, 8, 10]
-        return (21...108).compactMap {
-            blackOffsets.contains(Int($0 % 12)) ? UInt8($0) : nil
-        }
-    }
-
-    private func indexForBlackKey(_ midi: UInt8) -> Int? {
-        let whiteOffsets = [0, 2, 4, 5, 7, 9, 11]
-        var count = 0
-
-        for m in 21..<Int(midi) {
-            if whiteOffsets.contains(m % 12) {
-                count += 1
-            }
-        }
-        return count
+        return s
     }
 
     private func midiToName(_ midi: UInt8) -> String {
-        let names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
-        let note = names[Int(midi) % 12]
-        let octave = Int(midi) / 12 - 1
-        return "\(note)\(octave)"
+        let n = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
+        return "\(n[Int(midi)%12])\(Int(midi)/12-1)"
+    }
+
+    private func whiteIndexBeforeBlack(_ midi: UInt8) -> Int? {
+        let whitePC = [0,2,4,5,7,9,11]
+        var idx = 0
+        for m in 21..<Int(midi) {
+            if whitePC.contains(m % 12) { idx += 1 }
+        }
+        return idx < whiteKeys.count ? idx : nil
     }
 }
 
-// MARK: - Chord Display View
-
+// MARK: - Chord Display View (kept for play-along mode)
 final class RealTimeChordDisplayView: UIView {
-
     private let label: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 26, weight: .bold)
-        l.textColor = .white
-        l.textAlignment = .center
+        l.font = .systemFont(ofSize: 24, weight: .bold)
+        l.textColor = .white; l.textAlignment = .center
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-
         backgroundColor = UIColor(white: 0.06, alpha: 0.95)
-        layer.cornerRadius = 16
-        clipsToBounds = true
-
+        layer.cornerRadius = 14; clipsToBounds = true
         addSubview(label)
-
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             label.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
-
         label.text = "🎹 Ready"
     }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) not supported")
-    }
+    required init?(coder: NSCoder) { fatalError() }
 
     func setSingleChord(_ text: String) {
         UIView.transition(with: label, duration: 0.2, options: .transitionCrossDissolve) {
@@ -405,4 +326,3 @@ final class RealTimeChordDisplayView: UIView {
         }
     }
 }
-

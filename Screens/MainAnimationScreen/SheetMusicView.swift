@@ -10,10 +10,10 @@ import UIKit
 final class SheetMusicView: UIView {
 
     // MARK: Constants
-    private let lineSpacing: CGFloat = 11   // between staff lines
+    private let lineSpacing: CGFloat = 13   // between staff lines (wider for landscape)
     private let noteRadius:  CGFloat = 4.5
-    private let clefW:       CGFloat = 58   // column for brace + clef symbols
-    private let msrW:        CGFloat = 145  // pixels per measure on canvas
+    private let clefW:       CGFloat = 90   // column for brace + clef symbols (increased)
+    private let msrW:        CGFloat = 260  // pixels per measure on canvas
 
     private var staffH: CGFloat { 4 * lineSpacing }   // 5 lines = 4 gaps
 
@@ -24,6 +24,10 @@ final class SheetMusicView: UIView {
     private var score:          Score?
     private var lastBounds      = CGRect.zero
     private var renderPending   = false
+    
+    // For perfect tick-based synchronization
+    private var totalTicks:       Int = 1000
+    private var maxPixelsPerTick: CGFloat = 1.0
 
     // MARK: Permanent layers / views (added once, never removed)
     private let contentLayer = CALayer()   // all note/staff drawing lives here
@@ -40,26 +44,33 @@ final class SheetMusicView: UIView {
         setup()
         loadJSON()
     }
+
+    func loadData(_ data: Data) {
+        parseJSON(data)
+        setNeedsLayout()
+    }
     required init?(coder: NSCoder) { fatalError() }
 
     func setChordCount(_ n: Int) {}
 
     // MARK: One-time setup
     private func setup() {
-        backgroundColor = .white
+        backgroundColor = UIColor(white: 0.97, alpha: 1)
         layer.addSublayer(contentLayer)
 
-        playhead.backgroundColor    = UIColor.systemBlue.withAlphaComponent(0.18)
-        playhead.layer.cornerRadius = 3
+        // Fix: thin solid blue playhead line (not wide band)
+        playhead.backgroundColor    = UIColor.systemBlue
+        playhead.layer.cornerRadius = 0
         playhead.isUserInteractionEnabled = false
         addSubview(playhead)
 
-        // Fades notes out once they pass left of the playhead
-        fadeOverlay.backgroundColor = UIColor.white.withAlphaComponent(0.75)
+        // Fade overlay: white from left edge to playhead
+        fadeOverlay.backgroundColor = UIColor(white: 0.97, alpha: 0.72)
         fadeOverlay.isUserInteractionEnabled = false
         addSubview(fadeOverlay)
 
-        progressBar.backgroundColor = UIColor(red:0.18, green:0.80, blue:0.34, alpha:1)
+        // Progress bar at very top, systemBlue
+        progressBar.backgroundColor = UIColor.systemBlue
         progressBar.isUserInteractionEnabled = false
         addSubview(progressBar)
     }
@@ -71,16 +82,13 @@ final class SheetMusicView: UIView {
 
         let gt  = trebleTop
         let visH = totalStaffHeight
-        let phW: CGFloat = 26
-        
-        // Move playhead to 30% of width (left side) rather than center
-        let phX = bounds.width * 0.3 - phW/2
-        playhead.frame = CGRect(x: phX,
-                                y: gt - 8, width: phW, height: visH + 16)
-                                
-        fadeOverlay.frame = CGRect(x: 0, y: 0, width: phX, height: bounds.height)
+        // Fix 3: playhead is a 3pt wide solid blue vertical line at 28% of width
+        let phX = bounds.width * 0.28
+        let phW: CGFloat = 3
+        playhead.frame = CGRect(x: phX, y: gt - 12, width: phW, height: visH + 24)
 
-        progressBar.frame = CGRect(x:0, y:0, width: bounds.width * scrollFraction, height:4)
+        fadeOverlay.frame = CGRect(x: 0, y: 0, width: phX, height: bounds.height)
+        progressBar.frame = CGRect(x: 0, y: 0, width: bounds.width * scrollFraction, height: 3)
 
         if bounds != lastBounds {
             lastBounds = bounds
@@ -92,15 +100,33 @@ final class SheetMusicView: UIView {
     func updatePlaybackProgress(_ p: CGFloat) {
         let p = max(0, min(1, p))
         scrollFraction = p
-        
+
+        // Scroll the content layer so the note at fraction p aligns with the playhead
         let targetX = clefW + p * songPixelLength + 16
+        let tx = playhead.frame.midX - targetX
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
+        CATransaction.commit()
+        progressBar.frame = CGRect(x: 0, y: 0, width: bounds.width * p, height: 3)
+    }
+
+    /// Update progress based precisely on the loaded sheet's tick timeline
+    func updateToTick(_ tick: Double) {
+        let maxTick = max(1.0, Double(totalTicks))
+        let p = max(0, min(1, CGFloat(tick / maxTick)))
+        scrollFraction = p
+        
+        // Use exact tick mapping for perfect synchronization
+        let targetX = clefW + CGFloat(tick) * maxPixelsPerTick + 16
         let tx = playhead.frame.midX - targetX
         
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
-        progressBar.frame = CGRect(x:0, y:0, width: bounds.width * p, height:4)
+        progressBar.frame = CGRect(x: 0, y: 0, width: bounds.width * p, height: 3)
     }
 
     func resetProgress() {
@@ -113,14 +139,14 @@ final class SheetMusicView: UIView {
     }
 
     // MARK: Geometry
-    private var staffGap:        CGFloat { 26 }
-    private var trebleTop:       CGFloat {
-        let pad: CGFloat = 12
+    private var staffGap:         CGFloat { 30 }   // gap between treble and bass
+    private var trebleTop:        CGFloat {
+        let pad: CGFloat = 8
         let total = isSingleStaff ? staffH : totalStaffHeight
-        return pad + max(0, (bounds.height - pad - total)) / 2
+        return pad + max(0, (bounds.height - total - pad * 2)) / 2
     }
-    private var bassTop:         CGFloat { trebleTop + staffH + staffGap }
-    private var totalStaffHeight:CGFloat { isSingleStaff ? staffH : (staffH * 2 + staffGap) }
+    private var bassTop:          CGFloat { trebleTop + staffH + staffGap }
+    private var totalStaffHeight: CGFloat { isSingleStaff ? staffH : (staffH * 2 + staffGap) }
 
     // MARK: JSON
     private func loadJSON() {
@@ -134,7 +160,6 @@ final class SheetMusicView: UIView {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String:Any]
         else { return }
 
-        // Navigate to measures
         // "part" is [[String:Any]] (array), not [String:Any] — must handle both
         var raw: [[String:Any]]?
         if let pw = root["score-partwise"] as? [String:Any] {
@@ -238,9 +263,11 @@ final class SheetMusicView: UIView {
         }
 
         score   = Score(measures: measures, pixelsPerTick: pixelsPerTick)
+        self.totalTicks = globalTick
+        self.maxPixelsPerTick = pixelsPerTick
         songPixelLength = CGFloat(globalTick) * pixelsPerTick
         canvasW = max(3000, clefW + songPixelLength + 400)
-        print("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)")
+        print("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(totalTicks)")
     }
 
     private func noteFrom(_ d: [String:Any], tick: Int) -> SheetNote? {
@@ -422,22 +449,29 @@ final class SheetMusicView: UIView {
     // Draw note head + stem (black for a cleaner, unified look)
     private func drawHead(_ p:CALayer, cx:CGFloat, cy:CGFloat, alter:Int, staff:Int, step:String?, oct:Int?, stemUp:Bool) {
         let noteColor: UIColor = UIColor(white: 0.1, alpha: 1.0) // Deep dark gray/black
-        let w=noteRadius*2; let h=noteRadius*1.4
-        let hd=CALayer()
-        hd.backgroundColor=noteColor.cgColor
-        hd.cornerRadius=noteRadius*0.4
-        hd.frame=CGRect(x:cx-noteRadius, y:cy-h/2, width:w, height:h)
-        hd.transform=CATransform3DMakeRotation(-0.28, 0,0,1)
+        
+        let w = noteRadius * 2.5
+        let h = noteRadius * 1.6
+        
+        // True oval shape for the notehead
+        let hd = CAShapeLayer()
+        let ovalPath = UIBezierPath(ovalIn: CGRect(x: -w/2, y: -h/2, width: w, height: h))
+        hd.path = ovalPath.cgPath
+        hd.fillColor = noteColor.cgColor
+        hd.position = CGPoint(x: cx, y: cy)
+        hd.transform = CATransform3DMakeRotation(-0.35, 0, 0, 1) // ~20 degrees rotation
         p.addSublayer(hd)
 
-        let st=CALayer()
-        st.backgroundColor=noteColor.cgColor
+        let st = CALayer()
+        st.backgroundColor = noteColor.cgColor
+        let stemH = noteRadius * 5.0
+        let stemW: CGFloat = 1.0
         if stemUp {
             // Stem points UP from the RIGHT side of the notehead
-            st.frame=CGRect(x:cx+noteRadius-1.2, y:cy-noteRadius*4.5, width:1.2, height:noteRadius*4.5)
+            st.frame = CGRect(x: cx + w/2 - 1.5, y: cy - stemH, width: stemW, height: stemH)
         } else {
             // Stem points DOWN from the LEFT side of the notehead
-            st.frame=CGRect(x:cx-noteRadius, y:cy, width:1.2, height:noteRadius*4.5)
+            st.frame = CGRect(x: cx - w/2 + 0.5, y: cy, width: stemW, height: stemH)
         }
         p.addSublayer(st)
 
