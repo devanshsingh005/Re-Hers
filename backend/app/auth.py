@@ -87,3 +87,26 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[
     """
     auth_manager = get_auth_manager()
     return await auth_manager.get_current_user(authorization)
+
+
+async def require_admin(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+    """Dependency that enforces admin privileges.
+
+    Admin user IDs are configured via the ADMIN_USER_IDS environment variable
+    (comma-separated Supabase UUIDs).  An empty ADMIN_USER_IDS intentionally
+    blocks all admin access so the secure default is 'no admins configured'.
+
+    Usage:
+        @app.get("/admin/something")
+        async def admin_endpoint(user: dict = Depends(require_admin)):
+            ...
+    """
+    from app.config import ADMIN_USER_IDS  # late import avoids circular deps
+    if not ADMIN_USER_IDS:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access is not configured on this server.",
+        )
+    if user["id"] not in ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Admin privileges required.")
+    return user

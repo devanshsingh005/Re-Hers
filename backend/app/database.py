@@ -1,4 +1,5 @@
 """Database operations for sheet_files and jobs tables."""
+from datetime import datetime
 from supabase import create_client, Client
 from typing import Optional, List, Dict, Any
 from uuid import UUID
@@ -54,7 +55,7 @@ class DatabaseClient:
         label_warning: Optional[str] = None
     ) -> Dict[str, Any]:
         """Update job status (only if owned by user)."""
-        update_data = {"status": status, "updated_at": "now()"}
+        update_data = {"status": status, "updated_at": datetime.utcnow().isoformat()}
         
         if result_url:
             update_data["result_url"] = result_url
@@ -85,7 +86,23 @@ class DatabaseClient:
         ).order("created_at", desc=True).range(offset, offset + limit).execute()
         
         return response.data if response.data else []
-    
+
+    async def get_user_active_job_count(self, user_id: str) -> int:
+        """Count non-terminal jobs for a user (pending / queued / processing).
+
+        Used by /convert to enforce MAX_CONCURRENT_JOBS_PER_USER before
+        accepting a new upload.  Fetches only the 'id' column to minimise
+        wire payload — no full row scan needed.
+        """
+        response = (
+            self.client.table("jobs")
+            .select("id")
+            .eq("user_id", user_id)
+            .in_("status", ["pending", "queued", "processing"])
+            .execute()
+        )
+        return len(response.data) if response.data else 0
+
     # ==================== SHEET_FILES TABLE ====================
     
     async def create_sheet_file(
@@ -97,15 +114,19 @@ class DatabaseClient:
         file_size_bytes: Optional[int] = None,
         status: str = "processing"
     ) -> Dict[str, Any]:
-        """Create sheet_file record linking file to user."""
-        response = self.client.table("sheet_files").insert({
+        """Create or update sheet_file record linking file to user.
+        
+        Uses upsert on (user_id, job_id) so re-processing a job overwrites the
+        existing record rather than failing with a unique-constraint violation.
+        """
+        response = self.client.table("sheet_files").upsert({
             "id": file_id,
             "user_id": user_id,
             "job_id": job_id,
             "storage_path": storage_path,
             "file_size_bytes": file_size_bytes,
             "status": status
-        }).execute()
+        }, on_conflict="user_id,job_id").execute()
         
         if response.data:
             return response.data[0]
@@ -165,7 +186,7 @@ class DatabaseClient:
         """Update sheet_file status (with user validation)."""
         response = self.client.table("sheet_files").update({
             "status": status,
-            "updated_at": "now()"
+            "updated_at": datetime.utcnow().isoformat()
         }).eq("id", file_id).eq("user_id", user_id).execute()
         
         if response.data:
@@ -205,7 +226,7 @@ class DatabaseClient:
         """Mark sheet_file as orphaned (for cleanup tracking)."""
         response = self.client.table("sheet_files").update({
             "status": "orphaned",
-            "updated_at": "now()"
+            "updated_at": datetime.utcnow().isoformat()
         }).eq("id", file_id).execute()
         
         if response.data:

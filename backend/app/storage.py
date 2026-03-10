@@ -68,7 +68,7 @@ class StorageManager:
             self.client.storage.from_(self.bucket).upload(
                 path=storage_path,
                 file=json_bytes,
-                file_options={"content-type": "application/json", "upsert": "true"}
+                file_options={"content-type": "application/json", "x-upsert": "true"}
             )
             
             # Get public URL
@@ -189,7 +189,7 @@ class StorageManager:
         self.client.storage.from_("pdf_uploads").upload(
             path=storage_path,
             file=pdf_content,
-            file_options={"upsert": "true"}
+            file_options={"x-upsert": "true"}
         )
         
         return storage_path
@@ -204,32 +204,35 @@ class StorageManager:
         job_id: str,
         pdf_content: bytes
     ) -> Dict[str, Any]:
-        """Upload labeled PDF to user-scoped path in pdf_uploads bucket.
-        
+        """Upload labeled PDF to user-scoped path in sheet_data bucket.
+
+        Stored alongside output.json so it shares the same public-bucket
+        policies and can be fetched via a plain public URL on iOS.
+
         Args:
             user_id: The authenticated user's ID
             job_id: The job ID
             pdf_content: Raw PDF bytes
-        
+
         Returns:
             Dictionary with storage_path and file info
-        
+
         Raises:
             ValueError: If user_id is invalid
             Exception: If upload fails
         """
         if not self._is_valid_uuid(user_id):
             raise ValueError(f"Invalid user_id: {user_id}")
-        
-        # Create user-scoped path for labeled PDF in pdf_uploads bucket
+
+        # Store beside input.pdf in the pdf_uploads bucket
         storage_path = f"{user_id}/{job_id}/labeled.pdf"
-        
+
         self.client.storage.from_("pdf_uploads").upload(
             path=storage_path,
             file=pdf_content,
-            file_options={"content-type": "application/pdf", "upsert": "true"}
+            file_options={"content-type": "application/pdf", "x-upsert": "true"}
         )
-        
+
         return {
             "success": True,
             "storage_path": storage_path,
@@ -259,9 +262,9 @@ class StorageManager:
         if not job:
             raise PermissionError("Job not found or user unauthorized")
         
-        # Download from storage
+        # Download from pdf_uploads bucket (beside input.pdf)
         storage_path = f"{user_id}/{job_id}/labeled.pdf"
-        
+
         try:
             pdf_content = self.client.storage.from_("pdf_uploads").download(storage_path)
             return pdf_content

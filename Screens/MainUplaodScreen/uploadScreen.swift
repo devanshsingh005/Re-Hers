@@ -615,26 +615,12 @@ class UploadScreen: UIViewController {
         print("[Upload] pdfPath=\(pdfPath)")
         print("[Upload] outputURL=\(outputURL)")
 
-        // ── Step 2: Upsert job record ─────────────────────────────────────────────
-        let existingJobs: [Job] = try await supabase.from("jobs").select()
-            .eq("id", value: jobId).execute().value
-        if existingJobs.isEmpty {
-            let ins = JobInsert(id: jobId, userId: apiUid,
-                                pdfPath: pdfPath, resultUrl: outputURL, status: "completed")
-            let _: Job? = try? await supabase.from("jobs").insert(ins).select().single().execute().value
-        } else {
-            let upd = JobUpdate(resultUrl: outputURL, status: "completed", errorMessage: nil,
-                                updatedAt: ISO8601DateFormatter().string(from: Date()))
-            try await supabase.from("jobs").update(upd).eq("id", value: jobId).execute()
-        }
-
         // ── Step 3: Build json_data (protect canonical keys from API overwrite) ───
         // Generate a unique timestamp-based filename for this upload.
         let timestampFilename = generateTimestampFilename()
         uploadTitle = String(timestampFilename.dropLast(4))  // strip .pdf for display title
 
         var jsonDict: [String: Any] = [
-            "status":              "completed",
             "uploaded_at":         ISO8601DateFormatter().string(from: Date()),
             "title":               uploadTitle,           // e.g. "SheetMusic_2026-03-08_064025"
             "original_filename":   timestampFilename,     // e.g. "SheetMusic_2026-03-08_064025.pdf"
@@ -654,12 +640,12 @@ class UploadScreen: UIViewController {
 
         if existingScans.isEmpty {
             let ins = ScanInsert(userId: userId, jsonData: AnyCodable(jsonDict),
-                                  processingId: jobIdStr, status: "completed",
+                                  processingId: jobIdStr, status: "pending",
                                   originalFilename: timestampFilename, fileType: "application/pdf",
                                   processedAt: ISO8601DateFormatter().string(from: Date()))
             let _: Scan = try await supabase.from("scans").insert(ins).select().single().execute().value
         } else if let existing = existingScans.first {
-            let upd = ScanUpdate(jsonData: AnyCodable(jsonDict), status: "completed",
+            let upd = ScanUpdate(jsonData: AnyCodable(jsonDict), status: "pending",
                                   processedAt: ISO8601DateFormatter().string(from: Date()),
                                   updatedAt: ISO8601DateFormatter().string(from: Date()))
             try await supabase.from("scans").update(upd).eq("id", value: Int(existing.id)).execute()

@@ -7,6 +7,10 @@ from app.config import AUDIVERIS_API_URL
 
 logger = logging.getLogger(__name__)
 
+# Module-level session reuses TCP/TLS connections across jobs in the same worker
+# process. Each of the 4 worker processes has its own session — no sharing.
+_session = requests.Session()
+
 
 def run_audiveris(pdf_path: str) -> Dict[str, Any]:
     """Call Audiveris API with PDF file and return JSON output.
@@ -30,7 +34,7 @@ def run_audiveris(pdf_path: str) -> Dict[str, Any]:
             files = {'file': (pdf_path.split('/')[-1], pdf_file, 'application/pdf')}
             
             logger.debug(f"Sending PDF to Audiveris: {pdf_path}")
-            response = requests.post(url, files=files)
+            response = _session.post(url, files=files)
             
             logger.info(f"Audiveris response status: {response.status_code}")
     except FileNotFoundError as e:
@@ -45,5 +49,5 @@ def run_audiveris(pdf_path: str) -> Dict[str, Any]:
     
     # Parse and return JSON
     json_output = response.json()
-    logger.info(f"Successfully received JSON output from Audiveris ({len(str(json_output))} bytes)")
+    logger.info(f"Successfully received JSON output from Audiveris (keys: {list(json_output.keys())})")
     return json_output

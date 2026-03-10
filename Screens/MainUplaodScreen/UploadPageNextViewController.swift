@@ -154,8 +154,8 @@ final class UploadPageNextViewController: UIViewController {
                 effectiveResultURL = derived
             }
 
-            // Start polling — PDF will be loaded once processing is done
-            await MainActor.run { self.startPollingResultURL(effectiveResultURL) }
+            // Start polling job status — backend owns all transitions
+            await MainActor.run { self.startPollingJobStatus() }
 
         } catch {
             print("[Load] ❌ DB error: \(error)")
@@ -168,29 +168,6 @@ final class UploadPageNextViewController: UIViewController {
         let userId    = pdfPath.components(separatedBy: "/").first ?? jobId.uuidString
         let projectID = "djqgmowfjxsnjdffdohw"
         return "https://\(projectID).supabase.co/storage/v1/object/public/sheet_data/\(userId)/\(jobId.uuidString.lowercased())/output.json"
-    }
-
-    /// Checks if `preferred` path exists in Supabase Storage (HEAD request).
-    /// Returns `preferred` if available, otherwise `fallback`.
-    private func resolveAvailablePDFPath(preferred: String, fallback: String) async -> String {
-        guard let url = try? SupabaseManager.shared.client.storage
-                .from("pdf_uploads")
-                .getPublicURL(path: preferred) else { return fallback }
-        do {
-            var req = URLRequest(url: url)
-            req.httpMethod    = "HEAD"
-            req.timeoutInterval = 8
-            let (_, response) = try await URLSession.shared.data(for: req)
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if (200...299).contains(code) {
-                print("[PDF] labeled.pdf available ✅")
-                return preferred
-            }
-        } catch {
-            print("[PDF] labeled.pdf HEAD failed: \(error.localizedDescription)")
-        }
-        print("[PDF] labeled.pdf not ready — falling back to input.pdf")
-        return fallback
     }
 
     // MARK: - PDF Display
@@ -255,12 +232,16 @@ final class UploadPageNextViewController: UIViewController {
         }
     }
 
-    // MARK: - Output JSON Polling
+    // MARK: - Job Status Polling
 
     private static let maxPollAttempts = 24   // 24 × 5 s = 2 min max
     private var pollAttempts = 0
 
-    private func startPollingResultURL(_ url: String) {
+    /// Polls the jobs table every 5 s. Proceeds only when the backend sets
+    /// status = 'completed' or 'completed_with_warning', guaranteeing that
+    /// labeled.pdf is already saved before we try to load it.
+    private func startPollingJobStatus() {
+        guard let jobId else { return }
         showProcessingState()
         pollAttempts = 0
         let timer = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
@@ -269,79 +250,96 @@ final class UploadPageNextViewController: UIViewController {
             if self.pollAttempts >= Self.maxPollAttempts {
                 self.pollingTimer?.invalidate(); self.pollingTimer = nil
                 DispatchQueue.main.async {
-                    self.statusLabel.text     = "Processing timed out. Tap Refresh to retry."
-                    self.statusLabel.isHidden = false
+                    self.statusLabel.text       = "Processing timed out. Tap Refresh to retry."
+                    self.statusLabel.isHidden   = false
                     self.refreshButton.isHidden = false
                     self.progressView.isHidden  = true
                 }
                 return
             }
-            self.checkResultURL(url)
+            Task { await self.pollJobStatus(jobId: jobId) }
         }
         RunLoop.main.add(timer, forMode: .common)
         pollingTimer = timer
-        checkResultURL(url)   // immediate first check
+        Task { await pollJobStatus(jobId: jobId) }  // immediate first check
     }
 
-    private func checkResultURL(_ urlString: String) {
-        Task {
-            guard let url = URL(string: urlString) else { return }
-            do {
-                var req = URLRequest(url: url)
-                req.httpMethod = "GET"
-                req.setValue("bytes=0-0", forHTTPHeaderField: "Range")
-                req.timeoutInterval = 8
-                let (_, response) = try await URLSession.shared.data(for: req)
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if code == 200 || code == 206 {
-                    await downloadAndParseResult(url: url)
-                } else {
-                    await MainActor.run { self.updateProcessingStatus(message: "Processing… (\(code))") }
-                }
-            } catch {
-                await MainActor.run { self.updateProcessingStatus(message: "Processing…") }
+    private func pollJobStatus(jobId: UUID) async {
+        struct StatusRow: Decodable {
+            let status: String
+            let resultUrl: String?
+            enum CodingKeys: String, CodingKey {
+                case status
+                case resultUrl = "result_url"
             }
+        }
+        do {
+            let rows: [StatusRow] = try await SupabaseManager.shared.client
+                .from("jobs").select("status, result_url")
+                .eq("id", value: jobId).limit(1).execute().value
+            guard let row = rows.first else { return }
+            switch row.status {
+            case "completed", "completed_with_warning":
+                pollingTimer?.invalidate(); pollingTimer = nil
+                await handleJobCompleted(resultUrl: row.resultUrl)
+            case "failed":
+                pollingTimer?.invalidate(); pollingTimer = nil
+                await MainActor.run {
+                    self.statusLabel.text       = "Processing failed. Tap Refresh to retry."
+                    self.statusLabel.isHidden   = false
+                    self.refreshButton.isHidden = false
+                    self.progressView.isHidden  = true
+                }
+            case "processing":
+                await MainActor.run { self.updateProcessingStatus(message: "Processing…") }
+            default:
+                await MainActor.run { self.updateProcessingStatus(message: "Job queued…") }
+            }
+        } catch {
+            print("[Poll] ⚠️ DB error: \(error.localizedDescription)")
         }
     }
 
-    private func downloadAndParseResult(url: URL) async {
-        do {
-            var dlReq = URLRequest(url: url)
-            dlReq.timeoutInterval = 15
-            let (data, response) = try await URLSession.shared.data(for: dlReq)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else { return }
+    /// Called once the backend marks the job complete. By this point labeled.pdf
+    /// is guaranteed to be in sheet_data storage (same public bucket as output.json).
+    /// result_url from the DB is "sheet_data/{user_id}/{job_id}/labeled.pdf" —
+    /// we just prepend the Supabase public-storage base URL.
+    private func handleJobCompleted(resultUrl: String?) async {
+        await MainActor.run {
+            self.isProcessing           = false
+            self.progressView.isHidden  = true
+            self.statusLabel.isHidden   = true
+            self.refreshButton.isHidden = true
+            self.onDataReady?()
+        }
 
-            if let preview = String(data: data.prefix(500), encoding: .utf8) {
-                print("[Result] JSON preview:\n\(preview)")
+        let projectID = "djqgmowfjxsnjdffdohw"
+        let publicBase = "https://\(projectID).supabase.co/storage/v1/object/public"
+
+        // Load labeled PDF from sheet_data (public bucket — no auth needed)
+        if let relPath = resultUrl, !relPath.isEmpty {
+            // relPath is e.g. "sheet_data/{user_id}/{job_id}/labeled.pdf"
+            let pdfPublicURL = relPath.hasPrefix("http") ? relPath : "\(publicBase)/\(relPath)"
+            print("[PDF] ✅ Loading labeled PDF: \(pdfPublicURL)")
+            await MainActor.run { self.loadSheetPDF(from: pdfPublicURL) }
+        } else if let rawPath = pendingPDFPath {
+            // No result_url yet — rare fallback: show input PDF via signed URL
+            if let url = try? await SupabaseManager.shared.client.storage
+                    .from("pdf_uploads").createSignedURL(path: rawPath, expiresIn: 3600) {
+                print("[PDF] ⚠️ No result_url — falling back to input.pdf")
+                await MainActor.run { self.loadSheetPDF(from: url.absoluteString) }
             }
+        }
 
-            await MainActor.run {
-                self.pollingTimer?.invalidate(); self.pollingTimer = nil
-                self.isProcessing           = false
-                self.progressView.isHidden  = true
-                self.statusLabel.isHidden   = true
-                self.refreshButton.isHidden = true
-                self.onDataReady?()
-            }
-
-            // Load PDF now that processing is done: labeled.pdf if ready, else input.pdf
-            if let rawPath = self.pendingPDFPath {
-                let labeledPath  = rawPath.replacingOccurrences(of: "input.pdf", with: "labeled.pdf")
-                let resolvedPath = await self.resolveAvailablePDFPath(preferred: labeledPath, fallback: rawPath)
-                if let pdfURL = try? SupabaseManager.shared.client.storage
-                        .from("pdf_uploads").getPublicURL(path: resolvedPath) {
-                    print("[Load] ✅ Loading PDF post-processing: \(pdfURL.absoluteString)")
-                    await MainActor.run { self.loadSheetPDF(from: pdfURL.absoluteString) }
-                }
-            }
-
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        // Download output.json and populate chord/key/time/tempo fields
+        if let jobId, let rawPath = pendingPDFPath {
+            let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: rawPath)
+            if let url = URL(string: jsonURL),
+               let (data, _) = try? await URLSession.shared.data(from: url),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 print("[Result] Keys: \(json.keys.sorted())")
                 await parseAndDisplayJSON(json)
             }
-        } catch {
-            await MainActor.run { self.showErrorState(error: "Failed to download result") }
         }
     }
 
