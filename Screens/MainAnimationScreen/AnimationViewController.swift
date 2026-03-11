@@ -37,10 +37,7 @@ final class AnimationViewController: UIViewController {
     private let navBar    = LessonNavBarView()
     private let overlay   = PlaybackOverlay()
 
-    // MARK: - Layout Constants
-  private var kPianoH: CGFloat { 140 + (UIApplication.shared.connectedScenes
-    .compactMap { $0 as? UIWindowScene }.first?
-    .windows.first?.safeAreaInsets.bottom ?? 0) }  // visual height of piano pane
+    private let kPianoH: CGFloat = 170  // visual height of piano pane
     private let kNavH:   CGFloat = 54
 
     // MARK: - Overlay timer
@@ -107,6 +104,7 @@ final class AnimationViewController: UIViewController {
 
         // Nav bar (liquid glass, overlaid at top)
         navBar.translatesAutoresizingMaskIntoConstraints = false
+        navBar.alpha = 0
         view.addSubview(navBar)
         navBar.setSongTitle(songTitle)
 
@@ -149,6 +147,23 @@ final class AnimationViewController: UIViewController {
             guard let s = self else { return }
             s.isPlaying ? s.stopPlayback(reset: false) : s.startPlayback()
         }
+
+        // Reveal navbar with a swipe down from the top
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeDown(_:)))
+        swipe.direction = .down
+        view.addGestureRecognizer(swipe)
+    }
+
+    @objc private func didSwipeDown(_ gr: UISwipeGestureRecognizer) {
+        // Only allow navbar reveal if we are at the very beginning of the song
+        guard chordIndex == 0 && elapsedInChord < 0.1 else { return }
+        
+        setNavBar(visible: true, animated: true)
+        // Auto-hide navbar after 4 seconds
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+            self?.setNavBar(visible: false, animated: true)
+        }
     }
 
     // MARK: - Fix 2: Piano fills to physical bottom (no gap)
@@ -179,6 +194,10 @@ final class AnimationViewController: UIViewController {
         }
         navBar.onTempoChanged = { [weak self] m in self?.tempoMultiplier = m }
         navBar.onMenuTap      = { [weak self] in self?.showSoundPicker() }
+
+        sheetCard.onSeekProgress = { [weak self] p in
+            self?.seekToProgress(p)
+        }
     }
 
     // MARK: - Chord Loading
@@ -218,15 +237,17 @@ final class AnimationViewController: UIViewController {
         showOverlayBriefly()
     }
 
-    // MARK: - Overlay
+    // MARK: - Overlay & Nav Visibility
     private func setOverlay(visible: Bool, animated: Bool) {
-        let block = { 
-            self.overlay.alpha = visible ? 1 : 0 
-            // Also hide/show the top nav bar (the "fixed" one user doesn't want during playback)
-            self.navBar.alpha = visible ? 1 : 0
-        }
+        let block = { self.overlay.alpha = visible ? 1 : 0 }
         animated ? UIView.animate(withDuration: 0.22, animations: block) : block()
     }
+
+    private func setNavBar(visible: Bool, animated: Bool) {
+        let block = { self.navBar.alpha = visible ? 1 : 0 }
+        animated ? UIView.animate(withDuration: 0.22, animations: block) : block()
+    }
+
     private func showOverlayBriefly() {
         setOverlay(visible: true, animated: true)
         hideTimer?.invalidate()
@@ -235,11 +256,11 @@ final class AnimationViewController: UIViewController {
             self?.hideOverlay()
         }
     }
+
     private func hideOverlay() {
         hideTimer?.invalidate(); hideTimer = nil
         UIView.animate(withDuration: 0.22) { 
             self.overlay.alpha = 0 
-            self.navBar.alpha = 0
         }
     }
 
@@ -319,6 +340,57 @@ final class AnimationViewController: UIViewController {
         sheetCard.updateToTick(cTick + (nTick - cTick) * fraction)
     }
 
+    private func seekToProgress(_ p: CGFloat) {
+        guard totalDuration > 0 else { return }
+        let targetTime = totalDuration * Double(max(0, min(1, p)))
+        
+        // Find chord index
+        var acc = 0.0
+        var foundIdx = 0
+        var foundElapsed = 0.0
+        
+        for i in 0..<allChords.count {
+            let d = allChords[i].duration
+            if acc + d > targetTime {
+                foundIdx = i
+                foundElapsed = (targetTime - acc) / tempoMultiplier
+                break
+            }
+            acc += d
+            if i == allChords.count - 1 {
+                foundIdx = i
+                foundElapsed = 0
+            }
+        }
+        
+        chordIndex = foundIdx
+        elapsedInChord = foundElapsed
+        
+        // Match Fix 4 logic for consistency
+        elapsedTotal = 0
+        for i in 0..<chordIndex { elapsedTotal += allChords[i].duration }
+        elapsedTotal += elapsedInChord * tempoMultiplier
+        
+        isNewChord = true
+        AudioEngineManager.shared.stopAllNotes()
+        pianoVC.resetKeyboard()
+        
+        // Update sheet
+        let cTick = Double(allChords[chordIndex].globalTick)
+        let nTick = chordIndex + 1 < allChords.count ? Double(allChords[chordIndex + 1].globalTick) : cTick
+        let adjDur = allChords[chordIndex].duration / tempoMultiplier
+        let fraction = adjDur > 0 ? min(elapsedInChord / adjDur, 1.0) : 0
+        sheetCard.updateToTick(cTick + (nTick - cTick) * fraction)
+        
+        // If we were playing, keep playhead logic moving
+        if isPlaying {
+            // briefly show overlay to confirm interaction
+            showOverlayBriefly()
+        } else {
+            setOverlay(visible: true, animated: true)
+        }
+    }
+
     // MARK: - Fix 5: Tick — tempo-aware progress
     @objc private func tick(_ link: CADisplayLink) {
         guard isPlaying, chordIndex < allChords.count else {
@@ -385,6 +457,7 @@ final class PlaybackOverlay: UIView {
     private let btnPlay     = UIButton(type: .system)
     private let leftRipple  = SeekRipple(fwd: false)
     private let rightRipple = SeekRipple(fwd: true)
+    private let hintsLabel  = UILabel()
 
     override init(frame: CGRect) { super.init(frame: frame); build() }
     required init?(coder: NSCoder) { fatalError() }
@@ -423,6 +496,13 @@ final class PlaybackOverlay: UIView {
         rightRipple.translatesAutoresizingMaskIntoConstraints = false
         addSubview(leftRipple)
         addSubview(rightRipple)
+        
+        hintsLabel.text = "Swipe down at start for Navbar • Double-tap to Seek • Tap to Play"
+        hintsLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        hintsLabel.textColor = .white.withAlphaComponent(0.8)
+        hintsLabel.textAlignment = .center
+        hintsLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hintsLabel)
 
         NSLayoutConstraint.activate([
             btnPlay.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -436,7 +516,10 @@ final class PlaybackOverlay: UIView {
             rightRipple.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -40),
             rightRipple.centerYAnchor.constraint(equalTo: centerYAnchor),
             rightRipple.widthAnchor.constraint(equalToConstant: 70),
-            rightRipple.heightAnchor.constraint(equalToConstant: 40)
+            rightRipple.heightAnchor.constraint(equalToConstant: 40),
+            
+            hintsLabel.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -12),
+            hintsLabel.centerXAnchor.constraint(equalTo: centerXAnchor)
         ])
     }
     @objc private func pl() { onPlayPause?() }

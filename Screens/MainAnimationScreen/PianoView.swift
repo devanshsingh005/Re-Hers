@@ -60,12 +60,12 @@ final class AnimatedPianoKeyView: UIView {
         if keyType == .white {
             NSLayoutConstraint.activate([
                 noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -22),
             ])
         } else {
             NSLayoutConstraint.activate([
                 noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
             ])
         }
     }

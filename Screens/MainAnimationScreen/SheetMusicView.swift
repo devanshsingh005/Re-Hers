@@ -12,7 +12,7 @@ final class SheetMusicView: UIView {
     // MARK: Constants
     private let lineSpacing: CGFloat = 13   // between staff lines (wider for landscape)
     private let noteRadius:  CGFloat = 4.5
-    private let clefW:       CGFloat = 90   // column for brace + clef symbols (increased)
+    private let clefW:       CGFloat = 110   // column for brace + clef symbols (increased)
     private let msrW:        CGFloat = 260  // pixels per measure on canvas
 
     private var staffH: CGFloat { 4 * lineSpacing }   // 5 lines = 4 gaps
@@ -33,7 +33,12 @@ final class SheetMusicView: UIView {
     private let contentLayer = CALayer()   // all note/staff drawing lives here
     private let playhead     = UIView()
     private let fadeOverlay  = UIView()
+    private let progressBarTrack = UIView()
     private let progressBar  = UIView()
+    private let progressThumb = UIView()
+    
+    // Delegate to communicate seeks
+    var onSeekProgress: ((CGFloat) -> Void)?
     
     // Derived total pixel length of song for perfect sync
     private var songPixelLength: CGFloat = 1000
@@ -69,10 +74,42 @@ final class SheetMusicView: UIView {
         fadeOverlay.isUserInteractionEnabled = false
         addSubview(fadeOverlay)
 
-        // Progress bar at very top, systemBlue
-        progressBar.backgroundColor = UIColor.systemBlue
+        // Progress bar container & track
+        progressBarTrack.backgroundColor = UIColor.systemGray4
+        progressBarTrack.layer.cornerRadius = 4
+        progressBarTrack.isUserInteractionEnabled = true
+        addSubview(progressBarTrack)
+        
+        // Progress bar fill
+        let orangeColor = UIColor(red: 0.91, green: 0.44, blue: 0.05, alpha: 1.0)
+        progressBar.backgroundColor = orangeColor
+        progressBar.layer.cornerRadius = 4
         progressBar.isUserInteractionEnabled = false
-        addSubview(progressBar)
+        progressBarTrack.addSubview(progressBar)
+        
+        // Progress thumb (circle)
+        progressThumb.backgroundColor = orangeColor
+        progressThumb.layer.cornerRadius = 8
+        progressThumb.isUserInteractionEnabled = false
+        progressBarTrack.addSubview(progressThumb)
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleProgressPan(_:)))
+        progressBarTrack.addGestureRecognizer(pan)
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleProgressTap(_:)))
+        progressBarTrack.addGestureRecognizer(tap)
+    }
+
+    @objc private func handleProgressPan(_ gesture: UIPanGestureRecognizer) {
+        let loc = gesture.location(in: progressBarTrack)
+        let p = max(0, min(1, loc.x / progressBarTrack.bounds.width))
+        onSeekProgress?(p)
+    }
+    
+    @objc private func handleProgressTap(_ gesture: UITapGestureRecognizer) {
+        let loc = gesture.location(in: progressBarTrack)
+        let p = max(0, min(1, loc.x / progressBarTrack.bounds.width))
+        onSeekProgress?(p)
     }
 
     // MARK: layoutSubviews — FRAME MATH ONLY
@@ -88,7 +125,17 @@ final class SheetMusicView: UIView {
         playhead.frame = CGRect(x: phX, y: gt - 12, width: phW, height: visH + 24)
 
         fadeOverlay.frame = CGRect(x: 0, y: 0, width: phX, height: bounds.height)
-        progressBar.frame = CGRect(x: 0, y: 0, width: bounds.width * scrollFraction, height: 3)
+        
+        let trackPaddingX: CGFloat = 20
+        let trackY: CGFloat = 16
+        let trackW = bounds.width - (trackPaddingX * 2)
+        let trackH: CGFloat = 8
+        
+        progressBarTrack.frame = CGRect(x: trackPaddingX, y: trackY, width: trackW, height: trackH)
+        
+        let fillW = trackW * scrollFraction
+        progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: trackH)
+        progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
 
         if bounds != lastBounds {
             lastBounds = bounds
@@ -109,7 +156,11 @@ final class SheetMusicView: UIView {
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
-        progressBar.frame = CGRect(x: 0, y: 0, width: bounds.width * p, height: 3)
+        
+        let trackW = bounds.width - 40
+        let fillW = trackW * scrollFraction
+        progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: 8)
+        progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
     }
 
     /// Update progress based precisely on the loaded sheet's tick timeline
@@ -126,7 +177,11 @@ final class SheetMusicView: UIView {
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
-        progressBar.frame = CGRect(x: 0, y: 0, width: bounds.width * p, height: 3)
+        
+        let trackW = bounds.width - 40
+        let fillW = trackW * scrollFraction
+        progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: 8)
+        progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
     }
 
     func resetProgress() {
@@ -135,7 +190,8 @@ final class SheetMusicView: UIView {
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DIdentity
         CATransaction.commit()
-        progressBar.frame = CGRect(x:0, y:0, width:0, height:4)
+        progressBar.frame = CGRect(x: 0, y: 0, width: 0, height: 8)
+        progressThumb.frame = CGRect(x: -8, y: -4, width: 16, height: 16)
     }
 
     // MARK: Geometry
@@ -352,42 +408,45 @@ final class SheetMusicView: UIView {
 
     // MARK: Draw staff lines
     private func drawStaffLines(_ p:CALayer, gt:CGFloat, bt:CGFloat) {
+        let startX: CGFloat = 46
         let tops:[CGFloat] = isSingleStaff ? [gt] : [gt, bt]
         for top in tops {
             for i in 0..<5 {
-                p.addSublayer(box(x:clefW-2, y:top+CGFloat(i)*lineSpacing,
-                                  w:canvasW-clefW+2, h:0.7))
+                p.addSublayer(box(x:startX, y:top+CGFloat(i)*lineSpacing,
+                                  w:canvasW-startX+2, h:0.7))
             }
         }
     }
 
     // MARK: Draw brace + connecting barline
     private func drawBraceAndBarline(_ p:CALayer, gt:CGFloat, bt:CGFloat) {
+        let startX: CGFloat = 46
         if isSingleStaff {
             // Just a thin left barline
-            p.addSublayer(box(x:clefW-2, y:gt, w:1.5, h:staffH))
+            p.addSublayer(box(x:startX, y:gt, w:1.5, h:staffH))
             return
         }
         let totalH = bt + staffH - gt
         // Thick connecting barline on far left
-        p.addSublayer(box(x:clefW-2, y:gt, w:2, h:totalH))
+        p.addSublayer(box(x:startX, y:gt, w:2, h:totalH))
         // Curly brace { as text
         let tl = txt("{", sz:totalH*0.85)
-        tl.frame = CGRect(x:0, y:gt - totalH*0.05, width:clefW-6, height:totalH*1.1)
+        tl.frame = CGRect(x:4, y:gt - totalH*0.05, width:startX-8, height:totalH*1.1)
         tl.alignmentMode = .right
         p.addSublayer(tl)
     }
 
-    // MARK: Draw clef symbols
+    // MARK: Draw clefs
     private func drawClefs(_ p:CALayer, gt:CGFloat, bt:CGFloat) {
+        let clefX: CGFloat = 58
         // Treble clef
         let tc = txt("𝄞", sz:staffH+6)
-        tc.frame = CGRect(x:clefW-42, y:gt-8, width:38, height:staffH+18)
+        tc.frame = CGRect(x:clefX, y:gt-8, width:38, height:staffH+18)
         p.addSublayer(tc)
 
         if !isSingleStaff {
             let bc = txt("𝄢", sz:staffH*0.68)
-            bc.frame = CGRect(x:clefW-40, y:bt+1, width:36, height:staffH-2)
+            bc.frame = CGRect(x:clefX+2, y:bt+1, width:36, height:staffH-2)
             p.addSublayer(bc)
         }
     }

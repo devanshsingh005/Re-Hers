@@ -686,7 +686,9 @@ final class UploadPageNextViewController: UIViewController {
         }
         let vc = AnimationViewController()
         vc.sheetMusicData = data
-        navigationController?.pushViewController(vc, animated: true)
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     private func showAnimationError(_ msg: String) {

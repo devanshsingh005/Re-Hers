@@ -60,7 +60,7 @@ final class LessonNavBarView: UIView {
         tempoSlider.maximumValue = 2.0
         tempoSlider.value        = 1.0
         tempoSlider.minimumTrackTintColor = .systemBlue
-        tempoSlider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.4)
+        tempoSlider.maximumTrackTintColor = .systemGray4
         tempoSlider.setThumbImage(thumbImage(), for: .normal)
         tempoSlider.addTarget(self, action: #selector(sliderMoved), for: .valueChanged)
         tempoSlider.widthAnchor.constraint(equalToConstant: 110).isActive = true

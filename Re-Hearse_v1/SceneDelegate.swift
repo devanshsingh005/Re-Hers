@@ -22,7 +22,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let initialVC = storyboard.instantiateInitialViewController()!
 
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = initialVC
+        window.rootViewController = AnimationViewController()
         self.window = window
         window.makeKeyAndVisible()
     }
