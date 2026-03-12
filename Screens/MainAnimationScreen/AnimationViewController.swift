@@ -39,9 +39,10 @@ final class AnimationViewController: UIViewController {
 
     private let kPianoH: CGFloat = 170  // visual height of piano pane
     private let kNavH:   CGFloat = 54
+    private var navBarTopConstraint: NSLayoutConstraint?
 
-    // MARK: - Overlay timer
-    private var hideTimer:        Timer?
+    // MARK: - Overlay timers
+    private var overlayHideTimer: Timer?
     private var didCenterKeyboard = false
 
     // MARK: - Lifecycle
@@ -108,6 +109,9 @@ final class AnimationViewController: UIViewController {
         view.addSubview(navBar)
         navBar.setSongTitle(songTitle)
 
+        let topC = navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: -kNavH)
+        navBarTopConstraint = topC
+
         NSLayoutConstraint.activate([
             // Sheet card fills top portion
             sheetCard.topAnchor.constraint(equalTo: view.topAnchor),
@@ -122,7 +126,7 @@ final class AnimationViewController: UIViewController {
             overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // Nav bar pinned to top safe area
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            topC,
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             navBar.heightAnchor.constraint(equalToConstant: kNavH)
@@ -149,21 +153,22 @@ final class AnimationViewController: UIViewController {
         }
 
         // Reveal navbar with a swipe down from the top
-        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeDown(_:)))
-        swipe.direction = .down
-        view.addGestureRecognizer(swipe)
+        let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeDown(_:)))
+        swipeDown.direction = .down
+        view.addGestureRecognizer(swipeDown)
+
+        // Hide navbar with a swipe up
+        let swipeUp = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeUp(_:)))
+        swipeUp.direction = .up
+        view.addGestureRecognizer(swipeUp)
     }
 
     @objc private func didSwipeDown(_ gr: UISwipeGestureRecognizer) {
-        // Only allow navbar reveal if we are at the very beginning of the song
-        guard chordIndex == 0 && elapsedInChord < 0.1 else { return }
-        
         setNavBar(visible: true, animated: true)
-        // Auto-hide navbar after 4 seconds
-        hideTimer?.invalidate()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
-            self?.setNavBar(visible: false, animated: true)
-        }
+    }
+
+    @objc private func didSwipeUp(_ gr: UISwipeGestureRecognizer) {
+        setNavBar(visible: false, animated: true)
     }
 
     // MARK: - Fix 2: Piano fills to physical bottom (no gap)
@@ -244,21 +249,25 @@ final class AnimationViewController: UIViewController {
     }
 
     private func setNavBar(visible: Bool, animated: Bool) {
-        let block = { self.navBar.alpha = visible ? 1 : 0 }
-        animated ? UIView.animate(withDuration: 0.22, animations: block) : block()
+        let block = { 
+            self.navBar.alpha = visible ? 1 : 0 
+            self.navBarTopConstraint?.constant = visible ? 0 : -self.kNavH
+            self.view.layoutIfNeeded()
+        }
+        animated ? UIView.animate(withDuration: 0.3, animations: block) : block()
     }
 
     private func showOverlayBriefly() {
         setOverlay(visible: true, animated: true)
-        hideTimer?.invalidate()
+        overlayHideTimer?.invalidate()
         guard isPlaying else { return }
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+        overlayHideTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
             self?.hideOverlay()
         }
     }
 
     private func hideOverlay() {
-        hideTimer?.invalidate(); hideTimer = nil
+        overlayHideTimer?.invalidate(); overlayHideTimer = nil
         UIView.animate(withDuration: 0.22) { 
             self.overlay.alpha = 0 
         }
@@ -290,7 +299,7 @@ final class AnimationViewController: UIViewController {
         }
         overlay.setPlaying(false)
         setOverlay(visible: true, animated: true)
-        hideTimer?.invalidate(); hideTimer = nil
+        overlayHideTimer?.invalidate(); overlayHideTimer = nil
     }
 
     // MARK: - Fix 4: Seek (backward and forward)
@@ -497,7 +506,7 @@ final class PlaybackOverlay: UIView {
         addSubview(leftRipple)
         addSubview(rightRipple)
         
-        hintsLabel.text = "Swipe down at start for Navbar • Double-tap to Seek • Tap to Play"
+        hintsLabel.text = "Swipe down/up for Navbar • Double-tap to Seek • Tap to Play"
         hintsLabel.font = .systemFont(ofSize: 11, weight: .medium)
         hintsLabel.textColor = .white.withAlphaComponent(0.8)
         hintsLabel.textAlignment = .center

@@ -126,7 +126,7 @@ final class SheetMusicView: UIView {
 
         fadeOverlay.frame = CGRect(x: 0, y: 0, width: phX, height: bounds.height)
         
-        let trackPaddingX: CGFloat = 20
+        let trackPaddingX: CGFloat = 50
         let trackY: CGFloat = 16
         let trackW = bounds.width - (trackPaddingX * 2)
         let trackH: CGFloat = 8
@@ -157,7 +157,7 @@ final class SheetMusicView: UIView {
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
         
-        let trackW = bounds.width - 40
+        let trackW = bounds.width - 100
         let fillW = trackW * scrollFraction
         progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: 8)
         progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
@@ -178,7 +178,7 @@ final class SheetMusicView: UIView {
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
         
-        let trackW = bounds.width - 40
+        let trackW = bounds.width - 100
         let fillW = trackW * scrollFraction
         progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: 8)
         progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
