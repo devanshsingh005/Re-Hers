@@ -8,7 +8,9 @@
 import Foundation
 import UIKit
 import Supabase
+import Auth
 import SwiftUI
+import AuthenticationServices
 
 
 final class AuthViewController: UIViewController {
@@ -66,10 +68,8 @@ final class AuthViewController: UIViewController {
     private let rightSeparatorLine = UIView()
     private let orLabel = UILabel()
     
-    // Social buttons (UI only for now)
-    private let appleButton = UIButton(type: .system)
+    // Social buttons
     private let googleButton = UIButton(type: .system)
-    private let facebookButton = UIButton(type: .system)
     
     // Bottom toggle ("Create a Account" / "Already have an account?")
     private let switchModeButton = UIButton(type: .system)
@@ -226,9 +226,9 @@ private extension AuthViewController {
         
         primaryButton.setTitle("NEXT", for: .normal)
         primaryButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
-        primaryButton.backgroundColor = primaryOrangeColor
+        primaryButton.backgroundColor = .primaryColor
         primaryButton.setTitleColor(.white, for: .normal)
-        primaryButton.layer.cornerRadius = 8
+        primaryButton.layer.cornerRadius = 28 // Unified pill shape
         primaryButton.addTarget(self,
                                 action: #selector(primaryButtonTapped),
                                 for: .touchUpInside)
@@ -249,15 +249,46 @@ private extension AuthViewController {
         
         // MARK: - Social buttons
         
-        configureSocialButton(appleButton,
-                              title: "Continue with Apple",
-                              systemImageName: "apple.logo")
-        configureSocialButton(googleButton,
-                              title: "Continue with Google",
-                              systemImageName: "g.circle")
-        configureSocialButton(facebookButton,
-                              title: "Continue with Facebook",
-                              systemImageName: "f.circle")
+        // MARK: - Google Button Custom Subviews
+        let googleIconView = UIImageView(image: UIImage(named: "google_icon"))
+        googleIconView.contentMode = .scaleAspectFit
+        googleIconView.translatesAutoresizingMaskIntoConstraints = false
+        
+        let googleLabel = UILabel()
+        googleLabel.text = "Continue with Google"
+        googleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        googleLabel.textColor = .label
+        googleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let googleArrowView = UIImageView(image: UIImage(systemName: "arrow.right"))
+        googleArrowView.tintColor = .label
+        googleArrowView.contentMode = .scaleAspectFit
+        googleArrowView.translatesAutoresizingMaskIntoConstraints = false
+        
+        googleButton.addSubview(googleIconView)
+        googleButton.addSubview(googleLabel)
+        googleButton.addSubview(googleArrowView)
+        
+        configureSocialButton(googleButton, title: "", image: nil)
+        
+        NSLayoutConstraint.activate([
+            googleIconView.leadingAnchor.constraint(equalTo: googleButton.leadingAnchor, constant: 20),
+            googleIconView.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor),
+            googleIconView.widthAnchor.constraint(equalToConstant: 24),
+            googleIconView.heightAnchor.constraint(equalToConstant: 24),
+            
+            googleLabel.leadingAnchor.constraint(equalTo: googleIconView.trailingAnchor, constant: 12),
+            googleLabel.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor),
+            
+            googleArrowView.trailingAnchor.constraint(equalTo: googleButton.trailingAnchor, constant: -20),
+            googleArrowView.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor),
+            googleArrowView.widthAnchor.constraint(equalToConstant: 18),
+            googleArrowView.heightAnchor.constraint(equalToConstant: 18)
+        ])
+        
+        googleButton.addTarget(self,
+                               action: #selector(googleButtonTapped),
+                               for: .touchUpInside)
         
         // MARK: - Bottom switch mode
         
@@ -305,9 +336,7 @@ private extension AuthViewController {
          leftSeparatorLine,
          orLabel,
          rightSeparatorLine,
-         appleButton,
          googleButton,
-         facebookButton,
          errorLabel,
          activityIndicator,
          switchModeButton].forEach {
@@ -433,7 +462,7 @@ private extension AuthViewController {
             primaryButtonLoginConstraint!,
             primaryButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
             primaryButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
-            primaryButton.heightAnchor.constraint(equalToConstant: 55),
+            primaryButton.heightAnchor.constraint(equalToConstant: 56),
             
             
             activityIndicator.topAnchor.constraint(equalTo: primaryButton.bottomAnchor, constant: 8),
@@ -455,22 +484,12 @@ private extension AuthViewController {
             rightSeparatorLine.centerYAnchor.constraint(equalTo: orLabel.centerYAnchor),
             rightSeparatorLine.heightAnchor.constraint(equalToConstant: 1),
             
-            appleButton.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 24),
-            appleButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
-            appleButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
-            appleButton.heightAnchor.constraint(equalToConstant: 48),
-            
-            googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 12),
+            googleButton.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 24),
             googleButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
             googleButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
-            googleButton.heightAnchor.constraint(equalToConstant: 48),
+            googleButton.heightAnchor.constraint(equalToConstant: 56),
             
-            facebookButton.topAnchor.constraint(equalTo: googleButton.bottomAnchor, constant: 12),
-            facebookButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
-            facebookButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
-            facebookButton.heightAnchor.constraint(equalToConstant: 48),
-            
-            switchModeButton.topAnchor.constraint(equalTo: facebookButton.bottomAnchor, constant: 24),
+            switchModeButton.topAnchor.constraint(equalTo: googleButton.bottomAnchor, constant: 24),
             switchModeButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             switchModeButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24)
         ])
@@ -505,17 +524,28 @@ private extension AuthViewController {
     
     func configureSocialButton(_ button: UIButton,
                                title: String,
-                               systemImageName: String) {
-        button.setTitle("  " + title, for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .regular)
-        button.setTitleColor(.label, for: .normal)
-        button.layer.cornerRadius = 8
-        button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor.systemGray4.cgColor
+                               image: UIImage?) {
+        if !title.isEmpty {
+            button.setTitle("  " + title, for: .normal)
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .medium)
+            button.setTitleColor(.label, for: .normal)
+        }
+        
+        button.layer.cornerRadius = 28 // Pill shaped (height 56 / 2)
+        button.layer.borderWidth = 1.0
+        button.layer.borderColor = UIColor.systemGray5.cgColor
         button.contentHorizontalAlignment = .center
         
-        let image = UIImage(systemName: systemImageName)
-        button.setImage(image, for: .normal)
+        if let image = image {
+            button.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal)
+            button.imageView?.contentMode = .scaleAspectFit
+        }
+        
+        button.backgroundColor = .white
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.08 // Slightly more prominent shadow for consistency
+        button.layer.shadowOffset = CGSize(width: 0, height: 4)
+        button.layer.shadowRadius = 8
         
         button.translatesAutoresizingMaskIntoConstraints = false
     }
@@ -551,15 +581,11 @@ private extension AuthViewController {
         errorLabel.isHidden = true
         
         // Animate layout change
-        UIView.animate(withDuration: 0.3) {
-            self.view.layoutIfNeeded()
-        }
     }
 }
 
 // MARK: - Actions
-
-private extension AuthViewController {
+extension AuthViewController {
     
     @objc func togglePasswordVisibility() {
         passwordTextField.isSecureTextEntry.toggle()
@@ -639,11 +665,55 @@ private extension AuthViewController {
             }
         }
     }
+
+    @objc func googleButtonTapped() {
+        Task {
+            do {
+                let url = try await SupabaseManager.shared.client.auth.getOAuthSignInURL(
+                    provider: .google,
+                    redirectTo: URL(string: "io.supabase.rehearse://login-callback")
+                )
+                
+                await MainActor.run {
+                    let session = ASWebAuthenticationSession(
+                        url: url,
+                        callbackURLScheme: "io.supabase.rehearse"
+                    ) { callbackURL, error in
+                        if let callbackURL = callbackURL {
+                            Task {
+                                // Explicitly await the session handling
+                                _ = try? await SupabaseManager.shared.client.auth.handle(callbackURL)
+                                await MainActor.run {
+                                    self.routeAfterLogin()
+                                }
+                            }
+                        } else if let error = error {
+                            self.showError("Login failed: \(error.localizedDescription)")
+                        }
+                    }
+                    
+                    session.presentationContextProvider = self
+                    session.prefersEphemeralWebBrowserSession = false
+                    session.start()
+                }
+            } catch {
+                await MainActor.run {
+                    self.showError("Failed to start Google login: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - ASWebAuthenticationPresentationContextProviding
+extension AuthViewController: ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return self.view.window ?? ASPresentationAnchor()
+    }
 }
 
 // MARK: - Supabase Auth
-
-private extension AuthViewController {
+extension AuthViewController {
     
     func login(email: String, password: String) async throws {
         let client = SupabaseManager.shared.client
@@ -655,7 +725,6 @@ private extension AuthViewController {
         
         await MainActor.run {
             self.routeAfterLogin()
-
         }
     }
     
@@ -672,7 +741,6 @@ private extension AuthViewController {
             return
         }
         
-        // Send metadata so trigger can use it
         let result = try await client.auth.signUp(
             email: email,
             password: password,
@@ -682,27 +750,19 @@ private extension AuthViewController {
             ]
         )
         
-        // ⛔️ IMPORTANT: remove manual insert into profiles here.
-        // The trigger now handles profile creation.
-
         print("SIGNUP RESULT:", result)
         
         if result.session != nil {
-            // Email confirm OFF -> user already logged in
             await MainActor.run {
                 self.routeAfterLogin()
-
             }
         } else {
-            // Email confirm ON -> user must verify, but profile row is already created by trigger
             await MainActor.run {
                 self.showError("Account created. Please check your email to verify.")
             }
         }
     }
 
-    
-    
     @MainActor
     func showHomeScreen() {
         let home = MainTabBarController()
@@ -710,12 +770,12 @@ private extension AuthViewController {
         present(home, animated: true)
     }
 
-    
     @MainActor
     func showError(_ message: String) {
         errorLabel.text = message
         errorLabel.isHidden = false
     }
+
     @MainActor
     func routeAfterLogin() {
         Task {
@@ -724,30 +784,39 @@ private extension AuthViewController {
                 let session = try await client.auth.session
                 let userId = session.user.id.uuidString
 
-                // Query user_onboarding
-                let response = try await client
+                // Query user_onboarding and check if 'genre' field is set.
+                // If there's a trigger-created placeholder, 'genre' will be null.
+                struct OnboardingRow: Decodable {
+                    let genre: String?
+                }
+                
+                let row: OnboardingRow = try await client
                     .from("user_onboarding")
-                    .select()
+                    .select("genre")
                     .eq("id", value: userId)
                     .single()
                     .execute()
+                    .value
 
-                // If record exists → go home
-                showHomeScreen()
+                if row.genre != nil {
+                    showHomeScreen()
+                } else {
+                    showOnboardingFlow()
+                }
             } catch {
-                // If .single() fails → no onboarding data → start onboarding
+                // If .single() fails → no onboarding record found → start onboarding
                 showOnboardingFlow()
             }
         }
     }
+
     @MainActor
-   
     func showOnboardingFlow() {
         let onboardingVC = UIHostingController(rootView: OnboardingFlowRoot())
         onboardingVC.modalPresentationStyle = .fullScreen
         present(onboardingVC, animated: true)
     }
-
-
-
 }
+
+
+

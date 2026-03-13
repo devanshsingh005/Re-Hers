@@ -497,8 +497,8 @@ class HomeViewController: UIViewController {
 
         let playBtn = createBorderedButton("Play Along")
 
-        continueBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        playBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
+        continueBtn.heightAnchor.constraint(equalToConstant: 56).isActive = true
+        playBtn.heightAnchor.constraint(equalToConstant: 56).isActive = true
 
         let buttonStack = UIStackView(arrangedSubviews: [continueBtn, playBtn])
         buttonStack.axis = .horizontal
@@ -686,19 +686,19 @@ class HomeViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
 
-        // BLACK text (correct)
-        button.setTitleColor(.black, for: .normal)
-        button.tintColor = .black
+        // White text for primary action
+        button.setTitleColor(.white, for: .normal)
+        button.tintColor = .white
 
-        // Orange background
-        button.backgroundColor = .secondaryColor  // #FFAE3D
+        // New Brand Primary Color
+        button.backgroundColor = .primaryColor 
 
         button.adjustsImageWhenHighlighted = false
         button.adjustsImageWhenDisabled = false
 
-        // Rounded corners
+        // Unified pill shape
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        button.layer.cornerRadius = 12
+        button.layer.cornerRadius = 28
         button.layer.masksToBounds = true
 
         return button
@@ -709,18 +709,18 @@ class HomeViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
 
-        // Light gray background
-        button.backgroundColor = .lightGray   // #D9D9D9
+        // Balanced gray background for secondary action
+        button.backgroundColor = .systemGray6
 
         // Dark text
-        button.setTitleColor(.darkGray2, for: .normal)  // #212121
+        button.setTitleColor(.darkGray1, for: .normal)
 
         // No border
         button.layer.borderWidth = 0
         button.layer.borderColor = nil
 
-        // Rounded corners (same as Continue button)
-        button.layer.cornerRadius = 12
+        // Unified pill shape
+        button.layer.cornerRadius = 28
         button.layer.masksToBounds = true
 
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)

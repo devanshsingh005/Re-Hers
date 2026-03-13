@@ -6,6 +6,8 @@
 //
 
 import UIKit
+import Supabase
+import Auth
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -22,7 +24,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let initialVC = storyboard.instantiateInitialViewController()!
 
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = AnimationViewController()
+        window.rootViewController = initialVC
         self.window = window
         window.makeKeyAndVisible()
     }
@@ -56,6 +58,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // to restore the scene back to its current state.
     }
 
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        _ = SupabaseManager.shared.client.auth.handle(url)
+    }
 
 }
 

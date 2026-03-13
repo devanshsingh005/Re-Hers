@@ -30,6 +30,7 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
     private let usernameLabel = UILabel()
     private let bioLabel = UILabel()
     private let editButton = UIButton(type: .system)
+    private let signOutButton = UIButton(type: .system)
     
     // Background gradient
     private let backgroundGradient = CAGradientLayer()
@@ -154,12 +155,13 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         contentView.addArrangedSubview(buildAchievementsSection())
         contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
         
-        // Most played section
-        contentView.addArrangedSubview(buildMostPlayedSection())
+        // Add Sign Out Button
+        contentView.addArrangedSubview(buildSignOutButton())
+        contentView.setCustomSpacing(32, after: contentView.arrangedSubviews.last!)
 
         // Add bottom spacer
         let spacer = UIView()
-        spacer.heightAnchor.constraint(equalToConstant: 100).isActive = true
+        spacer.heightAnchor.constraint(equalToConstant: 60).isActive = true
         contentView.addArrangedSubview(spacer)
     }
 
@@ -725,6 +727,70 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
         ])
 
         return row
+    }
+
+    private func buildSignOutButton() -> UIView {
+        let container = UIView()
+        
+        signOutButton.setTitle("Sign Out", for: .normal)
+        signOutButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        signOutButton.setTitleColor(.white, for: .normal)
+        signOutButton.backgroundColor = .primaryColor
+        signOutButton.layer.cornerRadius = 28 // Unified pill shape
+        signOutButton.layer.shadowColor = UIColor.black.cgColor
+        signOutButton.layer.shadowOpacity = 0.08
+        signOutButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        signOutButton.layer.shadowRadius = 8
+        signOutButton.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
+        signOutButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        container.addSubview(signOutButton)
+        
+        NSLayoutConstraint.activate([
+            signOutButton.topAnchor.constraint(equalTo: container.topAnchor),
+            signOutButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            signOutButton.widthAnchor.constraint(equalToConstant: 240), // Slightly wider for consistency with login buttons
+            signOutButton.heightAnchor.constraint(equalToConstant: 56),
+            signOutButton.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        
+        return container
+    }
+
+    @objc private func signOutTapped() {
+        let alert = UIAlertController(title: "Sign Out",
+                                      message: "Are you sure you want to log out?",
+                                      preferredStyle: .alert)
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Sign Out", style: .destructive, handler: { _ in
+            self.performSignOut()
+        }))
+        
+        present(alert, animated: true)
+    }
+    
+    private func performSignOut() {
+        Task {
+            do {
+                try await SupabaseManager.shared.client.auth.signOut()
+                
+                await MainActor.run {
+                    // Transition to Login Screen
+                    let storyboard = UIStoryboard(name: "Main", bundle: nil)
+                    if let loginVC = storyboard.instantiateInitialViewController() {
+                        if let window = self.view.window {
+                            window.rootViewController = loginVC
+                            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: nil)
+                        }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.showAlert(title: "Error", message: "Failed to sign out: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     @objc private func editDailyGoalTapped() {
