@@ -94,6 +94,34 @@ class MainTabBarController: UITabBarController {
         tabBar.isTranslucent = false
         tabBar.clipsToBounds = false
     }
+
+    // MARK: - Orientation Delegation
+    override var shouldAutorotate: Bool {
+        return selectedViewController?.shouldAutorotate ?? true
+    }
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return selectedViewController?.supportedInterfaceOrientations ?? .portrait
+    }
+
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        return selectedViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
+    }
+}
+
+// MARK: - Navigation Controller Orientation Delegation
+extension UINavigationController {
+    override open var shouldAutorotate: Bool {
+        return topViewController?.shouldAutorotate ?? true
+    }
+
+    override open var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return topViewController?.supportedInterfaceOrientations ?? .allButUpsideDown
+    }
+
+    override open var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        return topViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
+    }
 }
 
 

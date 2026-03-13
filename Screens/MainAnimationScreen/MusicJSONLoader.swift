@@ -19,6 +19,15 @@ private struct NoteEvent {
 struct MusicJSONLoader {
 
     // MARK: - Public API
+    
+    func loadJSON(from filename: String) -> [SongChord]? {
+        do {
+            return try MusicJSONLoader.loadSongChords(fromBundleFilename: filename + ".json")
+        } catch {
+            print("[MusicJSONLoader] Error loading \(filename): \(error)")
+            return nil
+        }
+    }
 
     static func loadSongChords(
         fromBundleFilename filename: String,

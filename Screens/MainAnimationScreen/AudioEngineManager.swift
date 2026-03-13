@@ -62,6 +62,29 @@ final class AudioEngineManager {
         engine.connect(sampler, to: reverb,               format: nil)
         engine.connect(reverb,  to: engine.mainMixerNode, format: nil)
         engine.prepare()
+        setupNotifications()
+    }
+
+    private func setupNotifications() {
+        NotificationCenter.default.addObserver(self, selector: #selector(handleInterruption), name: AVAudioSession.interruptionNotification, object: nil)
+    }
+
+    @objc private func handleInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+        
+        if type == .began {
+            isStarted = false
+            engine.stop()
+        } else if type == .ended {
+            if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                if options.contains(.shouldResume) {
+                    startEngine()
+                }
+            }
+        }
     }
 
     // MARK: - Start
@@ -69,7 +92,7 @@ final class AudioEngineManager {
         guard !isStarted else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers, .allowBluetooth])
             try session.setActive(true)
             try engine.start()
             isStarted = true
