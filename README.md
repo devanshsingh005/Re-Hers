@@ -1,1 +1,1 @@
-hum banenge kamyaab!
+hum haunge kamyaab!

@@ -15,6 +15,7 @@ final class AnimatedPianoKeyView: UIView {
     var currentHand: HandType? = nil
 
     private var isPressed = false
+    var isHinted  = false { didSet { updateAppearance() } }
     var onTouchStateChanged: ((UInt8, Bool) -> Void)?
 
     private let noteLabel = UILabel()
@@ -76,22 +77,34 @@ final class AnimatedPianoKeyView: UIView {
     static let leftColor  = UIColor.systemBlue   // blue for left hand
     static let rightColor = UIColor.systemRed     // red for right hand
 
-    func animatePress(hand: HandType) {
-        currentHand = hand
-        let color = hand == .left ? AnimatedPianoKeyView.leftColor
-                                  : AnimatedPianoKeyView.rightColor
-        UIView.animate(withDuration: 0.08) {
-            // Use softer opacity for a calmer, silent feel
-            self.backgroundColor = color.withAlphaComponent(self.keyType == .white ? 0.35 : 0.55)
+    func animatePress(hand: HandType? = nil, color overrideColor: UIColor? = nil) {
+        let color: UIColor
+        if let ovColor = overrideColor {
+            color = ovColor
+        } else {
+            color = hand == .left ? AnimatedPianoKeyView.leftColor : AnimatedPianoKeyView.rightColor
+        }
+        
+        UIView.animate(withDuration: 0.1) {
+            self.backgroundColor = color
             self.transform = CGAffineTransform(scaleX: 0.97, y: 0.98)
         }
     }
 
     func animateRelease() {
-        currentHand = nil
-        UIView.animate(withDuration: 0.18) {
-            self.resetAppearance()
+        UIView.animate(withDuration: 0.2) {
+            self.updateAppearance()
             self.transform = .identity
+        }
+    }
+
+    private func updateAppearance() {
+        if isHinted {
+            backgroundColor = UIColor.systemBlue.withAlphaComponent(0.4)
+            layer.borderColor = UIColor.systemBlue.cgColor
+            layer.borderWidth = 1.5
+        } else {
+            resetAppearance()
         }
     }
 
@@ -236,12 +249,21 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     /// Highlight keys — left=blue, right=cyan-blue (all look blue as in Image 2)
     func playChord(leftHand: [String], rightHand: [String]) {
         resetAllKeys()
-        for n in leftHand  { findKey(n)?.animatePress(hand: .left) }
-        for n in rightHand { findKey(n)?.animatePress(hand: .right) }
+        for n in leftHand  { findKey(n)?.animatePress(color: AnimatedPianoKeyView.leftColor) }
+        for n in rightHand { findKey(n)?.animatePress(color: AnimatedPianoKeyView.rightColor) }
+    }
+
+    func showHints(for notes: [String]) {
+        (whiteKeys + blackKeys).forEach { k in
+            k.isHinted = notes.contains(k.noteName) || notes.contains(normalise(k.noteName))
+        }
     }
 
     func resetAllKeys() {
-        (whiteKeys + blackKeys).forEach { $0.animateRelease() }
+        (whiteKeys + blackKeys).forEach { 
+            $0.isHinted = false
+            $0.animateRelease() 
+        }
     }
 
     func scrollToNote(_ name: String) {
@@ -301,17 +323,28 @@ final class RealTimeChordDisplayView: UIView {
     private let label: UILabel = {
         let l = UILabel()
         l.font = .systemFont(ofSize: 24, weight: .bold)
-        l.textColor = .white; l.textAlignment = .center
+        l.textColor = .label; l.textAlignment = .center
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
+    private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor(white: 0.06, alpha: 0.95)
+        backgroundColor = .clear
         layer.cornerRadius = 14; clipsToBounds = true
+        
+        blurView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(blurView)
         addSubview(label)
+        
         NSLayoutConstraint.activate([
+            blurView.topAnchor.constraint(equalTo: topAnchor),
+            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             label.centerYAnchor.constraint(equalTo: centerYAnchor)

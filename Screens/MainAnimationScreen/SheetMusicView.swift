@@ -36,6 +36,7 @@ final class SheetMusicView: UIView {
     private let progressBarTrack = UIView()
     private let progressBar  = UIView()
     private let progressThumb = UIView()
+    private let feedbackOverlay = UIView()
     
     // Delegate to communicate seeks
     var onSeekProgress: ((CGFloat) -> Void)?
@@ -57,6 +58,19 @@ final class SheetMusicView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func setChordCount(_ n: Int) {}
+    
+    func configure(with chords: [SongChord]) {
+        // Since SheetMusicView already has loadJSON/loadData logic that parses everything,
+        // and PlayAlongViewController calls configure(with: st) where st is [SongChord],
+        // we can just ensure the view is ready. 
+        // In this implementation, the data is already loaded in loadDemoSheet() calling loadData.
+        // However, PlayAlongViewController expects configure(with:) to exist.
+        setNeedsLayout()
+    }
+
+    func updateProgress(to tick: Int) {
+        updateToTick(Double(tick))
+    }
 
     // MARK: One-time setup
     private func setup() {
@@ -98,6 +112,17 @@ final class SheetMusicView: UIView {
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleProgressTap(_:)))
         progressBarTrack.addGestureRecognizer(tap)
+
+        // Feedback overlay setup
+        feedbackOverlay.isUserInteractionEnabled = false
+        feedbackOverlay.alpha = 0
+        addSubview(feedbackOverlay)
+    }
+
+    func setProgressBarHidden(_ hidden: Bool) {
+        progressBarTrack.isHidden = hidden
+        progressBar.isHidden = hidden
+        progressThumb.isHidden = hidden
     }
 
     @objc private func handleProgressPan(_ gesture: UIPanGestureRecognizer) {
@@ -136,6 +161,8 @@ final class SheetMusicView: UIView {
         let fillW = trackW * scrollFraction
         progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: trackH)
         progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
+        
+        feedbackOverlay.frame = bounds
 
         if bounds != lastBounds {
             lastBounds = bounds
@@ -192,6 +219,39 @@ final class SheetMusicView: UIView {
         CATransaction.commit()
         progressBar.frame = CGRect(x: 0, y: 0, width: 0, height: 8)
         progressThumb.frame = CGRect(x: -8, y: -4, width: 16, height: 16)
+        
+        // Remove all wrong note markers
+        contentLayer.sublayers?.filter { $0.name == "WrongNoteMarker" }.forEach { $0.removeFromSuperlayer() }
+    }
+
+    // MARK: - Interactive Feedback
+    func showFeedback(isCorrect: Bool) {
+        let color = isCorrect ? UIColor.systemGreen : UIColor.systemRed
+        feedbackOverlay.backgroundColor = color.withAlphaComponent(0.15)
+        
+        UIView.animate(withDuration: 0.1, animations: {
+            self.feedbackOverlay.alpha = 1
+        }) { _ in
+            UIView.animate(withDuration: 0.3, delay: 0.1, options: .curveEaseOut, animations: {
+                self.feedbackOverlay.alpha = 0
+            }, completion: nil)
+        }
+    }
+
+    func addWrongNoteMarker(at tick: Double) {
+        let nx = clefW + CGFloat(tick) * maxPixelsPerTick + 16
+        
+        let marker = CALayer()
+        marker.name = "WrongNoteMarker"
+        marker.backgroundColor = UIColor.systemRed.withAlphaComponent(0.8).cgColor
+        marker.cornerRadius = 2
+        
+        // Vertical line covering the staff area
+        let markerH = totalStaffHeight + 20
+        let markerY = trebleTop - 10
+        marker.frame = CGRect(x: nx - 1, y: markerY, width: 2, height: markerH)
+        
+        contentLayer.addSublayer(marker)
     }
 
     // MARK: Geometry

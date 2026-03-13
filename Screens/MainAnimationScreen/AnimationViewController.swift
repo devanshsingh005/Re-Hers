@@ -45,9 +45,21 @@ final class AnimationViewController: UIViewController {
     private var overlayHideTimer: Timer?
     private var didCenterKeyboard = false
 
+    // MARK: - Initializer
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.hidesBottomBarWhenPushed = true
+    }
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        self.edgesForExtendedLayout = .all
         view.backgroundColor = UIColor.systemBackground
         buildLayout()
         embedPiano()
@@ -57,6 +69,9 @@ final class AnimationViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        // Ensure no safe-area gap remains from portrait transition
+        additionalSafeAreaInsets = .zero
+        
         // Center keyboard on C4 exactly once after layout is done
         if !didCenterKeyboard && pianoVC.view.bounds.width > 0 {
             didCenterKeyboard = true
@@ -76,6 +91,7 @@ final class AnimationViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
         tabBarController?.tabBar.isHidden = true
+        forceLandscape()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -91,6 +107,14 @@ final class AnimationViewController: UIViewController {
     override var shouldAutorotate: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
+
+    private func forceLandscape() {
+        if #available(iOS 16.0, *) {
+            self.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
+        UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+        UIViewController.attemptRotationToDeviceOrientation()
+    }
 
     // MARK: - Layout
     private func buildLayout() {

@@ -22,6 +22,11 @@ final class LessonNavBarView: UIView {
 
     func setSongTitle(_ t: String) { titleLabel.text = t }
 
+    private var rightStack: UIStackView?
+    func setPlaybackControlsHidden(_ hidden: Bool) {
+        rightStack?.isHidden = hidden
+    }
+
     override init(frame: CGRect) { super.init(frame: frame); build() }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -88,6 +93,7 @@ final class LessonNavBarView: UIView {
         // ── Right cluster ────────────────────────────────────────────────
         let right = UIStackView(arrangedSubviews: [sliderRow, menuBtn])
         right.axis = .horizontal; right.spacing = 8; right.alignment = .center
+        self.rightStack = right
 
         // ── Assemble ─────────────────────────────────────────────────────
         [backBtn, titleLabel, right].forEach {
