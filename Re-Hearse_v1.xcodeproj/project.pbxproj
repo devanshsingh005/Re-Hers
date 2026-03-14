@@ -40,6 +40,7 @@
 		2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DAE2EEE907000CBDC03 /* OnboardingQuestion2View.swift */; };
 		2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */; };
 		2BC4A97B2F642C3C004FC90E /* LaunchLoadingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC4A97A2F642C3C004FC90E /* LaunchLoadingViewController.swift */; };
+		2BC4A97D2F656AB4004FC90E /* RehearsalInfoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC4A97C2F656AB4004FC90E /* RehearsalInfoCard.swift */; };
 		39A4CFA913922A6AA9BEC35C /* PitchDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A17EECA87264A9EA407FA9 /* PitchDetector.swift */; };
 		84114B6A2EBCF68300E86F71 /* UploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* UploadScreen.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
@@ -95,6 +96,7 @@
 		2BC06DAE2EEE907000CBDC03 /* OnboardingQuestion2View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion2View.swift; sourceTree = "<group>"; };
 		2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion3View.swift; sourceTree = "<group>"; };
 		2BC4A97A2F642C3C004FC90E /* LaunchLoadingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchLoadingViewController.swift; sourceTree = "<group>"; };
+		2BC4A97C2F656AB4004FC90E /* RehearsalInfoCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RehearsalInfoCard.swift; sourceTree = "<group>"; };
 		81A17EECA87264A9EA407FA9 /* PitchDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PitchDetector.swift; sourceTree = "<group>"; };
 		84114B692EBCF68300E86F71 /* UploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomNavbar.swift; sourceTree = "<group>"; };
@@ -178,6 +180,7 @@
 			children = (
 				2B3828BF2EC6441A0025933F /* SplashViewController.swift */,
 				2BC4A97A2F642C3C004FC90E /* LaunchLoadingViewController.swift */,
+				2BC4A97C2F656AB4004FC90E /* RehearsalInfoCard.swift */,
 			);
 			path = Splash;
 			sourceTree = "<group>";
@@ -512,6 +515,7 @@
 				23E442E72ED63F0200A2F5AC /* SearchButtonExploreViewController.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */,
+				2BC4A97D2F656AB4004FC90E /* RehearsalInfoCard.swift in Sources */,
 				84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */,
 				236331F32ED6C2B3007D5F94 /* Models/ColorViewController.swift in Sources */,
 				2BC4A97B2F642C3C004FC90E /* LaunchLoadingViewController.swift in Sources */,

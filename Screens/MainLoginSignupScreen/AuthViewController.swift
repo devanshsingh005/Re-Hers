@@ -93,7 +93,6 @@ final class AuthViewController: UIViewController {
         }
     }
     
-    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -104,6 +103,35 @@ final class AuthViewController: UIViewController {
         
         setupViews()
         updateTextsForMode()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        // Only show the intro card once per fresh install
+        if !UserDefaults.standard.bool(forKey: "hasSeenAppIntroCard") {
+            showRehearsalInfoCard()
+        }
+    }
+    
+    private func showRehearsalInfoCard() {
+        let binding = Binding<Bool>(
+            get: { true },
+            set: { isVisible in
+                if !isVisible {
+                    self.presentedViewController?.dismiss(animated: false, completion: {
+                        UserDefaults.standard.set(true, forKey: "hasSeenAppIntroCard")
+                    })
+                }
+            }
+        )
+        
+        let introView = RehearsalInfoCard(isPresented: binding)
+        let hostingController = UIHostingController(rootView: introView)
+        hostingController.modalPresentationStyle = .overFullScreen
+        hostingController.view.backgroundColor = .clear // Let the ZStack handle dimming
+        
+        present(hostingController, animated: false, completion: nil)
     }
 }
 
