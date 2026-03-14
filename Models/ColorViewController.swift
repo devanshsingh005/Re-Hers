@@ -14,8 +14,8 @@ public extension UIColor {
     /// Brand Primary Color - #EF9408
     static let primaryColor: UIColor = UIColor(hex: "#EF9408")
 
-    /// Brand Accent Color (Orange) - #FFAE3D
-    static let secondaryColor: UIColor = UIColor(hex: "#FFAE3D")
+    /// Brand Accent Color (Orange) - #EF9408
+    static let secondaryColor: UIColor = UIColor(hex: "#EF9408")
 
     /// Dark Gray 1 - #3C3C3C
     static let darkGray1: UIColor = UIColor(hex: "#3C3C3C")

@@ -22,7 +22,7 @@ extension HomeViewController {
             var config = UIButton.Configuration.filled()
             config.title = title
             // Apply colors to match previous appearance
-            config.baseBackgroundColor = .secondaryColor // #FFAE3D
+            config.baseBackgroundColor = .secondaryColor // #EF9408
             config.baseForegroundColor = .black
             // Corner radius roughly matching previous 12pt
             config.cornerStyle = .medium
@@ -35,7 +35,6 @@ extension HomeViewController {
 
             button.configuration = config
 
-            // Keep appearance consistent on highlight/disabled (no dimming)
             button.configurationUpdateHandler = { btn in
                 guard var updated = btn.configuration else { return }
                 updated.baseBackgroundColor = .secondaryColor

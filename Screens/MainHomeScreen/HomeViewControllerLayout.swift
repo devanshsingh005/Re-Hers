@@ -71,14 +71,16 @@ extension HomeViewController {
     
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {
-        UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
         let vc = AnimationViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
     @objc func playAlongTapped() {
-        UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
         let vc = PlayAlongViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
 }
