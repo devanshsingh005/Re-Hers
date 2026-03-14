@@ -777,13 +777,10 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
                 
                 await MainActor.run {
                     UserDefaults.standard.set(false, forKey: "isLoggedIn")
-                    // Transition to Login Screen
-                    let storyboard = UIStoryboard(name: "Main", bundle: nil)
-                    if let loginVC = storyboard.instantiateInitialViewController() {
-                        if let window = self.view.window {
-                            window.rootViewController = loginVC
-                            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: nil)
-                        }
+                    
+                    // Transition to Splash Screen using unified SceneDelegate helper
+                    if let sceneDelegate = self.view.window?.windowScene?.delegate as? SceneDelegate {
+                        sceneDelegate.showGetStartedSplash()
                     }
                 }
             } catch {

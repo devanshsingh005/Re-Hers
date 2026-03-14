@@ -21,41 +21,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = (scene as? UIWindowScene) else { return }
 
         let window = UIWindow(windowScene: windowScene)
-        
-        let splashView = SplashScreenView { [weak self] in
-            self?.transitionToAuth()
-        }
-        
-        window.rootViewController = UIHostingController(rootView: splashView)
         self.window = window
 
         // Synchronous check: Do we believe the user is logged in?
         let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
 
         if isLoggedIn {
-            // User is supposedly logged in. Show the seamless loading spinner while
-            // the async Supabase session check completely verifies the token.
-            let loadingVC = LaunchLoadingViewController()
-            window.rootViewController = loadingVC
+            // User is already logged in. Instantly go to the Home Page.
+            // We run the async session check in the background just to be safe,
+            // but we don't block the UI with a loading screen anymore.
+            showMainApp()
             window.makeKeyAndVisible()
 
             Task {
                 do {
                     _ = try await SupabaseManager.shared.client.auth.session
-                    await MainActor.run { self.showMainApp() }
+                    // Session is valid, stay on main app.
                 } catch {
-                    // Token expired or invalid. Reset flag and show login.
-                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
-                    await MainActor.run { self.showGetStartedSplash() }
+                    // Session invalid/expired. Reset flag and bounce back to login via splash.
+                    await MainActor.run {
+                        UserDefaults.standard.set(false, forKey: "isLoggedIn")
+                        self.showGetStartedSplash()
+                    }
                 }
             }
         } else {
-            // User is explicitly logged out or a first-time user.
-            // Immediately show the onboarding/Get Started splash with NO intermediate screen.
-            let storyboard = UIStoryboard(name: "Main", bundle: nil)
-            guard let splashVC = storyboard.instantiateInitialViewController() else { return }
-            
-            window.rootViewController = splashVC
+            // New user or logged-out user: show the animated SwiftUI splash screen.
+            showGetStartedSplash()
             window.makeKeyAndVisible()
         }
     }
@@ -70,9 +62,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// Route to the "Get Started" splash screen (unauthenticated)
     func showGetStartedSplash() {
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        guard let splashVC = storyboard.instantiateInitialViewController() else { return }
-        setRootViewController(splashVC)
+        let splashView = SplashScreenView { [weak self] in
+            self?.transitionToAuth()
+        }
+        let hostingController = UIHostingController(rootView: splashView)
+        setRootViewController(hostingController)
     }
 
     /// Route to the login / sign-up screen
