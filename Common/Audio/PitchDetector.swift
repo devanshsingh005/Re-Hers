@@ -123,6 +123,13 @@ public final class PitchDetector {
     private func process(buffer: AVAudioPCMBuffer, window: [Float]) {
         guard let channel = buffer.floatChannelData?[0], let setup = fftSetup else { return }
         
+        // Calculate root mean square (RMS) amplitude as a noise gate
+        var rms: Float = 0
+        vDSP_rmsqv(channel, 1, &rms, vDSP_Length(buffer.frameLength))
+        if rms < 0.015 { 
+            return // Ignore very quiet background noise 
+        }
+        
         var samples = [Float](repeating: 0, count: bufferSize)
         let copySize = min(Int(buffer.frameLength), bufferSize)
         // Copy audio data

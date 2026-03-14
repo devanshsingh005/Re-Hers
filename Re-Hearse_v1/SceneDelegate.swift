@@ -8,6 +8,7 @@
 import UIKit
 import Supabase
 import Auth
+import SwiftUI
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -18,8 +19,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
 
         guard let windowScene = (scene as? UIWindowScene) else { return }
-        
+
         let window = UIWindow(windowScene: windowScene)
+        
+        let splashView = SplashScreenView { [weak self] in
+            self?.transitionToAuth()
+        }
+        
+        window.rootViewController = UIHostingController(rootView: splashView)
         self.window = window
 
         // Synchronous check: Do we believe the user is logged in?
@@ -84,6 +91,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                           options: .transitionCrossDissolve,
                           animations: { window.rootViewController = vc },
                           completion: nil)
+    }
+
+    func transitionToAuth() {
+        guard let window = self.window else { return }
+        
+        // Transition to AuthViewController (or your primary entry point)
+        let authVC = AuthViewController()
+        
+        UIView.transition(with: window,
+                          duration: 0.6,
+                          options: .transitionCrossDissolve,
+                          animations: {
+            window.rootViewController = authVC
+        }, completion: nil)
     }
 
 

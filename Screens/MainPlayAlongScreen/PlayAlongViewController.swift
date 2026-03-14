@@ -108,12 +108,12 @@ final class PlayAlongViewController: UIViewController {
             sheetMusic.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
             sheetMusic.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             sheetMusic.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            sheetMusic.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -kPianoH),
+            sheetMusic.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -kPianoH),
 
             pianoKeyboard.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             pianoKeyboard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             pianoKeyboard.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            pianoKeyboard.topAnchor.constraint(equalTo: view.bottomAnchor, constant: -kPianoH),
+            pianoKeyboard.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -kPianoH),
 
             reportView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             reportView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -137,7 +137,13 @@ final class PlayAlongViewController: UIViewController {
     }
 
     private func wireCallbacks() {
-        navBar.onBackTap = { [weak self] in self?.navigationController?.popViewController(animated: true) }
+        navBar.onBackTap = { [weak self] in
+            if let nc = self?.navigationController, nc.viewControllers.count > 1 {
+                nc.popViewController(animated: true)
+            } else {
+                self?.dismiss(animated: true)
+            }
+        }
         
         sheetMusic.onSeekProgress = { [weak self] p in self?.engine.seek(to: Double(p)) }
         
@@ -147,7 +153,13 @@ final class PlayAlongViewController: UIViewController {
         }
         
         reportView.onRetry = { [weak self] in self?.restartSession() }
-        reportView.onDone  = { [weak self] in self?.navigationController?.popViewController(animated: true) }
+        reportView.onDone  = { [weak self] in
+            if let nc = self?.navigationController, nc.viewControllers.count > 1 {
+                nc.popViewController(animated: true)
+            } else {
+                self?.dismiss(animated: true)
+            }
+        }
     }
 
     private func loadSheetData() {
@@ -247,8 +259,22 @@ extension PlayAlongViewController: PlayAlongEngineDelegate {
 // MARK: - Pitch Detection
 extension PlayAlongViewController: PitchDetectorDelegate {
     func pitchDetectorDidDetect(note: String, frequency: Float, amplitude: CGFloat) {
-        // Lower threshold for laptop microphones (0.05 -> 0.02)
-        guard note != "—" && amplitude > 0.02 else { return }
+        // Guard against low amplitude background noise
+        guard note != "—" && amplitude > 0.08 else { return }
+        
+        let now = Date()
+        
+        if note == engine.lastDetectedNote {
+            // Prevent same note from triggering rapidly
+            if now.timeIntervalSince(engine.lastDetectedTime) < 0.3 { return }
+        } else {
+            // Prevent rapid flutter between different notes
+            if now.timeIntervalSince(engine.lastDetectedTime) < 0.15 { return }
+        }
+        
+        engine.lastDetectedNote = note
+        engine.lastDetectedTime = now
+        
         handleInput(note: note)
     }
 }
@@ -275,6 +301,10 @@ final class PlayAlongEngine {
     
     private var groupStartTime: Date?
     var requiredBPM: Int = 90 // Default
+    
+    // Antigravity Fix: Pitch Detection Debouncing State
+    var lastDetectedNote: String?
+    var lastDetectedTime: Date = Date.distantPast
     
     func start(with musicData: [SongChord]) {
         dataManager = PianoDataManager(scoreData: musicData)

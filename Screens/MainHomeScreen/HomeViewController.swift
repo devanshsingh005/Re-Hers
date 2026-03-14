@@ -271,7 +271,9 @@ class HomeViewController: UIViewController {
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {
         let vc = PianoAnimationViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
 

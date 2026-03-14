@@ -16,7 +16,7 @@ import AuthenticationServices
 final class AuthViewController: UIViewController {
     
     // MARK: - Constants
-    private let primaryOrangeColor = UIColor(red: 1.0, green: 0.702, blue: 0.0, alpha: 1.0)
+    private let primaryOrangeColor = UIColor(hex: "#EF9408")
     
     // MARK: - Constraint Storage
     private var signupConstraints: [NSLayoutConstraint] = []
@@ -114,7 +114,7 @@ private extension AuthViewController {
     func setupViews() {
         // MARK: - Top titles
         
-        appTitleLabel.text = "RE-HEARSE"
+        appTitleLabel.text = "rehearse"
         appTitleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
         appTitleLabel.textAlignment = .center
         appTitleLabel.textColor = UIColor(named: "TextPrimary") ?? .label

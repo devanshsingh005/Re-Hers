@@ -288,7 +288,9 @@ class SongDetailViewController: UIViewController {
         animationButton.setTitleColor(.darkGray, for: .normal)
 
         let vc = PlayAlongViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     @objc private func openPianoAnimationVC() {
