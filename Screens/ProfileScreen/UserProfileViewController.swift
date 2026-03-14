@@ -776,6 +776,7 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
                 try await SupabaseManager.shared.client.auth.signOut()
                 
                 await MainActor.run {
+                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
                     // Transition to Login Screen
                     let storyboard = UIStoryboard(name: "Main", bundle: nil)
                     if let loginVC = storyboard.instantiateInitialViewController() {

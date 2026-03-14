@@ -94,7 +94,12 @@ struct OnboardingQuestion3View: View {
             let userId = session.user.id.uuidString
 
             viewModel.saveToSupabase(userId: userId) { success in
-                if success { showHomeScreen() }
+                guard success else { return }
+                // ⚠️ saveToSupabase callback runs on a background thread —
+                // all UIKit transitions MUST happen on the main thread.
+                DispatchQueue.main.async {
+                    showHomeScreen()
+                }
             }
 
         } catch {
@@ -105,13 +110,17 @@ struct OnboardingQuestion3View: View {
     // MARK: - Navigation
     func showHomeScreen() {
         let home = MainTabBarController()
-        home.modalPresentationStyle = .fullScreen
 
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = scene.windows.first {
+        // Use the modern non-deprecated keyWindow lookup
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let window = scene.keyWindow else { return }
 
-            window.rootViewController = home
-            window.makeKeyAndVisible()
-        }
+        UIView.transition(with: window,
+                          duration: 0.35,
+                          options: .transitionCrossDissolve,
+                          animations: { window.rootViewController = home },
+                          completion: nil)
     }
 }

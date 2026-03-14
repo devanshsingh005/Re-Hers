@@ -653,15 +653,19 @@ extension AuthViewController {
                 } else {
                     try await signUp(email: email, password: password)
                 }
+                await MainActor.run {
+                    self.activityIndicator.stopAnimating()
+                    self.primaryButton.isEnabled = true
+                    UserDefaults.standard.set(true, forKey: "isLoggedIn")
+                    self.routeAfterLogin()
+                }
             } catch {
                 await MainActor.run {
                     self.showError(error.localizedDescription)
+                    self.activityIndicator.stopAnimating()
+                    self.primaryButton.isEnabled = true
+                    UserDefaults.standard.set(false, forKey: "isLoggedIn") // Set to false on error
                 }
-            }
-            
-            await MainActor.run {
-                self.activityIndicator.stopAnimating()
-                self.primaryButton.isEnabled = true
             }
         }
     }
@@ -673,28 +677,100 @@ extension AuthViewController {
                     provider: .google,
                     redirectTo: URL(string: "io.supabase.rehearse://login-callback")
                 )
-                
+
                 await MainActor.run {
-                    let session = ASWebAuthenticationSession(
+                    let webSession = ASWebAuthenticationSession(
                         url: url,
                         callbackURLScheme: "io.supabase.rehearse"
                     ) { callbackURL, error in
-                        if let callbackURL = callbackURL {
-                            Task {
-                                // Explicitly await the session handling
-                                _ = try? await SupabaseManager.shared.client.auth.handle(callbackURL)
+
+                        // User cancelled — fail silently
+                        if let error = error as? ASWebAuthenticationSessionError,
+                           error.code == .canceledLogin { return }
+
+                        if let error = error {
+                            DispatchQueue.main.async {
+                                self.showError("Google sign-in failed: \(error.localizedDescription)")
+                            }
+                            return
+                        }
+
+                        guard let callbackURL = callbackURL else {
+                            DispatchQueue.main.async {
+                                self.showError("Google sign-in failed: no callback URL.")
+                            }
+                            return
+                        }
+
+                        // Exchange the callback URL for a Supabase session.
+                        // IMPORTANT: After handle() succeeds we query onboarding
+                        // INLINE in the same Task — this avoids the race condition
+                        // where routeAfterLogin() spawns a *new* Task and tries to
+                        // read client.auth.session before it is fully committed.
+                        Task {
+                            do {
+                                let client = SupabaseManager.shared.client
+                                try await client.auth.handle(callbackURL)
+
+                                // The SDK securely stores the session in the iOS Keychain.
+                                // Sometimes fetching .session immediately throws "Auth session missing"
+                                // because the Keychain write hasn't propagated across threads yet.
+                                // We retry up to 5 times (max 1.5s delay) to ensure it syncs.
+                                var session: Session?
+                                for _ in 0..<5 {
+                                    if let s = try? await client.auth.session {
+                                        session = s
+                                        break
+                                    }
+                                    try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                                }
+                                
+                                guard let validSession = session else {
+                                    throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Session took too long to save. Please restart the app."])
+                                }
+
+                                let userId = validSession.user.id.uuidString
+
+                                // Check onboarding completion inline
+                                struct OnboardingRow: Decodable { let genre: String? }
+                                let shouldOnboard: Bool
+
+                                do {
+                                    let row: OnboardingRow = try await client
+                                        .from("user_onboarding")
+                                        .select("genre")
+                                        .eq("id", value: userId)
+                                        .single()
+                                        .execute()
+                                        .value
+                                        
+                                    print("Google Auth Onboarding Check - Retrieved Genre: \(String(describing: row.genre))")
+                                    shouldOnboard = row.genre == nil || row.genre!.isEmpty
+                                } catch {
+                                    print("Google Auth Onboarding Check - No record found: \(error.localizedDescription)")
+                                    shouldOnboard = true // no record → show onboarding
+                                }
+                                
                                 await MainActor.run {
-                                    self.routeAfterLogin()
+                                    UserDefaults.standard.set(true, forKey: "isLoggedIn")
+                                    if shouldOnboard {
+                                        self.showOnboardingFlow()
+                                    } else {
+                                        self.showHomeScreen()
+                                    }
+                                }
+
+                            } catch {
+                                await MainActor.run {
+                                    self.showError("Sign-in failed: \(error.localizedDescription)")
                                 }
                             }
-                        } else if let error = error {
-                            self.showError("Login failed: \(error.localizedDescription)")
                         }
                     }
-                    
-                    session.presentationContextProvider = self
-                    session.prefersEphemeralWebBrowserSession = false
-                    session.start()
+
+                    webSession.presentationContextProvider = self
+                    webSession.prefersEphemeralWebBrowserSession = true
+                    webSession.start()
                 }
             } catch {
                 await MainActor.run {
@@ -766,8 +842,7 @@ extension AuthViewController {
     @MainActor
     func showHomeScreen() {
         let home = MainTabBarController()
-        home.modalPresentationStyle = .fullScreen
-        present(home, animated: true)
+        replaceRootViewController(with: home)
     }
 
     @MainActor
@@ -784,28 +859,37 @@ extension AuthViewController {
                 let session = try await client.auth.session
                 let userId = session.user.id.uuidString
 
-                // Query user_onboarding and check if 'genre' field is set.
-                // If there's a trigger-created placeholder, 'genre' will be null.
+                // Query user_onboarding — check if the user has set their genre (completed onboarding)
                 struct OnboardingRow: Decodable {
                     let genre: String?
                 }
-                
-                let row: OnboardingRow = try await client
-                    .from("user_onboarding")
-                    .select("genre")
-                    .eq("id", value: userId)
-                    .single()
-                    .execute()
-                    .value
 
-                if row.genre != nil {
-                    showHomeScreen()
-                } else {
+                do {
+                    let row: OnboardingRow = try await client
+                        .from("user_onboarding")
+                        .select("genre")
+                        .eq("id", value: userId)
+                        .single()
+                        .execute()
+                        .value
+                        
+                    print("Email Auth Onboarding Check - Retrieved Genre: \(String(describing: row.genre))")
+
+                    if row.genre != nil && !row.genre!.isEmpty {
+                        // Returning user with completed onboarding → go to main app
+                        showHomeScreen()
+                    } else {
+                        // User record exists but onboarding not finished
+                        showOnboardingFlow()
+                    }
+                } catch {
+                    print("Email Auth Onboarding Check - No record found: \(error.localizedDescription)")
+                    // No onboarding record found at all → show onboarding
                     showOnboardingFlow()
                 }
             } catch {
-                // If .single() fails → no onboarding record found → start onboarding
-                showOnboardingFlow()
+                // Could not get session — stay on auth screen
+                showError("Login error. Please try again.")
             }
         }
     }
@@ -813,8 +897,22 @@ extension AuthViewController {
     @MainActor
     func showOnboardingFlow() {
         let onboardingVC = UIHostingController(rootView: OnboardingFlowRoot())
-        onboardingVC.modalPresentationStyle = .fullScreen
-        present(onboardingVC, animated: true)
+        replaceRootViewController(with: onboardingVC)
+    }
+
+    /// Replaces the window's root view controller with a smooth cross-dissolve.
+    /// Always use this instead of present() for top-level navigation transitions.
+    private func replaceRootViewController(with vc: UIViewController) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let window = scene.keyWindow else { return }
+
+        UIView.transition(with: window,
+                          duration: 0.35,
+                          options: .transitionCrossDissolve,
+                          animations: { window.rootViewController = vc },
+                          completion: nil)
     }
 }
 
