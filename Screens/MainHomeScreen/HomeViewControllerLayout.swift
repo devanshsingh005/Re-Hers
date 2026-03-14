@@ -71,11 +71,12 @@ extension HomeViewController {
     
     // MARK: - Navigation to Piano Page
     @objc func openPianoPage() {
-        let vc = PianoAnimationViewController()
+        UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+        let vc = AnimationViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
     @objc func playAlongTapped() {
-        print("🔥 PLAY ALONG TAP DETECTED")
+        UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
         let vc = PlayAlongViewController()
         navigationController?.pushViewController(vc, animated: true)
     }

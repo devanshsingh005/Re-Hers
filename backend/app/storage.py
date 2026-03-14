@@ -16,6 +16,21 @@ class StorageManager:
         self.db = db_client
         self.bucket = SUPABASE_BUCKET
     
+    def _is_valid_uuid(self, value: str) -> bool:
+        """Validate UUID format.
+        
+        Args:
+            value: String to validate as UUID
+        
+        Returns:
+            True if valid UUID, False otherwise
+        """
+        try:
+            uuid.UUID(str(value))
+            return True
+        except (ValueError, AttributeError):
+            return False
+    
     async def upload_json(
         self,
         user_id: str,
@@ -53,7 +68,7 @@ class StorageManager:
             self.client.storage.from_(self.bucket).upload(
                 path=storage_path,
                 file=json_bytes,
-                file_options={"content-type": "application/json", "upsert": "true"}
+                file_options={"content-type": "application/json", "x-upsert": "true"}
             )
             
             # Get public URL
@@ -174,7 +189,7 @@ class StorageManager:
         self.client.storage.from_("pdf_uploads").upload(
             path=storage_path,
             file=pdf_content,
-            file_options={"upsert": "true"}
+            file_options={"x-upsert": "true"}
         )
         
         return storage_path
@@ -183,14 +198,78 @@ class StorageManager:
         """Download PDF from storage."""
         return self.client.storage.from_("pdf_uploads").download(pdf_path)
     
-    @staticmethod
-    def _is_valid_uuid(val: str) -> bool:
-        """Validate UUID format."""
+    async def upload_labeled_pdf(
+        self,
+        user_id: str,
+        job_id: str,
+        pdf_content: bytes
+    ) -> Dict[str, Any]:
+        """Upload labeled PDF to user-scoped path in sheet_data bucket.
+
+        Stored alongside output.json so it shares the same public-bucket
+        policies and can be fetched via a plain public URL on iOS.
+
+        Args:
+            user_id: The authenticated user's ID
+            job_id: The job ID
+            pdf_content: Raw PDF bytes
+
+        Returns:
+            Dictionary with storage_path and file info
+
+        Raises:
+            ValueError: If user_id is invalid
+            Exception: If upload fails
+        """
+        if not self._is_valid_uuid(user_id):
+            raise ValueError(f"Invalid user_id: {user_id}")
+
+        # Store beside input.pdf in the pdf_uploads bucket
+        storage_path = f"{user_id}/{job_id}/labeled.pdf"
+
+        self.client.storage.from_("pdf_uploads").upload(
+            path=storage_path,
+            file=pdf_content,
+            file_options={"content-type": "application/pdf", "x-upsert": "true"}
+        )
+
+        return {
+            "success": True,
+            "storage_path": storage_path,
+            "file_size_bytes": len(pdf_content)
+        }
+    
+    async def get_labeled_pdf_for_user(
+        self,
+        user_id: str,
+        job_id: str
+    ) -> bytes:
+        """Download labeled PDF with user validation.
+        
+        Args:
+            user_id: The authenticated user's ID
+            job_id: The job ID
+        
+        Returns:
+            Raw PDF bytes
+        
+        Raises:
+            PermissionError: If file not found or user unauthorized
+        """
+        # Verify job belongs to user (RLS)
+        job = await self.db.get_job(job_id, user_id)
+        
+        if not job:
+            raise PermissionError("Job not found or user unauthorized")
+        
+        # Download from pdf_uploads bucket (beside input.pdf)
+        storage_path = f"{user_id}/{job_id}/labeled.pdf"
+
         try:
-            uuid.UUID(val)
-            return True
-        except (ValueError, AttributeError, TypeError):
-            return False
+            pdf_content = self.client.storage.from_("pdf_uploads").download(storage_path)
+            return pdf_content
+        except Exception as e:
+            raise FileNotFoundError(f"Labeled PDF not found: {str(e)}")
 
 
 # Legacy function for backward compatibility

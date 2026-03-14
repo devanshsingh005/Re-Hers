@@ -123,17 +123,9 @@ final class ChordRecognitionViewController: UIViewController {
     private let fakeFrequencies: [Float] = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]
 
     // MARK: - Real audio / FFT
-    private let audioEngine = AVAudioEngine()
-    private var fftSetup: FFTSetup?
-    private var bufferSize: Int = 4096
-    private var sampleRate: Double = 44100
-    private var isListening = false
+    private let pitchDetector = PitchDetector()
     
     // MARK: - Audio processing
-    private var detectedPeaks: [(frequency: Float, magnitude: Float)] = []
-    private let minMagnitudeThreshold: Float = 0.001
-    private var frequencyHistory: [Float] = []
-    private let historySize = 3
     private var lastNote: String = ""
     private var waveUpdateCounter = 0
 
@@ -145,6 +137,7 @@ final class ChordRecognitionViewController: UIViewController {
         setupUI()
         configureActions()
         setupWaveLayer()
+        pitchDetector.delegate = self
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -346,7 +339,7 @@ final class ChordRecognitionViewController: UIViewController {
         if useFakeMode {
             fakeTimer == nil ? startFakeAudio() : stopFakeAudio()
         } else {
-            isListening ? stopListening() : startListening()
+            pitchDetector.isListening ? stopListening() : startListening()
         }
     }
 
@@ -383,69 +376,14 @@ final class ChordRecognitionViewController: UIViewController {
 
     // MARK: - Real audio + FFT
     private func startListening() {
-        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
-            guard let self = self else { return }
-
-            if !granted {
-                print("❌ Microphone permission denied")
-                return
-            }
-
-            DispatchQueue.main.async {
-                do {
-                    try self.configureAudioSession()
-                    self.startEngine()
-                } catch {
-                    print("❌ Audio session error:", error)
-                    self.statusLabel.text = "Audio Error"
-                }
-            }
-        }
-    }
-    
-    private func configureAudioSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-            .playAndRecord,
-            mode: .measurement,
-            options: [.defaultToSpeaker, .allowBluetooth]
-        )
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
-    }
-
-    private func startEngine() {
-        guard !audioEngine.isRunning else { return }
-        let input = audioEngine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        sampleRate = format.sampleRate
-
-        let log2n = vDSP_Length(log2(Float(bufferSize)))
-        fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
-
-        var window = [Float](repeating: 0, count: bufferSize)
-        vDSP_hann_window(&window, vDSP_Length(bufferSize), Int32(vDSP_HANN_NORM))
-
-        input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(bufferSize), format: format) {
-            [weak self] buffer, _ in
-            self?.process(buffer: buffer, window: window)
-        }
-
-        try? AVAudioSession.sharedInstance().setCategory(.record, mode: .measurement)
-        try? AVAudioSession.sharedInstance().setActive(true)
-        try? audioEngine.start()
-
-        isListening = true
+        pitchDetector.startListening()
         micButton.backgroundColor = .systemYellow
         showStopButton(true)
         statusLabel.text = "Listening..."
     }
 
     private func stopListening() {
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
-        if let setup = fftSetup { vDSP_destroy_fftsetup(setup) }
-        fftSetup = nil
-        isListening = false
+        pitchDetector.stopListening()
         micButton.backgroundColor = .systemGreen
         showStopButton(false)
         statusLabel.text = "Stopped"
@@ -456,135 +394,6 @@ final class ChordRecognitionViewController: UIViewController {
         }
     }
 
-    private func process(buffer: AVAudioPCMBuffer, window: [Float]) {
-        guard let channel = buffer.floatChannelData?[0], let setup = fftSetup else { return }
-
-        var samples = [Float](repeating: 0, count: bufferSize)
-        let copySize = min(Int(buffer.frameLength), bufferSize)
-        memcpy(&samples, channel, copySize * MemoryLayout<Float>.size)
-
-        vDSP_vmul(samples, 1, window, 1, &samples, 1, vDSP_Length(bufferSize))
-
-        let half = bufferSize / 2
-        var real = [Float](repeating: 0, count: half)
-        var imag = [Float](repeating: 0, count: half)
-        var split = DSPSplitComplex(realp: &real, imagp: &imag)
-
-        samples.withUnsafeBufferPointer {
-            $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
-                vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
-            }
-        }
-
-        vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
-
-        var magnitudes = [Float](repeating: 0, count: half)
-        vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
-        
-        // Find significant peaks
-        let peaks = findSignificantPeaks(in: magnitudes)
-        detectedPeaks = peaks
-        
-        DispatchQueue.main.async {
-            self.updateDisplay(with: peaks)
-        }
-    }
-    
-    // MARK: - Peak detection
-    private func findSignificantPeaks(in magnitudes: [Float]) -> [(frequency: Float, magnitude: Float)] {
-        var peaks: [(frequency: Float, magnitude: Float)] = []
-        
-        for i in 2..<magnitudes.count - 2 {
-            let mag = magnitudes[i]
-            
-            // Check if this is a peak
-            if mag > minMagnitudeThreshold &&
-               mag > magnitudes[i-2] &&
-               mag > magnitudes[i-1] &&
-               mag > magnitudes[i+1] &&
-               mag > magnitudes[i+2] {
-                
-                let frequency = Float(i) * Float(sampleRate) / Float(bufferSize)
-                
-                // Only consider audible frequencies (65 Hz to 2000 Hz)
-                if frequency >= 65 && frequency <= 2000 {
-                    // Use quadratic interpolation for better accuracy
-                    let interpolatedFreq = quadraticInterpolation(
-                        index: i,
-                        magnitudes: magnitudes,
-                        sampleRate: Float(sampleRate),
-                        fftSize: bufferSize
-                    )
-                    
-                    peaks.append((frequency: interpolatedFreq, magnitude: mag))
-                }
-            }
-        }
-        
-        // Sort by magnitude
-        peaks.sort { (peak1: (frequency: Float, magnitude: Float), peak2: (frequency: Float, magnitude: Float)) -> Bool in
-            return peak1.magnitude > peak2.magnitude
-        }
-        
-        // Take only the strongest peak for note detection
-        if peaks.count > 1 {
-            return [peaks[0]]
-        }
-        
-        return peaks
-    }
-    
-    private func quadraticInterpolation(index: Int, magnitudes: [Float], sampleRate: Float, fftSize: Int) -> Float {
-        guard index > 0 && index < magnitudes.count - 1 else {
-            return Float(index) * sampleRate / Float(fftSize)
-        }
-        
-        let left = magnitudes[index - 1]
-        let center = magnitudes[index]
-        let right = magnitudes[index + 1]
-        
-        let p = 0.5 * (left - right) / (left - 2 * center + right)
-        let interpolatedIndex = Float(index) + p
-        return interpolatedIndex * sampleRate / Float(fftSize)
-    }
-    
-    private func updateDisplay(with peaks: [(frequency: Float, magnitude: Float)]) {
-        guard !peaks.isEmpty else {
-            noteLabel.text = "—"
-            frequencyLabel.text = "Frequency: — Hz"
-            statusLabel.text = "No signal"
-            return
-        }
-        
-        // Find the strongest frequency
-        let strongestPeak = peaks.max(by: { $0.magnitude < $1.magnitude })!
-        let frequency = strongestPeak.frequency
-        
-        // Update frequency history for stability
-        frequencyHistory.append(frequency)
-        if frequencyHistory.count > historySize {
-            frequencyHistory.removeFirst()
-        }
-        
-        // Use average frequency for more stable display
-        let stableFrequency: Float
-        if !frequencyHistory.isEmpty {
-            stableFrequency = frequencyHistory.reduce(0, +) / Float(frequencyHistory.count)
-        } else {
-            stableFrequency = frequency
-        }
-        
-        // Convert frequency to note
-        let note = Self.frequencyToNoteName(stableFrequency)
-        
-        // Calculate amplitude for wave visualization
-        let maxMagnitude = peaks.map { $0.magnitude }.max() ?? 0
-        let amplitude = CGFloat(min(1.0, Double(maxMagnitude) * 500))
-        
-        updateDisplay(note: note, frequency: stableFrequency, amplitude: amplitude)
-        statusLabel.text = "Live"
-    }
-    
     private func updateDisplay(note: String, frequency: Float, amplitude: CGFloat) {
         noteLabel.text = note
         frequencyLabel.text = String(format: "Frequency: %.1f Hz", frequency)
@@ -592,26 +401,19 @@ final class ChordRecognitionViewController: UIViewController {
         // Update wave with new parameters
         updateWave(with: amplitude, frequency: frequency)
     }
+}
 
-    // MARK: - Note Detection Helpers
-    private static func frequencyToNoteName(_ f: Float) -> String {
-        guard f > 0 else { return "—" }
-        
-        let midi = frequencyToMIDINoteNumber(f)
-        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        let noteIndex = midi % 12
-        let octave = (midi / 12) - 1
-        
-        if noteIndex >= 0 && noteIndex < noteNames.count && octave >= 0 && octave <= 7 {
-            return "\(noteNames[noteIndex])\(octave)"
+extension ChordRecognitionViewController: PitchDetectorDelegate {
+    func pitchDetectorDidDetect(note: String, frequency: Float, amplitude: CGFloat) {
+        // Only update UI if we receive a valid note
+        guard note != "—" else {
+            noteLabel.text = "—"
+            frequencyLabel.text = "Frequency: — Hz"
+            statusLabel.text = "No signal"
+            return
         }
-        return "C4"
-    }
-
-    private static func frequencyToMIDINoteNumber(_ f: Float) -> Int {
-        guard f > 0 else { return 69 } // Default to A4
         
-        let midi = Int(round(69 + 12 * log2(f / 440.0)))
-        return max(0, min(127, midi)) // Clamp to valid MIDI range
+        updateDisplay(note: note, frequency: frequency, amplitude: amplitude)
+        statusLabel.text = "Live"
     }
 }

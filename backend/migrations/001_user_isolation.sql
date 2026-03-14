@@ -10,8 +10,10 @@ CREATE TABLE IF NOT EXISTS jobs (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   pdf_path TEXT NOT NULL,
   result_url TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'completed_with_warning', 'failed')),
+  label_status TEXT CHECK (label_status IN ('success', 'failed', NULL)),
   error_message TEXT,
+  label_warning TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

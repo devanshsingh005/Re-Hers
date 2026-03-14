@@ -85,10 +85,10 @@ struct OnboardingQuestion2View: View {
                     .environmentObject(viewModel)
             } label: {
                 Text("Continue")
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(selection == nil ? .gray : Color(UIColor.secondaryColor))
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(selection == nil ? Color(UIColor.systemGray4) : Color(UIColor.primaryColor))
                     .foregroundColor(.white)
-                    .cornerRadius(12)
+                    .cornerRadius(28)
             }
             .disabled(selection == nil)
 

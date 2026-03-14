@@ -6,6 +6,8 @@
 //
 
 import UIKit
+import Supabase
+import Auth
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -16,15 +18,72 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
 
         guard let windowScene = (scene as? UIWindowScene) else { return }
-
-        // ✅ Load the initial view controller from Main.storyboard
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        let initialVC = storyboard.instantiateInitialViewController()!
-
+        
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = MainTabBarController()
         self.window = window
-        window.makeKeyAndVisible()
+
+        // Synchronous check: Do we believe the user is logged in?
+        let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
+
+        if isLoggedIn {
+            // User is supposedly logged in. Show the seamless loading spinner while
+            // the async Supabase session check completely verifies the token.
+            let loadingVC = LaunchLoadingViewController()
+            window.rootViewController = loadingVC
+            window.makeKeyAndVisible()
+
+            Task {
+                do {
+                    _ = try await SupabaseManager.shared.client.auth.session
+                    await MainActor.run { self.showMainApp() }
+                } catch {
+                    // Token expired or invalid. Reset flag and show login.
+                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
+                    await MainActor.run { self.showGetStartedSplash() }
+                }
+            }
+        } else {
+            // User is explicitly logged out or a first-time user.
+            // Immediately show the onboarding/Get Started splash with NO intermediate screen.
+            let storyboard = UIStoryboard(name: "Main", bundle: nil)
+            guard let splashVC = storyboard.instantiateInitialViewController() else { return }
+            
+            window.rootViewController = splashVC
+            window.makeKeyAndVisible()
+        }
+    }
+
+    // MARK: - Navigation Helpers
+
+    /// Route to the main dashboard (already authenticated)
+    func showMainApp() {
+        let tabBar = MainTabBarController()
+        setRootViewController(tabBar)
+    }
+
+    /// Route to the "Get Started" splash screen (unauthenticated)
+    func showGetStartedSplash() {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        guard let splashVC = storyboard.instantiateInitialViewController() else { return }
+        setRootViewController(splashVC)
+    }
+
+    /// Route to the login / sign-up screen
+    func showLoginScreen() {
+        let authVC = AuthViewController()
+        let nav = UINavigationController(rootViewController: authVC)
+        nav.setNavigationBarHidden(true, animated: false)
+        setRootViewController(nav)
+    }
+
+    /// Smoothly swap the root view controller with a cross-dissolve
+    private func setRootViewController(_ vc: UIViewController) {
+        guard let window = self.window else { return }
+        UIView.transition(with: window,
+                          duration: 0.35,
+                          options: .transitionCrossDissolve,
+                          animations: { window.rootViewController = vc },
+                          completion: nil)
     }
 
 
@@ -56,6 +115,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // to restore the scene back to its current state.
     }
 
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        // ASWebAuthenticationSession handles its own callbacks directly.
+        // We do NOT call SupabaseManager.shared.client.auth.handle(url) here
+        // as it causes a race condition and "Auth session missing" error
+        // when both attempt to consume the single-use OAuth callback.
+    }
 
 }
 

@@ -71,10 +71,10 @@ struct OnboardingQuestion3View: View {
                 Task { await submit() }
             } label: {
                 Text(viewModel.isSaving ? "Saving…" : "Finish")
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(selection == nil ? .gray : Color(UIColor.secondaryColor))
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(selection == nil ? Color(UIColor.systemGray4) : Color(UIColor.primaryColor))
                     .foregroundColor(.white)
-                    .cornerRadius(12)
+                    .cornerRadius(28)
             }
             .disabled(selection == nil || viewModel.isSaving)
 
@@ -94,7 +94,12 @@ struct OnboardingQuestion3View: View {
             let userId = session.user.id.uuidString
 
             viewModel.saveToSupabase(userId: userId) { success in
-                if success { showHomeScreen() }
+                guard success else { return }
+                // ⚠️ saveToSupabase callback runs on a background thread —
+                // all UIKit transitions MUST happen on the main thread.
+                DispatchQueue.main.async {
+                    showHomeScreen()
+                }
             }
 
         } catch {
@@ -105,13 +110,17 @@ struct OnboardingQuestion3View: View {
     // MARK: - Navigation
     func showHomeScreen() {
         let home = MainTabBarController()
-        home.modalPresentationStyle = .fullScreen
 
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = scene.windows.first {
+        // Use the modern non-deprecated keyWindow lookup
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let window = scene.keyWindow else { return }
 
-            window.rootViewController = home
-            window.makeKeyAndVisible()
-        }
+        UIView.transition(with: window,
+                          duration: 0.35,
+                          options: .transitionCrossDissolve,
+                          animations: { window.rootViewController = home },
+                          completion: nil)
     }
 }

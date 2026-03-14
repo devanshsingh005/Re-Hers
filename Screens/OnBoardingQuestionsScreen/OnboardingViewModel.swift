@@ -28,7 +28,7 @@ class OnboardingViewModel: ObservableObject {
                 // NEW SDK SYNTAX — FIXED
                 try await client
                     .from("user_onboarding")
-                    .insert([
+                    .upsert([
                         "id": userId,
                         "genre": genre,
                         "artist": artist,
