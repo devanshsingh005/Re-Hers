@@ -11,6 +11,13 @@ final class PlayAlongViewController: UIViewController {
     // MARK: - Logic
     private let engine = PlayAlongEngine()
     private let pitchDetector = PitchDetector()
+    
+    // Dynamic Data
+    var sheetMusicData: Data?
+    
+    // Haptics
+    private let hapticSuccess = UIImpactFeedbackGenerator(style: .light)
+    private let hapticPeak    = UIImpactFeedbackGenerator(style: .medium)
 
     private let kPianoH: CGFloat = 136
     private let kNavH:   CGFloat = 54
@@ -39,6 +46,9 @@ final class PlayAlongViewController: UIViewController {
         self.edgesForExtendedLayout = .all
         setupUI()
         wireCallbacks()
+        
+        hapticSuccess.prepare()
+        hapticPeak.prepare()
         
         engine.delegate = self
         pitchDetector.delegate = self
@@ -134,6 +144,18 @@ final class PlayAlongViewController: UIViewController {
         navBar.chordDisplay.isUserInteractionEnabled = true
         let infoTap = UITapGestureRecognizer(target: self, action: #selector(simulateSession))
         navBar.chordDisplay.addGestureRecognizer(infoTap)
+        
+        let micTap = UITapGestureRecognizer(target: self, action: #selector(micIndicatorTapped))
+        navBar.micIndicator.addGestureRecognizer(micTap)
+        navBar.micIndicator.isUserInteractionEnabled = true
+    }
+    
+    @objc private func micIndicatorTapped() {
+        print("🎙️ Manual Mic Reset requested")
+        pitchDetector.stopListening()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.pitchDetector.startListening()
+        }
     }
 
     private func wireCallbacks() {
@@ -163,12 +185,33 @@ final class PlayAlongViewController: UIViewController {
     }
 
     private func loadSheetData() {
-        let parser = MusicJSONLoader()
-        if let st = parser.loadJSON(from: "sheet_test") {
+        let result: [SongChord]?
+        
+        if let data = sheetMusicData {
+            print("📄 [PlayAlong] RECEIVED DYNAMIC DATA: \(data.count) bytes")
+            
+            // Fix: Tell SheetMusicView to parse the raw data directly
+            sheetMusic.loadData(data)
+            
+            do {
+                result = try MusicJSONLoader.loadSongChords(from: data)
+                if let count = result?.count {
+                    print("✅ [PlayAlong] Successfully parsed \(count) chords from dynamic data")
+                }
+            } catch {
+                print("❌ [PlayAlong] FAILED to parse dynamic data: \(error)")
+                result = nil
+            }
+        } else {
+            print("📄 [PlayAlong] No dynamic data, falling back to sheet_test")
+            result = MusicJSONLoader().loadJSON(from: "sheet_test")
+        }
+        
+        if let st = result {
             sheetMusic.configure(with: st)
             engine.start(with: st)
         } else {
-            print("❌ [PlayAlong] Failed to load sheet_test data")
+            print("❌ [PlayAlong] Failed to load any sheet data")
         }
     }
     
@@ -192,6 +235,10 @@ final class PlayAlongViewController: UIViewController {
             let feedbackColor = isCorrect ? UIColor.systemGreen : UIColor.systemRed
             key.animatePress(color: feedbackColor)
             
+            if isCorrect {
+                hapticSuccess.impactOccurred(intensity: 0.8)
+            }
+            
             // Re-release after a short delay to revert to the hint (Blue) or blank
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 key.animateRelease()
@@ -199,6 +246,11 @@ final class PlayAlongViewController: UIViewController {
         }
         
         sheetMusic.showFeedback(isCorrect: isCorrect)
+        
+        if !isCorrect {
+            // Add a permanent marker on the sheet music for where the mistake happened
+            sheetMusic.addWrongNoteMarker(at: Double(engine.currentTick))
+        }
     }
 
     @objc private func simulateSession() {
@@ -258,24 +310,28 @@ extension PlayAlongViewController: PlayAlongEngineDelegate {
 
 // MARK: - Pitch Detection
 extension PlayAlongViewController: PitchDetectorDelegate {
-    func pitchDetectorDidDetect(note: String, frequency: Float, amplitude: CGFloat) {
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
         // Guard against low amplitude background noise
-        guard note != "—" && amplitude > 0.08 else { return }
+        guard !notes.isEmpty && amplitude > 0.08 else { 
+            navBar.setMicActive(false)
+            return 
+        }
+        navBar.setMicActive(true)
         
         let now = Date()
         
-        if note == engine.lastDetectedNote {
-            // Prevent same note from triggering rapidly
-            if now.timeIntervalSince(engine.lastDetectedTime) < 0.3 { return }
-        } else {
-            // Prevent rapid flutter between different notes
-            if now.timeIntervalSince(engine.lastDetectedTime) < 0.15 { return }
+        // Handle all detected notes (chord support)
+        for note in notes {
+            if note == engine.lastDetectedNote {
+                if now.timeIntervalSince(engine.lastDetectedTime) < 0.3 { continue }
+            } else {
+                if now.timeIntervalSince(engine.lastDetectedTime) < 0.15 { continue }
+            }
+            
+            engine.lastDetectedNote = note
+            engine.lastDetectedTime = now
+            handleInput(note: note)
         }
-        
-        engine.lastDetectedNote = note
-        engine.lastDetectedTime = now
-        
-        handleInput(note: note)
     }
 }
 
@@ -291,7 +347,7 @@ final class PlayAlongEngine {
     weak var delegate: PlayAlongEngineDelegate?
     
     private var dataManager: PianoDataManager?
-    private var currentTick: Int = 0
+    var currentTick: Int = 0 // Changed from private to allow access from ViewController
     private var expectedNotes: [String] = []
     
     private var totalCorrect = 0
@@ -323,16 +379,32 @@ final class PlayAlongEngine {
             totalCorrect += 1
             expectedNotes.removeAll { $0 == note }
             
+            // Advance if chord is fully cleared OR if it's taking too long (Auto-advance for partial hits in production)
             if expectedNotes.isEmpty {
-                calculateTempoPulse()
-                currentTick += 50
-                advance()
+                completeGroup()
             }
             return true
         } else {
             totalMistakes += 1
             return false
         }
+    }
+    
+    // Antigravity: Multi-note support for chords
+    func processNotes(_ notes: [String]) {
+        var anyCorrect = false
+        for note in notes {
+            if expectedNotes.contains(note) {
+                _ = processNote(note)
+                anyCorrect = true
+            }
+        }
+    }
+    
+    private func completeGroup() {
+        calculateTempoPulse()
+        currentTick += 50
+        advance()
     }
     
     func seek(to p: Double) {
@@ -385,6 +457,8 @@ final class PlayAlongEngine {
 final class PlayAlongNavBar: UIView {
     var onBackTap: (() -> Void)?
     
+    private let brandOrange = UIColor(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0, alpha: 1.0) // #EF9408
+    
     private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
     private let backButton = UIButton(type: .system)
     let chordDisplay = UILabel()
@@ -402,6 +476,10 @@ final class PlayAlongNavBar: UIView {
     private let tempoLabel = UILabel()
     private let tempoValueLabel = UILabel()
     private let tempoIndicator = UIView()
+    
+    // Mic Status
+    let micIndicator = UIView()
+    private let micBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -433,15 +511,15 @@ final class PlayAlongNavBar: UIView {
         progressTrack.layer.borderWidth = 1
         progressTrack.layer.borderColor = UIColor.label.withAlphaComponent(0.1).cgColor
         
-        progressGradient.colors = [UIColor.systemGreen.cgColor, UIColor.systemTeal.cgColor]
+        progressGradient.colors = [brandOrange.cgColor, brandOrange.withAlphaComponent(0.6).cgColor]
         progressGradient.startPoint = CGPoint(x: 0, y: 0.5)
         progressGradient.endPoint = CGPoint(x: 1, y: 0.5)
         progressBar.layer.addSublayer(progressGradient)
         progressBar.layer.cornerRadius = 6
         progressBar.clipsToBounds = true
         
-        progressLabel.font = .systemFont(ofSize: 10, weight: .bold)
-        progressLabel.textColor = .secondaryLabel
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .bold)
+        progressLabel.textColor = brandOrange
         progressLabel.text = "0%"
         
         // Tempo UI
@@ -464,10 +542,27 @@ final class PlayAlongNavBar: UIView {
         tempoStack.alignment = .center
         tempoStack.spacing = -2
         
-        [blurView, backButton, chordDisplay, progressTrack, progressLabel, tempoContainer, tempoIndicator].forEach {
+        [blurView, backButton, chordDisplay, progressTrack, progressLabel, tempoContainer, tempoIndicator, micIndicator].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
+        
+        micIndicator.backgroundColor = .systemRed.withAlphaComponent(0.3)
+        micIndicator.layer.cornerRadius = 4
+        micIndicator.layer.borderWidth = 1
+        micIndicator.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.5).cgColor
+        
+        let micDot = UIView()
+        micDot.backgroundColor = .systemRed
+        micDot.layer.cornerRadius = 3
+        micDot.translatesAutoresizingMaskIntoConstraints = false
+        micIndicator.addSubview(micDot)
+        NSLayoutConstraint.activate([
+            micDot.centerXAnchor.constraint(equalTo: micIndicator.centerXAnchor),
+            micDot.centerYAnchor.constraint(equalTo: micIndicator.centerYAnchor),
+            micDot.widthAnchor.constraint(equalToConstant: 6),
+            micDot.heightAnchor.constraint(equalToConstant: 6)
+        ])
         
         tempoContainer.addSubview(tempoStack)
         tempoStack.translatesAutoresizingMaskIntoConstraints = false
@@ -515,7 +610,13 @@ final class PlayAlongNavBar: UIView {
             tempoIndicator.topAnchor.constraint(equalTo: tempoContainer.topAnchor, constant: -4),
             tempoIndicator.centerXAnchor.constraint(equalTo: tempoContainer.centerXAnchor),
             tempoIndicator.widthAnchor.constraint(equalToConstant: 6),
-            tempoIndicator.heightAnchor.constraint(equalToConstant: 6)
+            tempoIndicator.heightAnchor.constraint(equalToConstant: 6),
+            
+            // Mic Indicator Position (Added breathing space)
+            micIndicator.trailingAnchor.constraint(equalTo: progressTrack.leadingAnchor, constant: -40),
+            micIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
+            micIndicator.widthAnchor.constraint(equalToConstant: 16),
+            micIndicator.heightAnchor.constraint(equalToConstant: 16)
         ])
     }
     
@@ -560,6 +661,31 @@ final class PlayAlongNavBar: UIView {
             self.progressBar.widthAnchor.constraint(equalTo: self.progressTrack.widthAnchor, multiplier: clamped).isActive = true
             self.layoutIfNeeded()
             self.updateGradientFrame()
+        }
+    }
+    
+    func setMicActive(_ active: Bool) {
+        let color: UIColor = active ? .systemGreen : .systemRed
+        UIView.animate(withDuration: 0.3) {
+            self.micIndicator.backgroundColor = color.withAlphaComponent(0.2)
+            self.micIndicator.layer.borderColor = color.withAlphaComponent(0.4).cgColor
+            self.micIndicator.subviews.first?.backgroundColor = color
+        }
+        
+        if active {
+            if micIndicator.layer.animation(forKey: "pulse") == nil {
+                let pulse = CABasicAnimation(keyPath: "transform.scale")
+                pulse.duration = 0.6
+                pulse.fromValue = 1.0
+                pulse.toValue = 1.2
+                pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                pulse.autoreverses = true
+                pulse.repeatCount = .infinity
+                micIndicator.layer.add(pulse, forKey: "pulse")
+            }
+        } else {
+            micIndicator.layer.removeAnimation(forKey: "pulse")
+            micIndicator.transform = .identity
         }
     }
 }

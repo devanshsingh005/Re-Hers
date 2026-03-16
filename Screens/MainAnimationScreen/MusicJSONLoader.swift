@@ -248,15 +248,21 @@ struct MusicJSONLoader {
 
     private static func findMeasures(in dict: [String: Any]) -> [[String: Any]]? {
         // Direct hit: this dict has a "measure" array
-        if let arr = dict["measure"] as? [[String: Any]], !arr.isEmpty { return arr }
+        if let arr = dict["measure"] as? [[String: Any]], !arr.isEmpty { 
+            print("📎 [MusicJSONLoader] Found 'measure' array directly")
+            return arr 
+        }
 
         // The JSON structure is: score-partwise → part (Array) → each element has "measure"
         // We must recurse into both sub-dicts AND arrays of dicts.
-        for (_, v) in dict {
+        for (key, v) in dict {
             // Recurse into a nested dict
-            if let sub = v as? [String: Any], let f = findMeasures(in: sub) { return f }
+            if let sub = v as? [String: Any] {
+                if let f = findMeasures(in: sub) { return f }
+            }
             // Recurse into an array of dicts — collect & flatten all parts' measures
             if let arr = v as? [[String: Any]] {
+                print("📂 [MusicJSONLoader] Recursing into array for key: \(key)")
                 let allMeasures = arr.compactMap { findMeasures(in: $0) }.flatMap { $0 }
                 if !allMeasures.isEmpty { return allMeasures }
             }

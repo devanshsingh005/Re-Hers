@@ -404,9 +404,9 @@ final class ChordRecognitionViewController: UIViewController {
 }
 
 extension ChordRecognitionViewController: PitchDetectorDelegate {
-    func pitchDetectorDidDetect(note: String, frequency: Float, amplitude: CGFloat) {
-        // Only update UI if we receive a valid note
-        guard note != "—" else {
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
+        // Only update UI if we receive valid notes
+        guard let note = notes.first, note != "—" else {
             noteLabel.text = "—"
             frequencyLabel.text = "Frequency: — Hz"
             statusLabel.text = "No signal"

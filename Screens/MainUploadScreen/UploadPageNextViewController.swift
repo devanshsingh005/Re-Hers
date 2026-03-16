@@ -334,11 +334,28 @@ final class UploadPageNextViewController: UIViewController {
         // Download output.json and populate chord/key/time/tempo fields
         if let jobId, let rawPath = pendingPDFPath {
             let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: rawPath)
-            if let url = URL(string: jsonURL),
-               let (data, _) = try? await URLSession.shared.data(from: url),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                print("[Result] Keys: \(json.keys.sorted())")
-                await parseAndDisplayJSON(json)
+            print("[JSON] 🔄 Fetching output.json: \(jsonURL)")
+            
+            Task {
+                do {
+                    let (data, response) = try await URLSession.shared.data(from: URL(string: jsonURL)!)
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    print("[JSON] HTTP \(code)  bytes=\(data.count)")
+                    
+                    guard (200...299).contains(code) else {
+                        print("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
+                        return
+                    }
+                    
+                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        print("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
+                        await parseAndDisplayJSON(json)
+                    } else {
+                        print("❌ [JSON] output.json is not a dictionary")
+                    }
+                } catch {
+                    print("❌ [JSON] Error fetching/parsing output.json: \(error)")
+                }
             }
         }
     }
@@ -654,22 +671,42 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     @objc private func didTapPlayAlong() {
+        if isProcessing { 
+            let a = UIAlertController(title: "Processing", message: "Please wait for the analysis to complete.", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
+            return
+        }
+        
+        guard let json = sheetMusicJSON else {
+            let a = UIAlertController(title: "No Data", message: "No sheet music data available for this upload.", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
+            return
+        }
+        
         let a = UIAlertController(
             title: "Play Along",
-            message: "Chords: \(extractedChords.joined(separator: " - "))\nTempo: \(tempo)",
+            message: "Start practice session for this piece?\nTempo: \(tempo)",
             preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong() })
+        a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong(with: json) })
         a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(a, animated: true)
     }
 
-    private func startPlayAlong() {
-        let a = UIAlertController(
-            title: "Playing…",
-            message: "\(extractedChords.joined(separator: " → "))\n\(tempo)",
-            preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Stop", style: .destructive))
-        present(a, animated: true)
+    private func startPlayAlong(with json: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else {
+            let a = UIAlertController(title: "Error", message: "Failed to prepare data for Play Along.", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
+            return
+        }
+        
+        let vc = PlayAlongViewController()
+        vc.sheetMusicData = data
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     @objc private func didTapAnimation() {

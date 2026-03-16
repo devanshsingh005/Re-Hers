@@ -93,10 +93,10 @@ struct SplashScreenView: View {
     var onGetStarted: () -> Void
     
     private let impact = UIImpactFeedbackGenerator(style: .medium)
-    private let brandOrange = Color(red: 239/255, green: 148/255, blue: 8/255) // #EF9408
+    private let brandOrange = Color(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0) // #EF9408
     
     private var baseColor: Color {
-        colorScheme == .dark ? Color(red: 15/255, green: 15/255, blue: 15/255) : Color(red: 248/255, green: 248/255, blue: 244/255)
+        colorScheme == .dark ? Color(red: 15.0/255.0, green: 15.0/255.0, blue: 15.0/255.0) : Color(red: 248.0/255.0, green: 248.0/255.0, blue: 244.0/255.0)
     }
     
     private var accentColor: Color {
