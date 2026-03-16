@@ -285,6 +285,24 @@ public final class TopNavBar: UIView {
 
     // MARK: - Load Profile Image
     private func loadProfileImage(from urlString: String) async {
+        // Handle local icons (icon_1, icon_2, ..., icon_9)
+        if urlString.starts(with: "icon_") {
+            await MainActor.run {
+                if let img = UIImage(named: urlString) {
+                    self.profileImg.image = img
+                    self.profileImg.contentMode = .scaleAspectFill
+                    self.profileImg.tintColor = .clear
+                    print("✅ NavBar: Loaded local icon \(urlString)")
+                } else {
+                    self.profileImg.image = UIImage(systemName: "person.crop.circle")
+                    self.profileImg.tintColor = .gray
+                    self.profileImg.contentMode = .scaleAspectFit
+                    print("❌ NavBar: Local icon \(urlString) not found in assets")
+                }
+            }
+            return
+        }
+
         var finalURLString = urlString
         
         // Fix the URL if it's missing /public/

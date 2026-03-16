@@ -83,6 +83,16 @@ struct OnboardingQuestion3View: View {
         .padding(.top, 40)
         .background(Color(UIColor.appBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .alert("Error", isPresented: Binding<Bool>(
+            get: { viewModel.errorMessage != nil },
+            set: { _ in viewModel.errorMessage = nil }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let msg = viewModel.errorMessage {
+                Text(msg)
+            }
+        }
     }
 
     // MARK: - SAVE DATA
@@ -94,15 +104,17 @@ struct OnboardingQuestion3View: View {
             let userId = session.user.id.uuidString
 
             viewModel.saveToSupabase(userId: userId) { success in
-                guard success else { return }
-                // ⚠️ saveToSupabase callback runs on a background thread —
-                // all UIKit transitions MUST happen on the main thread.
-                DispatchQueue.main.async {
-                    showHomeScreen()
+                if success {
+                    DispatchQueue.main.async {
+                        showHomeScreen()
+                    }
+                } else {
+                    print("Submit failed in callback.")
                 }
             }
 
         } catch {
+            viewModel.errorMessage = "Failed to get session: \(error.localizedDescription)"
             print("Failed to get session: \(error.localizedDescription)")
         }
     }

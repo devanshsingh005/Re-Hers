@@ -20,12 +20,15 @@ class OnboardingViewModel: ObservableObject {
         }
 
         isSaving = true
+        errorMessage = nil // Reset error state
 
         let client = SupabaseManager.shared.client
+        let randomIcon = "icon_\(Int.random(in: 1...9))"
 
         Task {
             do {
-                // NEW SDK SYNTAX — FIXED
+                print("Starting onboarding save for user: \(userId)")
+                // 1. Save onboarding answers
                 try await client
                     .from("user_onboarding")
                     .upsert([
@@ -36,14 +39,28 @@ class OnboardingViewModel: ObservableObject {
                     ])
                     .execute()
 
+                print("Onboarding table updated.")
+
+                // 2. Also update profiles table so NavBar and Profile screen see the new icon
+                try await client
+                    .from("profiles")
+                    .upsert([
+                        "id": userId,
+                        "avatar_url": randomIcon
+                    ])
+                    .execute()
+
+                print("Profiles table updated with icon: \(randomIcon)")
+
                 DispatchQueue.main.async {
                     self.isSaving = false
                     completion(true)
                 }
 
             } catch {
+                print("Onboarding save failed: \(error.localizedDescription)")
                 DispatchQueue.main.async {
-                    self.errorMessage = error.localizedDescription
+                    self.errorMessage = "Failed to save: \(error.localizedDescription)"
                     self.isSaving = false
                     completion(false)
                 }

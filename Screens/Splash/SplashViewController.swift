@@ -224,8 +224,8 @@ struct SplashScreenView: View {
             breathScale = 1.025
         }
         
-        // Accelerated Auto-navigation: Exactly at 3.0 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        // Accelerated Auto-navigation: Exactly at 2.0 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             onGetStarted()
         }
     }

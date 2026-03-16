@@ -33,11 +33,11 @@ struct RehearsalInfoCard: View {
                             .padding(.top, 10)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 24) // ← reduced from original
+                    .padding(.top, 36) // Increased for breathing space
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 24)
 
-                    Divider()
+
 
                     // Features
                     VStack(alignment: .leading, spacing: 0) {
@@ -46,27 +46,28 @@ struct RehearsalInfoCard: View {
                             title: "Scan & Play",
                             description: "Scan sheet music and instantly start practicing."
                         )
-                        Divider().padding(.leading, 64)
+
                         FeatureRow(
                             icon: "pianokeys",
                             title: "Animations",
                             description: "See animated keys that guide your fingers while playing."
                         )
-                        Divider().padding(.leading, 64)
+
                         FeatureRow(
                             icon: "play.circle",
                             title: "Play Along",
                             description: "Practice songs in real time with guided playback."
                         )
-                        Divider().padding(.leading, 64)
+
                         FeatureRow(
                             icon: "dumbbell",
                             title: "Build Your Basics",
                             description: "Strengthen core piano skills with structured exercises."
                         )
                     }
+                    .padding(.vertical, 8) // Extra space between headers and button
 
-                    Divider()
+
 
                     // Got It Button
                     Button(action: dismiss) {
@@ -78,11 +79,20 @@ struct RehearsalInfoCard: View {
                             .background(Color.orange)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .padding(20)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .padding(.bottom, 36) // Extra bottom breathing space
                 }
-                .background(Color(uiColor: .systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .shadow(color: .black.opacity(0.2), radius: 24, x: 0, y: 8)
+                .background(
+                    ZStack {
+                        // User requested Color #F8F8F4
+                        Color(red: 0.9725, green: 0.9725, blue: 0.9569).opacity(0.94)
+                        // Glassy blur effect
+                        BlurView(style: .systemThinMaterialLight).opacity(0.4)
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                .shadow(color: .black.opacity(0.15), radius: 30, x: 0, y: 10)
 
                 // Close button
                 Button(action: dismiss) {
@@ -153,10 +163,19 @@ struct FeatureRow: View {
     }
 }
 
+// MARK: - Blur View Helper
+struct BlurView: UIViewRepresentable {
+    var style: UIBlurEffect.Style
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        return UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
+}
+
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color.gray.opacity(0.5).ignoresSafeArea()
+        Color.black.opacity(0.8).ignoresSafeArea()
         RehearsalInfoCard(isPresented: .constant(true))
     }
 }

@@ -142,7 +142,7 @@ private extension AuthViewController {
     func setupViews() {
         // MARK: - Top titles
         
-        appTitleLabel.text = "rehearse"
+        appTitleLabel.text = "Rehearse"
         appTitleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
         appTitleLabel.textAlignment = .center
         appTitleLabel.textColor = UIColor(named: "TextPrimary") ?? .label

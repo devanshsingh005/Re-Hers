@@ -780,7 +780,7 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
                     
                     // Transition to Splash Screen using unified SceneDelegate helper
                     if let sceneDelegate = self.view.window?.windowScene?.delegate as? SceneDelegate {
-                        sceneDelegate.showGetStartedSplash()
+                        sceneDelegate.showSplashAndRoute()
                     }
                 }
             } catch {
@@ -920,6 +920,17 @@ private extension UserProfileViewController {
             !urlString.isEmpty
         else {
             return  // keep default
+        }
+        
+        // Handle local icon names (e.g., set when user is assigned a random icon)
+        if urlString.lowercased().hasPrefix("icon_") {
+            if let image = UIImage(named: urlString) {
+                self.profileImageView.image = image
+                self.profileImageView.contentMode = .scaleAspectFill
+                self.profileImageView.backgroundColor = .clear
+                self.profileImageView.tintColor = .clear
+                return
+            }
         }
         
         Task {

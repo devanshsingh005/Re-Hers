@@ -6,50 +6,62 @@
 import UIKit
 import Foundation
 
-struct Track {
-    let title: String
-    let artist: String
-    let artworkName: String
-}
 
-class PlaylistDetailViewController: UIViewController {
+class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     
     // MARK: - Passed Data
-    var passedImage: UIImage?
+    var passedImage: UIImage? {
+        didSet {
+            guard isViewLoaded else { return }
+            let placeholder = playlistId.map { albumPlaceholder(for: $0) } ?? UIImage(systemName: "music.note.list")
+            let img = passedImage ?? placeholder
+            albumArtBackgroundView.image = img
+            albumArtCardView.image = img
+        }
+    }
     var passedTitle: String?
     var passedArtist: String?
+    var playlistId: UUID?
     
-    // MARK: - Tracks (dynamic list)
-    private var trackList: [Track] = [
-        Track(title: "Last Rite",      artist: "Devjeet Saha", artworkName: "cl_3"),
-        Track(title: "Phool",          artist: "Devjeet Saha", artworkName: "cl_4"),
-        Track(title: "Chalo dur kahi", artist: "Devjeet Saha", artworkName: "cl_5"),
-    ]
-    
-    // MARK: - All available songs to choose from
-    private let availableSongs: [Track] = [
-        Track(title: "Moonlight Echo", artist: "Devjeet Saha", artworkName: "cl_6"),
-        Track(title: "Broken Strings", artist: "Devjeet Saha", artworkName: "cl_7"),
-        Track(title: "Infinite Road",  artist: "Devjeet Saha", artworkName: "cl_8"),
-        Track(title: "Daydream Pulse", artist: "Devjeet Saha", artworkName: "cl_9"),
-    ]
-    
-    // MARK: - Scroll + Container
-    private let mainScrollView = UIScrollView()
-    private let contentView = UIView()
+    // MARK: - Tracks (fetched from Supabase)
+    private var trackList: [PlaylistTrack] = []
     
     // MARK: - UI Elements
     private let navBar = TopNavBar.make(title: "")
     
+    // Header View Components (will be placed in tableView.tableHeaderView)
+    private let headerContainerView = UIView()
     private let albumArtBackgroundContainer = UIView()
     private let albumArtBackgroundView = UIImageView()
     private let albumArtCardView = UIImageView()
-    
     private let playlistTitleLabel = UILabel()
     private let playlistArtistLabel = UILabel()
-    
     private let tracksHeaderLabel = UILabel()
-    private let tracksStackView = UIStackView()
+    
+    // Table View
+    private let tracksTableView = UITableView(frame: .zero, style: .plain)
+    
+    // MARK: - Activity Indicator
+    private let activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.color = .orange
+        indicator.hidesWhenStopped = true
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        return indicator
+    }()
+    
+    // MARK: - Empty State
+    private let emptyStateLabel: UILabel = {
+        let label = UILabel()
+        label.text = "No tracks yet.\nTap + to add a track."
+        label.textColor = .secondaryLabel
+        label.font = .systemFont(ofSize: 16)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
     
     // MARK: - Floating Button
     private let floatingAddButton: UIButton = {
@@ -70,31 +82,55 @@ class PlaylistDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        view.backgroundColor = .systemBackground
+        // Background color #F8F8F4
+        view.backgroundColor = UIColor(red: 248/255, green: 248/255, blue: 244/255, alpha: 1.0)
         navigationController?.navigationBar.isHidden = true
         
-        setupUI()
-        setupScroll()
-        setupContent()
-        setupConstraints()
-        reloadTracksUI()
+        setupTableView()
+        setupNavBar()
+        setupHeader()
+        setupActivityIndicator()
         applyPassedData()
         setupFloatingButton()
+        fetchTracks()
     }
     
     // MARK: - Apply Passed Playlist Data
     private func applyPassedData() {
-        let img = passedImage ?? UIImage(named: "cl_2")
+        let placeholder = playlistId.map { albumPlaceholder(for: $0) } ?? UIImage(systemName: "music.note.list")
+        let img = passedImage ?? placeholder
         
         albumArtBackgroundView.image = img
         albumArtCardView.image = img
         
-        playlistTitleLabel.text = passedTitle ?? "Silent Waves"
-        playlistArtistLabel.text = passedArtist ?? "Devjeet Saha"
+        playlistTitleLabel.text = passedTitle ?? "Playlist"
+        playlistArtistLabel.text = passedArtist ?? "Custom Playlist" // Matching design text
     }
     
-    private func setupUI() {
-        setupNavBar()
+    private func setupTableView() {
+        tracksTableView.backgroundColor = .clear
+        tracksTableView.separatorStyle = .none
+        tracksTableView.dataSource = self
+        tracksTableView.delegate = self
+        tracksTableView.register(TrackTableViewCell.self, forCellReuseIdentifier: "TrackCell")
+        tracksTableView.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(tracksTableView)
+        
+        NSLayoutConstraint.activate([
+            tracksTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60), // Space for navbar
+            tracksTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tracksTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tracksTableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    private func setupActivityIndicator() {
+        view.addSubview(activityIndicator)
+        NSLayoutConstraint.activate([
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
     }
 
     // MARK: - Navbar
@@ -117,15 +153,10 @@ class PlaylistDetailViewController: UIViewController {
             self?.navigationController?.pushViewController(vc, animated: true)
         }
         navBar.profileAction = { [weak self] in
-               guard let self = self else { return }
-               let vc = UserProfileViewController()
-               self.navigationController?.pushViewController(vc, animated: true)
-           }
-
-           navBar.backAction = { [weak self] in
-               self?.navigationController?.popViewController(animated: true)
-           }
-
+            guard let self = self else { return }
+            let vc = UserProfileViewController()
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
         
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -134,35 +165,14 @@ class PlaylistDetailViewController: UIViewController {
         ])
     }
     
-    // MARK: - Scroll
-    private func setupScroll() {
-        mainScrollView.translatesAutoresizingMaskIntoConstraints = false
-        mainScrollView.alwaysBounceVertical = true
-        view.addSubview(mainScrollView)
+    // MARK: - Header Setup
+    private func setupHeader() {
+        headerContainerView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 350)
         
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-        mainScrollView.addSubview(contentView)
-        
-        NSLayoutConstraint.activate([
-            mainScrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
-            mainScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mainScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            mainScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            contentView.topAnchor.constraint(equalTo: mainScrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: mainScrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: mainScrollView.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: mainScrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: mainScrollView.widthAnchor),
-        ])
-    }
-    
-    // MARK: - Content
-    private func setupContent() {
         albumArtBackgroundContainer.layer.cornerRadius = 24
         albumArtBackgroundContainer.clipsToBounds = true
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(albumArtBackgroundContainer)
+        headerContainerView.addSubview(albumArtBackgroundContainer)
         
         albumArtBackgroundView.contentMode = .scaleAspectFill
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
@@ -172,36 +182,32 @@ class PlaylistDetailViewController: UIViewController {
         albumArtCardView.clipsToBounds = true
         albumArtCardView.layer.cornerRadius = 24
         albumArtCardView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(albumArtCardView)
+        headerContainerView.addSubview(albumArtCardView)
         
-        playlistTitleLabel.font = .systemFont(ofSize: 24, weight: .bold)
+        playlistTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         playlistTitleLabel.textAlignment = .center
         playlistTitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(playlistTitleLabel)
+        headerContainerView.addSubview(playlistTitleLabel)
         
-        playlistArtistLabel.font = .systemFont(ofSize: 14)
-        playlistArtistLabel.textColor = .darkGray
+        playlistArtistLabel.font = .systemFont(ofSize: 16)
+        playlistArtistLabel.textColor = .secondaryLabel
         playlistArtistLabel.textAlignment = .center
         playlistArtistLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(playlistArtistLabel)
+        headerContainerView.addSubview(playlistArtistLabel)
         
-        tracksHeaderLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        tracksHeaderLabel.font = .systemFont(ofSize: 20, weight: .bold)
         tracksHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(tracksHeaderLabel)
+        headerContainerView.addSubview(tracksHeaderLabel)
         
-        tracksStackView.axis = .vertical
-        tracksStackView.spacing = 12
-        tracksStackView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(tracksStackView)
-    }
-    
-    // MARK: - Constraints
-    private func setupConstraints() {
+        headerContainerView.addSubview(emptyStateLabel)
+        
+        tracksTableView.tableHeaderView = headerContainerView
+        
         NSLayoutConstraint.activate([
-            albumArtBackgroundContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: 180),
+            albumArtBackgroundContainer.topAnchor.constraint(equalTo: headerContainerView.topAnchor, constant: 8),
+            albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: 16),
+            albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: -16),
+            albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: 160),
             
             albumArtBackgroundView.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
             albumArtBackgroundView.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
@@ -209,31 +215,63 @@ class PlaylistDetailViewController: UIViewController {
             albumArtBackgroundView.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
             
             albumArtCardView.centerXAnchor.constraint(equalTo: albumArtBackgroundContainer.centerXAnchor),
-            albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: -28),
+            albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: -10),
             albumArtCardView.heightAnchor.constraint(equalToConstant: 140),
             albumArtCardView.widthAnchor.constraint(equalToConstant: 140),
             
-            playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 16),
-            playlistTitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 10),
+            playlistTitleLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
             
-            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: 5),
-            playlistArtistLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: 4),
+            playlistArtistLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
             
-            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: 28),
-            tracksHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: 16),
+            tracksHeaderLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: 20),
             
-            tracksStackView.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: 16),
-            tracksStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            tracksStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            tracksStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
+            emptyStateLabel.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: 30),
+            emptyStateLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: 40),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: -40),
         ])
+        
+        // Add tap gesture to playlist title
+        playlistTitleLabel.isUserInteractionEnabled = true
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handlePlaylistRename))
+        playlistTitleLabel.addGestureRecognizer(tap)
+    }
+    
+    @objc private func handlePlaylistRename() {
+        let alert = UIAlertController(title: "Rename Playlist", message: "Enter new name", preferredStyle: .alert)
+        alert.addTextField { $0.text = self.playlistTitleLabel.text }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { _ in
+            guard let newName = alert.textFields?.first?.text, !newName.isEmpty else { return }
+            self.updatePlaylistName(newName)
+        })
+        present(alert, animated: true)
+    }
+    
+    private func updatePlaylistName(_ newName: String) {
+        guard let id = playlistId else { return }
+        Task {
+            do {
+                try await PlaylistsManager.shared.updatePlaylistName(id: id, newName: newName)
+                await MainActor.run {
+                    self.playlistTitleLabel.text = newName
+                    self.passedTitle = newName
+                    NotificationCenter.default.post(name: NSNotification.Name("PlaylistUpdated"), object: nil)
+                }
+            } catch {
+                print("❌ Rename error: \(error)")
+            }
+        }
     }
     
     // MARK: - Floating Button Setup
     private func setupFloatingButton() {
         view.addSubview(floatingAddButton)
         
-        floatingAddButton.addTarget(self, action: #selector(showAddSongPopup), for: .touchUpInside)
+        floatingAddButton.addTarget(self, action: #selector(showAddTrackDialog), for: .touchUpInside)
         
         NSLayoutConstraint.activate([
             floatingAddButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
@@ -243,108 +281,255 @@ class PlaylistDetailViewController: UIViewController {
         ])
     }
     
-    // MARK: - Popup to Choose Songs
-    @objc private func showAddSongPopup() {
-        let alert = UIAlertController(title: "Add Song", message: "Select a track to add", preferredStyle: .actionSheet)
-        
-        for song in availableSongs {
-            alert.addAction(UIAlertAction(title: song.title, style: .default, handler: { _ in
-                self.addSongToPlaylist(song)
-            }))
+    // MARK: - Fetch Tracks
+    private func fetchTracks() {
+        guard let playlistId = playlistId else {
+            reloadTracksUI()
+            return
         }
         
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        activityIndicator.startAnimating()
         
-        self.present(alert, animated: true)
+        Task {
+            do {
+                let tracks = try await PlaylistsManager.shared.fetchPlaylistTracks(playlistId: playlistId)
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackList = tracks
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            } catch {
+                print("❌ Error fetching tracks: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            }
+        }
     }
     
-    // MARK: - Add Song Logic
-    private func addSongToPlaylist(_ song: Track) {
-        trackList.append(song)
-        reloadTracksUI()
+    // MARK: - Add Track
+    @objc private func showAddTrackDialog() {
+        guard let playlistId = playlistId else { return }
+        let picker = UploadPickerViewController()
+        picker.modalPresentationStyle = .pageSheet
+        if let sheet = picker.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 24
+        }
+        picker.onSelect = { [weak self] uploadItem in
+            guard let self else { return }
+            self.addScanToPlaylist(playlistId: playlistId, scan: uploadItem)
+        }
+        present(picker, animated: true)
+    }
+    
+    private func addScanToPlaylist(playlistId: UUID, scan: UploadScanItem) {
+        activityIndicator.startAnimating()
+        Task {
+            do {
+                let newTrack = try await PlaylistsManager.shared.addScanToPlaylist(
+                    playlistId: playlistId,
+                    scan: scan
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackList.append(newTrack)
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            } catch {
+                print("❌ Error adding scan to playlist: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.activityIndicator.stopAnimating()
+                    let alert = UIAlertController(title: "Error",
+                                                  message: "Failed to add track: \(error.localizedDescription)",
+                                                  preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self?.present(alert, animated: true)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Remove Track
+    private func removeTrack(at index: Int) {
+        let track = trackList[index]
+        guard let itemId = track.playlistItemId else { return }
+        
+        activityIndicator.startAnimating()
+        
+        Task {
+            do {
+                try await PlaylistsManager.shared.removeTrackFromPlaylist(playlistItemId: itemId)
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackList.remove(at: index)
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            } catch {
+                print("❌ Error removing track: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.activityIndicator.stopAnimating()
+                }
+            }
+        }
     }
     
     // MARK: - Refresh UI
     private func reloadTracksUI() {
-        tracksStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
         tracksHeaderLabel.text = "Tracks - \(trackList.count)"
+        emptyStateLabel.isHidden = !trackList.isEmpty
+        tracksTableView.reloadData()
+    }
+    
+    // MARK: - UITableViewDataSource
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return trackList.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "TrackCell", for: indexPath) as! TrackTableViewCell
+        let track = trackList[indexPath.row]
+        cell.configure(with: track, index: indexPath.row)
+        cell.selectionStyle = .none
         
-        for (i, track) in trackList.enumerated() {
-            let card = makeTrackCard(for: track, index: i)
-            tracksStackView.addArrangedSubview(card)
+        cell.renameHandler = { [weak self] in
+            self?.handleTrackRename(at: indexPath.row)
+        }
+        
+        return cell
+    }
+    
+    private func handleTrackRename(at index: Int) {
+        let track = trackList[index]
+        let alert = UIAlertController(title: "Rename Track", message: "Enter new title", preferredStyle: .alert)
+        alert.addTextField { $0.text = track.title }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { _ in
+            guard let newTitle = alert.textFields?.first?.text, !newTitle.isEmpty else { return }
+            self.updateTrackTitle(at: index, newTitle: newTitle)
+        })
+        present(alert, animated: true)
+    }
+    
+    private func updateTrackTitle(at index: Int, newTitle: String) {
+        guard let playlistItemId = trackList[index].playlistItemId else { return }
+        Task {
+            do {
+                try await PlaylistsManager.shared.updateTrackName(playlistItemId: playlistItemId, newTitle: newTitle)
+                await MainActor.run {
+                    self.fetchTracks() // Refresh data
+                }
+            } catch {
+                print("❌ Track rename error: \(error)")
+            }
         }
     }
     
-    // MARK: - Track Card
-    private func makeTrackCard(for track: Track, index: Int) -> UIView {
-        let container = UIView()
-        container.backgroundColor = UIColor.systemGray5
+    // MARK: - UITableViewDelegate
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 92 // 80 card height + 12 spacing
+    }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let track = trackList[indexPath.row]
+        let vc = SongDetailViewController()
+        vc.passedImage = UIImage(named: "cl_\((indexPath.row % 5) + 1)")
+        vc.passedSongTitle = track.title
+        vc.passedArtist = track.artist
+        navigationController?.pushViewController(vc, animated: true)
+    }
+    
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { [weak self] (_, _, completion) in
+            self?.removeTrack(at: indexPath.row)
+            completion(true)
+        }
+        deleteAction.backgroundColor = .systemRed
+        deleteAction.image = UIImage(systemName: "trash")
+        
+        return UISwipeActionsConfiguration(actions: [deleteAction])
+    }
+}
+
+
+// MARK: - Custom TableViewCell
+class TrackTableViewCell: UITableViewCell {
+    
+    private let container = UIView()
+    private let artwork = UIImageView()
+    private let titleLabel = UILabel()
+    private let artistLabel = UILabel()
+    var renameHandler: (() -> Void)?
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setupUI() {
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        
+        // Playlist/Card color #F4F3EE
+        container.backgroundColor = UIColor(red: 244/255, green: 243/255, blue: 238/255, alpha: 1.0)
         container.layer.cornerRadius = 22
         container.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(container)
         
-        let artwork = UIImageView(image: UIImage(named: track.artworkName))
         artwork.contentMode = .scaleAspectFill
         artwork.layer.cornerRadius = 18
         artwork.clipsToBounds = true
+        artwork.backgroundColor = UIColor.systemGray4
+        artwork.tintColor = .darkGray
         artwork.translatesAutoresizingMaskIntoConstraints = false
-        
-        let title = UILabel()
-        title.text = track.title
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
-        
-        let artist = UILabel()
-        artist.text = track.artist
-        artist.font = .systemFont(ofSize: 12)
-        artist.textColor = .secondaryLabel
-        
-        let labels = UIStackView(arrangedSubviews: [title, artist])
-        labels.axis = .vertical
-        labels.spacing = 0
-        labels.translatesAutoresizingMaskIntoConstraints = false
-        
-        let play = UIButton(type: .system)
-        play.setImage(UIImage(systemName: "play.fill"), for: .normal)
-        play.tintColor = .darkGray
-        play.tag = index
-        play.addTarget(self, action: #selector(trackPlayTapped(_:)), for: .touchUpInside)
-        play.translatesAutoresizingMaskIntoConstraints = false
-        
         container.addSubview(artwork)
-        container.addSubview(labels)
-        container.addSubview(play)
+        
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.isUserInteractionEnabled = true
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleRenameTap))
+        titleLabel.addGestureRecognizer(tap)
+        container.addSubview(titleLabel)
+        
+        artistLabel.font = .systemFont(ofSize: 12)
+        artistLabel.textColor = .secondaryLabel
+        artistLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(artistLabel)
         
         NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: 80),
+            container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
+            container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
             
             artwork.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             artwork.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             artwork.widthAnchor.constraint(equalToConstant: 56),
             artwork.heightAnchor.constraint(equalToConstant: 56),
             
-            labels.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
-            labels.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            labels.trailingAnchor.constraint(equalTo: play.leadingAnchor, constant: -10),
+            titleLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
+            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -10),
             
-            play.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            play.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            play.widthAnchor.constraint(equalToConstant: 32),
-            play.heightAnchor.constraint(equalToConstant: 32),
+            artistLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
+            artistLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            artistLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: 10),
         ])
-        
-        return container
     }
     
-    // MARK: - Play Action
-    @objc private func trackPlayTapped(_ sender: UIButton) {
-        let index = sender.tag
-        let track = trackList[index]
-        
-        let vc = SongDetailViewController()
-        vc.passedImage = UIImage(named: track.artworkName)
-        vc.passedSongTitle = track.title
-        vc.passedArtist = track.artist
-        
-        navigationController?.pushViewController(vc, animated: true)
+    func configure(with track: PlaylistTrack, index: Int) {
+        titleLabel.text = track.title
+        artistLabel.text = track.artist
+        artwork.image = UIImage(named: "cl_\((index % 5) + 1)") ?? UIImage(systemName: "music.note")
+    }
+    
+    @objc private func handleRenameTap() {
+        renameHandler?()
     }
 }

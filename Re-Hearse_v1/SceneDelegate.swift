@@ -23,50 +23,54 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let window = UIWindow(windowScene: windowScene)
         self.window = window
 
-        // Synchronous check: Do we believe the user is logged in?
+        // Always show the animated SwiftUI splash screen as the primary entry point
+        showSplashAndRoute()
+        window.makeKeyAndVisible()
+    }
+
+
+
+    /// Decides where to go after the splash screen finishes
+    private func performInitialRouting() {
         let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
 
         if isLoggedIn {
-            // User is already logged in. Instantly go to the Home Page.
-            // We run the async session check in the background just to be safe,
-            // but we don't block the UI with a loading screen anymore.
+            // User is already logged in. Go to the Home Page.
             showMainApp()
-            window.makeKeyAndVisible()
 
+            // Silently verify session in the background
             Task {
                 do {
                     _ = try await SupabaseManager.shared.client.auth.session
-                    // Session is valid, stay on main app.
                 } catch {
-                    // Session invalid/expired. Reset flag and bounce back to login via splash.
+                    // Oops, session expired. Reset flag and take them back to login.
                     await MainActor.run {
                         UserDefaults.standard.set(false, forKey: "isLoggedIn")
-                        self.showGetStartedSplash()
+                        self.showLoginScreen()
                     }
                 }
             }
         } else {
-            // New user or logged-out user: show the animated SwiftUI splash screen.
-            showGetStartedSplash()
-            window.makeKeyAndVisible()
+            // New or logged-out user: go to Login
+            showLoginScreen()
         }
     }
 
     // MARK: - Navigation Helpers
 
-    /// Route to the main dashboard (already authenticated)
-    func showMainApp() {
-        let tabBar = MainTabBarController()
-        setRootViewController(tabBar)
-    }
-
-    /// Route to the "Get Started" splash screen (unauthenticated)
-    func showGetStartedSplash() {
+    /// Shows the animated splash screen and then routes to Login or Home
+    func showSplashAndRoute() {
         let splashView = SplashScreenView { [weak self] in
-            self?.transitionToAuth()
+            self?.performInitialRouting()
         }
         let hostingController = UIHostingController(rootView: splashView)
         setRootViewController(hostingController)
+    }
+
+    /// Route to the main dashboard
+    func showMainApp() {
+        let tabBar = MainTabBarController()
+        setRootViewController(tabBar)
     }
 
     /// Route to the login / sign-up screen
@@ -77,28 +81,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         setRootViewController(nav)
     }
 
-    /// Smoothly swap the root view controller with a cross-dissolve
-    private func setRootViewController(_ vc: UIViewController) {
-        guard let window = self.window else { return }
-        UIView.transition(with: window,
-                          duration: 0.35,
-                          options: .transitionCrossDissolve,
-                          animations: { window.rootViewController = vc },
-                          completion: nil)
-    }
-
-    func transitionToAuth() {
+    /// Smoothly swap the root view controller with a cross-dissolve if a root already exists
+    private func setRootViewController(_ vc: UIViewController, animated: Bool = true) {
         guard let window = self.window else { return }
         
-        // Transition to AuthViewController (or your primary entry point)
-        let authVC = AuthViewController()
-        
-        UIView.transition(with: window,
-                          duration: 0.6,
-                          options: .transitionCrossDissolve,
-                          animations: {
-            window.rootViewController = authVC
-        }, completion: nil)
+        // If we don't have a root yet (initial launch), don't animate to avoid a black flash.
+        // If animated is false, just set it directly.
+        if animated, window.rootViewController != nil {
+            UIView.transition(with: window,
+                              duration: 0.35,
+                              options: .transitionCrossDissolve,
+                              animations: { window.rootViewController = vc },
+                              completion: nil)
+        } else {
+            window.rootViewController = vc
+        }
     }
 
 
