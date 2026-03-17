@@ -2,106 +2,233 @@
 //  HomeViewControllerContinueLearning.swift
 //  Re-Hearse_v1
 //
-//  Created by Devvvv on 07/12/25.
-//
-
-import Foundation
-//
-//  HomeViewController+ContinueLearning.swift
-//  Re-Hearse_v1
-//
 
 import UIKit
 
-extension HomeViewController {
-    
-    // MARK: - Continue Learning Section
-    func addContinueLearningSection() {
-        let sectionHeader = UILabel()
-        sectionHeader.text = "Continue Learning"
-        sectionHeader.font = .systemFont(ofSize: 18, weight: .semibold)
-        sectionHeader.textColor = .darkGray1
+private let kAppCream = UIColor(red: 0xFB/255.0, green: 0xF0/255.0, blue: 0xDA/255.0, alpha: 1.0)
 
-        contentView.addArrangedSubview(sectionHeader)
+extension HomeViewController {
+
+    // MARK: - Build Your Basics
+    func addBuildYourBasicsSection() {
+        contentView.addArrangedSubview(makeSectionHeader("Build your basics"))
+        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
+
+        // ── Cream card ──
+        let card = UIView()
+        card.backgroundColor   = kAppCream
+        card.layer.cornerRadius = 20
+        card.layer.masksToBounds = true
+        card.translatesAutoresizingMaskIntoConstraints = false
+
+        let headingLabel = UILabel()
+        headingLabel.text          = "Start from\nthe basics"
+        headingLabel.font          = .systemFont(ofSize: 20, weight: .bold)
+        headingLabel.textColor     = UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
+        headingLabel.numberOfLines = 2
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text      = "Scales · Chords · Rhythm"
+        subtitleLabel.font      = .systemFont(ofSize: 12)
+        subtitleLabel.textColor = UIColor(red: 0.50, green: 0.45, blue: 0.38, alpha: 1.0)
+
+        // Orange pill button
+        let exploreBg = UIView()
+        exploreBg.backgroundColor   = kAppOrange
+        exploreBg.layer.cornerRadius = 14
+        exploreBg.layer.masksToBounds = true
+
+        let exploreLabel = UILabel()
+        exploreLabel.text      = "Explore →"
+        exploreLabel.font      = .systemFont(ofSize: 12, weight: .semibold)
+        exploreLabel.textColor = .white
+        exploreLabel.translatesAutoresizingMaskIntoConstraints = false
+        exploreBg.addSubview(exploreLabel)
+        NSLayoutConstraint.activate([
+            exploreLabel.topAnchor.constraint(equalTo: exploreBg.topAnchor, constant: 6),
+            exploreLabel.bottomAnchor.constraint(equalTo: exploreBg.bottomAnchor, constant: -6),
+            exploreLabel.leadingAnchor.constraint(equalTo: exploreBg.leadingAnchor, constant: 14),
+            exploreLabel.trailingAnchor.constraint(equalTo: exploreBg.trailingAnchor, constant: -14),
+        ])
+
+        let leftStack = UIStackView(arrangedSubviews: [headingLabel, subtitleLabel, exploreBg])
+        leftStack.axis      = .vertical
+        leftStack.spacing   = 4
+        leftStack.alignment = .leading
+        leftStack.translatesAutoresizingMaskIntoConstraints = false
+        leftStack.setCustomSpacing(14, after: subtitleLabel)
+
+        // Orange icon tile
+        let iconTile = UIView()
+        iconTile.backgroundColor   = kAppOrange
+        iconTile.layer.cornerRadius = 14
+        iconTile.layer.masksToBounds = true
+        iconTile.translatesAutoresizingMaskIntoConstraints = false
+
+        let iconImage = UIImageView(image: UIImage(systemName: "pianokeys"))
+        iconImage.tintColor     = .white
+        iconImage.contentMode   = .scaleAspectFit
+        iconImage.translatesAutoresizingMaskIntoConstraints = false
+        iconTile.addSubview(iconImage)
+
+        NSLayoutConstraint.activate([
+            iconTile.widthAnchor.constraint(equalToConstant: 62),
+            iconTile.heightAnchor.constraint(equalToConstant: 62),
+            iconImage.centerXAnchor.constraint(equalTo: iconTile.centerXAnchor),
+            iconImage.centerYAnchor.constraint(equalTo: iconTile.centerYAnchor),
+            iconImage.widthAnchor.constraint(equalToConstant: 28),
+            iconImage.heightAnchor.constraint(equalToConstant: 28),
+        ])
+
+        card.addSubview(leftStack)
+        card.addSubview(iconTile)
+
+        NSLayoutConstraint.activate([
+            card.heightAnchor.constraint(greaterThanOrEqualToConstant: 110),
+
+            leftStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            leftStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            leftStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            leftStack.trailingAnchor.constraint(lessThanOrEqualTo: iconTile.leadingAnchor, constant: -10),
+
+            iconTile.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            iconTile.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+        ])
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(buildBasicsTapped))
+        card.addGestureRecognizer(tap); card.isUserInteractionEnabled = true
+        contentView.addArrangedSubview(card)
+    }
+
+    @objc private func buildBasicsTapped() {
+        navigationController?.pushViewController(LessonMapViewController(), animated: true)
+    }
+
+    // MARK: - Continue Playing
+    func addContinueLearningSection() {
+        contentView.addArrangedSubview(makeSectionHeader("Continue playing"))
+        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
 
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
+        scrollView.clipsToBounds = false
         contentView.addArrangedSubview(scrollView)
         scrollView.heightAnchor.constraint(equalToConstant: 180).isActive = true
-        
+
         let stackView = UIStackView()
-        stackView.axis = .horizontal
-        stackView.spacing = 14
+        stackView.axis = .horizontal; stackView.spacing = 12
         scrollView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
-
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
-            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor)
+            stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor),
         ])
-        
-        let imageNames = ["cl_5", "cl_4", "ride_home", "cl_1", "cl_2"]
-        imageNames.forEach {
-            stackView.addArrangedSubview(createImageCard(imageName: $0, title: getTitleForImage($0)))
+
+        let songs: [(image: String, song: String, artist: String)] = [
+            ("cl_5",      "Ride",      "Pritam"),
+            ("cl_4",      "Ride",      "Tanishk"),
+            ("ride_home", "Ride",      "Tanishk"),
+            ("cl_1",      "Moonlight", "Beethoven"),
+            ("cl_2",      "Fur Elise", "Beethoven"),
+        ]
+        // Alternate orange / cream placeholder backgrounds
+        for (i, s) in songs.enumerated() {
+            stackView.addArrangedSubview(
+                createContinuePlayingCard(
+                    imageName: s.image, song: s.song, artist: s.artist,
+                    placeholderColor: i.isMultiple(of: 2) ? kAppOrange : kAppCream
+                )
+            )
         }
     }
 
-    // MARK: - Image Card
-     func createImageCard(imageName: String, title: String) -> UIView {
+    // MARK: - Square album card
+    func createContinuePlayingCard(imageName: String, song: String, artist: String,
+                                   placeholderColor: UIColor = .systemGray5) -> UIView {
+        let size: CGFloat = 120
+        let wrapper = UIView()
+        wrapper.translatesAutoresizingMaskIntoConstraints = false
+
         let card = UIView()
-        card.layer.cornerRadius = 12
-        card.clipsToBounds = true
-        
+        card.backgroundColor     = placeholderColor
+        card.layer.cornerRadius  = 16
+        card.layer.shadowColor   = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.07
+        card.layer.shadowRadius  = 8
+        card.layer.shadowOffset  = CGSize(width: 0, height: 2)
+        card.clipsToBounds       = false
+        card.translatesAutoresizingMaskIntoConstraints = false
+
         let imageView = UIImageView(image: UIImage(named: imageName))
-        imageView.contentMode = .scaleAspectFill
-        imageView.clipsToBounds = true
-        
-        let titleLabel = UILabel()
-        titleLabel.text = title
-        titleLabel.textColor = .appBackground
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        titleLabel.textAlignment = .center
-        titleLabel.backgroundColor = UIColor(white: 0, alpha: 0.7)
-        
-        card.addSubview(imageView)
-        card.addSubview(titleLabel)
+        imageView.contentMode         = .scaleAspectFill
+        imageView.clipsToBounds       = true
+        imageView.layer.cornerRadius  = 16
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+        card.addSubview(imageView)
+
+        let songLabel = UILabel()
+        songLabel.text = song
+        songLabel.textColor = UIColor { trait in
+            trait.userInterfaceStyle == .dark ? .white : UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
+        }
+        songLabel.font          = .systemFont(ofSize: 13, weight: .semibold)
+        songLabel.textAlignment = .center
+        songLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let artistLabel = UILabel()
+        artistLabel.text          = artist
+        artistLabel.textColor     = UIColor(red: 0.55, green: 0.53, blue: 0.49, alpha: 1.0)
+        artistLabel.font          = .systemFont(ofSize: 11)
+        artistLabel.textAlignment = .center
+        artistLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        wrapper.addSubview(card)
+        wrapper.addSubview(songLabel)
+        wrapper.addSubview(artistLabel)
+
         NSLayoutConstraint.activate([
-            card.widthAnchor.constraint(equalToConstant: 140),
-            card.heightAnchor.constraint(equalToConstant: 160),
-            
+            wrapper.widthAnchor.constraint(equalToConstant: size),
+
+            card.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            card.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            card.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            card.widthAnchor.constraint(equalToConstant: size),
+            card.heightAnchor.constraint(equalToConstant: size),
+
             imageView.topAnchor.constraint(equalTo: card.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: card.trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            
-            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            titleLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            titleLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            titleLabel.heightAnchor.constraint(equalToConstant: 32)
+
+            songLabel.topAnchor.constraint(equalTo: card.bottomAnchor, constant: 8),
+            songLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            songLabel.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+
+            artistLabel.topAnchor.constraint(equalTo: songLabel.bottomAnchor, constant: 2),
+            artistLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            artistLabel.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            artistLabel.bottomAnchor.constraint(lessThanOrEqualTo: wrapper.bottomAnchor),
         ])
-        
-        return card
+        return wrapper
     }
 
-    // MARK: - Image Title Resolver
+    func createImageCard(imageName: String, title: String) -> UIView {
+        createContinuePlayingCard(imageName: imageName, song: title, artist: "")
+    }
+
     func getTitleForImage(_ name: String) -> String {
-        let titles: [String: String] = [
-            "arrival": "The Arrival",
-            "meridian": "Meridian",
-            "classic": "Classic Suite",
-            "fur_elise": "Fur Elise",
-            "nocturne": "Nocturne",
-            "sonata": "Moonlight Sonata",
-            "prelude": "Prelude",
-            "rhapsody": "Rhapsody"
-        ]
-        return titles[name] ?? name.capitalized
+        let t = ["arrival":"The Arrival","meridian":"Meridian","classic":"Classic Suite",
+                 "fur_elise":"Fur Elise","nocturne":"Nocturne","sonata":"Moonlight Sonata",
+                 "prelude":"Prelude","rhapsody":"Rhapsody"]
+        return t[name] ?? name.capitalized
     }
 }
 
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
