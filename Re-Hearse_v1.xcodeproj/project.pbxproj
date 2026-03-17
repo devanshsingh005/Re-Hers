@@ -18,18 +18,17 @@
 		236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */; };
 		238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */; };
 		238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1D2ED4CE8200301661 /* PlayListInside.swift */; };
-		AA1BC2D42F8000010001ABCD /* UploadPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */; };
-		23C38EF12F2D1011002AD861 /* HomeViewControllerFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C38EF02F2D1000002AD861 /* HomeViewControllerFooter.swift */; };
 		23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C736412ED579D100BCD95B /* UserProfileViewController.swift */; };
+		23D103F52F690FBA00A6EBD2 /* HomeViewControllerUploadSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103F42F690FBA00A6EBD2 /* HomeViewControllerUploadSection.swift */; };
+		23D103F62F690FBA00A6EBD2 /* HomeViewControllerContinueCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103F12F690FBA00A6EBD2 /* HomeViewControllerContinueCard.swift */; };
+		23D103F72F690FBA00A6EBD2 /* HomeViewControllerButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103F02F690FBA00A6EBD2 /* HomeViewControllerButtons.swift */; };
+		23D103F82F690FBA00A6EBD2 /* HomeViewControllerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103F32F690FBA00A6EBD2 /* HomeViewControllerLayout.swift */; };
+		23D103F92F690FBA00A6EBD2 /* DailyGoalManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103EE2F690FBA00A6EBD2 /* DailyGoalManager.swift */; };
+		23D103FA2F690FBA00A6EBD2 /* HomeViewControllerContinueLearning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103F22F690FBA00A6EBD2 /* HomeViewControllerContinueLearning.swift */; };
+		23D103FB2F690FBA00A6EBD2 /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D103EF2F690FBA00A6EBD2 /* HomeViewController.swift */; };
 		23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */; };
 		23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */; };
 		23E442E72ED63F0200A2F5AC /* SearchButtonExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E62ED63F0200A2F5AC /* SearchButtonExploreViewController.swift */; };
-		23FA2E802EE55C720028C205 /* HomeViewControllerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E7F2EE55C720028C205 /* HomeViewControllerLayout.swift */; };
-		23FA2E822EE55CA60028C205 /* HomeViewControllerDailyGoal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E812EE55CA60028C205 /* HomeViewControllerDailyGoal.swift */; };
-		23FA2E842EE55D680028C205 /* HomeViewControllerContinueCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E832EE55D680028C205 /* HomeViewControllerContinueCard.swift */; };
-		23FA2E862EE55EA30028C205 /* HomeViewControllerButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E852EE55EA30028C205 /* HomeViewControllerButtons.swift */; };
-		23FA2E882EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E872EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift */; };
-		23FA2E8A2EE55F260028C205 /* HomeViewControllerUploadSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FA2E892EE55F260028C205 /* HomeViewControllerUploadSection.swift */; };
 		2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */; };
 		2B1DAEB72F67F64F00BE5943 /* PlaylistsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1DAEB52F67F64F00BE5943 /* PlaylistsManager.swift */; };
 		2B1DAEBA2F67F66800BE5943 /* PlaylistModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1DAEB82F67F66800BE5943 /* PlaylistModels.swift */; };
@@ -68,7 +67,7 @@
 		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
 		84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */; };
-		84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBA86F2EBA7816006DF51E /* HomeViewController.swift */; };
+		AA1BC2D42F8000010001ABCD /* UploadPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */; };
 		F1A15E19826CAB5F156D28C0 /* ChordRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3C0D13FC97FE0B50919FB24 /* ChordRecognition.swift */; };
 /* End PBXBuildFile section */
 
@@ -77,18 +76,17 @@
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayListScreen.swift; sourceTree = "<group>"; };
 		238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongDetailsPage.swift; sourceTree = "<group>"; };
 		238BCB1D2ED4CE8200301661 /* PlayListInside.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayListInside.swift; sourceTree = "<group>"; };
-		AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPickerViewController.swift; sourceTree = "<group>"; };
-		23C38EF02F2D1000002AD861 /* HomeViewControllerFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerFooter.swift; sourceTree = "<group>"; };
 		23C736412ED579D100BCD95B /* UserProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileViewController.swift; sourceTree = "<group>"; };
+		23D103EE2F690FBA00A6EBD2 /* DailyGoalManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyGoalManager.swift; sourceTree = "<group>"; };
+		23D103EF2F690FBA00A6EBD2 /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
+		23D103F02F690FBA00A6EBD2 /* HomeViewControllerButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerButtons.swift; sourceTree = "<group>"; };
+		23D103F12F690FBA00A6EBD2 /* HomeViewControllerContinueCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerContinueCard.swift; sourceTree = "<group>"; };
+		23D103F22F690FBA00A6EBD2 /* HomeViewControllerContinueLearning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerContinueLearning.swift; sourceTree = "<group>"; };
+		23D103F32F690FBA00A6EBD2 /* HomeViewControllerLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerLayout.swift; sourceTree = "<group>"; };
+		23D103F42F690FBA00A6EBD2 /* HomeViewControllerUploadSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerUploadSection.swift; sourceTree = "<group>"; };
 		23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPageNextViewController.swift; sourceTree = "<group>"; };
 		23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaximizeUploadPageViewController.swift; sourceTree = "<group>"; };
 		23E442E62ED63F0200A2F5AC /* SearchButtonExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchButtonExploreViewController.swift; sourceTree = "<group>"; };
-		23FA2E7F2EE55C720028C205 /* HomeViewControllerLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerLayout.swift; sourceTree = "<group>"; };
-		23FA2E812EE55CA60028C205 /* HomeViewControllerDailyGoal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerDailyGoal.swift; sourceTree = "<group>"; };
-		23FA2E832EE55D680028C205 /* HomeViewControllerContinueCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerContinueCard.swift; sourceTree = "<group>"; };
-		23FA2E852EE55EA30028C205 /* HomeViewControllerButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerButtons.swift; sourceTree = "<group>"; };
-		23FA2E872EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerContinueLearning.swift; sourceTree = "<group>"; };
-		23FA2E892EE55F260028C205 /* HomeViewControllerUploadSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewControllerUploadSection.swift; sourceTree = "<group>"; };
 		2B12BD8A2EBA7D0F009795DF /* ExploreViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreViewController.swift; sourceTree = "<group>"; };
 		2B1DAEB52F67F64F00BE5943 /* PlaylistsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistsManager.swift; sourceTree = "<group>"; };
 		2B1DAEB82F67F66800BE5943 /* PlaylistModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistModels.swift; sourceTree = "<group>"; };
@@ -128,8 +126,8 @@
 		84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopNavBar.swift; sourceTree = "<group>"; };
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
 		84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/Wurlitzer210.sf2; sourceTree = "<group>"; };
-		84DBA86F2EBA7816006DF51E /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 		A8B6FEB9F6EB754D1A71C261 /* PianoDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PianoDataManager.swift; sourceTree = "<group>"; };
+		AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPickerViewController.swift; sourceTree = "<group>"; };
 		D3C0D13FC97FE0B50919FB24 /* ChordRecognition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChordRecognition.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -144,6 +142,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		23D103FC2F690FC500A6EBD2 /* LearningCurve */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LearningCurve;
+			sourceTree = "<group>";
+		};
 		23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MainLoginSignupScreen;
@@ -356,6 +359,7 @@
 		84DBA8592EBA72C7006DF51E /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				23D103FC2F690FC500A6EBD2 /* LearningCurve */,
 				2BC06DA52EEE7D6700CBDC03 /* OnBoardingQuestionsScreen */,
 				23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */,
 				2B5707A72ED59EC300C68472 /* ProfileScreen */,
@@ -383,14 +387,13 @@
 		84DBA85C2EBA735F006DF51E /* MainHomeScreen */ = {
 			isa = PBXGroup;
 			children = (
-				23C38EF02F2D1000002AD861 /* HomeViewControllerFooter.swift */,
-				84DBA86F2EBA7816006DF51E /* HomeViewController.swift */,
-				23FA2E7F2EE55C720028C205 /* HomeViewControllerLayout.swift */,
-				23FA2E812EE55CA60028C205 /* HomeViewControllerDailyGoal.swift */,
-				23FA2E832EE55D680028C205 /* HomeViewControllerContinueCard.swift */,
-				23FA2E852EE55EA30028C205 /* HomeViewControllerButtons.swift */,
-				23FA2E872EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift */,
-				23FA2E892EE55F260028C205 /* HomeViewControllerUploadSection.swift */,
+				23D103EE2F690FBA00A6EBD2 /* DailyGoalManager.swift */,
+				23D103EF2F690FBA00A6EBD2 /* HomeViewController.swift */,
+				23D103F02F690FBA00A6EBD2 /* HomeViewControllerButtons.swift */,
+				23D103F12F690FBA00A6EBD2 /* HomeViewControllerContinueCard.swift */,
+				23D103F22F690FBA00A6EBD2 /* HomeViewControllerContinueLearning.swift */,
+				23D103F32F690FBA00A6EBD2 /* HomeViewControllerLayout.swift */,
+				23D103F42F690FBA00A6EBD2 /* HomeViewControllerUploadSection.swift */,
 			);
 			path = MainHomeScreen;
 			sourceTree = "<group>";
@@ -448,6 +451,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				23D103FC2F690FC500A6EBD2 /* LearningCurve */,
 				23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
 				842B083D2EBA0465001AC579 /* Re-Hearse_v1 */,
@@ -523,19 +527,22 @@
 				23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */,
 				2BC06DAB2EEE903200CBDC03 /* OnboardingFlowRoot.swift in Sources */,
 				2B9B8F592F485DE70049535B /* UploadQuizPopup.swift in Sources */,
+				23D103F52F690FBA00A6EBD2 /* HomeViewControllerUploadSection.swift in Sources */,
+				23D103F62F690FBA00A6EBD2 /* HomeViewControllerContinueCard.swift in Sources */,
+				23D103F72F690FBA00A6EBD2 /* HomeViewControllerButtons.swift in Sources */,
+				23D103F82F690FBA00A6EBD2 /* HomeViewControllerLayout.swift in Sources */,
+				23D103F92F690FBA00A6EBD2 /* DailyGoalManager.swift in Sources */,
+				23D103FA2F690FBA00A6EBD2 /* HomeViewControllerContinueLearning.swift in Sources */,
+				23D103FB2F690FBA00A6EBD2 /* HomeViewController.swift in Sources */,
 				236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */,
 				842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */,
-				23FA2E8A2EE55F260028C205 /* HomeViewControllerUploadSection.swift in Sources */,
-				23FA2E842EE55D680028C205 /* HomeViewControllerContinueCard.swift in Sources */,
 				8416D6382F2BD83C00E0E638 /* MainChordRecognitionScreen.swift in Sources */,
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
-				84DBA8702EBA7816006DF51E /* HomeViewController.swift in Sources */,
 				84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */,
 				2B9B8F572F48562D0049535B /* AllUploadsViewController.swift in Sources */,
 				84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */,
 				84114B6A2EBCF68300E86F71 /* UploadScreen.swift in Sources */,
 				2BC06DAD2EEE905100CBDC03 /* OnboardingQuestion1View.swift in Sources */,
-				23C38EF12F2D1011002AD861 /* HomeViewControllerFooter.swift in Sources */,
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
 				23E442E72ED63F0200A2F5AC /* SearchButtonExploreViewController.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
@@ -543,8 +550,6 @@
 				2BC4A97D2F656AB4004FC90E /* RehearsalInfoCard.swift in Sources */,
 				84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */,
 				236331F32ED6C2B3007D5F94 /* Models/ColorViewController.swift in Sources */,
-				23FA2E822EE55CA60028C205 /* HomeViewControllerDailyGoal.swift in Sources */,
-				23FA2E862EE55EA30028C205 /* HomeViewControllerButtons.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* ExploreViewController.swift in Sources */,
 				2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */,
 				84ADF6952F5EAABA009F3D7D /* AnimationViewController.swift in Sources */,
@@ -560,7 +565,6 @@
 				84ADF69E2F5EAABA009F3D7D /* TopView.swift in Sources */,
 				84ADF69F2F5EAABA009F3D7D /* SheetMusicView.swift in Sources */,
 				84ADF6A02F5EAABA009F3D7D /* MusicJSONLoader.swift in Sources */,
-				23FA2E882EE55ECB0028C205 /* HomeViewControllerContinueLearning.swift in Sources */,
 				84AFA4462EF82681004A8110 /* PlayAlongViewController.swift in Sources */,
 				2BC06DA72EEE8DF100CBDC03 /* ProgressIndicator.swift in Sources */,
 				238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */,
@@ -568,7 +572,6 @@
 				2B1DAEBC2F68002400BE5943 /* ImageLoader.swift in Sources */,
 				238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */,
 				2B1DAEB72F67F64F00BE5943 /* PlaylistsManager.swift in Sources */,
-				23FA2E802EE55C720028C205 /* HomeViewControllerLayout.swift in Sources */,
 				2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */,
 				23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */,
 				F1A15E19826CAB5F156D28C0 /* ChordRecognition.swift in Sources */,
