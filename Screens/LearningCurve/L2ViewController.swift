@@ -1,4 +1,7 @@
 import UIKit
+internal import PostgREST
+import Auth
+import Supabase
 
 // MARK: - Music Staff View
 
@@ -282,6 +285,7 @@ class LessonDetailViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 1, green: 0.98, blue: 0.95, alpha: 1)
         setupUI()
+        loadCompletedVariantsFromSupabase()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -933,12 +937,14 @@ class LessonDetailViewController: UIViewController {
             animateProgressBar()
 
             // ── Persist part completion to Supabase ───────────────────────
-            SupabaseProgressManager.recordPartCompleted(
-                chapterIndex: chapterIndex,
-                partIndex:    variantIndex,
-                attempts:     attempts,
-                scorePoints:  scorePoints
-            )
+            Task {
+                await SupabaseProgressManager.recordPartCompleted(
+                    chapterIndex: chapterIndex,
+                    partIndex:    variantIndex,
+                    attempts:     attempts,
+                    scorePoints:  scorePoints
+                )
+            }
             // ─────────────────────────────────────────────────────────────
         }
 
@@ -996,12 +1002,14 @@ class LessonDetailViewController: UIViewController {
 
         // ── Capture session duration and persist to Supabase ─────────────
         sessionDurationSeconds = Int(Date().timeIntervalSince(lessonStartedAt))
-        SupabaseProgressManager.recordLessonCompleted(
-            chapterIndex:    chapterIndex,
-            stars:           stars,
-            durationSeconds: sessionDurationSeconds,
-            scorePoints:     scorePoints
-        )
+        let saveTask = Task {
+            await SupabaseProgressManager.recordLessonCompleted(
+                chapterIndex:    chapterIndex,
+                stars:           stars,
+                durationSeconds: sessionDurationSeconds,
+                scorePoints:     scorePoints
+            )
+        }
         // ─────────────────────────────────────────────────────────────────
 
         let popup = LessonCompletionPopupView(stars: stars, lessonTitle: lesson.title)
@@ -1030,13 +1038,18 @@ class LessonDetailViewController: UIViewController {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
 
         popup.onContinue = { [weak self] in
-            UIView.animate(withDuration: 0.25, animations: {
-                popup.alpha = 0
-                popup.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-                dim.alpha = 0
-            }) { _ in
-                popup.removeFromSuperview(); dim.removeFromSuperview()
-                self?.onLessonCompleted?(stars)
+            Task {
+                await saveTask.value
+                await MainActor.run {
+                    UIView.animate(withDuration: 0.25, animations: {
+                        popup.alpha = 0
+                        popup.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+                        dim.alpha = 0
+                    }) { _ in
+                        popup.removeFromSuperview(); dim.removeFromSuperview()
+                        self?.onLessonCompleted?(stars)
+                    }
+                }
             }
         }
     }
@@ -1133,6 +1146,54 @@ class LessonDetailViewController: UIViewController {
         present(sheet, animated: true)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
+    
+    // MARK: - Supabase Parts Synchronization
+    
+    private struct PartCompletedEvent: Decodable {
+        let part_index: Int
+    }
+    
+    private func loadCompletedVariantsFromSupabase() {
+        Task {
+            do {
+                let db = SupabaseManager.shared.client
+                let userID = try await db.auth.session.user.id
+                
+                let events: [PartCompletedEvent] = try await db
+                    .from("lesson_events")
+                    .select("part_index")
+                    .eq("user_id", value: userID.uuidString)
+                    .eq("chapter_index", value: chapterIndex)
+                    .eq("event_type", value: "part_completed")
+                    .execute()
+                    .value
+                
+                await MainActor.run {
+                    for event in events {
+                        let idx = event.part_index
+                        guard idx >= 0 && idx < self.lesson.variants.count else { continue }
+                        self.variantsDone.insert(idx)
+                        self.chipButtons[idx].markDone()
+                        self.dotsStack.arrangedSubviews[idx].backgroundColor = .systemGreen
+                    }
+                    
+                    self.refreshProgressRowLabel()
+                    self.progressPercentLabel.text = "\(Int(self.lessonProgress * 100))% complete"
+                    
+                    if self.progressFillConstraint != nil {
+                        self.progressFillConstraint.constant = 130 * CGFloat(self.lessonProgress)
+                        UIView.animate(withDuration: 0.3) {
+                            self.view.layoutIfNeeded()
+                        }
+                    }
+                }
+            } catch {
+                print("[LessonDetailViewController] loadCompletedVariants error: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Practice Variant Handlers
 }
 
 // MARK: - Lesson Completion Popup View
