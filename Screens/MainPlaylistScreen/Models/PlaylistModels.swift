@@ -7,14 +7,17 @@ public struct PlaylistTrack: Codable, Identifiable {
     public let artist: String
     public let imageUrl: String?
     public let playlistItemId: Int64? // DB row id for deletion
-    
-    public init(id: UUID = UUID(), trackId: String = "", title: String, artist: String, imageUrl: String? = nil, playlistItemId: Int64? = nil) {
+    public let sheetScanId: Int64?    // links back to the `scans` table row
+
+    public init(id: UUID = UUID(), trackId: String = "", title: String, artist: String,
+                imageUrl: String? = nil, playlistItemId: Int64? = nil, sheetScanId: Int64? = nil) {
         self.id = id
         self.trackId = trackId
         self.title = title
         self.artist = artist
         self.imageUrl = imageUrl
         self.playlistItemId = playlistItemId
+        self.sheetScanId = sheetScanId
     }
 }
 

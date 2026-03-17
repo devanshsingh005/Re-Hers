@@ -438,6 +438,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         vc.passedImage = UIImage(named: "cl_\((indexPath.row % 5) + 1)")
         vc.passedSongTitle = track.title
         vc.passedArtist = track.artist
+        vc.passedSheetScanId = track.sheetScanId
         navigationController?.pushViewController(vc, animated: true)
     }
     

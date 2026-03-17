@@ -39,7 +39,8 @@ public final class PlaylistsManager {
                     trackId: item.trackId,
                     title: item.trackTitle,
                     artist: item.artistName,
-                    playlistItemId: item.id
+                    playlistItemId: item.id,
+                    sheetScanId: item.sheetScanId
                 )
             }
             
@@ -75,7 +76,8 @@ public final class PlaylistsManager {
                 trackId: item.trackId,
                 title: item.trackTitle,
                 artist: item.artistName,
-                playlistItemId: item.id
+                playlistItemId: item.id,
+                sheetScanId: item.sheetScanId
             )
         }
     }
@@ -171,12 +173,95 @@ public final class PlaylistsManager {
             trackId: inserted.trackId,
             title: inserted.trackTitle,
             artist: inserted.artistName,
-            playlistItemId: inserted.id
+            playlistItemId: inserted.id,
+            sheetScanId: inserted.sheetScanId
         )
     }
     
+    // MARK: - Fetch labeled PDF URL for a scan
+
+    /// Reads `json_data.output_url` from the `scans` table for the given scan ID.
+    /// Returns `nil` gracefully when no output URL exists yet.
+    public func fetchPDFURL(forScanId scanId: Int64) async throws -> URL? {
+        struct ScanRow: Codable {
+            let jsonData: AnyScan?
+            enum CodingKeys: String, CodingKey { case jsonData = "json_data" }
+        }
+        struct AnyScan: Codable {
+            let outputUrl: String?
+            enum CodingKeys: String, CodingKey { case outputUrl = "output_url" }
+        }
+
+        let rows: [ScanRow] = try await SupabaseManager.shared.client
+            .from("scans")
+            .select("json_data")
+            .eq("id", value: Int(scanId))
+            .limit(1)
+            .execute()
+            .value
+
+        guard let urlString = rows.first?.jsonData?.outputUrl,
+              !urlString.isEmpty,
+              let url = URL(string: urlString) else { return nil }
+        return url
+    }
+
+    /// Fetches the labeled PDF URL string from the scans table for a given scan ID.
+    /// Returns the result URL string (may be relative path or full URL).
+    public func fetchJobPDFURLString(forScanId scanId: Int64) async throws -> String? {
+        struct ScanRow: Codable {
+            let jobId: String?
+            let jsonData: AnyScan?
+            enum CodingKeys: String, CodingKey {
+                case jobId = "job_id"
+                case jsonData = "json_data"
+            }
+        }
+        struct AnyScan: Codable {
+            let outputUrl: String?
+            enum CodingKeys: String, CodingKey { case outputUrl = "output_url" }
+        }
+
+        let rows: [ScanRow] = try await SupabaseManager.shared.client
+            .from("scans")
+            .select("job_id, json_data")
+            .eq("id", value: Int(scanId))
+            .limit(1)
+            .execute()
+            .value
+
+        // Try to get output_url from json_data first
+        if let urlString = rows.first?.jsonData?.outputUrl, !urlString.isEmpty {
+            return urlString
+        }
+        
+        // If that doesn't work, try to fetch from jobs table if we have a job_id
+        if let jobId = rows.first?.jobId, !jobId.isEmpty {
+            struct JobRow: Codable {
+                let resultUrl: String?
+                enum CodingKeys: String, CodingKey {
+                    case resultUrl = "result_url"
+                }
+            }
+            
+            let jobRows: [JobRow] = try await SupabaseManager.shared.client
+                .from("jobs")
+                .select("result_url")
+                .eq("id", value: jobId)
+                .limit(1)
+                .execute()
+                .value
+            
+            if let resultUrl = jobRows.first?.resultUrl, !resultUrl.isEmpty {
+                return resultUrl
+            }
+        }
+        
+        return nil
+    }
+
     // MARK: - Fetch User Uploads
-    
+
     /// Fetches all scans for the current user, mapped to lightweight UploadScanItem models.
     public func fetchUserUploads() async throws -> [UploadScanItem] {
         let session = try await SupabaseManager.shared.client.auth.session
