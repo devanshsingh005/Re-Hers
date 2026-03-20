@@ -606,7 +606,7 @@ class UploadScreen: UIViewController {
         print("[Upload] API keys: \(api.keys.sorted())")
 
         guard let jobIdStr  = api["job_id"]  as? String, let jobId  = UUID(uuidString: jobIdStr),
-              let apiUidStr = api["user_id"] as? String, let apiUid = UUID(uuidString: apiUidStr)
+              let apiUidStr = api["user_id"] as? String, let _ = UUID(uuidString: apiUidStr)
         else { throw UploadError.badAPIResponse }
 
         let pdfPath   = "\(apiUidStr.lowercased())/\(jobIdStr.lowercased())/input.pdf"

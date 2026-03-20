@@ -549,7 +549,11 @@ class LessonMapViewController: UIViewController {
     private func setupPath() {
         let totalHeight  = CGFloat(chapters.count) * vSpacing + 140
         let pathTopOffset: CGFloat = 120
-        let w = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
+        let w: CGFloat = {
+            if view.bounds.width > 0 { return view.bounds.width }
+            if let screen = view.window?.windowScene?.screen { return screen.bounds.width }
+            return 390
+        }()
 
         let canvas = PathCanvasView(chapters: chapters, nodeSize: nodeSize,
                                     vSpacing: vSpacing, width: w)

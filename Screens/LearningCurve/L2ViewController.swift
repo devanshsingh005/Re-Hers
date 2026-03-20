@@ -51,7 +51,7 @@ class MusicStaffView: UIView {
         clefLayer.fontSize = 72
         clefLayer.foregroundColor = UIColor.systemGray3.cgColor
         clefLayer.frame = CGRect(x: staffLeft + 2, y: staffTop - 32, width: 60, height: 85)
-        clefLayer.contentsScale = UIScreen.main.scale
+        clefLayer.contentsScale = UITraitCollection.current.displayScale
         layer.addSublayer(clefLayer)
 
         let centerY = staffTop + CGFloat(numLines - 1) / 2 * lineSpacing

@@ -37,7 +37,7 @@ struct ParticleView: View {
             .onAppear {
                 createParticles()
             }
-            .onChange(of: timeline.date) { _ in
+            .onChange(of: timeline.date) { _, _ in
                 updateParticles()
             }
         }

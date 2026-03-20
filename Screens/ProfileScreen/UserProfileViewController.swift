@@ -706,7 +706,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
             let client = SupabaseManager.shared.client
             let fileName = "avatar_\(user.id.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
             do {
-                try await client.storage.from("useprofile").upload(path: fileName, file: jpegData)
+                try await client.storage.from("useprofile").upload(fileName, data: jpegData)
                 let projectRef = "djqgmowfjxsnjdffdohw"
                 let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
                 _ = try await client.from("profiles")

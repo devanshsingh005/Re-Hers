@@ -109,11 +109,8 @@ final class AnimationViewController: UIViewController {
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func forceLandscape() {
-        if #available(iOS 16.0, *) {
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
+        self.setNeedsUpdateOfSupportedInterfaceOrientations()
         UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
-        UIViewController.attemptRotationToDeviceOrientation()
     }
 
     // MARK: - Layout

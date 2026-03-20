@@ -59,7 +59,7 @@ class HomeViewController: UIViewController {
     private func startPracticeTimer() {
         stopPracticeTimer()
         practiceTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
+            guard self != nil else { return }
             DailyGoalManager.shared.checkAndResetIfNewDay()
             DailyGoalManager.shared.practiceTimeMinutesToday += 1
         }

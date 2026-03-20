@@ -92,11 +92,8 @@ final class PlayAlongViewController: UIViewController {
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func forceLandscape() {
-        if #available(iOS 16.0, *) {
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
+        self.setNeedsUpdateOfSupportedInterfaceOrientations()
         UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
-        UIViewController.attemptRotationToDeviceOrientation()
     }
 
     // MARK: - UI Setup
@@ -392,11 +389,9 @@ final class PlayAlongEngine {
     
     // Antigravity: Multi-note support for chords
     func processNotes(_ notes: [String]) {
-        var anyCorrect = false
         for note in notes {
             if expectedNotes.contains(note) {
                 _ = processNote(note)
-                anyCorrect = true
             }
         }
     }

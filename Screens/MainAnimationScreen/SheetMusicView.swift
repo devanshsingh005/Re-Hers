@@ -355,7 +355,7 @@ final class SheetMusicView: UIView {
                 let staffStr = MusicJSONLoader.strVal(d["staff"]) ?? "1"
                 let dur = MusicJSONLoader.intVal(d["duration"]) ?? 0
                 let isChord = d["chord"] != nil
-                let isRest = d["rest"] != nil
+                _ = d["rest"] != nil
 
                 let tickKey = "\(staffStr)-\(voice)"
                 let localCur = localTick[tickKey, default: 0]
@@ -685,7 +685,7 @@ final class SheetMusicView: UIView {
         l.string=s
         l.fontSize=sz
         l.foregroundColor=UIColor.black.cgColor
-        l.contentsScale=UIScreen.main.scale
+        l.contentsScale=UITraitCollection.current.displayScale
         l.alignmentMode = .center
         l.isWrapped=false
         return l

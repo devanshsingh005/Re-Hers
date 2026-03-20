@@ -701,7 +701,7 @@ extension AuthViewController {
     @objc func googleButtonTapped() {
         Task {
             do {
-                let url = try await SupabaseManager.shared.client.auth.getOAuthSignInURL(
+                let url = try SupabaseManager.shared.client.auth.getOAuthSignInURL(
                     provider: .google,
                     redirectTo: URL(string: "io.supabase.rehearse://login-callback")
                 )
@@ -738,7 +738,7 @@ extension AuthViewController {
                         Task {
                             do {
                                 let client = SupabaseManager.shared.client
-                                try await client.auth.handle(callbackURL)
+                                client.auth.handle(callbackURL)
 
                                 // The SDK securely stores the session in the iOS Keychain.
                                 // Sometimes fetching .session immediately throws "Auth session missing"
@@ -812,7 +812,9 @@ extension AuthViewController {
 // MARK: - ASWebAuthenticationPresentationContextProviding
 extension AuthViewController: ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        return self.view.window ?? ASPresentationAnchor()
+        if let window = self.view.window { return window }
+        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        return UIWindow(windowScene: scene!)
     }
 }
 

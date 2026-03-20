@@ -99,7 +99,6 @@ final class ChordRecognitionViewController: UIViewController {
         b.backgroundColor = .systemGreen
         b.layer.cornerRadius = 40
         b.imageView?.contentMode = .scaleAspectFit
-        b.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         return b
     }()
     
@@ -110,7 +109,6 @@ final class ChordRecognitionViewController: UIViewController {
         btn.backgroundColor = .systemRed
         btn.layer.cornerRadius = 40
         btn.imageView?.contentMode = .scaleAspectFit
-        btn.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         btn.alpha = 0.7
         return btn
     }()
@@ -142,7 +140,7 @@ final class ChordRecognitionViewController: UIViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        AVAudioApplication.requestRecordPermission { granted in
             print("Mic permission granted:", granted)
         }
     }

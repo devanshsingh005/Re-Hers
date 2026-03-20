@@ -6,7 +6,7 @@
 import UIKit
 import Foundation
 
-class SongDetailViewController: UIViewController {
+class PlayAlongSongDetailViewController: UIViewController {
     
     // MARK: - Passed Data From Previous Page
     var passedImage: UIImage?
@@ -335,12 +335,4 @@ class SongDetailViewController: UIViewController {
     }
 }
 
-// MARK: - LandscapeNavigationController
-// Forces landscape for AnimationViewController presentation.
-final class LandscapeNavigationController: UINavigationController {
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
-    override var shouldAutorotate: Bool { true }
-    override var prefersStatusBarHidden: Bool { topViewController?.prefersStatusBarHidden ?? true }
-}
 

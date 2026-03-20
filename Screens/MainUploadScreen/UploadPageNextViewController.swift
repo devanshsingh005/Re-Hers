@@ -141,17 +141,17 @@ final class UploadPageNextViewController: UIViewController {
             self.pendingPDFPath = row.pdfPath
 
             // Determine effective result URL
-            let effectiveResultURL: String
+            let _: String
             if let preSupplied = self.resultURL, !preSupplied.isEmpty {
                 print("[Load] ✅ Using pre-supplied resultURL: \(preSupplied)")
-                effectiveResultURL = preSupplied
+                _ = preSupplied
             } else if let dbURL = row.resultUrl, !dbURL.isEmpty {
                 print("[Load] Using DB result_url: \(dbURL)")
-                effectiveResultURL = dbURL
+                _ = dbURL
             } else {
                 let derived = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
                 print("[Load] No result_url — using derived: \(derived)")
-                effectiveResultURL = derived
+                _ = derived
             }
 
             // Start polling job status — backend owns all transitions
@@ -453,7 +453,7 @@ final class UploadPageNextViewController: UIViewController {
                     }
                 }
                 guard !steps.isEmpty else { continue }
-                let label = steps.sorted().joined()   // e.g. "ADE" → use root only
+                let _ = steps.sorted().joined()   // e.g. "ADE" → use root only
                 let root  = steps.sorted().first ?? "C"
                 if !seen.contains(root) { seen.insert(root); chords.append(root) }
             }
@@ -705,7 +705,7 @@ final class UploadPageNextViewController: UIViewController {
         let vc = PlayAlongViewController()
         vc.sheetMusicData = data
         let nav = LandscapeNavigationController(rootViewController: vc)
-        nav.modalPresentationStyle = .fullScreen
+        nav.modalPresentationStyle = UIModalPresentationStyle.fullScreen
         present(nav, animated: true)
     }
 
@@ -724,7 +724,7 @@ final class UploadPageNextViewController: UIViewController {
         let vc = AnimationViewController()
         vc.sheetMusicData = data
         let nav = LandscapeNavigationController(rootViewController: vc)
-        nav.modalPresentationStyle = .fullScreen
+        nav.modalPresentationStyle = UIModalPresentationStyle.fullScreen
         present(nav, animated: true)
     }
 

@@ -35,11 +35,11 @@ class MainTabBarController: UITabBarController {
             selectedImage: UIImage(systemName: "plus.square.fill")
         )
         
-        // Explore Tab
-        let exploreVC = ExploreViewController()
-        let exploreNav = UINavigationController(rootViewController: exploreVC)
-        exploreNav.tabBarItem = UITabBarItem(
-            title: "Explore",
+        // Discover Tab
+        let discoverVC = DiscoverViewController()
+        let discoverNav = UINavigationController(rootViewController: discoverVC)
+        discoverNav.tabBarItem = UITabBarItem(
+            title: "Discover",
             image: UIImage(systemName: "magnifyingglass"),
             selectedImage: UIImage(systemName: "magnifyingglass")
         )
@@ -63,7 +63,7 @@ class MainTabBarController: UITabBarController {
         )
         
         // Set all view controllers
-        viewControllers = [homeNav, uploadNav, exploreNav, playListNav]
+        viewControllers = [homeNav, uploadNav, discoverNav, playListNav]
     }
     
     private func setupAppearance() {
@@ -96,9 +96,6 @@ class MainTabBarController: UITabBarController {
     }
 
     // MARK: - Orientation Delegation
-    override var shouldAutorotate: Bool {
-        return selectedViewController?.shouldAutorotate ?? true
-    }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         return selectedViewController?.supportedInterfaceOrientations ?? .portrait
@@ -111,9 +108,6 @@ class MainTabBarController: UITabBarController {
 
 // MARK: - Navigation Controller Orientation Delegation
 extension UINavigationController {
-    override open var shouldAutorotate: Bool {
-        return topViewController?.shouldAutorotate ?? true
-    }
 
     override open var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         return topViewController?.supportedInterfaceOrientations ?? .allButUpsideDown

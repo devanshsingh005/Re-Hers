@@ -43,13 +43,14 @@ public final class TopNavBar: UIView {
     }()
 
     private let dayBadge: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setTitle("🔥 Day 1", for: .normal)
-        btn.setTitleColor(.black, for: .normal)
-        btn.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
-        btn.layer.cornerRadius = 16
+        var config = UIButton.Configuration.filled()
+        config.title = "🔥 Day 1"
+        config.baseForegroundColor = .black
+        config.baseBackgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
+        config.cornerStyle = .capsule
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        let btn = UIButton(configuration: config)
         btn.titleLabel?.font = .boldSystemFont(ofSize: 14)
-        btn.contentEdgeInsets = .init(top: 6, left: 10, bottom: 6, right: 10)
         return btn
     }()
 
@@ -60,7 +61,6 @@ public final class TopNavBar: UIView {
 
         btn.contentHorizontalAlignment = .fill
         btn.contentVerticalAlignment = .fill
-        btn.contentEdgeInsets = .zero
         btn.imageView?.contentMode = .scaleAspectFit
 
         return btn
@@ -200,7 +200,6 @@ public final class TopNavBar: UIView {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            print("🔄 NavBar received profile update notification - refreshing...")
             self?.loadUserProfile()
         }
     }
@@ -224,7 +223,6 @@ public final class TopNavBar: UIView {
 
     // MARK: - Refresh Profile (Public Method)
     public func refreshProfile() {
-        print("🔄 Manually refreshing navbar profile...")
         loadUserProfile()
     }
 
@@ -257,8 +255,6 @@ public final class TopNavBar: UIView {
                     } else {
                         self.welcomeLabel.text = "Welcome back, User"
                     }
-                    
-                    print("✅ NavBar loaded profile name: \(profile.full_name ?? "nil")")
                 }
 
                 if let urlString = profile.avatar_url, !urlString.isEmpty {
@@ -268,11 +264,9 @@ public final class TopNavBar: UIView {
                         self.profileImg.image = UIImage(systemName: "person.crop.circle")
                         self.profileImg.tintColor = .gray
                         self.profileImg.contentMode = .scaleAspectFit
-                        print("✅ NavBar: No avatar URL, using default")
                     }
                 }
             } catch {
-                print("❌ Failed to load navbar profile:", error)
                 await MainActor.run {
                     self.welcomeLabel.text = "Welcome back..."
                     self.profileImg.image = UIImage(systemName: "person.crop.circle")
@@ -292,12 +286,10 @@ public final class TopNavBar: UIView {
                     self.profileImg.image = img
                     self.profileImg.contentMode = .scaleAspectFill
                     self.profileImg.tintColor = .clear
-                    print("✅ NavBar: Loaded local icon \(urlString)")
                 } else {
                     self.profileImg.image = UIImage(systemName: "person.crop.circle")
                     self.profileImg.tintColor = .gray
                     self.profileImg.contentMode = .scaleAspectFit
-                    print("❌ NavBar: Local icon \(urlString) not found in assets")
                 }
             }
             return
@@ -312,7 +304,6 @@ public final class TopNavBar: UIView {
         }
         
         guard let url = URL(string: finalURLString) else {
-            print("❌ Invalid URL for navbar profile: \(finalURLString)")
             await MainActor.run {
                 self.profileImg.image = UIImage(systemName: "person.crop.circle")
                 self.profileImg.tintColor = .gray
@@ -322,7 +313,6 @@ public final class TopNavBar: UIView {
         }
 
         do {
-            print("🔄 NavBar loading image from: \(url)")
             let request = URLRequest(url: url, timeoutInterval: 30)
             let (data, _) = try await URLSession.shared.data(for: request)
             
@@ -331,18 +321,15 @@ public final class TopNavBar: UIView {
                     self.profileImg.image = img
                     self.profileImg.contentMode = .scaleAspectFill
                     self.profileImg.tintColor = .clear
-                    print("✅ NavBar image loaded successfully")
                 }
             } else {
                 await MainActor.run {
                     self.profileImg.image = UIImage(systemName: "person.crop.circle")
                     self.profileImg.tintColor = .gray
                     self.profileImg.contentMode = .scaleAspectFit
-                    print("❌ NavBar: Could not create image from data")
                 }
             }
         } catch {
-            print("❌ Failed to load profile image:", error)
             await MainActor.run {
                 self.profileImg.image = UIImage(systemName: "person.crop.circle")
                 self.profileImg.tintColor = .gray

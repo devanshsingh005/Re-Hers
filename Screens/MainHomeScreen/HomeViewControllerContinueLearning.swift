@@ -33,25 +33,25 @@ extension HomeViewController {
         subtitleLabel.textColor = UIColor(red: 0.50, green: 0.45, blue: 0.38, alpha: 1.0)
 
         // Orange pill button
-        let exploreBg = UIView()
-        exploreBg.backgroundColor   = kAppOrange
-        exploreBg.layer.cornerRadius = 14
-        exploreBg.layer.masksToBounds = true
+        let discoverBg = UIView()
+        discoverBg.backgroundColor   = kAppOrange
+        discoverBg.layer.cornerRadius = 14
+        discoverBg.layer.masksToBounds = true
 
-        let exploreLabel = UILabel()
-        exploreLabel.text      = "Explore →"
-        exploreLabel.font      = .systemFont(ofSize: 12, weight: .semibold)
-        exploreLabel.textColor = .white
-        exploreLabel.translatesAutoresizingMaskIntoConstraints = false
-        exploreBg.addSubview(exploreLabel)
+        let discoverLabel = UILabel()
+        discoverLabel.text      = "Discover →"
+        discoverLabel.font      = .systemFont(ofSize: 12, weight: .semibold)
+        discoverLabel.textColor = .white
+        discoverLabel.translatesAutoresizingMaskIntoConstraints = false
+        discoverBg.addSubview(discoverLabel)
         NSLayoutConstraint.activate([
-            exploreLabel.topAnchor.constraint(equalTo: exploreBg.topAnchor, constant: 6),
-            exploreLabel.bottomAnchor.constraint(equalTo: exploreBg.bottomAnchor, constant: -6),
-            exploreLabel.leadingAnchor.constraint(equalTo: exploreBg.leadingAnchor, constant: 14),
-            exploreLabel.trailingAnchor.constraint(equalTo: exploreBg.trailingAnchor, constant: -14),
+            discoverLabel.topAnchor.constraint(equalTo: discoverBg.topAnchor, constant: 6),
+            discoverLabel.bottomAnchor.constraint(equalTo: discoverBg.bottomAnchor, constant: -6),
+            discoverLabel.leadingAnchor.constraint(equalTo: discoverBg.leadingAnchor, constant: 14),
+            discoverLabel.trailingAnchor.constraint(equalTo: discoverBg.trailingAnchor, constant: -14),
         ])
 
-        let leftStack = UIStackView(arrangedSubviews: [headingLabel, subtitleLabel, exploreBg])
+        let leftStack = UIStackView(arrangedSubviews: [headingLabel, subtitleLabel, discoverBg])
         leftStack.axis      = .vertical
         leftStack.spacing   = 4
         leftStack.alignment = .leading

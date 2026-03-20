@@ -41,11 +41,9 @@ public final class PitchDetector {
     
     /// Requests microphone permission and starts the audio engine.
     func startListening() {
-        let session = AVAudioSession.sharedInstance()
-        
         // If already requested in this run, just check status and start
         if PitchDetector.hasRequestedPermissionInSession {
-            if session.recordPermission == .granted {
+            if AVAudioApplication.shared.recordPermission == .granted {
                 self.startEngine()
             }
             return
@@ -53,7 +51,7 @@ public final class PitchDetector {
         
         // First time in this session
         PitchDetector.hasRequestedPermissionInSession = true
-        session.requestRecordPermission { [weak self] granted in
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self = self, granted else { return }
             
             DispatchQueue.main.async {
@@ -80,7 +78,7 @@ public final class PitchDetector {
     
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true)
     }
     
@@ -156,24 +154,29 @@ public final class PitchDetector {
         let half = bufferSize / 2
         var real = [Float](repeating: 0, count: half)
         var imag = [Float](repeating: 0, count: half)
-        var split = DSPSplitComplex(realp: &real, imagp: &imag)
         
-        samples.withUnsafeBufferPointer {
-            $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
-                vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
+        real.withUnsafeMutableBufferPointer { realBuf in
+            imag.withUnsafeMutableBufferPointer { imagBuf in
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                
+                samples.withUnsafeBufferPointer {
+                    $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
+                        vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
+                    }
+                }
+                
+                // Perform Forward FFT
+                vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
+                
+                var magnitudes = [Float](repeating: 0, count: half)
+                // Convert complex array to magnitudes
+                vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
+                
+                let peaks = findSignificantPeaks(in: magnitudes)
+                DispatchQueue.main.async { [weak self] in
+                    self?.handleDetectedPeaks(peaks)
+                }
             }
-        }
-        
-        // Perform Forward FFT
-        vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
-        
-        var magnitudes = [Float](repeating: 0, count: half)
-        // Convert complex array to magnitudes
-        vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
-        
-        let peaks = findSignificantPeaks(in: magnitudes)
-        DispatchQueue.main.async { [weak self] in
-            self?.handleDetectedPeaks(peaks)
         }
     }
     

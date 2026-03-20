@@ -240,4 +240,4 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
     }
 }
 
-private enum AssocKeys { static var pc = "pageControl" }
+private enum AssocKeys { nonisolated(unsafe) static var pc: UInt8 = 0 }

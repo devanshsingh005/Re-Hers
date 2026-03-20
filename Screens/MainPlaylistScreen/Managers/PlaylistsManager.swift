@@ -462,8 +462,8 @@ public final class PlaylistsManager {
         try await SupabaseManager.shared.client.storage
             .from("playlistcover")
             .upload(
-                path: fileName,
-                file: imageData,
+                fileName,
+                data: imageData,
                 options: FileOptions(contentType: "image/jpeg")
             )
         

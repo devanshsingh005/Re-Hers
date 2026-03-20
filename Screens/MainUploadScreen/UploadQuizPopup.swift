@@ -526,7 +526,7 @@ class UploadQuizPopup: UIViewController {
     // MARK: - Dot Updates
     private func updateDots(activeIndex: Int) {
         for (i, dot) in dotsStack.arrangedSubviews.enumerated() {
-            guard let dotView = dot as? UIView else { continue }
+            guard let dotView = dot as UIView? else { continue }
             UIView.animate(withDuration: 0.2) {
                 if i == activeIndex {
                     dotView.backgroundColor = UIColor(hex: "#FF6B00")

@@ -1,36 +1,27 @@
 //
-//  SongDetailsPage.swift
-//  Re-Hearse_v1
+//  DiscoverSongDetailViewController.swift
+//  Re-Hearse
+//
+//  Redesigned to match UploadPageNextViewController and PlaylistSongDetailViewController.
 //
 
 import UIKit
-import Foundation
 import PDFKit
-import Supabase
 
-class PlaylistSongDetailViewController: UIViewController {
+class DiscoverSongDetailViewController: UIViewController {
 
-    // MARK: - Passed Data From Previous Page
+    // MARK: - Passed Data
+    var song: Song?
     var passedImage: UIImage?
-    var passedSongTitle: String?
-    var passedArtist: String?
-    var passedSheetScanId: Int64?
 
     // MARK: - Private State
-
-    /// Cached PDFDocument — loaded once, reused by the Animation button
     private var loadedPDFDocument: PDFDocument?
-
-    /// The parsed output.json dictionary — same as sheetMusicJSON in
-    /// UploadPageNextViewController. Serialised to Data when Animation tapped.
     private var sheetMusicJSON: [String: Any]?
 
-    // Supabase constants (match every other file in the project)
     private let projectID  = "djqgmowfjxsnjdffdohw"
     private var publicBase: String {
         "https://\(projectID).supabase.co/storage/v1/object/public"
     }
-    private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     // MARK: - Scroll Container
     private let mainScrollView = UIScrollView()
@@ -73,9 +64,6 @@ class PlaylistSongDetailViewController: UIViewController {
         setupActions()
 
         applyPassedData()
-
-        // Kick off both fetches in parallel — PDF for the inline view,
-        // output.json for the Animation button (same as handleJobCompleted does).
         loadSheetData()
     }
 
@@ -85,8 +73,8 @@ class PlaylistSongDetailViewController: UIViewController {
         let img = passedImage ?? UIImage(named: "ride_home")
         albumArtBackgroundView.image = img
         albumArtCardView.image       = img
-        songTitleLabel.text = passedSongTitle ?? "Unknown Song"
-        artistLabel.text    = passedArtist    ?? "Unknown Artist"
+        songTitleLabel.text = song?.title ?? "Unknown Song"
+        artistLabel.text    = song?.composer ?? "Unknown Artist"
     }
 
     // MARK: - NavBar
@@ -154,6 +142,19 @@ class PlaylistSongDetailViewController: UIViewController {
         albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
 
+        // Dim overlay to make the foreground card pop
+        let dimOverlay = UIView()
+        dimOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        dimOverlay.translatesAutoresizingMaskIntoConstraints = false
+        albumArtBackgroundContainer.addSubview(dimOverlay)
+
+        NSLayoutConstraint.activate([
+            dimOverlay.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
+            dimOverlay.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
+            dimOverlay.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
+            dimOverlay.trailingAnchor.constraint(equalTo: albumArtBackgroundContainer.trailingAnchor)
+        ])
+
         albumArtCardView.layer.cornerRadius = 24
         albumArtCardView.contentMode = .scaleAspectFill
         albumArtCardView.clipsToBounds = true
@@ -177,6 +178,7 @@ class PlaylistSongDetailViewController: UIViewController {
         contentView.addSubview(artistLabel)
 
         playAlongButton.setTitle("Play Along", for: .normal)
+        playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         playAlongButton.layer.cornerRadius = 12
         playAlongButton.setTitleColor(.white, for: .normal)
         playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
@@ -185,6 +187,7 @@ class PlaylistSongDetailViewController: UIViewController {
         playAlongButton.layer.shadowOffset  = CGSize(width: 0, height: 3)
 
         animationButton.setTitle("Animation", for: .normal)
+        animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         animationButton.layer.cornerRadius = 12
         animationButton.setTitleColor(.darkGray, for: .normal)
         animationButton.backgroundColor = .systemGray5
@@ -225,7 +228,7 @@ class PlaylistSongDetailViewController: UIViewController {
         pdfLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.addSubview(pdfLoadingIndicator)
 
-        pdfErrorLabel.text = "Sheet music unavailable.\nTry opening this song from Uploads."
+        pdfErrorLabel.text = "Sheet music unavailable.\nThe file might not be uploaded yet."
         pdfErrorLabel.numberOfLines = 0
         pdfErrorLabel.textAlignment = .center
         pdfErrorLabel.font          = .systemFont(ofSize: 15)
@@ -265,9 +268,13 @@ class PlaylistSongDetailViewController: UIViewController {
 
             songTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 18),
             songTitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            songTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            songTitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             artistLabel.topAnchor.constraint(equalTo: songTitleLabel.bottomAnchor, constant: 2),
             artistLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            artistLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            artistLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             buttonStack.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 28),
             buttonStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -291,10 +298,10 @@ class PlaylistSongDetailViewController: UIViewController {
             pdfLoadingIndicator.centerXAnchor.constraint(equalTo: pdfView.centerXAnchor),
             pdfLoadingIndicator.centerYAnchor.constraint(equalTo: pdfView.centerYAnchor),
 
-            pdfErrorLabel.centerXAnchor.constraint(equalTo: pdfView.centerXAnchor),
-            pdfErrorLabel.centerYAnchor.constraint(equalTo: pdfView.centerYAnchor),
-            pdfErrorLabel.leadingAnchor.constraint(equalTo: pdfView.leadingAnchor, constant: 16),
-            pdfErrorLabel.trailingAnchor.constraint(equalTo: pdfView.trailingAnchor, constant: -16),
+            pdfErrorLabel.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
+            pdfErrorLabel.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
+            pdfErrorLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
+            pdfErrorLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
 
             bottomSpacer.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor),
             bottomSpacer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -324,38 +331,25 @@ class PlaylistSongDetailViewController: UIViewController {
         present(nav, animated: true)
     }
 
-    // ── Animation button ──────────────────────────────────────────────────────
-    // Mirrors didTapAnimation + navigateToAnimation in UploadPageNextViewController:
-    //   guard sheetMusicJSON != nil → serialise to Data → set vc.sheetMusicData → present
-    // The JSON is fetched from output.json during loadSheetData() below, exactly
-    // the same way handleJobCompleted fetches it in UploadPageNextViewController.
     @objc private func didTapAnimation() {
         animationButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
         animationButton.setTitleColor(.white, for: .normal)
         playAlongButton.backgroundColor = .systemGray5
         playAlongButton.setTitleColor(.darkGray, for: .normal)
 
-        // sheetMusicJSON is populated by loadSheetData() → fetchOutputJSON().
-        // Guard identical to UploadPageNextViewController.didTapAnimation.
         guard let json = sheetMusicJSON else {
             showAnimationError("No sheet music data available yet.\nPlease wait a moment and try again.")
             return
         }
 
-        navigateToAnimation(withJSON: json)
-    }
-
-    /// Serialises the parsed output.json dictionary and passes it to
-    /// AnimationViewController — exact copy of navigateToAnimation in
-    /// UploadPageNextViewController.
-    private func navigateToAnimation(withJSON json: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: json) else {
             showAnimationError("Failed to prepare sheet music data.")
             return
         }
+
         let vc = AnimationViewController()
         vc.sheetMusicData = data
-        vc.songTitle      = passedSongTitle ?? "Animation"
+        vc.songTitle      = song?.title ?? "Animation"
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
@@ -373,14 +367,12 @@ class PlaylistSongDetailViewController: UIViewController {
         bookmarkButton.setImage(UIImage(systemName: on ? "bookmark" : "bookmark.fill"), for: .normal)
     }
 
-    // MARK: - Master Fetch
-    // Resolves the job once, then fires both fetches in parallel —
-    // same work handleJobCompleted does in UploadPageNextViewController.
+    // MARK: - Fetch Data
 
     private func loadSheetData() {
-        guard let scanId = passedSheetScanId else {
-            print("[SongDetail] ❌ No scanId")
-            pdfErrorLabel.isHidden = false
+        guard let sheetId = song?.sheetFileId else {
+            print("[DiscoverDetail] ❌ No sheetFileId")
+            self.showPDFError()
             return
         }
 
@@ -389,122 +381,54 @@ class PlaylistSongDetailViewController: UIViewController {
         pdfErrorLabel.isHidden = true
 
         Task {
-            do {
-                // ── Step 1: resolve job from scans.json_data ──────────────────────
-                // job_id lives INSIDE json_data (JSONB), not as a real column.
-                // Cast via AnyCodable — the same pattern used everywhere else.
-                struct ScanRow: Codable {
-                    let jsonData: SongDetailAnyCodable?
-                    enum CodingKeys: String, CodingKey { case jsonData = "json_data" }
-                }
+            // 1. Fetch PDF (labeled or original)
+            let pdfURLStrings = [
+                "\(publicBase)/sheet_data/discover/\(sheetId.uuidString)/labeled.pdf",
+                "\(publicBase)/sheet_data/discover/\(sheetId.uuidString).pdf",
+                "\(publicBase)/pdf_uploads/\(sheetId.uuidString)/labeled.pdf",
+                "\(publicBase)/pdf_uploads/\(sheetId.uuidString).pdf"
+            ]
 
-                let scanRows: [ScanRow] = try await supabase
-                    .from("scans")
-                    .select("json_data")
-                    .eq("id", value: Int(scanId))
-                    .limit(1)
-                    .execute()
-                    .value
-
-                guard let jsonDict = scanRows.first?.jsonData?.value as? [String: Any],
-                      let jobIdStr = jsonDict["job_id"] as? String,
-                      let jobId    = UUID(uuidString: jobIdStr) else {
-                    print("[SongDetail] ❌ No job_id in json_data for scanId=\(scanId)")
-                    await MainActor.run { self.showPDFError() }
-                    return
-                }
-
-                print("[SongDetail] ✅ job_id=\(jobId.uuidString)")
-
-                // ── Step 2: query jobs for pdf_path + result_url ──────────────────
-                // Mirrors fetchJobAndLoad in UploadPageNextViewController.
-                struct JobRow: Decodable {
-                    let pdfPath:   String
-                    let resultUrl: String?
-                    enum CodingKeys: String, CodingKey {
-                        case pdfPath   = "pdf_path"
-                        case resultUrl = "result_url"
+            var pdfFound = false
+            for urlString in pdfURLStrings {
+                guard let url = URL(string: urlString) else { continue }
+                print("[DiscoverDetail][PDF] trying: \(url)")
+                if let (data, resp) = try? await URLSession.shared.data(from: url),
+                   (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
+                   let doc = PDFDocument(data: data), doc.pageCount > 0 {
+                    await MainActor.run {
+                        self.renderPDF(doc)
+                        pdfFound = true
                     }
+                    break
                 }
+            }
 
-                let jobRows: [JobRow] = try await supabase
-                    .from("jobs")
-                    .select("pdf_path, result_url")
-                    .eq("id", value: jobId)
-                    .limit(1)
-                    .execute()
-                    .value
-
-                guard let job = jobRows.first else {
-                    print("[SongDetail] ❌ No jobs row for jobId=\(jobId)")
-                    await MainActor.run { self.showPDFError() }
-                    return
-                }
-
-                print("[SongDetail] pdf_path=\(job.pdfPath)  result_url=\(job.resultUrl ?? "nil")")
-
-                // ── Step 3a: load labeled PDF ─────────────────────────────────────
-                // Mirrors handleJobCompleted in UploadPageNextViewController.
-                // result_url = "sheet_data/{userId}/{jobId}/labeled.pdf" (relative)
-                let pdfURLString: String
-                if let rel = job.resultUrl, !rel.isEmpty {
-                    pdfURLString = rel.hasPrefix("http") ? rel : "\(publicBase)/\(rel)"
-                } else {
-                    let userId  = job.pdfPath.components(separatedBy: "/").first ?? ""
-                    pdfURLString = "\(publicBase)/sheet_data/\(userId)/\(jobId.uuidString.lowercased())/labeled.pdf"
-                }
-
-                print("[SongDetail][PDF] fetching: \(pdfURLString)")
-                if let pdfURL = URL(string: pdfURLString) {
-                    var pdfReq = URLRequest(url: pdfURL)
-                    pdfReq.timeoutInterval = 15
-                    if let (pdfData, pdfResp) = try? await URLSession.shared.data(for: pdfReq),
-                       (200...299).contains((pdfResp as? HTTPURLResponse)?.statusCode ?? 0) {
-                        await MainActor.run { self.renderPDF(pdfData) }
-                    } else {
-                        await MainActor.run { self.showPDFError() }
-                    }
-                }
-
-                // ── Step 3b: fetch output.json for Animation button ───────────────
-                // Uses the exact same deriveOutputURL logic as UploadPageNextViewController:
-                //   sheet_data/{userId}/{jobId}/output.json
-                // Then parses it and stores in sheetMusicJSON — same as
-                // parseAndDisplayJSON stores it in sheetMusicJSON there.
-                let jsonURLString = deriveOutputURL(jobId: jobId, pdfPath: job.pdfPath)
-                print("[SongDetail][JSON] fetching: \(jsonURLString)")
-
-                if let jsonURL = URL(string: jsonURLString),
-                   let (jsonData, _) = try? await URLSession.shared.data(from: jsonURL),
-                   let parsed = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                    print("[SongDetail][JSON] ✅ keys=\(parsed.keys.sorted())")
-                    await MainActor.run { self.sheetMusicJSON = parsed }
-                } else {
-                    print("[SongDetail][JSON] ⚠️ output.json not available yet")
-                }
-
-            } catch {
-                print("[SongDetail] ❌ \(error.localizedDescription)")
+            if !pdfFound {
                 await MainActor.run { self.showPDFError() }
+            }
+
+            // 2. Fetch output.json for Animation (run in parallel but sequentially for simplicity)
+            let jsonURLStrings = [
+                "\(publicBase)/sheet_data/discover/\(sheetId.uuidString)/output.json",
+                "\(publicBase)/pdf_uploads/\(sheetId.uuidString)/output.json"
+            ]
+
+            for urlString in jsonURLStrings {
+                guard let url = URL(string: urlString) else { continue }
+                print("[DiscoverDetail][JSON] trying: \(url)")
+                if let (data, resp) = try? await URLSession.shared.data(from: url),
+                   (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
+                   let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    print("[DiscoverDetail][JSON] ✅ keys=\(parsed.keys.sorted())")
+                    await MainActor.run { self.sheetMusicJSON = parsed }
+                    break
+                }
             }
         }
     }
 
-    // MARK: - Helpers
-
-    /// Derives output.json URL from job_id + pdf_path.
-    /// Direct copy of deriveOutputURL in UploadPageNextViewController.
-    private func deriveOutputURL(jobId: UUID, pdfPath: String) -> String {
-        let userId = pdfPath.components(separatedBy: "/").first ?? jobId.uuidString
-        return "\(publicBase)/sheet_data/\(userId)/\(jobId.uuidString.lowercased())/output.json"
-    }
-
-    private func renderPDF(_ data: Data) {
-        guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
-            print("[SongDetail][PDF] ❌ Not a valid PDF")
-            showPDFError(); return
-        }
-        print("[SongDetail][PDF] ✅ \(doc.pageCount) page(s)")
+    private func renderPDF(_ doc: PDFDocument) {
         loadedPDFDocument = doc
         pdfView.document  = doc
         pdfView.isHidden  = false
@@ -514,8 +438,6 @@ class PlaylistSongDetailViewController: UIViewController {
     }
 
     @objc private func didTapPDFView() {
-        // Pass the already-loaded PDFDocument directly to MaximizeUploadPageViewController.
-        // No extra network call needed — same document that renderPDF() cached.
         guard let doc = loadedPDFDocument else { return }
         let vc = MaximizeUploadPageViewController()
         vc.pdfDocument = doc
@@ -529,35 +451,3 @@ class PlaylistSongDetailViewController: UIViewController {
         pdfErrorLabel.isHidden = false
     }
 }
-
-// MARK: - SongDetailAnyCodable
-// Identical to UploadScreen.AnyCodable / AllUploadsViewController.AnyCodable.
-// Required to decode json_data (JSONB) so we can read arbitrary keys like "job_id".
-private struct SongDetailAnyCodable: Codable {
-    let value: Any
-    init(_ value: Any) { self.value = value }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if      let b = try? c.decode(Bool.self)                           { value = b }
-        else if let i = try? c.decode(Int.self)                            { value = i }
-        else if let d = try? c.decode(Double.self)                         { value = d }
-        else if let s = try? c.decode(String.self)                         { value = s }
-        else if let a = try? c.decode([SongDetailAnyCodable].self)         { value = a.map { $0.value } }
-        else if let d = try? c.decode([String: SongDetailAnyCodable].self) { value = d.mapValues { $0.value } }
-        else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
-    }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch value {
-        case let b as Bool:          try c.encode(b)
-        case let i as Int:           try c.encode(i)
-        case let d as Double:        try c.encode(d)
-        case let s as String:        try c.encode(s)
-        case let a as [Any]:         try c.encode(a.map { SongDetailAnyCodable($0) })
-        case let d as [String: Any]: try c.encode(d.mapValues { SongDetailAnyCodable($0) })
-        default: throw EncodingError.invalidValue(
-            value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
-        }
-    }
-}
-

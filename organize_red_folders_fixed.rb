@@ -39,17 +39,17 @@ def main
     end
   end
 
-  # 2. MainExploreScreen
-  explore_group = find_group(project.main_group, 'MainExploreScreen')
+  # 2. MainDiscoverScreen
+  explore_group = find_group(project.main_group, 'MainDiscoverScreen')
   if explore_group
-    explore_dir = File.join(screens_dir, 'MainExploreScreen')
+    explore_dir = File.join(screens_dir, 'MainDiscoverScreen')
     FileUtils.mkdir_p(explore_dir)
-    ['ExploreViewController.swift', 'SearchButtonExploreViewController.swift', 'SearchPageViewController.swift'].each do |file|
+    ['DiscoverViewController.swift', 'SearchButtonDiscoverViewController.swift', 'SearchDiscoverPageViewController.swift'].each do |file|
       old_path = File.join(screens_dir, file)
       new_path = File.join(explore_dir, file)
       if File.exist?(old_path)
         FileUtils.mv(old_path, new_path)
-        puts "Moved #{file} to MainExploreScreen/"
+        puts "Moved #{file} to MainDiscoverScreen/"
         ref = explore_group.files.find { |f| f.path == file || f.name == file }
         if ref
           ref.path = file

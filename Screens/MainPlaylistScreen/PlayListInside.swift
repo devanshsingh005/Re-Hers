@@ -434,7 +434,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let track = trackList[indexPath.row]
-        let vc = SongDetailViewController()
+        let vc = PlaylistSongDetailViewController()
         vc.passedImage = UIImage(named: "cl_\((indexPath.row % 5) + 1)")
         vc.passedSongTitle = track.title
         vc.passedArtist = track.artist
