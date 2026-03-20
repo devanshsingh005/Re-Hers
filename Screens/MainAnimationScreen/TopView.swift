@@ -64,7 +64,7 @@ final class LessonNavBarView: UIView {
         tempoSlider.minimumValue = 0.5
         tempoSlider.maximumValue = 2.0
         tempoSlider.value        = 1.0
-        tempoSlider.minimumTrackTintColor = .systemBlue
+        tempoSlider.minimumTrackTintColor = BrandColors.brand
         tempoSlider.maximumTrackTintColor = .systemGray4
         tempoSlider.setThumbImage(thumbImage(), for: .normal)
         tempoSlider.addTarget(self, action: #selector(sliderMoved), for: .valueChanged)
@@ -126,7 +126,7 @@ final class LessonNavBarView: UIView {
     private func thumbImage() -> UIImage {
         let s = CGSize(width: 16, height: 16)
         UIGraphicsBeginImageContextWithOptions(s, false, 0)
-        UIColor.systemBlue.setFill()
+        BrandColors.brand.setFill()
         UIBezierPath(ovalIn: CGRect(origin: .zero, size: s)).fill()
         let img = UIGraphicsGetImageFromCurrentImageContext()!
         UIGraphicsEndImageContext()

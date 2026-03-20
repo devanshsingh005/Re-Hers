@@ -83,7 +83,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         super.viewDidLoad()
         
         // Background color #F8F8F4
-        view.backgroundColor = UIColor(red: 248/255, green: 248/255, blue: 244/255, alpha: 1.0)
+        view.backgroundColor = ComponentColors.App.screenBackground
         navigationController?.navigationBar.isHidden = true
         
         setupTableView()
@@ -478,7 +478,7 @@ class TrackTableViewCell: UITableViewCell {
         contentView.backgroundColor = .clear
         
         // Playlist/Card color #F4F3EE
-        container.backgroundColor = UIColor(red: 244/255, green: 243/255, blue: 238/255, alpha: 1.0)
+        container.backgroundColor = ComponentColors.SongCard.background
         container.layer.cornerRadius = 22
         container.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(container)

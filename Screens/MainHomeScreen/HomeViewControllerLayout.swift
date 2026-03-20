@@ -65,11 +65,7 @@ extension HomeViewController {
         let titleLabel = UILabel()
         titleLabel.text = text
         titleLabel.font = .systemFont(ofSize: 17, weight: .bold)
-        titleLabel.textColor = UIColor { trait in
-            trait.userInterfaceStyle == .dark
-                ? .white
-                : UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
-        }
+        titleLabel.textColor = ComponentColors.HomeScreen.sectionHeaderText
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         guard let action else { return titleLabel }
@@ -77,7 +73,7 @@ extension HomeViewController {
         let seeAll = UIButton(type: .system)
         seeAll.setTitle("See all", for: .normal)
         seeAll.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
-        seeAll.setTitleColor(kAppOrange, for: .normal)
+        seeAll.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
         seeAll.translatesAutoresizingMaskIntoConstraints = false
         seeAll.addAction(UIAction { _ in action() }, for: .touchUpInside)
 

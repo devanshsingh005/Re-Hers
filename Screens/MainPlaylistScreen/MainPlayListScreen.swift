@@ -6,14 +6,6 @@
 import UIKit
 import PhotosUI
 
-// MARK: - Color Constants
-extension UIColor {
-    static let pageBackground = UIColor(red: 0.973, green: 0.973, blue: 0.957, alpha: 1)
-    static let cardBackground = UIColor(red: 0.957, green: 0.953, blue: 0.933, alpha: 1)
-    static let labelPrimary   = UIColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1)
-    static let labelSecondary = UIColor(red: 0.557, green: 0.557, blue: 0.576, alpha: 1)
-}
-
 // MARK: - Album Placeholder Helper
 func albumPlaceholder(for id: UUID) -> UIImage {
     let index = abs(id.hashValue) % 16 + 1
@@ -31,14 +23,14 @@ class PlaylistViewController: UIViewController {
     // MARK: - Delete Button (selection mode only)
     private let deleteButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.backgroundColor = .systemRed
+        btn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         btn.setImage(UIImage(systemName: "trash"), for: .normal)
-        btn.tintColor = .white
-        btn.layer.cornerRadius = UIDevice.current.userInterfaceIdiom == .pad ? 35 : 30
+        btn.tintColor = SemanticColors.Text.onBrand
+        btn.layer.cornerRadius = 28
         btn.clipsToBounds = false
-        btn.layer.shadowColor = UIColor.black.cgColor
-        btn.layer.shadowOpacity = 0.25
-        btn.layer.shadowRadius = 6
+        btn.layer.shadowColor = SemanticColors.Shadow.level2.cgColor
+        btn.layer.shadowOpacity = 0.3
+        btn.layer.shadowRadius = 8
         btn.layer.shadowOffset = CGSize(width: 0, height: 4)
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.alpha = 0
@@ -49,15 +41,13 @@ class PlaylistViewController: UIViewController {
     private let selectionModeLabel: UILabel = {
         let label = UILabel()
         label.text = "Select Playlists to Delete"
-        label.textColor = .systemRed
-        label.font = UIDevice.current.userInterfaceIdiom == .pad
-            ? .boldSystemFont(ofSize: 18)
-            : .boldSystemFont(ofSize: 16)
+        label.textColor = SemanticColors.Text.primary
+        label.font = .systemFont(ofSize: 20, weight: .bold)
         label.textAlignment = .center
-        label.backgroundColor = .white
-        label.layer.cornerRadius = 8
+        label.backgroundColor = SemanticColors.Background.card
+        label.layer.cornerRadius = 4
         label.clipsToBounds = true
-        label.layer.borderColor = UIColor.systemRed.cgColor
+        label.layer.borderColor = ComponentColors.DestructiveButton.border.cgColor
         label.layer.borderWidth = 1
         label.alpha = 0
         label.isHidden = true
@@ -68,7 +58,7 @@ class PlaylistViewController: UIViewController {
     // MARK: - Activity Indicator
     private let activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
-        indicator.color = .orange
+        indicator.color = SemanticColors.Text.brand
         indicator.hidesWhenStopped = true
         indicator.translatesAutoresizingMaskIntoConstraints = false
         return indicator
@@ -111,7 +101,7 @@ class PlaylistViewController: UIViewController {
 
     // MARK: - Setup UI
     private func setupUI() {
-        view.backgroundColor = .pageBackground
+        view.backgroundColor = ComponentColors.App.screenBackground
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
         setupCollectionView()
@@ -127,7 +117,7 @@ class PlaylistViewController: UIViewController {
     }
 
     private func setupRefreshControl() {
-        refreshControl.tintColor = .orange
+        refreshControl.tintColor = SemanticColors.Text.brand
         refreshControl.addTarget(self, action: #selector(refreshPlaylists), for: .valueChanged)
         collectionView.refreshControl = refreshControl
     }
@@ -202,7 +192,7 @@ class PlaylistViewController: UIViewController {
                                  forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter,
                                  withReuseIdentifier: "CreateFooter")
 
-        collectionView.backgroundColor     = .pageBackground
+        collectionView.backgroundColor     = ComponentColors.App.screenBackground
         collectionView.alwaysBounceVertical = true
 
         NSLayoutConstraint.activate([
@@ -521,8 +511,8 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     // MARK: Subviews
     let deleteBackgroundView: UIView = {
         let v = UIView()
-        v.backgroundColor = .systemRed
-        v.layer.cornerRadius = 18
+        v.backgroundColor = SemanticColors.State.incorrect
+        v.layer.cornerRadius = 4
         v.clipsToBounds = true
         v.isHidden = true
         return v
@@ -537,7 +527,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
 
     let containerView: UIView = {
         let v = UIView()
-        v.backgroundColor = .cardBackground
+        v.backgroundColor = ComponentColors.SongCard.background
         v.layer.cornerRadius = 18
         v.clipsToBounds = true
         return v
@@ -554,7 +544,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     private let titleLabel: UILabel = {
         let l = UILabel()
         l.font = .boldSystemFont(ofSize: 16)
-        l.textColor = .labelPrimary
+        l.textColor = ComponentColors.SongCard.titleText
         l.numberOfLines = 1
         return l
     }()
@@ -562,7 +552,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     private let subtitleLabel: UILabel = {
         let l = UILabel()
         l.font = .systemFont(ofSize: 13)
-        l.textColor = .labelSecondary
+        l.textColor = ComponentColors.SongCard.metadataText
         l.numberOfLines = 1
         return l
     }()
@@ -571,17 +561,17 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
         let cfg = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         let iv = UIImageView(image: UIImage(systemName: "chevron.right",
                                             withConfiguration: cfg))
-        iv.tintColor = UIColor.labelSecondary.withAlphaComponent(0.45)
+        iv.tintColor = ComponentColors.SongCard.metadataText.withAlphaComponent(0.45)
         iv.contentMode = .scaleAspectFit
         return iv
     }()
 
     let selectionOverlay: UIView = {
         let v = UIView()
-        v.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
+        v.backgroundColor = SemanticColors.State.incorrectSubtle
         v.layer.cornerRadius = 18
-        v.layer.borderColor  = UIColor.systemRed.cgColor
-        v.layer.borderWidth  = 2
+        v.layer.borderColor  = SemanticColors.State.incorrect.cgColor
+        v.layer.borderWidth  = 1.5
         v.isHidden = true
         return v
     }()
@@ -767,7 +757,7 @@ class CreatePlaylistFooterView: UICollectionReusableView {
         config.imagePlacement      = .leading
         config.imagePadding        = 8
         config.title               = "Create New Playlist"
-        config.baseForegroundColor = .orange
+        config.baseForegroundColor = BrandColors.brand
         config.titleTextAttributesTransformer =
             UIConfigurationTextAttributesTransformer { attrs in
                 var a = attrs
@@ -796,7 +786,7 @@ class CreatePlaylistFooterView: UICollectionReusableView {
         super.layoutSubviews()
         dashedLayer?.removeFromSuperlayer()
         let dashed = CAShapeLayer()
-        dashed.strokeColor     = UIColor(red: 0.627, green: 0.667, blue: 0.749, alpha: 0.55).cgColor
+        dashed.strokeColor     = ComponentColors.SongCard.border.withAlphaComponent(0.55).cgColor
         dashed.fillColor       = UIColor.clear.cgColor
         dashed.lineWidth       = 1.5
         dashed.lineDashPattern = [6, 4]
@@ -828,7 +818,7 @@ class AddPlaylistViewController: UIViewController,
 
     private let cardView: UIView = {
         let v = UIView()
-        v.backgroundColor = .systemBackground
+        v.backgroundColor = SemanticColors.Background.card
         v.layer.cornerRadius = 20
         v.clipsToBounds = true
         return v
@@ -859,7 +849,7 @@ class AddPlaylistViewController: UIViewController,
         iv.contentMode = .scaleAspectFill
         iv.layer.cornerRadius = 12
         iv.clipsToBounds = true
-        iv.backgroundColor = .systemGray5
+        iv.backgroundColor = SemanticColors.Background.skeletonBase
         return iv
     }()
 

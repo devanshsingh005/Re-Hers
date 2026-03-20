@@ -63,7 +63,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = ComponentColors.SongDetailScreen.background
         navigationController?.navigationBar.isHidden = true
 
         setupUI()
@@ -92,7 +92,7 @@ class PlaylistSongDetailViewController: UIViewController {
     // MARK: - NavBar
 
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = ComponentColors.SongDetailScreen.background
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
     }
@@ -161,7 +161,7 @@ class PlaylistSongDetailViewController: UIViewController {
         contentView.addSubview(albumArtCardView)
 
         bookmarkButton.setImage(UIImage(systemName: "bookmark"), for: .normal)
-        bookmarkButton.tintColor = .systemGray
+        bookmarkButton.tintColor = ComponentColors.SongCard.chevronIcon
         bookmarkButton.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(bookmarkButton)
 
@@ -172,22 +172,22 @@ class PlaylistSongDetailViewController: UIViewController {
 
         artistLabel.textAlignment = .center
         artistLabel.font = .systemFont(ofSize: 14)
-        artistLabel.textColor = .darkGray
+        artistLabel.textColor = ComponentColors.SongDetailScreen.artistName
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
 
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.layer.cornerRadius = 12
-        playAlongButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
         playAlongButton.layer.shadowOpacity = 0.15
         playAlongButton.layer.shadowRadius  = 6
         playAlongButton.layer.shadowOffset  = CGSize(width: 0, height: 3)
 
         animationButton.setTitle("Animation", for: .normal)
         animationButton.layer.cornerRadius = 12
-        animationButton.setTitleColor(.darkGray, for: .normal)
-        animationButton.backgroundColor = .systemGray5
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
 
         buttonStack.axis         = .horizontal
@@ -212,7 +212,7 @@ class PlaylistSongDetailViewController: UIViewController {
         pdfView.autoScales          = true
         pdfView.displayMode         = .singlePageContinuous
         pdfView.displayDirection    = .vertical
-        pdfView.backgroundColor     = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1)
+        pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
         pdfView.isHidden            = true
         pdfView.isUserInteractionEnabled = true
         pdfView.translatesAutoresizingMaskIntoConstraints = false
@@ -220,7 +220,7 @@ class PlaylistSongDetailViewController: UIViewController {
         pdfView.addGestureRecognizer(pdfTap)
         sheetContainer.addSubview(pdfView)
 
-        pdfLoadingIndicator.color = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1)
+        pdfLoadingIndicator.color = ComponentColors.SongDetailScreen.primaryActionFill
         pdfLoadingIndicator.hidesWhenStopped = true
         pdfLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.addSubview(pdfLoadingIndicator)
@@ -313,10 +313,10 @@ class PlaylistSongDetailViewController: UIViewController {
     }
 
     @objc private func openPlayAlongVC() {
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        playAlongButton.setTitleColor(.white, for: .normal)
-        animationButton.backgroundColor = .systemGray5
-        animationButton.setTitleColor(.darkGray, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         let vc  = PlayAlongViewController()
         let nav = LandscapeNavigationController(rootViewController: vc)
@@ -330,10 +330,10 @@ class PlaylistSongDetailViewController: UIViewController {
     // The JSON is fetched from output.json during loadSheetData() below, exactly
     // the same way handleJobCompleted fetches it in UploadPageNextViewController.
     @objc private func didTapAnimation() {
-        animationButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        animationButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = .systemGray5
-        playAlongButton.setTitleColor(.darkGray, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         // sheetMusicJSON is populated by loadSheetData() → fetchOutputJSON().
         // Guard identical to UploadPageNextViewController.didTapAnimation.
@@ -368,8 +368,8 @@ class PlaylistSongDetailViewController: UIViewController {
     }
 
     @objc private func bookmarkTapped() {
-        let on = bookmarkButton.tintColor == .systemYellow
-        bookmarkButton.tintColor = on ? .systemGray : .systemYellow
+        let on = bookmarkButton.tintColor == UIColor.systemYellow
+        bookmarkButton.tintColor = on ? ComponentColors.SongCard.chevronIcon : .systemYellow
         bookmarkButton.setImage(UIImage(systemName: on ? "bookmark" : "bookmark.fill"), for: .normal)
     }
 

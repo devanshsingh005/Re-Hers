@@ -16,7 +16,7 @@ extension HomeViewController {
 
         // Cream card — compact height
         let container = UIView()
-        container.backgroundColor   = UIColor(red: 0xFB/255.0, green: 0xF0/255.0, blue: 0xDA/255.0, alpha: 1.0)
+        container.backgroundColor   = ComponentColors.SongCard.background
         container.layer.cornerRadius = 16
         container.layer.masksToBounds = true
         container.translatesAutoresizingMaskIntoConstraints = false
@@ -24,7 +24,7 @@ extension HomeViewController {
 
         // Orange icon tile
         let iconContainer = UIView()
-        iconContainer.backgroundColor   = kAppOrange
+        iconContainer.backgroundColor   = ComponentColors.HomeScreen.actionButtonFill
         iconContainer.layer.cornerRadius = 11
         iconContainer.layer.masksToBounds = true
         iconContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -47,12 +47,12 @@ extension HomeViewController {
         let titleLabel = UILabel()
         titleLabel.text      = "Stuck on a sheet?"
         titleLabel.font      = .systemFont(ofSize: 14, weight: .bold)
-        titleLabel.textColor = UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
+        titleLabel.textColor = ComponentColors.SongCard.titleText
 
         let subtitleLabel = UILabel()
         subtitleLabel.text      = "Upload it and we'll guide you."
         subtitleLabel.font      = .systemFont(ofSize: 11)
-        subtitleLabel.textColor = UIColor(red: 0.50, green: 0.45, blue: 0.38, alpha: 1.0)
+        subtitleLabel.textColor = ComponentColors.SongCard.metadataText
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical; textStack.spacing = 2; textStack.alignment = .leading

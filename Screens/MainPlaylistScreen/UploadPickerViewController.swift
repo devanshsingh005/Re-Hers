@@ -58,7 +58,7 @@ class UploadPickerViewController: UIViewController {
 
     private let loadingIndicator: UIActivityIndicatorView = {
         let a = UIActivityIndicatorView(style: .medium)
-        a.color = UIColor(hex: "#FF6B00")
+        a.color = ComponentColors.SongCard.fileIcon
         a.hidesWhenStopped = true
         a.translatesAutoresizingMaskIntoConstraints = false
         return a
@@ -68,7 +68,7 @@ class UploadPickerViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = ComponentColors.App.screenBackground
         setupHeader()
         setupScrollView()
         setupLoadingIndicator()
@@ -165,7 +165,7 @@ class UploadPickerViewController: UIViewController {
 
         // Card container
         let card = UIView()
-        card.backgroundColor = .systemBackground
+        card.backgroundColor = ComponentColors.SongCard.background
         card.layer.cornerRadius = 16
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
@@ -192,8 +192,8 @@ class UploadPickerViewController: UIViewController {
         let badge = UILabel()
         badge.text = upload.fileType
         badge.font = .systemFont(ofSize: 11, weight: .bold)
-        badge.textColor = UIColor(hex: "#FF6B00")
-        badge.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        badge.textColor = ComponentColors.SongCard.fileIcon
+        badge.backgroundColor = ComponentColors.SongCard.fileIcon.withAlphaComponent(0.12)
         badge.layer.cornerRadius = 5
         badge.clipsToBounds = true
         badge.textAlignment = .center
@@ -218,7 +218,7 @@ class UploadPickerViewController: UIViewController {
         // Add button
         let addBtn = UIButton(type: .system)
         addBtn.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
-        addBtn.tintColor = UIColor(hex: "#FF6B00")
+        addBtn.tintColor = ComponentColors.SongCard.fileIcon
         addBtn.translatesAutoresizingMaskIntoConstraints = false
         addBtn.widthAnchor.constraint(equalToConstant: 36).isActive = true
         addBtn.heightAnchor.constraint(equalToConstant: 36).isActive = true
@@ -304,7 +304,7 @@ class UploadPickerViewController: UIViewController {
 
     private func makeGradientIconView() -> GradientIconView {
         let v = GradientIconView()
-        v.colors = [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")]
+        v.colors = [ComponentColors.HomeScreen.actionButtonFill, ComponentColors.SongCard.fileIcon]
         v.layer.cornerRadius = 12
         v.clipsToBounds = true
         v.translatesAutoresizingMaskIntoConstraints = false

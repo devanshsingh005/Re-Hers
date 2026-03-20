@@ -86,9 +86,9 @@ class DiscoverViewController: UIViewController {
     // Skills section title
     private lazy var skillsTitleLabel: UILabel = {
         let lbl = UILabel()
-        lbl.text = "Skills"
+        lbl.text = "Skills & Games"
         lbl.font = .systemFont(ofSize: 22, weight: .bold)
-        lbl.textColor = .label
+        lbl.textColor = ComponentColors.DiscoverScreen.sectionHeader
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
     }()
@@ -113,9 +113,9 @@ class DiscoverViewController: UIViewController {
     // Songs section header
     private lazy var songsTitleLabel: UILabel = {
         let lbl = UILabel()
-        lbl.text = "Songs"
+        lbl.text = "Popular Songs"
         lbl.font = .systemFont(ofSize: 22, weight: .bold)
-        lbl.textColor = .label
+        lbl.textColor = ComponentColors.DiscoverScreen.sectionHeader
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
     }()
@@ -123,7 +123,7 @@ class DiscoverViewController: UIViewController {
     private lazy var sortButton: UIButton = {
         var config = UIButton.Configuration.plain()
         config.title = "By level ↑"
-        config.baseForegroundColor = UIColor(red: 239/255, green: 148/255, blue: 8/255, alpha: 1)
+        config.baseForegroundColor = ComponentColors.HomeScreen.actionButtonFill
         config.image = UIImage(systemName: "chevron.down")
         config.imagePlacement = .trailing
         config.imagePadding = 4
@@ -150,9 +150,9 @@ class DiscoverViewController: UIViewController {
     // Empty state
     private lazy var emptyLabel: UILabel = {
         let lbl = UILabel()
-        lbl.text = "No songs found."
-        lbl.font = .systemFont(ofSize: 16, weight: .regular)
-        lbl.textColor = .secondaryLabel
+        lbl.text = "No songs found for this category."
+        lbl.font = .systemFont(ofSize: 16)
+        lbl.textColor = ComponentColors.DiscoverScreen.emptyStateText
         lbl.textAlignment = .center
         lbl.isHidden = true
         lbl.translatesAutoresizingMaskIntoConstraints = false
@@ -185,6 +185,7 @@ class DiscoverViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.backgroundColor = ComponentColors.DiscoverScreen.background
         setupNavBar()
         setupUI()
         setupLevelChips()
@@ -230,7 +231,7 @@ class DiscoverViewController: UIViewController {
     // MARK: UI Setup
 
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        // view.backgroundColor = .systemBackground // Already handled in viewDidLoad via token
 
         // Add scroll view
         view.addSubview(scrollView)
@@ -377,15 +378,14 @@ class DiscoverViewController: UIViewController {
     }
 
     private func updateChipSelection(selectedTag: Int) {
-        let primary = UIColor(red: 239/255, green: 148/255, blue: 8/255, alpha: 1)
-        for view in levelStackView.arrangedSubviews {
-            guard let btn = view as? UIButton else { continue }
-            if btn.tag == selectedTag {
-                btn.backgroundColor = primary
-                btn.setTitleColor(.white, for: .normal)
+        let chips = levelStackView.arrangedSubviews.compactMap { $0 as? UIButton }
+        for (idx, btn) in chips.enumerated() {
+            if idx == selectedTag {
+                btn.setTitleColor(ComponentColors.DiscoverScreen.chipTextSelected, for: .normal)
+                btn.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundSelected
             } else {
-                btn.backgroundColor = .secondarySystemBackground
-                btn.setTitleColor(.secondaryLabel, for: .normal)
+                btn.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
+                btn.setTitleColor(ComponentColors.DiscoverScreen.chipTextDefault, for: .normal)
             }
         }
     }
@@ -413,8 +413,8 @@ class DiscoverViewController: UIViewController {
 
     private func makeSkillTile(icon: String, name: String, tag: String) -> UIButton {
         let btn = UIButton(type: .system)
-        btn.backgroundColor = .systemBackground
-        btn.layer.cornerRadius = 18
+        btn.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
+        btn.layer.cornerRadius = 16
         
         // Shadow
         btn.layer.shadowColor = UIColor.black.cgColor
@@ -426,18 +426,16 @@ class DiscoverViewController: UIViewController {
         btn.widthAnchor.constraint(equalToConstant: 92).isActive = true
 
         // Icon
-        let iconIV = UIImageView()
-        let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)
-        iconIV.image = UIImage(systemName: icon, withConfiguration: config)
-        iconIV.tintColor = .label
+        let iconIV = UIImageView(image: UIImage(systemName: icon))
         iconIV.contentMode = .scaleAspectFit
+        iconIV.tintColor = ComponentColors.DiscoverScreen.skillTileIcon
         iconIV.translatesAutoresizingMaskIntoConstraints = false
 
         // Name label
         let nameLabel = UILabel()
         nameLabel.text = name
-        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        nameLabel.textColor = .secondaryLabel
+        nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        nameLabel.textColor = ComponentColors.DiscoverScreen.skillTileTitle
         nameLabel.textAlignment = .center
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -460,21 +458,32 @@ class DiscoverViewController: UIViewController {
 
     @objc private func skillTileTapped(_ sender: UIButton) {
         guard let skill = sender.accessibilityIdentifier else { return }
+        
+        UIView.animate(withDuration: 0.1, animations: {
+            sender.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+            sender.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                sender.transform = .identity
+                sender.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
+            }
+        }
+        print("Skill tapped")
+
         if selectedSkill == skill {
             selectedSkill = nil
             sender.layer.borderColor = nil
             sender.layer.borderWidth = 0
-            sender.backgroundColor = .systemBackground
+            sender.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
         } else {
             for view in skillStackView.arrangedSubviews {
                 view.layer.borderWidth = 0
-                view.backgroundColor = .systemBackground
+                view.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
             }
             selectedSkill = skill
-            let primary = UIColor(red: 239/255, green: 148/255, blue: 8/255, alpha: 1)
-            sender.layer.borderColor = primary.cgColor
+            sender.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
             sender.layer.borderWidth = 2
-            sender.backgroundColor = primary.withAlphaComponent(0.05)
+            sender.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.05)
         }
         applyFilters()
     }
@@ -587,21 +596,21 @@ extension DiscoverViewController: UITableViewDelegate {
 class SongCell: UITableViewCell {
     static let reuseID = "SongCell"
 
-    private let orangeColor = UIColor(red: 239/255, green: 148/255, blue: 8/255, alpha: 1)
+    private let orangeColor = ComponentColors.HomeScreen.actionButtonFill
 
     // Art view — initials in grey square
     private lazy var artView: UIView = {
         let v = UIView()
-        v.backgroundColor = .secondarySystemBackground
-        v.layer.cornerRadius = 14
+        v.backgroundColor = ComponentColors.DiscoverySongCard.artPlaceholder
+        v.layer.cornerRadius = 8
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
 
     private lazy var initialsLabel: UILabel = {
         let lbl = UILabel()
-        lbl.font = .systemFont(ofSize: 17, weight: .bold)
-        lbl.textColor = .tertiaryLabel
+        lbl.font = .systemFont(ofSize: 18, weight: .bold)
+        lbl.textColor = ComponentColors.DiscoverySongCard.artPlaceholderText
         lbl.textAlignment = .center
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
@@ -609,8 +618,8 @@ class SongCell: UITableViewCell {
 
     private lazy var titleLabel: UILabel = {
         let lbl = UILabel()
-        lbl.font = .systemFont(ofSize: 17, weight: .bold)
-        lbl.textColor = .label
+        lbl.font = .systemFont(ofSize: 17, weight: .semibold)
+        lbl.textColor = ComponentColors.DiscoverySongCard.titleText
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
     }()
@@ -618,7 +627,7 @@ class SongCell: UITableViewCell {
     private lazy var composerLabel: UILabel = {
         let lbl = UILabel()
         lbl.font = .systemFont(ofSize: 14, weight: .regular)
-        lbl.textColor = .secondaryLabel
+        lbl.textColor = SemanticColors.Text.secondary
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
     }()
@@ -634,14 +643,14 @@ class SongCell: UITableViewCell {
     private lazy var chevron: UIImageView = {
         let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
         let iv = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: config))
-        iv.tintColor = .tertiaryLabel
+        iv.tintColor = SemanticColors.Text.tertiary
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
     }()
 
     private lazy var separatorLine: UIView = {
         let v = UIView()
-        v.backgroundColor = .separator.withAlphaComponent(0.5)
+        v.backgroundColor = ComponentColors.DiscoverySongCard.separator
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()

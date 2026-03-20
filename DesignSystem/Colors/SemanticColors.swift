@@ -125,6 +125,9 @@ public enum SemanticColors {
 
     public enum Icon {
 
+        /// High-emphasis icon — used for primary actions or standalone imagery.
+        public static let primary: UIColor = BrandColors.textPrimary
+
         /// Active / selected icon in tab bar or toolbar.
         public static let active: UIColor = BrandColors.brand
 

@@ -5,7 +5,9 @@
 
 import UIKit
 
-private let kAppCream = UIColor(red: 0xFB/255.0, green: 0xF0/255.0, blue: 0xDA/255.0, alpha: 1.0)
+// kAppCream is kept as a local alias so call-sites in this file need no change.
+// The canonical value is ComponentColors.SongCard.background — do NOT hardcode here.
+private let kAppCream: UIColor = ComponentColors.SongCard.background
 
 extension HomeViewController {
 
@@ -24,17 +26,17 @@ extension HomeViewController {
         let headingLabel = UILabel()
         headingLabel.text          = "Start from\nthe basics"
         headingLabel.font          = .systemFont(ofSize: 20, weight: .bold)
-        headingLabel.textColor     = UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
+        headingLabel.textColor     = ComponentColors.SongCard.titleText
         headingLabel.numberOfLines = 2
 
         let subtitleLabel = UILabel()
         subtitleLabel.text      = "Scales · Chords · Rhythm"
         subtitleLabel.font      = .systemFont(ofSize: 12)
-        subtitleLabel.textColor = UIColor(red: 0.50, green: 0.45, blue: 0.38, alpha: 1.0)
+        subtitleLabel.textColor = ComponentColors.SongCard.metadataText
 
         // Orange pill button
         let discoverBg = UIView()
-        discoverBg.backgroundColor   = kAppOrange
+        discoverBg.backgroundColor   = ComponentColors.HomeScreen.actionButtonFill
         discoverBg.layer.cornerRadius = 14
         discoverBg.layer.masksToBounds = true
 
@@ -60,7 +62,7 @@ extension HomeViewController {
 
         // Orange icon tile
         let iconTile = UIView()
-        iconTile.backgroundColor   = kAppOrange
+        iconTile.backgroundColor   = ComponentColors.HomeScreen.actionButtonFill
         iconTile.layer.cornerRadius = 14
         iconTile.layer.masksToBounds = true
         iconTile.translatesAutoresizingMaskIntoConstraints = false
@@ -139,7 +141,7 @@ extension HomeViewController {
             stackView.addArrangedSubview(
                 createContinuePlayingCard(
                     imageName: s.image, song: s.song, artist: s.artist,
-                    placeholderColor: i.isMultiple(of: 2) ? kAppOrange : kAppCream
+                    placeholderColor: i.isMultiple(of: 2) ? ComponentColors.HomeScreen.actionButtonFill : kAppCream
                 )
             )
         }
@@ -171,16 +173,14 @@ extension HomeViewController {
 
         let songLabel = UILabel()
         songLabel.text = song
-        songLabel.textColor = UIColor { trait in
-            trait.userInterfaceStyle == .dark ? .white : UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
-        }
+        songLabel.textColor = ComponentColors.SongCard.titleText
         songLabel.font          = .systemFont(ofSize: 13, weight: .semibold)
         songLabel.textAlignment = .center
         songLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let artistLabel = UILabel()
         artistLabel.text          = artist
-        artistLabel.textColor     = UIColor(red: 0.55, green: 0.53, blue: 0.49, alpha: 1.0)
+        artistLabel.textColor     = ComponentColors.SongCard.metadataText
         artistLabel.font          = .systemFont(ofSize: 11)
         artistLabel.textAlignment = .center
         artistLabel.translatesAutoresizingMaskIntoConstraints = false

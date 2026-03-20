@@ -68,13 +68,13 @@ class MusicStaffView: UIView {
 
         let stem = CALayer()
         stem.frame = CGRect(x: noteX + 8, y: noteY - 28, width: 2, height: 32)
-        stem.backgroundColor = UIColor.systemOrange.cgColor
+        stem.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         layer.addSublayer(stem)
 
         let noteHead = CALayer()
         noteHead.bounds = CGRect(x: 0, y: 0, width: 22, height: 15)
         noteHead.position = CGPoint(x: noteX, y: noteY + 6)
-        noteHead.backgroundColor = UIColor.systemOrange.cgColor
+        noteHead.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         noteHead.cornerRadius = 7
         noteHead.transform = CATransform3DMakeRotation(-0.25, 0, 0, 1)
         layer.addSublayer(noteHead)
@@ -109,12 +109,12 @@ class MusicStaffView: UIView {
         let tapLabel = UILabel()
         tapLabel.text = "TAP TO PLAY"
         tapLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        tapLabel.textColor = .systemOrange
+        tapLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         tapLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let border = UIView()
         border.translatesAutoresizingMaskIntoConstraints = false
-        border.layer.borderColor = UIColor.systemOrange.cgColor
+        border.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         border.layer.borderWidth = 1.2
         border.layer.cornerRadius = 11
         border.addSubview(tapLabel)
@@ -155,9 +155,9 @@ class VariantChipButton: UIButton {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupChip(label: String, sublabel: String, isSelected: Bool) {
-        backgroundColor = isSelected ? .systemOrange : UIColor.systemGray6
+        backgroundColor = isSelected ? ComponentColors.HomeScreen.actionButtonFill : UIColor.systemGray6
         layer.cornerRadius = 20
-        layer.shadowColor = isSelected ? UIColor.systemOrange.cgColor : UIColor.clear.cgColor
+        layer.shadowColor = isSelected ? ComponentColors.HomeScreen.actionButtonFill.cgColor : UIColor.clear.cgColor
         layer.shadowOpacity = 0.3; layer.shadowRadius = 8
         layer.shadowOffset = CGSize(width: 0, height: 4)
 
@@ -198,7 +198,7 @@ class VariantChipButton: UIButton {
         tick.textColor = .white; tick.translatesAutoresizingMaskIntoConstraints = false
 
         let badge = UIView()
-        badge.backgroundColor = UIColor(red: 0.18, green: 0.72, blue: 0.45, alpha: 1)
+        badge.backgroundColor = ComponentColors.LessonScreen.correctAnswer
         badge.layer.cornerRadius = 9; badge.translatesAutoresizingMaskIntoConstraints = false
         badge.addSubview(tick); addSubview(badge)
 
@@ -283,7 +283,7 @@ class LessonDetailViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 1, green: 0.98, blue: 0.95, alpha: 1)
+        view.backgroundColor = ComponentColors.HomeScreen.background
         setupUI()
         loadCompletedVariantsFromSupabase()
     }
@@ -307,7 +307,7 @@ class LessonDetailViewController: UIViewController {
         let backButton = UIButton(type: .system)
         backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
         backButton.setTitle(" Back", for: .normal)
-        backButton.tintColor = .systemOrange
+        backButton.tintColor = ComponentColors.HomeScreen.actionButtonFill
         backButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
         backButton.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
         backButton.translatesAutoresizingMaskIntoConstraints = false
@@ -351,9 +351,9 @@ class LessonDetailViewController: UIViewController {
 
         let avatarView = UIView()
         avatarView.translatesAutoresizingMaskIntoConstraints = false
-        avatarView.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.2)
+        avatarView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.2)
         avatarView.layer.cornerRadius = 22; avatarView.layer.masksToBounds = true
-        avatarView.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.4).cgColor
+        avatarView.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.4).cgColor
         avatarView.layer.borderWidth = 2
         let avatarIcon = UILabel()
         avatarIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -367,12 +367,12 @@ class LessonDetailViewController: UIViewController {
 
         let progressBGView = UIView()
         progressBGView.translatesAutoresizingMaskIntoConstraints = false
-        progressBGView.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.18)
+        progressBGView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18)
         progressBGView.layer.cornerRadius = 4
 
         let progressFill = UIView()
         progressFill.translatesAutoresizingMaskIntoConstraints = false
-        progressFill.backgroundColor = .systemOrange
+        progressFill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         progressFill.layer.cornerRadius = 4
         progressBGView.addSubview(progressFill)
 
@@ -380,7 +380,7 @@ class LessonDetailViewController: UIViewController {
         lessonNameLabel.translatesAutoresizingMaskIntoConstraints = false
         lessonNameLabel.text = "Lesson 1: \(lesson.title)"
         lessonNameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        lessonNameLabel.textColor = .systemOrange
+        lessonNameLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
 
         progressPercentLabel = UILabel()
         progressPercentLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -403,7 +403,7 @@ class LessonDetailViewController: UIViewController {
             let dot = UIView()
             dot.translatesAutoresizingMaskIntoConstraints = false
             dot.layer.cornerRadius = 5
-            dot.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.2)
+            dot.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.2)
             dot.widthAnchor.constraint(equalToConstant: 10).isActive = true
             dot.heightAnchor.constraint(equalToConstant: 10).isActive = true
             dotsStack.addArrangedSubview(dot)
@@ -433,8 +433,8 @@ class LessonDetailViewController: UIViewController {
         noteNameLabel.translatesAutoresizingMaskIntoConstraints = false
         noteNameLabel.text = lesson.variants[0]
         noteNameLabel.font = .systemFont(ofSize: 80, weight: .heavy)
-        noteNameLabel.textColor = .systemOrange; noteNameLabel.textAlignment = .center
-        noteNameLabel.layer.shadowColor = UIColor.systemOrange.withAlphaComponent(0.3).cgColor
+        noteNameLabel.textColor = ComponentColors.HomeScreen.actionButtonFill; noteNameLabel.textAlignment = .center
+        noteNameLabel.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
         noteNameLabel.layer.shadowRadius = 10; noteNameLabel.layer.shadowOpacity = 0.3
         noteNameLabel.layer.shadowOffset = CGSize(width: 0, height: 4)
 
@@ -485,8 +485,8 @@ class LessonDetailViewController: UIViewController {
         let waveCfg = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
         tryBtn.setImage(UIImage(systemName: "waveform", withConfiguration: waveCfg), for: .normal)
         tryBtn.tintColor = .white; tryBtn.setTitleColor(.white, for: .normal)
-        tryBtn.backgroundColor = kAppOrange; tryBtn.layer.cornerRadius = 26
-        tryBtn.layer.shadowColor = kAppOrange.cgColor
+        tryBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; tryBtn.layer.cornerRadius = 26
+        tryBtn.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         tryBtn.layer.shadowOpacity = 0.35; tryBtn.layer.shadowRadius = 12
         tryBtn.layer.shadowOffset = CGSize(width: 0, height: 6)
         tryBtn.addTarget(self, action: #selector(didTapTryYourself), for: .touchUpInside)
@@ -498,7 +498,7 @@ class LessonDetailViewController: UIViewController {
         descLabel.translatesAutoresizingMaskIntoConstraints = false
         descLabel.text = lesson.description
         descLabel.font = .systemFont(ofSize: 14)
-        descLabel.textColor = UIColor(red: 0.25, green: 0.22, blue: 0.18, alpha: 1.0)
+        descLabel.textColor = ComponentColors.SongCard.titleText
         descLabel.numberOfLines = 0
         descLabel.lineBreakMode = .byWordWrapping
         conceptCard.addSubview(conceptHeader)
@@ -516,7 +516,7 @@ class LessonDetailViewController: UIViewController {
             overviewLabel.translatesAutoresizingMaskIntoConstraints = false
             overviewLabel.text = lesson.familyOverview
             overviewLabel.font = .systemFont(ofSize: 13)
-            overviewLabel.textColor = UIColor(red: 0.45, green: 0.40, blue: 0.35, alpha: 1.0)
+            overviewLabel.textColor = ComponentColors.SongCard.metadataText
             overviewLabel.numberOfLines = 0
             conceptCard.addSubview(overviewLabel)
             conceptConstraints += [
@@ -583,7 +583,7 @@ class LessonDetailViewController: UIViewController {
         listenLabel.translatesAutoresizingMaskIntoConstraints = false
         listenLabel.text = lesson.listeningGuide.isEmpty ? "Listen carefully to each chord and notice the mood it creates." : lesson.listeningGuide
         listenLabel.font = .systemFont(ofSize: 14)
-        listenLabel.textColor = UIColor(red: 0.25, green: 0.22, blue: 0.18, alpha: 1.0)
+        listenLabel.textColor = ComponentColors.SongCard.titleText
         listenLabel.numberOfLines = 0
         listenCard.addSubview(listenHeader)
         listenCard.addSubview(listenLabel)
@@ -735,7 +735,7 @@ class LessonDetailViewController: UIViewController {
     private func makeInfoCard() -> UIView {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
-        v.backgroundColor = UIColor(red: 0xFB/255.0, green: 0xF0/255.0, blue: 0xDA/255.0, alpha: 1.0)
+        v.backgroundColor = ComponentColors.SongCard.background
         v.layer.cornerRadius = 18
         v.layer.masksToBounds = true
         return v
@@ -747,14 +747,14 @@ class LessonDetailViewController: UIViewController {
         row.axis = .horizontal; row.spacing = 7; row.alignment = .center
 
         let img = UIImageView(image: UIImage(systemName: icon))
-        img.tintColor = kAppOrange; img.contentMode = .scaleAspectFit
+        img.tintColor = ComponentColors.HomeScreen.actionButtonFill; img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
         img.widthAnchor.constraint(equalToConstant: 16).isActive = true
         img.heightAnchor.constraint(equalToConstant: 16).isActive = true
 
         let lbl = UILabel()
         lbl.text = title; lbl.font = .systemFont(ofSize: 13, weight: .bold)
-        lbl.textColor = kAppOrange
+        lbl.textColor = ComponentColors.HomeScreen.actionButtonFill
 
         row.addArrangedSubview(img)
         row.addArrangedSubview(lbl)
@@ -772,9 +772,9 @@ class LessonDetailViewController: UIViewController {
         // Name pill
         let namePill = UIView()
         namePill.translatesAutoresizingMaskIntoConstraints = false
-        namePill.backgroundColor = detail.type == "major" ? kAppOrange
-            : detail.type == "minor" ? UIColor(red: 0.35, green: 0.55, blue: 0.75, alpha: 1.0)
-            : UIColor(red: 0.55, green: 0.45, blue: 0.65, alpha: 1.0)
+        namePill.backgroundColor = detail.type == "major" ? ComponentColors.HomeScreen.actionButtonFill
+            : detail.type == "minor" ? ComponentColors.HomeScreen.actionButtonFill
+            : ComponentColors.SongCard.metadataText
         namePill.layer.cornerRadius = 10
 
         let nameL = UILabel()
@@ -790,14 +790,14 @@ class LessonDetailViewController: UIViewController {
         notesL.translatesAutoresizingMaskIntoConstraints = false
         notesL.text = detail.notes.joined(separator: " – ")
         notesL.font = .systemFont(ofSize: 12, weight: .semibold)
-        notesL.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.08, alpha: 1.0)
+        notesL.textColor = ComponentColors.SongCard.titleText
 
         // Emotion label
         let emotionL = UILabel()
         emotionL.translatesAutoresizingMaskIntoConstraints = false
         emotionL.text = detail.emotion
         emotionL.font = .systemFont(ofSize: 11)
-        emotionL.textColor = UIColor(red: 0.45, green: 0.40, blue: 0.35, alpha: 1.0)
+        emotionL.textColor = ComponentColors.SongCard.metadataText
         emotionL.numberOfLines = 2
 
         bg.addSubview(namePill); bg.addSubview(nameL); bg.addSubview(notesL); bg.addSubview(emotionL)
@@ -834,19 +834,19 @@ class LessonDetailViewController: UIViewController {
         numeralL.translatesAutoresizingMaskIntoConstraints = false
         numeralL.text = prog.numerals
         numeralL.font = .systemFont(ofSize: 11, weight: .bold)
-        numeralL.textColor = kAppOrange
+        numeralL.textColor = ComponentColors.HomeScreen.actionButtonFill
 
         let chordsL = UILabel()
         chordsL.translatesAutoresizingMaskIntoConstraints = false
         chordsL.text = prog.chords
         chordsL.font = .systemFont(ofSize: 13, weight: .semibold)
-        chordsL.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.08, alpha: 1.0)
+        chordsL.textColor = ComponentColors.SongCard.titleText
 
         let feelL = UILabel()
         feelL.translatesAutoresizingMaskIntoConstraints = false
         feelL.text = prog.feel
         feelL.font = .systemFont(ofSize: 11)
-        feelL.textColor = UIColor(red: 0.45, green: 0.40, blue: 0.35, alpha: 1.0)
+        feelL.textColor = ComponentColors.SongCard.metadataText
         feelL.numberOfLines = 2
 
         bg.addSubview(numeralL); bg.addSubview(chordsL); bg.addSubview(feelL)
@@ -875,7 +875,7 @@ class LessonDetailViewController: UIViewController {
 
         let numCircle = UIView()
         numCircle.translatesAutoresizingMaskIntoConstraints = false
-        numCircle.backgroundColor = kAppOrange
+        numCircle.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         numCircle.layer.cornerRadius = 12
 
         let numL = UILabel()
@@ -889,7 +889,7 @@ class LessonDetailViewController: UIViewController {
         taskL.translatesAutoresizingMaskIntoConstraints = false
         taskL.text = text
         taskL.font = .systemFont(ofSize: 13)
-        taskL.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.08, alpha: 1.0)
+        taskL.textColor = ComponentColors.SongCard.titleText
         taskL.numberOfLines = 0
 
         bg.addSubview(numCircle); bg.addSubview(numL); bg.addSubview(taskL)
@@ -929,7 +929,7 @@ class LessonDetailViewController: UIViewController {
             if variantIndex < dotsStack.arrangedSubviews.count {
                 let dot = dotsStack.arrangedSubviews[variantIndex]
                 UIView.animate(withDuration: 0.3) {
-                    dot.backgroundColor = UIColor(red: 0.18, green: 0.72, blue: 0.45, alpha: 1)
+                    dot.backgroundColor = ComponentColors.LessonScreen.correctAnswer
                 }
             }
 
@@ -978,7 +978,7 @@ class LessonDetailViewController: UIViewController {
         ])
         text.append(NSAttributedString(string: "\(pct)%", attributes: [
             .font: UIFont.systemFont(ofSize: 11, weight: .bold),
-            .foregroundColor: UIColor.systemOrange
+            .foregroundColor: ComponentColors.HomeScreen.actionButtonFill
         ]))
         progressRowLabel?.attributedText = text
     }
@@ -1100,8 +1100,8 @@ class LessonDetailViewController: UIViewController {
         for (i, btn) in chipButtons.enumerated() {
             let isSel = i == idx
             UIView.animate(withDuration: 0.2) {
-                if !btn.isDone { btn.backgroundColor = isSel ? .systemOrange : UIColor.systemGray6 }
-                btn.layer.shadowColor = isSel ? UIColor.systemOrange.cgColor : UIColor.clear.cgColor
+                if !btn.isDone { btn.backgroundColor = isSel ? ComponentColors.HomeScreen.actionButtonFill : UIColor.systemGray6 }
+                btn.layer.shadowColor = isSel ? ComponentColors.HomeScreen.actionButtonFill.cgColor : UIColor.clear.cgColor
                 btn.layer.shadowOpacity = isSel ? 0.3 : 0
                 if let stack = btn.subviews.first(where: { $0 is UIStackView }) as? UIStackView {
                     for sub in stack.arrangedSubviews {
@@ -1218,13 +1218,13 @@ class LessonCompletionPopupView: UIView {
         // Top accent bar
         let bar = UIView()
         bar.translatesAutoresizingMaskIntoConstraints = false
-        bar.backgroundColor = .systemOrange; bar.layer.cornerRadius = 4
+        bar.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; bar.layer.cornerRadius = 4
         addSubview(bar)
 
         // Icon circle
         let iconCircle = UIView()
         iconCircle.translatesAutoresizingMaskIntoConstraints = false
-        iconCircle.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.10)
+        iconCircle.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
         iconCircle.layer.cornerRadius = 40
         addSubview(iconCircle)
 
@@ -1283,7 +1283,7 @@ class LessonCompletionPopupView: UIView {
         // "Next lesson unlocked" pill
         let pill = UIView()
         pill.translatesAutoresizingMaskIntoConstraints = false
-        pill.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.10)
+        pill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
         pill.layer.cornerRadius = 16
         addSubview(pill)
 
@@ -1291,7 +1291,7 @@ class LessonCompletionPopupView: UIView {
         pillLabel.translatesAutoresizingMaskIntoConstraints = false
         pillLabel.text = "🔓  Next lesson is now unlocked!"
         pillLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        pillLabel.textColor = .systemOrange; pillLabel.textAlignment = .center
+        pillLabel.textColor = ComponentColors.HomeScreen.actionButtonFill; pillLabel.textAlignment = .center
         pill.addSubview(pillLabel)
 
         // Continue button
@@ -1300,9 +1300,9 @@ class LessonCompletionPopupView: UIView {
         contBtn.setTitle("Continue  →", for: .normal)
         contBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
         contBtn.setTitleColor(.white, for: .normal)
-        contBtn.backgroundColor = .systemOrange
+        contBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         contBtn.layer.cornerRadius = 26
-        contBtn.layer.shadowColor = UIColor.systemOrange.cgColor
+        contBtn.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         contBtn.layer.shadowOpacity = 0.35; contBtn.layer.shadowRadius = 12
         contBtn.layer.shadowOffset = CGSize(width: 0, height: 5)
         contBtn.addTarget(self, action: #selector(tappedContinue), for: .touchUpInside)
@@ -1394,13 +1394,13 @@ class TryYourselfViewController: UIViewController {
         // Note pill
         let notePill = UIView()
         notePill.translatesAutoresizingMaskIntoConstraints = false
-        notePill.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.1)
+        notePill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.1)
         notePill.layer.cornerRadius = 25
         let noteLabel = UILabel()
         noteLabel.translatesAutoresizingMaskIntoConstraints = false
         noteLabel.text = noteName
         noteLabel.font = .systemFont(ofSize: 24, weight: .bold)
-        noteLabel.textColor = .systemOrange
+        noteLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         notePill.addSubview(noteLabel)
 
         let subLabel = UILabel()
@@ -1423,7 +1423,7 @@ class TryYourselfViewController: UIViewController {
         for i in 0..<3 {
             let ring = UIView()
             ring.layer.cornerRadius = CGFloat(50 + i * 20)
-            ring.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0).cgColor
+            ring.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0).cgColor
             ring.layer.borderWidth = 2.5
             ring.translatesAutoresizingMaskIntoConstraints = false
             ringContainer.addSubview(ring); pulseViews.append(ring)
@@ -1438,8 +1438,8 @@ class TryYourselfViewController: UIViewController {
 
         micButton = UIButton(type: .system)
         micButton.translatesAutoresizingMaskIntoConstraints = false
-        micButton.backgroundColor = .systemOrange; micButton.layer.cornerRadius = 50
-        micButton.layer.shadowColor = UIColor.systemOrange.cgColor
+        micButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; micButton.layer.cornerRadius = 50
+        micButton.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         micButton.layer.shadowOpacity = 0.4; micButton.layer.shadowRadius = 20
         micButton.layer.shadowOffset = CGSize(width: 0, height: 8)
         let micCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
@@ -1455,7 +1455,7 @@ class TryYourselfViewController: UIViewController {
         ])
 
         let grad = CAGradientLayer()
-        grad.colors = [UIColor.systemOrange.cgColor, UIColor.orange.cgColor]
+        grad.colors = [ComponentColors.HomeScreen.actionButtonFill.cgColor, UIColor.orange.cgColor]
         grad.startPoint = CGPoint(x: 0, y: 0); grad.endPoint = CGPoint(x: 1, y: 1)
         grad.frame = CGRect(x: 0, y: 0, width: 100, height: 100); grad.cornerRadius = 50
         micButton.layer.insertSublayer(grad, at: 0)
@@ -1472,7 +1472,7 @@ class TryYourselfViewController: UIViewController {
         doneButton.setTitle("✓  Done Practicing", for: .normal)
         doneButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
         doneButton.setTitleColor(.white, for: .normal)
-        let green = UIColor(red: 0.18, green: 0.72, blue: 0.45, alpha: 1)
+        let green = ComponentColors.LessonScreen.correctAnswer
         doneButton.backgroundColor = green
         doneButton.layer.cornerRadius = 24
         doneButton.layer.shadowColor = green.cgColor
@@ -1539,7 +1539,7 @@ class TryYourselfViewController: UIViewController {
 
             let waveCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
             micButton.setImage(UIImage(systemName: "waveform", withConfiguration: waveCfg), for: .normal)
-            statusLabel.text = "Listening... 🎤"; statusLabel.textColor = .systemOrange
+            statusLabel.text = "Listening... 🎤"; statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
             startPulseAnimation()
             UIView.animate(withDuration: 0.3) { self.micButton.transform = CGAffineTransform(scaleX: 1.1, y: 1.1) }
 
@@ -1578,7 +1578,7 @@ class TryYourselfViewController: UIViewController {
         for (i, ring) in pulseViews.enumerated() {
             UIView.animate(withDuration: 1.0, delay: Double(i) * 0.15,
                            options: [.repeat, .autoreverse, .allowUserInteraction]) {
-                ring.layer.borderColor = UIColor.systemOrange.withAlphaComponent(
+                ring.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(
                     CGFloat(0.25 - Double(i) * 0.08)).cgColor
                 ring.transform = CGAffineTransform(scaleX: 1.1 + CGFloat(i) * 0.05,
                                                    y: 1.1 + CGFloat(i) * 0.05)
@@ -1590,7 +1590,7 @@ class TryYourselfViewController: UIViewController {
         for ring in pulseViews {
             ring.layer.removeAllAnimations()
             UIView.animate(withDuration: 0.4) {
-                ring.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0).cgColor
+                ring.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0).cgColor
                 ring.transform = .identity
             }
         }

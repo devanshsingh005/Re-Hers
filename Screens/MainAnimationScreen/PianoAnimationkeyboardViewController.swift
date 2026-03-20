@@ -95,7 +95,7 @@ final class PianoAnimationkeyboardViewController: UIViewController {
 
     // MARK: - L / R Labels
     private func buildLabels() {
-        configureLabel(leftLabel,  text: "L", color: .systemBlue)
+        configureLabel(leftLabel,  text: "L", color: BrandColors.brand)
         configureLabel(rightLabel, text: "R", color: .systemRed)
 
         [leftLabel, rightLabel].forEach { $0.alpha = 0; view.addSubview($0) }

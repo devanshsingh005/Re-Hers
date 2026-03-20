@@ -5,8 +5,7 @@
 
 import UIKit
 
-// MARK: - Shared Orange
-let kAppOrange = UIColor(red: 1.0, green: 0.60, blue: 0.10, alpha: 1.0)
+// ComponentColors.HomeScreen.actionButtonFill — imported from DesignSystem. Used directly throughout this file.
 
 // MARK: - Data Model
 struct ContinueCardItem {
@@ -23,7 +22,7 @@ final class PillButton: UIButton {
     required init?(coder: NSCoder) { super.init(coder: coder); setup() }
 
     private func setup() {
-        backgroundColor = kAppOrange
+        backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         clipsToBounds   = true
         let attrs:   [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: UIColor.white]
         let hlAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: UIColor.white.withAlphaComponent(0.6)]
@@ -54,7 +53,7 @@ final class ContinueCardCell: UICollectionViewCell {
 
     private func setup() {
         // Cream background
-        contentView.backgroundColor = UIColor(red: 0xFB/255.0, green: 0xF0/255.0, blue: 0xDA/255.0, alpha: 1.0)
+        contentView.backgroundColor = ComponentColors.SongCard.background
         contentView.layer.cornerRadius   = 20
         contentView.layer.masksToBounds  = false
         layer.shadowColor   = UIColor.black.cgColor
@@ -68,10 +67,10 @@ final class ContinueCardCell: UICollectionViewCell {
         albumImage.contentMode        = .scaleAspectFill
 
         titleLabel.font      = .systemFont(ofSize: 18, weight: .bold)
-        titleLabel.textColor = UIColor(red: 0.10, green: 0.09, blue: 0.07, alpha: 1.0)
+        titleLabel.textColor = ComponentColors.SongCard.titleText
 
         subtitleLabel.font      = .systemFont(ofSize: 12)
-        subtitleLabel.textColor = UIColor(red: 0.50, green: 0.48, blue: 0.44, alpha: 1.0)
+        subtitleLabel.textColor = ComponentColors.SongCard.metadataText
 
         let labelStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         labelStack.axis = .vertical; labelStack.spacing = 4; labelStack.alignment = .leading
@@ -120,8 +119,8 @@ final class ContinueCardCell: UICollectionViewCell {
             let seg = UIView()
             seg.layer.cornerRadius = 3; seg.layer.masksToBounds = true
             seg.backgroundColor = i < item.filledDots
-                ? kAppOrange
-                : UIColor(red: 0.85, green: 0.80, blue: 0.73, alpha: 1.0)
+                ? ComponentColors.HomeScreen.actionButtonFill
+                : ComponentColors.SongCard.border
             dotsStack.addArrangedSubview(seg)
         }
     }
@@ -183,8 +182,8 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
         let pageControl = UIPageControl()
         pageControl.numberOfPages                    = carouselItems.count
         pageControl.currentPage                      = 0
-        pageControl.currentPageIndicatorTintColor    = kAppOrange
-        pageControl.pageIndicatorTintColor           = UIColor(red: 0.80, green: 0.76, blue: 0.70, alpha: 1.0)
+        pageControl.currentPageIndicatorTintColor    = ComponentColors.HomeScreen.actionButtonFill
+        pageControl.pageIndicatorTintColor           = ComponentColors.SongCard.border
         pageControl.translatesAutoresizingMaskIntoConstraints = false
 
         let wrapper = UIView()

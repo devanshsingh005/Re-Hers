@@ -52,32 +52,33 @@ class ChapterNodeView: UIView {
 
         switch chapter.status {
         case .completed:
-            circleView.backgroundColor = UIColor.systemOrange
-            circleView.layer.shadowColor   = UIColor.systemOrange.cgColor
+            circleView.backgroundColor     = ComponentColors.LearningCurve.nodeCompletedFill
+            circleView.layer.borderColor   = ComponentColors.LearningCurve.pathCompleted.cgColor
+            circleView.layer.shadowColor   = ComponentColors.HomeScreen.actionButtonFill.cgColor
             circleView.layer.shadowOpacity = 0.45
             circleView.layer.shadowRadius  = 10
             circleView.layer.shadowOffset  = CGSize(width: 0, height: 5)
             iconLabel.text      = "✓"
             iconLabel.font      = .systemFont(ofSize: 28, weight: .heavy)
-            iconLabel.textColor = .white
+            iconLabel.textColor = ComponentColors.LearningCurve.nodeIconCompleted
         case .current:
-            circleView.backgroundColor  = .white
-            circleView.layer.borderColor = UIColor.systemOrange.cgColor
+            circleView.backgroundColor   = ComponentColors.LearningCurve.nodeActiveFill
+            circleView.layer.borderColor = ComponentColors.LearningCurve.pathCompleted.cgColor
             circleView.layer.borderWidth = 5
-            circleView.layer.shadowColor   = UIColor.systemOrange.cgColor
+            circleView.layer.shadowColor   = ComponentColors.HomeScreen.actionButtonFill.cgColor
             circleView.layer.shadowOpacity = 0.3
             circleView.layer.shadowRadius  = 12
             circleView.layer.shadowOffset  = CGSize(width: 0, height: 5)
             iconLabel.text      = "♩"
-            iconLabel.font      = .systemFont(ofSize: 30, weight: .bold)
-            iconLabel.textColor = UIColor.systemOrange
+            iconLabel.textColor = ComponentColors.LearningCurve.nodeIconActive
         case .locked:
-            circleView.backgroundColor  = UIColor.systemGray5
-            circleView.layer.borderColor = UIColor.systemGray4.cgColor
+            circleView.backgroundColor   = ComponentColors.LearningCurve.nodeLockedFill
+            circleView.layer.borderColor = ComponentColors.LearningCurve.nodeLockedBorder.cgColor
             circleView.layer.borderWidth = 2
-            iconLabel.text = "🔒"
-            iconLabel.font = .systemFont(ofSize: 24)
+            iconLabel.text      = "🔒"
+            iconLabel.textColor = ComponentColors.LearningCurve.nodeIconLocked
         }
+        iconLabel.font = .systemFont(ofSize: 24)
 
         iconLabel.translatesAutoresizingMaskIntoConstraints = false
         iconLabel.textAlignment = .center
@@ -96,14 +97,14 @@ class ChapterNodeView: UIView {
         titleLabel.text          = chapter.title
         titleLabel.font          = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textAlignment = .center
-        titleLabel.textColor     = chapter.status == .locked ? UIColor.systemGray3 : UIColor.label
-
+        titleLabel.textColor = chapter.status == .locked ? ComponentColors.LearningCurve.nodeIconLocked : ComponentColors.LearningCurve.headerTitle
+        
         badgeLabel.translatesAutoresizingMaskIntoConstraints = false
         badgeLabel.text            = chapter.title.uppercased()
         badgeLabel.font            = .systemFont(ofSize: 11, weight: .heavy)
-        badgeLabel.textColor       = .white
+        badgeLabel.textColor       = ComponentColors.LearningCurve.chapterBadgeText
         badgeLabel.textAlignment   = .center
-        badgeLabel.backgroundColor = UIColor.systemOrange
+        badgeLabel.backgroundColor = ComponentColors.LearningCurve.chapterBadgeFill
         badgeLabel.layer.cornerRadius  = 11
         badgeLabel.layer.masksToBounds = true
         badgeLabel.isHidden            = (chapter.status != .current)
@@ -173,9 +174,9 @@ class ChapterPopupCard: UIView {
 
     private func setupView(chapter: MusicChapter) {
         containerView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.backgroundColor      = .white
-        containerView.layer.cornerRadius   = 20
-        containerView.layer.shadowColor    = UIColor.black.cgColor
+        containerView.backgroundColor = ComponentColors.LearningCurve.popupBackground
+        containerView.layer.cornerRadius = 24
+        containerView.layer.shadowColor = ComponentColors.LearningCurve.popupShadow.cgColor
         containerView.layer.shadowOpacity  = 0.14
         containerView.layer.shadowRadius   = 20
         containerView.layer.shadowOffset   = CGSize(width: 0, height: 6)
@@ -192,13 +193,13 @@ class ChapterPopupCard: UIView {
 
         switch chapter.status {
         case .completed:
-            statusView.backgroundColor = UIColor.systemOrange
+            statusView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
             statusIcon.text = "✓"; statusIcon.font = .systemFont(ofSize: 22, weight: .heavy)
             statusIcon.textColor = .white
         case .current:
-            statusView.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.12)
+            statusView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
             statusIcon.text = "♩"; statusIcon.font = .systemFont(ofSize: 24, weight: .bold)
-            statusIcon.textColor = .systemOrange
+            statusIcon.textColor = ComponentColors.HomeScreen.actionButtonFill
         case .locked:
             statusView.backgroundColor = UIColor.systemGray5
             statusIcon.text = "🔒"; statusIcon.font = .systemFont(ofSize: 20)
@@ -231,38 +232,38 @@ class ChapterPopupCard: UIView {
         primaryBtn.layer.cornerRadius   = 24
         primaryBtn.layer.masksToBounds  = true
 
-        switch chapter.status {
-        case .completed:
+        let status = chapter.status
+        if status == .completed {
             let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
             primaryBtn.setImage(UIImage(systemName: "arrow.counterclockwise", withConfiguration: cfg), for: .normal)
-            primaryBtn.setTitle("  Practice Again", for: .normal)
+            primaryBtn.setTitle(NSLocalizedString("practice_again_btn", comment: ""), for: .normal)
             primaryBtn.titleLabel?.font      = .systemFont(ofSize: 16, weight: .bold)
-            primaryBtn.tintColor             = .white
-            primaryBtn.backgroundColor       = .systemOrange
-            primaryBtn.layer.shadowColor     = UIColor.systemOrange.cgColor
+            primaryBtn.tintColor             = ComponentColors.PrimaryButton.text
+            primaryBtn.backgroundColor       = ComponentColors.LearningCurve.pathCompleted
+            primaryBtn.layer.shadowColor     = ComponentColors.HomeScreen.actionButtonFill.cgColor
             primaryBtn.layer.shadowOpacity   = 0.35
             primaryBtn.layer.shadowRadius    = 8
             primaryBtn.layer.shadowOffset    = CGSize(width: 0, height: 4)
             primaryBtn.layer.masksToBounds   = false
-        case .current:
+        } else if status == .current {
             let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
             primaryBtn.setImage(UIImage(systemName: "play.fill", withConfiguration: cfg), for: .normal)
-            primaryBtn.setTitle("  Start Lesson", for: .normal)
+            primaryBtn.setTitle(NSLocalizedString("start_lesson_btn", comment: ""), for: .normal)
             primaryBtn.titleLabel?.font      = .systemFont(ofSize: 16, weight: .bold)
-            primaryBtn.tintColor             = .white
-            primaryBtn.backgroundColor       = .systemOrange
-            primaryBtn.layer.shadowColor     = UIColor.systemOrange.cgColor
+            primaryBtn.tintColor             = ComponentColors.PrimaryButton.text
+            primaryBtn.backgroundColor       = ComponentColors.LearningCurve.pathCompleted
+            primaryBtn.layer.shadowColor     = ComponentColors.HomeScreen.actionButtonFill.cgColor
             primaryBtn.layer.shadowOpacity   = 0.35
             primaryBtn.layer.shadowRadius    = 8
             primaryBtn.layer.shadowOffset    = CGSize(width: 0, height: 4)
             primaryBtn.layer.masksToBounds   = false
-        case .locked:
+        } else { // .locked
             let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
             primaryBtn.setImage(UIImage(systemName: "lock.fill", withConfiguration: cfg), for: .normal)
             primaryBtn.setTitle("  Locked", for: .normal)
             primaryBtn.titleLabel?.font  = .systemFont(ofSize: 16, weight: .bold)
-            primaryBtn.tintColor         = UIColor.systemGray2
-            primaryBtn.backgroundColor   = UIColor.systemGray5
+            primaryBtn.tintColor         = ComponentColors.LearningCurve.nodeIconLocked
+            primaryBtn.backgroundColor   = ComponentColors.LearningCurve.nodeLockedFill
             primaryBtn.isEnabled         = false
         }
         primaryBtn.addTarget(self, action: #selector(didTapPrimary), for: .touchUpInside)
@@ -348,7 +349,7 @@ class LessonMapViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 1, green: 0.98, blue: 0.95, alpha: 1)
+        view.backgroundColor = ComponentColors.HomeScreen.background
         setupScrollView()
         setupHeader()
         setupPath()
@@ -449,20 +450,20 @@ class LessonMapViewController: UIViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text      = "Basics"
         titleLabel.font      = .systemFont(ofSize: 30, weight: .heavy)
-        titleLabel.textColor = .label
+        titleLabel.textColor = ComponentColors.LearningCurve.headerTitle
 
         let subtitleLabel = UILabel()
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.text      = "Interactive lessons"
         subtitleLabel.font      = .systemFont(ofSize: 14)
-        subtitleLabel.textColor = .systemGray
+        subtitleLabel.textColor = ComponentColors.LearningCurve.headerSubtitle
 
         let avatarView = UIView()
         avatarView.translatesAutoresizingMaskIntoConstraints = false
-        avatarView.backgroundColor     = UIColor.systemOrange.withAlphaComponent(0.2)
+        avatarView.backgroundColor     = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.2)
         avatarView.layer.cornerRadius  = 22
         avatarView.layer.masksToBounds = true
-        avatarView.layer.borderColor   = UIColor.systemOrange.withAlphaComponent(0.4).cgColor
+        avatarView.layer.borderColor   = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.4).cgColor
         avatarView.layer.borderWidth   = 2
         let avatarIcon = UILabel()
         avatarIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -476,12 +477,12 @@ class LessonMapViewController: UIViewController {
 
         let progressBG = UIView()
         progressBG.translatesAutoresizingMaskIntoConstraints = false
-        progressBG.backgroundColor  = UIColor.systemOrange.withAlphaComponent(0.18)
+        progressBG.backgroundColor  = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18)
         progressBG.layer.cornerRadius = 4
 
         let progressFill = UIView()
         progressFill.translatesAutoresizingMaskIntoConstraints = false
-        progressFill.backgroundColor  = .systemOrange
+        progressFill.backgroundColor  = ComponentColors.HomeScreen.actionButtonFill
         progressFill.layer.cornerRadius = 4
         progressBG.addSubview(progressFill)
         headerProgressFill = progressFill
@@ -525,12 +526,12 @@ class LessonMapViewController: UIViewController {
 
     private func refreshHeaderProgressLabel() {
         let pText = NSMutableAttributedString(string: "PROGRESS    ", attributes: [
-            .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: UIColor.systemGray
+            .font: UIFont.systemFont(ofSize: 11, weight: .black),
+            .foregroundColor: ComponentColors.LearningCurve.headerSubtitle
         ])
         pText.append(NSAttributedString(string: "\(Int(progress * 100))%", attributes: [
             .font: UIFont.systemFont(ofSize: 11, weight: .bold),
-            .foregroundColor: UIColor.systemOrange
+            .foregroundColor: ComponentColors.HomeScreen.actionButtonFill
         ]))
         headerProgressLabel?.attributedText = pText
     }
@@ -747,13 +748,13 @@ class UnlockBannerView: UIView {
 
         let accentBar = UIView()
         accentBar.translatesAutoresizingMaskIntoConstraints = false
-        accentBar.backgroundColor    = .systemOrange
+        accentBar.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill
         accentBar.layer.cornerRadius = 4
         addSubview(accentBar)
 
         let iconCircle = UIView()
         iconCircle.translatesAutoresizingMaskIntoConstraints = false
-        iconCircle.backgroundColor    = UIColor.systemOrange.withAlphaComponent(0.12)
+        iconCircle.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         iconCircle.layer.cornerRadius = 38
         addSubview(iconCircle)
 
@@ -775,14 +776,14 @@ class UnlockBannerView: UIView {
         let titleLabel = UILabel()
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text          = "Lesson Unlocked!"
-        titleLabel.font          = .systemFont(ofSize: 24, weight: .heavy)
-        titleLabel.textColor     = .label
+        titleLabel.font          = .systemFont(ofSize: 22, weight: .bold)
+        titleLabel.textColor     = ComponentColors.LearningCurve.popupTitle
         titleLabel.textAlignment = .center
         addSubview(titleLabel)
 
         let pillView = UIView()
         pillView.translatesAutoresizingMaskIntoConstraints = false
-        pillView.backgroundColor    = UIColor.systemOrange.withAlphaComponent(0.1)
+        pillView.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.1)
         pillView.layer.cornerRadius = 16
         addSubview(pillView)
 
@@ -790,15 +791,15 @@ class UnlockBannerView: UIView {
         pillLabel.translatesAutoresizingMaskIntoConstraints = false
         pillLabel.text          = "🎵  \(lessonTitle)"
         pillLabel.font          = .systemFont(ofSize: 15, weight: .semibold)
-        pillLabel.textColor     = .systemOrange
+        pillLabel.textColor     = ComponentColors.HomeScreen.actionButtonFill
         pillLabel.textAlignment = .center
         pillView.addSubview(pillLabel)
 
         let subtitleLabel = UILabel()
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.text          = "Great work! Your next lesson is ready to explore."
-        subtitleLabel.font          = .systemFont(ofSize: 14)
-        subtitleLabel.textColor     = .systemGray
+        subtitleLabel.font          = .systemFont(ofSize: 15)
+        subtitleLabel.textColor     = ComponentColors.LearningCurve.popupSubtitle
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
         addSubview(subtitleLabel)
@@ -808,9 +809,9 @@ class UnlockBannerView: UIView {
         continueBtn.setTitle("Continue  🎉", for: .normal)
         continueBtn.titleLabel?.font    = .systemFont(ofSize: 17, weight: .bold)
         continueBtn.setTitleColor(.white, for: .normal)
-        continueBtn.backgroundColor     = .systemOrange
+        continueBtn.backgroundColor     = ComponentColors.HomeScreen.actionButtonFill
         continueBtn.layer.cornerRadius  = 26
-        continueBtn.layer.shadowColor   = UIColor.systemOrange.cgColor
+        continueBtn.layer.shadowColor   = ComponentColors.HomeScreen.actionButtonFill.cgColor
         continueBtn.layer.shadowOpacity = 0.35
         continueBtn.layer.shadowRadius  = 12
         continueBtn.layer.shadowOffset  = CGSize(width: 0, height: 5)
@@ -882,7 +883,7 @@ class PathCanvasView: UIView {
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         drawWatermarks(ctx: ctx, rect: rect)
-        ctx.setStrokeColor(UIColor.systemOrange.withAlphaComponent(0.35).cgColor)
+        ctx.setStrokeColor(ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.35).cgColor)
         ctx.setLineWidth(5); ctx.setLineDash(phase: 0, lengths: [12, 9])
         ctx.setLineCap(.round)
         for i in 0..<chapters.count - 1 {
@@ -898,13 +899,13 @@ class PathCanvasView: UIView {
         let iconChars = ["♩", "♫", "♬"]
         let attrs: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 32),
-            .foregroundColor: UIColor.systemOrange.withAlphaComponent(0.18)
+            .foregroundColor: ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18)
         ]
         func drawStaffLines(at center: CGPoint, rotation: CGFloat) {
             ctx.saveGState()
             ctx.translateBy(x: center.x, y: center.y)
             ctx.rotate(by: rotation * .pi / 180)
-            ctx.setStrokeColor(UIColor.systemOrange.withAlphaComponent(0.18).cgColor)
+            ctx.setStrokeColor(ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18).cgColor)
             ctx.setLineWidth(2); ctx.setLineDash(phase: 0, lengths: [])
             let lineW: CGFloat = 28; let lineSpacing: CGFloat = 5
             let totalH = lineSpacing * 3

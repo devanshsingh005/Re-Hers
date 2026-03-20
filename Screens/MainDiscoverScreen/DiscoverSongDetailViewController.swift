@@ -54,7 +54,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = ComponentColors.SongDetailScreen.background
         navigationController?.navigationBar.isHidden = true
 
         setupUI()
@@ -80,7 +80,7 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - NavBar
 
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = ComponentColors.SongDetailScreen.background
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
     }
@@ -162,26 +162,27 @@ class DiscoverSongDetailViewController: UIViewController {
         contentView.addSubview(albumArtCardView)
 
         bookmarkButton.setImage(UIImage(systemName: "bookmark"), for: .normal)
-        bookmarkButton.tintColor = .systemGray
+        bookmarkButton.tintColor = ComponentColors.SongCard.chevronIcon
         bookmarkButton.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(bookmarkButton)
 
         songTitleLabel.textAlignment = .center
         songTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        songTitleLabel.textColor = ComponentColors.SongDetailScreen.songTitle
         songTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(songTitleLabel)
 
         artistLabel.textAlignment = .center
         artistLabel.font = .systemFont(ofSize: 14)
-        artistLabel.textColor = .darkGray
+        artistLabel.textColor = ComponentColors.SongDetailScreen.artistName
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
 
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         playAlongButton.layer.cornerRadius = 12
-        playAlongButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
         playAlongButton.layer.shadowOpacity = 0.15
         playAlongButton.layer.shadowRadius  = 6
         playAlongButton.layer.shadowOffset  = CGSize(width: 0, height: 3)
@@ -189,8 +190,8 @@ class DiscoverSongDetailViewController: UIViewController {
         animationButton.setTitle("Animation", for: .normal)
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         animationButton.layer.cornerRadius = 12
-        animationButton.setTitleColor(.darkGray, for: .normal)
-        animationButton.backgroundColor = .systemGray5
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
 
         buttonStack.axis         = .horizontal
@@ -215,7 +216,7 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfView.autoScales          = true
         pdfView.displayMode         = .singlePageContinuous
         pdfView.displayDirection    = .vertical
-        pdfView.backgroundColor     = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1)
+        pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
         pdfView.isHidden            = true
         pdfView.isUserInteractionEnabled = true
         pdfView.translatesAutoresizingMaskIntoConstraints = false
@@ -223,7 +224,7 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfView.addGestureRecognizer(pdfTap)
         sheetContainer.addSubview(pdfView)
 
-        pdfLoadingIndicator.color = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1)
+        pdfLoadingIndicator.color = ComponentColors.SongDetailScreen.primaryActionFill
         pdfLoadingIndicator.hidesWhenStopped = true
         pdfLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.addSubview(pdfLoadingIndicator)
@@ -232,7 +233,7 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfErrorLabel.numberOfLines = 0
         pdfErrorLabel.textAlignment = .center
         pdfErrorLabel.font          = .systemFont(ofSize: 15)
-        pdfErrorLabel.textColor     = .secondaryLabel
+        pdfErrorLabel.textColor = SemanticColors.Text.secondary
         pdfErrorLabel.isHidden      = true
         pdfErrorLabel.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.addSubview(pdfErrorLabel)
@@ -320,10 +321,10 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     @objc private func openPlayAlongVC() {
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        playAlongButton.setTitleColor(.white, for: .normal)
-        animationButton.backgroundColor = .systemGray5
-        animationButton.setTitleColor(.darkGray, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         let vc  = PlayAlongViewController()
         let nav = LandscapeNavigationController(rootViewController: vc)
@@ -332,10 +333,10 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     @objc private func didTapAnimation() {
-        animationButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        animationButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = .systemGray5
-        playAlongButton.setTitleColor(.darkGray, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         guard let json = sheetMusicJSON else {
             showAnimationError("No sheet music data available yet.\nPlease wait a moment and try again.")
@@ -362,8 +363,8 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     @objc private func bookmarkTapped() {
-        let on = bookmarkButton.tintColor == .systemYellow
-        bookmarkButton.tintColor = on ? .systemGray : .systemYellow
+        let on = bookmarkButton.tintColor == UIColor.systemYellow
+        bookmarkButton.tintColor = on ? ComponentColors.SongCard.chevronIcon : .systemYellow
         bookmarkButton.setImage(UIImage(systemName: on ? "bookmark" : "bookmark.fill"), for: .normal)
     }
 

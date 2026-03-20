@@ -53,46 +53,30 @@ class MainTabBarController: UITabBarController {
             selectedImage: UIImage(systemName: "music.note.list")
         )
         
-        // Chord Recognition Tab
-        let chordVC = ChordRecognitionViewController()
-        let chordNav = UINavigationController(rootViewController: chordVC)
-        chordNav.tabBarItem = UITabBarItem(
-            title: "Chords",
-            image: UIImage(systemName: "pianokeys"),
-            selectedImage: UIImage(systemName: "pianokeys")
-        )
-        
         // Set all view controllers
         viewControllers = [homeNav, uploadNav, discoverNav, playListNav]
     }
     
     private func setupAppearance() {
-        tabBar.tintColor = UIColor(red: 0.96, green: 0.71, blue: 0.34, alpha: 1.0)
-        tabBar.unselectedItemTintColor = .systemGray
-        
-        // Force light mode appearance and remove dark mode
-        if #available(iOS 15.0, *) {
-            let appearance = UITabBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = .white
-            
-            // Remove separator line
-            appearance.shadowColor = .clear
-            appearance.shadowImage = nil
-            
-            // Set the same appearance for both normal and scroll edge
-            tabBar.standardAppearance = appearance
-            tabBar.scrollEdgeAppearance = appearance
-        } else {
-            // Fallback for earlier iOS versions
-            tabBar.backgroundColor = .white
-            tabBar.barTintColor = .white
-            tabBar.isTranslucent = false
-        }
-        
-        // Ensure the tab bar background extends to the bottom edge
-        tabBar.isTranslucent = false
-        tabBar.clipsToBounds = false
+        // Active / inactive icon and label tints — all resolved from the design token layer.
+        tabBar.tintColor             = ComponentColors.TabBar.activeIcon
+        tabBar.unselectedItemTintColor = ComponentColors.TabBar.inactiveIcon
+
+        // iOS 15+ opaque appearance — collapses redundancy between standardAppearance
+        // and scrollEdgeAppearance so the bar never turns transparent on scroll.
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = ComponentColors.TabBar.background
+
+        // Use the separator token rather than hiding the line entirely.
+        // Passing .clear would fully remove it; the token is a very subtle stroke colour.
+        appearance.shadowColor = ComponentColors.TabBar.separator
+
+        tabBar.standardAppearance  = appearance
+        tabBar.scrollEdgeAppearance = appearance
+
+        tabBar.isTranslucent  = false
+        tabBar.clipsToBounds  = false
     }
 
     // MARK: - Orientation Delegation
@@ -117,33 +101,4 @@ extension UINavigationController {
         return topViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
     }
 }
-
-
-//
-//  BottomNavbar.swift
-//  Re-Hearse_v1
-//
-//  Created by admin20 on 06/11/25.
-//
-
-//
-//  BottomNavbar.swift
-//  Re-Hearse_v1
-//
-//  Created by admin20 on 06/11/25.
-//
-
-//
-//  BottomNavbar.swift
-//  Re-Hearse_v1
-//
-//  Created by admin20 on 06/11/25.
-//
-
-//
-//  BottomNavbar.swift
-//  Re-Hearse_v1
-//
-//  Created by admin20 on 06/11/25.
-//
 

@@ -69,7 +69,7 @@ final class AnimatedPianoKeyView: UIView {
     // MARK: - Colours
     // LEFT hand = blue, RIGHT hand = red
 
-    static let leftColor  = UIColor.systemBlue   // blue for left hand
+    static let leftColor  = BrandColors.brand   // blue for left hand
     static let rightColor = UIColor.systemRed     // red for right hand
 
     func animatePress(hand: HandType? = nil, color overrideColor: UIColor? = nil) {
@@ -103,12 +103,12 @@ final class AnimatedPianoKeyView: UIView {
     private func updateAppearance() {
         if isHinted {
             // "Luminous" hint — glowing soft blue
-            backgroundColor = UIColor.systemBlue.withAlphaComponent(0.25)
-            layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.5).cgColor
+            backgroundColor = BrandColors.brand.withAlphaComponent(0.25)
+            layer.borderColor = BrandColors.brand.withAlphaComponent(0.5).cgColor
             layer.borderWidth = 1.5
             
             // Subtle glow even when not pressed
-            layer.shadowColor = UIColor.systemBlue.cgColor
+            layer.shadowColor = BrandColors.brand.cgColor
             layer.shadowOpacity = 0.3
             layer.shadowRadius = 4
         } else {
@@ -121,7 +121,7 @@ final class AnimatedPianoKeyView: UIView {
         switch keyType {
         case .white:
             // Ivory base instead of pure flat gray
-            backgroundColor = UIColor(red: 0.98, green: 0.98, blue: 0.96, alpha: 1)
+            backgroundColor = ComponentColors.HomeScreen.background
             layer.borderColor = UIColor(white: 0.88, alpha: 1).cgColor
         case .black:
             // Obsidian base

@@ -40,12 +40,8 @@ class HomeViewController: UIViewController {
     }
 
     private func setupUI() {
-        // Dynamic light / dark background
-        view.backgroundColor = UIColor { trait in
-            trait.userInterfaceStyle == .dark
-                ? UIColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1.0)
-                : .white
-        }
+        // Background and navigation bar — tokens handle light/dark automatically
+        view.backgroundColor = ComponentColors.HomeScreen.background
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
         setupScrollView()

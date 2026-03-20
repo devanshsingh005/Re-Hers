@@ -78,7 +78,7 @@ extension HomeViewController {
         // ── Cream pill card, full stadium radius ──
         let cardHeight: CGFloat = 44
         let card = UIView()
-        card.backgroundColor  = UIColor(red: 0xFB/255.0, green: 0xF0/255.0, blue: 0xDA/255.0, alpha: 1.0)
+        card.backgroundColor  = ComponentColors.App.screenBackground
         card.layer.cornerRadius  = cardHeight / 2   // full pill
         card.layer.masksToBounds = true
         card.translatesAutoresizingMaskIntoConstraints = false
@@ -88,13 +88,13 @@ extension HomeViewController {
         let label = UILabel()
         label.text      = "Daily goal"
         label.font      = .systemFont(ofSize: 12, weight: .semibold)
-        label.textColor = UIColor(red: 0.80, green: 0.40, blue: 0.00, alpha: 1.0)
+        label.textColor = ComponentColors.HomeScreen.actionButtonFill
         label.translatesAutoresizingMaskIntoConstraints = false
 
         // Progress bar — orange fill, sand track
         let progress = UIProgressView()
-        progress.progressTintColor = kAppOrange
-        progress.trackTintColor    = UIColor(red: 0.88, green: 0.82, blue: 0.74, alpha: 1.0)
+        progress.progressTintColor = ComponentColors.HomeScreen.actionButtonFill
+        progress.trackTintColor    = ComponentColors.QuizScreen.progressTrack
         progress.layer.cornerRadius = 3
         progress.clipsToBounds      = true
         progress.transform = CGAffineTransform(scaleX: 1.0, y: 1.8)
@@ -107,7 +107,7 @@ extension HomeViewController {
         // Time label — deep orange, right-aligned
         let time = UILabel()
         time.font          = .systemFont(ofSize: 12, weight: .semibold)
-        time.textColor     = UIColor(red: 0.80, green: 0.40, blue: 0.00, alpha: 1.0)
+        time.textColor     = ComponentColors.HomeScreen.actionButtonFill
         time.textAlignment = .right
         time.translatesAutoresizingMaskIntoConstraints = false
         dailyGoalTimeLabel = time

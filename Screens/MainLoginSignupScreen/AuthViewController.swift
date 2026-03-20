@@ -16,7 +16,7 @@ import AuthenticationServices
 final class AuthViewController: UIViewController {
     
     // MARK: - Constants
-    private let primaryOrangeColor = UIColor(hex: "#EF9408")
+    private let primaryOrangeColor = ComponentColors.HomeScreen.actionButtonFill
     
     // MARK: - Constraint Storage
     private var signupConstraints: [NSLayoutConstraint] = []

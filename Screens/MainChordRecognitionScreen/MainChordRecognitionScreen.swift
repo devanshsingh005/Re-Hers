@@ -74,7 +74,7 @@ final class ChordRecognitionViewController: UIViewController {
         view.backgroundColor = .white
         view.layer.cornerRadius = 12
         view.layer.borderWidth = 1
-        view.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.3).cgColor
+        view.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
         return view
     }()
     
@@ -245,7 +245,7 @@ final class ChordRecognitionViewController: UIViewController {
     private func setupWaveLayer() {
         let waveLayer = CAShapeLayer()
         waveLayer.fillColor = UIColor.clear.cgColor
-        waveLayer.strokeColor = UIColor.systemOrange.cgColor
+        waveLayer.strokeColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         waveLayer.lineWidth = 3.0
         waveLayer.lineCap = .round
         waveLayer.lineJoin = .round
@@ -294,13 +294,13 @@ final class ChordRecognitionViewController: UIViewController {
         let orangeShade: UIColor
         switch waveUpdateCounter % 4 {
         case 0:
-            orangeShade = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // Bright orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.85) // Bright orange
         case 1:
-            orangeShade = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0) // Pure orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill // Pure orange
         case 2:
-            orangeShade = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 1.0) // Light orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.75) // Light orange
         default:
-            orangeShade = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1.0) // Dark orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.90) // Dark orange
         }
         
         waveLayer.strokeColor = orangeShade.cgColor

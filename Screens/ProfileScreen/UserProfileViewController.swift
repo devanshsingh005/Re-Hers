@@ -33,6 +33,7 @@ final class UserProfileViewController: UIViewController {
     private let profileImageView = UIImageView()
     private let nameLabel = UILabel()
     private let usernameLabel = UILabel()
+    private let titleLabel = UILabel()
     private let editProfileButton = UIButton(type: .system)
 
     // Stat cards
@@ -56,7 +57,7 @@ final class UserProfileViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.973, green: 0.973, blue: 0.957, alpha: 1.0) // #F8F8F4
+        view.backgroundColor = ComponentColors.ProfileScreen.background // #F8F8F4
         navigationController?.navigationBar.isHidden = true
         setupUI()
         loadData()
@@ -99,15 +100,14 @@ final class UserProfileViewController: UIViewController {
         backBtn.setImage(UIImage(systemName: "chevron.left",
                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)),
                          for: .normal)
-        backBtn.tintColor = UIColor(red: 0.7, green: 0.55, blue: 0.25, alpha: 1.0)
+        backBtn.tintColor = ComponentColors.NavBar.backButton
         backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
         backBtn.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(backBtn)
 
-        let titleLabel = UILabel()
         titleLabel.text = "Profile"
         titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
-        titleLabel.textColor = UIColor(red: 0.15, green: 0.15, blue: 0.15, alpha: 1.0)
+        titleLabel.textColor = ComponentColors.ProfileScreen.userName
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(titleLabel)
 
@@ -118,8 +118,8 @@ final class UserProfileViewController: UIViewController {
         // Gradient ring via CAGradientLayer mask
         let ringGradient = CAGradientLayer()
         ringGradient.colors = [
-            UIColor(red: 1.0, green: 0.78, blue: 0.3, alpha: 1.0).cgColor,
-            UIColor(red: 0.96, green: 0.62, blue: 0.18, alpha: 1.0).cgColor
+            ComponentColors.ProfileScreen.avatarBorder.cgColor,
+            ComponentColors.ProfileScreen.avatarBorder.cgColor
         ]
         ringGradient.startPoint = CGPoint(x: 0, y: 0)
         ringGradient.endPoint = CGPoint(x: 1, y: 1)
@@ -131,7 +131,7 @@ final class UserProfileViewController: UIViewController {
 
         profileImageView.image = UIImage(systemName: "person.fill")
         profileImageView.tintColor = .white
-        profileImageView.backgroundColor = UIColor(red: 0.6, green: 0.72, blue: 0.85, alpha: 1.0)
+        profileImageView.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
         profileImageView.contentMode = .scaleAspectFill
         profileImageView.clipsToBounds = true
         profileImageView.layer.cornerRadius = (ringSize - 8) / 2
@@ -144,20 +144,20 @@ final class UserProfileViewController: UIViewController {
 
         nameLabel.text = "Loading..."
         nameLabel.font = .systemFont(ofSize: 24, weight: .bold)
-        nameLabel.textColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
+        nameLabel.textColor = ComponentColors.ProfileScreen.userName
         nameLabel.textAlignment = .center
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(nameLabel)
 
         usernameLabel.text = "@username"
         usernameLabel.font = .systemFont(ofSize: 15, weight: .regular)
-        usernameLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
+        usernameLabel.textColor = ComponentColors.ProfileScreen.userHandle
         usernameLabel.textAlignment = .center
         usernameLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(usernameLabel)
 
-        editProfileButton.setTitle("Edit Profile", for: .normal)
-        editProfileButton.setTitleColor(UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0), for: .normal)
+        editProfileButton.setTitle("Profile", for: .normal)
+        editProfileButton.setTitleColor(ComponentColors.ProfileScreen.editProfileText, for: .normal)
         editProfileButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         editProfileButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
         editProfileButton.translatesAutoresizingMaskIntoConstraints = false
@@ -205,14 +205,14 @@ final class UserProfileViewController: UIViewController {
         contentView.addSubview(statsContainer)
 
         // Find editProfileButton to anchor below it
-        let brandColor = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0) // #EF9408
+        let brandColor = ComponentColors.ProfileScreen.editProfileText // #EF9408
         let cards = [
             makeStatCard(iconName: "clock", iconColor: brandColor,
-                         valueLabel: practiceLabel, valueText: "–", subtitleText: "PRACTICE"),
+                         valueLabel: practiceLabel, valueText: "–", subtitleText: "Practice"),
             makeStatCard(iconName: "book.fill", iconColor: brandColor,
-                         valueLabel: lessonsLabel, valueText: "–", subtitleText: "LESSONS"),
+                         valueLabel: lessonsLabel, valueText: "–", subtitleText: "Lessons"),
             makeStatCard(iconName: "flame.fill", iconColor: brandColor,
-                         valueLabel: streakLabel, valueText: "–", subtitleText: "STREAK")
+                         valueLabel: streakLabel, valueText: "–", subtitleText: "Streak")
         ]
 
         let stack = UIStackView(arrangedSubviews: cards)
@@ -242,10 +242,10 @@ final class UserProfileViewController: UIViewController {
                                valueLabel: UILabel, valueText: String,
                                subtitleText: String) -> UIView {
         let card = UIView()
-        card.backgroundColor = UIColor(red: 0.984, green: 0.945, blue: 0.855, alpha: 0.8) // #FBF1DA 80%
+        card.backgroundColor = ComponentColors.ProfileScreen.statCardFill // #FBF1DA 80%
         card.layer.cornerRadius = 16
         card.layer.borderWidth = 0.5
-        card.layer.borderColor = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 0.4).cgColor // #EF9408 at 40%
+        card.layer.borderColor = ComponentColors.ProfileScreen.statCardBorder.cgColor // #EF9408 at 40%
 
         let icon = UIImageView(image: UIImage(systemName: iconName))
         icon.tintColor = iconColor
@@ -254,14 +254,14 @@ final class UserProfileViewController: UIViewController {
 
         valueLabel.text = valueText
         valueLabel.font = .systemFont(ofSize: 22, weight: .bold)
-        valueLabel.textColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
+        valueLabel.textColor = ComponentColors.ProfileScreen.userName
         valueLabel.textAlignment = .center
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitle = UILabel()
         subtitle.text = subtitleText
         subtitle.font = .systemFont(ofSize: 10, weight: .semibold)
-        subtitle.textColor = UIColor(red: 0.55, green: 0.55, blue: 0.55, alpha: 1.0)
+        subtitle.textColor = ComponentColors.ProfileScreen.statLabel
         subtitle.textAlignment = .center
         let subtitleAttrs = NSMutableAttributedString(string: subtitleText)
         subtitleAttrs.addAttribute(.kern, value: 1.2, range: NSRange(location: 0, length: subtitleText.count))
@@ -291,7 +291,7 @@ final class UserProfileViewController: UIViewController {
     // MARK: - PRACTICE PROGRESS SECTION
     private func buildPracticeProgressSection() {
         let card = UIView()
-        card.backgroundColor = .white
+        card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
         card.layer.cornerRadius = 20
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
@@ -304,34 +304,34 @@ final class UserProfileViewController: UIViewController {
         let titleLabel = UILabel()
         titleLabel.text = "Practice Progress"
         titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
-        titleLabel.textColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
+        titleLabel.textColor = ComponentColors.ProfileScreen.userName
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(titleLabel)
 
         // Goal badge
         let goalBadgeBg = UIView()
-        goalBadgeBg.backgroundColor = UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0)
+        goalBadgeBg.backgroundColor = ComponentColors.ProfileScreen.statCardFill
         goalBadgeBg.layer.cornerRadius = 12
         goalBadgeBg.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(goalBadgeBg)
 
         goalBadgeLabel.text = "Goal: –"
         goalBadgeLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        goalBadgeLabel.textColor = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        goalBadgeLabel.textColor = ComponentColors.ProfileScreen.editProfileText
         goalBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
         goalBadgeBg.addSubview(goalBadgeLabel)
 
         // Weekly hours
         weeklyHoursLabel.text = "– h"
         weeklyHoursLabel.font = .systemFont(ofSize: 36, weight: .bold)
-        weeklyHoursLabel.textColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
+        weeklyHoursLabel.textColor = ComponentColors.ProfileScreen.userName
         weeklyHoursLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(weeklyHoursLabel)
 
         let thisWeekLabel = UILabel()
-        thisWeekLabel.text = "this week"
+        thisWeekLabel.text = "This Week"
         thisWeekLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        thisWeekLabel.textColor = UIColor(red: 0.55, green: 0.55, blue: 0.55, alpha: 1.0)
+        thisWeekLabel.textColor = ComponentColors.ProfileScreen.statLabel
         thisWeekLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(thisWeekLabel)
 
@@ -388,8 +388,8 @@ final class UserProfileViewController: UIViewController {
     private func buildSignOutSection() {
         signOutButton.setTitle("Sign Out", for: .normal)
         signOutButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
-        signOutButton.setTitleColor(UIColor(red: 0.85, green: 0.25, blue: 0.2, alpha: 1.0), for: .normal)
-        signOutButton.backgroundColor = UIColor(red: 0.98, green: 0.88, blue: 0.86, alpha: 1.0)
+        signOutButton.setTitleColor(ComponentColors.ProfileScreen.destructiveText, for: .normal)
+        signOutButton.backgroundColor = ComponentColors.DestructiveButton.fill
         signOutButton.layer.cornerRadius = 28
         signOutButton.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
         signOutButton.translatesAutoresizingMaskIntoConstraints = false
@@ -778,7 +778,7 @@ final class PracticeChartView: UIView {
     }
 
     private let days = ["M", "T", "W", "T", "F", "S", "S"]
-    private let accentColor = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0) // #EF9408
+    private let accentColor = ComponentColors.ProfileScreen.editProfileText // #EF9408
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -872,7 +872,7 @@ final class PracticeChartView: UIView {
         // Day labels
         let labelAttrs: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 11, weight: .medium),
-            .foregroundColor: UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1.0)
+            .foregroundColor: ComponentColors.ProfileScreen.graphAxisLabel
         ]
         for (i, day) in days.enumerated() {
             let x = chartRect.minX + CGFloat(i) * step
@@ -899,8 +899,8 @@ final class GradientHeaderView: UIView {
     required init?(coder: NSCoder) { super.init(coder: coder); setup() }
     private func setup() {
         gradient.colors = [
-            UIColor(red: 1.0, green: 0.75, blue: 0.36, alpha: 1).cgColor,
-            UIColor(red: 1.0, green: 0.93, blue: 0.83, alpha: 1).cgColor
+            ComponentColors.ProfileScreen.graphLine.withAlphaComponent(0.6).cgColor,
+            ComponentColors.ProfileScreen.graphAreaFill.cgColor
         ]
         gradient.startPoint = CGPoint(x: 0.5, y: 0)
         gradient.endPoint = CGPoint(x: 0.5, y: 1)

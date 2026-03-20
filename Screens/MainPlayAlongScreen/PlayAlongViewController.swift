@@ -452,7 +452,7 @@ final class PlayAlongEngine {
 final class PlayAlongNavBar: UIView {
     var onBackTap: (() -> Void)?
     
-    private let brandOrange = UIColor(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0, alpha: 1.0) // #EF9408
+    private let brandOrange = ComponentColors.HomeScreen.actionButtonFill
     
     private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
     private let backButton = UIButton(type: .system)
@@ -626,7 +626,7 @@ final class PlayAlongNavBar: UIView {
         let target = 90
         let diff = abs(bpm - target)
         
-        let color: UIColor = diff < 10 ? .label : (diff < 20 ? .systemOrange : .systemRed)
+        let color: UIColor = diff < 10 ? .label : (diff < 20 ? ComponentColors.Toast.warningText : ComponentColors.Toast.errorText)
         UIView.animate(withDuration: 0.3) {
             self.tempoValueLabel.textColor = color
             self.tempoIndicator.backgroundColor = color
@@ -729,7 +729,7 @@ final class PlayAlongReportView: UIView {
         addSubview(buttonsStack)
 
         retryButton.setTitle("Practice Again", for: .normal)
-        retryButton.backgroundColor = .systemBlue
+        retryButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         retryButton.setTitleColor(.white, for: .normal)
         retryButton.layer.cornerRadius = 12
         retryButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)

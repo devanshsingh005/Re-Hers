@@ -50,7 +50,7 @@ class UploadScreen: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
+        view.backgroundColor = ComponentColors.HomeScreen.background
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
         setupScrollView()
@@ -123,8 +123,8 @@ class UploadScreen: UIViewController {
     private func setupHeaderSection() {
         let sub = UILabel()
         sub.text      = "Capture or import your documents"
-        sub.font      = .systemFont(ofSize: 16, weight: .regular)
-        sub.textColor = .secondaryLabel
+        sub.font      = .systemFont(ofSize: 13)
+        sub.textColor = SemanticColors.Text.secondary
         let stack = UIStackView(arrangedSubviews: [sub])
         stack.axis = .vertical; stack.spacing = 4
         contentView.addArrangedSubview(stack)
@@ -142,7 +142,7 @@ class UploadScreen: UIViewController {
 
     private func makeScanCard() -> UIView {
         let card = cardButton()
-        let gradient = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        let gradient = GradientView(colors: [ComponentColors.HomeScreen.actionButtonGradientStart, ComponentColors.HomeScreen.actionButtonGradientEnd])
         gradient.isUserInteractionEnabled = false
         gradient.translatesAutoresizingMaskIntoConstraints = false
         card.insertSubview(gradient, at: 0)
@@ -151,7 +151,7 @@ class UploadScreen: UIViewController {
                                                bg: UIColor.white.withAlphaComponent(0.25))
         let mainLbl = cardLabel("Scan",         size: 22, weight: .bold,    color: .white)
         let subLbl  = cardLabel("Music Sheet",  size: 11, weight: .semibold,
-                                color: UIColor.white.withAlphaComponent(0.75), tracking: 1.5)
+                                color: UIColor.white.withAlphaComponent(0.9), tracking: 1.5)
         [iconWrap, mainLbl, subLbl].forEach { card.addSubview($0) }
         NSLayoutConstraint.activate(
             gradient.pinEdges(to: card) + [
@@ -174,16 +174,16 @@ class UploadScreen: UIViewController {
     }
 
     private func makeUploadCard() -> UIView {
-        let orange = UIColor(hex: "#FF6B00")
+        let orange = BrandColors.brand
         let card   = cardButton()
-        card.backgroundColor = UIColor(hex: "#FF740E").withAlphaComponent(0.08)
-        card.layer.borderColor = orange.withAlphaComponent(0.18).cgColor
+        card.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.08)
+        card.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18).cgColor
         card.layer.borderWidth = 1.5
 
         let (iconWrap, iconImg) = makeCardIcon(systemName: "icloud.and.arrow.up", tint: orange,
                                                bg: orange.withAlphaComponent(0.15))
-        let mainLbl = cardLabel("Upload",      size: 22, weight: .bold,    color: .label)
-        let subLbl  = cardLabel("Music Sheet", size: 11, weight: .semibold, color: .secondaryLabel, tracking: 1.5)
+        let mainLbl = cardLabel("Upload",      size: 22, weight: .bold,    color: SemanticColors.Text.primary)
+        let subLbl  = cardLabel("Music Sheet", size: 11, weight: .semibold, color: SemanticColors.Text.secondary, tracking: 1.5)
         [iconWrap, mainLbl, subLbl].forEach { card.addSubview($0) }
         NSLayoutConstraint.activate([
             iconWrap.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
@@ -264,16 +264,16 @@ class UploadScreen: UIViewController {
     // MARK: - Recent Uploads Section
     private func setupRecentUploadsSection() {
         let headerLabel = UILabel()
-        headerLabel.text      = "Recent Uploads"
-        headerLabel.font      = .systemFont(ofSize: 20, weight: .bold)
-        headerLabel.textColor = .label
+        headerLabel.text = "Recent Uploads"
+        headerLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        headerLabel.textColor = SemanticColors.Text.primary
 
         let seeAllBtn = UIButton(type: .system)
-        seeAllBtn.backgroundColor    = UIColor(hex: "#FF6B00").withAlphaComponent(0.10)
+        seeAllBtn.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
         seeAllBtn.layer.cornerRadius = 14
         var cfg = UIButton.Configuration.plain()
         cfg.title                = "See All"
-        cfg.baseForegroundColor  = UIColor(hex: "#FF6B00")
+        cfg.baseForegroundColor  = ComponentColors.HomeScreen.actionButtonFill
         cfg.contentInsets        = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
         seeAllBtn.configuration  = cfg
         seeAllBtn.addAction(UIAction { [weak self] _ in
@@ -359,7 +359,7 @@ class UploadScreen: UIViewController {
     private func makeUploadRow(title: String, fileType: String, meta: String, scan: Scan) -> UIView {
         // Card
         let card = UIButton(type: .custom)
-        card.backgroundColor       = .systemBackground
+        card.backgroundColor       = ComponentColors.SongCard.background
         card.layer.cornerRadius    = 16
         card.layer.shadowColor     = UIColor.black.cgColor
         card.layer.shadowOpacity   = 0.05
@@ -369,7 +369,7 @@ class UploadScreen: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Icon
-        let iconWrap = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        let iconWrap = GradientView(colors: [ComponentColors.HomeScreen.actionButtonGradientStart, ComponentColors.HomeScreen.actionButtonGradientEnd])
         iconWrap.layer.cornerRadius  = 12
         iconWrap.clipsToBounds       = true
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
@@ -384,14 +384,14 @@ class UploadScreen: UIViewController {
         let titleLbl = UILabel()
         titleLbl.text          = title
         titleLbl.font          = .systemFont(ofSize: 15, weight: .semibold)
-        titleLbl.textColor     = .label
+        titleLbl.textColor     = SemanticColors.Text.primary
         titleLbl.lineBreakMode = .byTruncatingTail
 
         let badgeLbl = UILabel()
         badgeLbl.text              = fileType
         badgeLbl.font              = .systemFont(ofSize: 11, weight: .bold)
-        badgeLbl.textColor         = UIColor(hex: "#FF6B00")
-        badgeLbl.backgroundColor   = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        badgeLbl.textColor         = ComponentColors.HomeScreen.actionButtonFill
+        badgeLbl.backgroundColor   = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         badgeLbl.layer.cornerRadius = 5
         badgeLbl.clipsToBounds     = true
         badgeLbl.textAlignment     = .center
@@ -402,7 +402,7 @@ class UploadScreen: UIViewController {
         let dateLbl = UILabel()
         dateLbl.text      = meta
         dateLbl.font      = .systemFont(ofSize: 12)
-        dateLbl.textColor = .tertiaryLabel
+        dateLbl.textColor = SemanticColors.Text.tertiary
 
         let metaRow = UIStackView(arrangedSubviews: [badgeLbl, dateLbl])
         metaRow.axis      = .horizontal
@@ -418,7 +418,7 @@ class UploadScreen: UIViewController {
         // More button
         let moreBtn = UIButton(type: .system)
         moreBtn.setImage(UIImage(systemName: "ellipsis"), for: .normal)
-        moreBtn.tintColor = .tertiaryLabel
+        moreBtn.tintColor = SemanticColors.Text.tertiary
         moreBtn.translatesAutoresizingMaskIntoConstraints = false
         let scanId = scan.id
         moreBtn.addAction(UIAction { [weak self, weak titleLbl] _ in
@@ -720,12 +720,12 @@ class UploadScreen: UIViewController {
                                 y: (Constants.pdfPageSize.height - h) / 2,
                                 width: w, height: h))
             let txt   = "\(i + 1)"
-            let attrs: [NSAttributedString.Key: Any] = [
+            let attributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.gray
             ]
-            let sz = txt.size(withAttributes: attrs)
+            let sz = txt.size(withAttributes: attributes)
             txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2,
-                                y: 10, width: sz.width, height: sz.height), withAttributes: attrs)
+                                y: 10, width: sz.width, height: sz.height), withAttributes: attributes)
         }
         UIGraphicsEndPDFContext()
         return pdf as Data

@@ -78,7 +78,7 @@ final class UploadPageNextViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
+        view.backgroundColor = ComponentColors.App.screenBackground
         setupNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
         showProcessingState()
         print("[VDL] jobId=\(jobId?.uuidString ?? "nil")  resultURL=\(resultURL ?? "nil")")
@@ -762,7 +762,7 @@ final class UploadPageNextViewController: UIViewController {
         scrollView.alwaysBounceVertical = true
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
-        sheetContainer.backgroundColor    = UIColor(red: 0.93, green: 0.92, blue: 0.90, alpha: 1.0)
+        sheetContainer.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicCardFill
         sheetContainer.layer.cornerRadius = 24
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -774,7 +774,7 @@ final class UploadPageNextViewController: UIViewController {
         var previewConfig = UIButton.Configuration.filled()
         previewConfig.title              = "Preview"
         previewConfig.baseForegroundColor  = .white
-        previewConfig.baseBackgroundColor  = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        previewConfig.baseBackgroundColor  = ComponentColors.HomeScreen.actionButtonFill
         previewConfig.contentInsets      = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
         previewConfig.cornerStyle        = .fixed
         previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
@@ -788,7 +788,7 @@ final class UploadPageNextViewController: UIViewController {
         pdfView.autoScales          = true
         pdfView.displayMode         = .singlePageContinuous
         pdfView.displayDirection    = .vertical
-        pdfView.backgroundColor     = UIColor(red: 0.99, green: 0.98, blue: 0.97, alpha: 1.0)
+        pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
         pdfView.layer.cornerRadius  = 14
         pdfView.clipsToBounds       = false
         pdfView.minScaleFactor      = 0.1
@@ -799,15 +799,15 @@ final class UploadPageNextViewController: UIViewController {
         sheetImageView.contentMode       = .scaleAspectFit
         sheetImageView.clipsToBounds     = true
         sheetImageView.layer.cornerRadius = 14
-        sheetImageView.backgroundColor   = UIColor(red: 0.99, green: 0.98, blue: 0.97, alpha: 1.0)
+        sheetImageView.backgroundColor   = ComponentColors.SongDetailScreen.sheetMusicBackground
         sheetImageView.isHidden          = true
         sheetImageView.translatesAutoresizingMaskIntoConstraints = false
 
-        sheetLoadingIndicator.color             = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        sheetLoadingIndicator.color             = ComponentColors.HomeScreen.actionButtonFill
         sheetLoadingIndicator.hidesWhenStopped  = true
         sheetLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
 
-        progressView.progressTintColor  = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        progressView.progressTintColor  = ComponentColors.HomeScreen.actionButtonFill
         progressView.trackTintColor     = UIColor.secondaryLabel.withAlphaComponent(0.2)
         progressView.layer.cornerRadius = 3
         progressView.clipsToBounds      = true
@@ -823,7 +823,7 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         refreshButton.setTitle("Refresh", for: .normal)
-        refreshButton.setTitleColor(UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0), for: .normal)
+        refreshButton.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
         refreshButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
         refreshButton.isHidden         = true
         refreshButton.translatesAutoresizingMaskIntoConstraints = false
@@ -853,7 +853,7 @@ final class UploadPageNextViewController: UIViewController {
         metronomeLabel.textAlignment = .right
         metronomeLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        tipsContainer.backgroundColor    = UIColor(red: 0.93, green: 0.92, blue: 0.90, alpha: 1.0)
+        tipsContainer.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicCardFill
         tipsContainer.layer.cornerRadius = 20
         tipsContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -871,7 +871,7 @@ final class UploadPageNextViewController: UIViewController {
         var playConfig = UIButton.Configuration.filled()
         playConfig.title              = "Play Along"
         playConfig.baseForegroundColor  = .white
-        playConfig.baseBackgroundColor  = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        playConfig.baseBackgroundColor  = ComponentColors.HomeScreen.actionButtonFill
         playConfig.cornerStyle        = .capsule
         playAlongButton.configuration = playConfig
         playAlongButton.translatesAutoresizingMaskIntoConstraints = false
@@ -879,7 +879,7 @@ final class UploadPageNextViewController: UIViewController {
         var animConfig = UIButton.Configuration.filled()
         animConfig.title              = "Animation"
         animConfig.baseForegroundColor  = .label
-        animConfig.baseBackgroundColor  = UIColor(red: 0.90, green: 0.89, blue: 0.87, alpha: 1.0)
+        animConfig.baseBackgroundColor  = ComponentColors.SongDetailScreen.sheetMusicBackground
         animConfig.cornerStyle        = .capsule
         animationButton.configuration = animConfig
         animationButton.translatesAutoresizingMaskIntoConstraints = false
