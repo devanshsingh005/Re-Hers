@@ -153,12 +153,13 @@ class AllUploadsViewController: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Icon
-        let iconWrap = GradientView(colors: [ComponentColors.HomeScreen.actionButtonGradientStart, ComponentColors.HomeScreen.actionButtonGradientEnd])
+        let iconWrap = UIView()
+        iconWrap.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         iconWrap.layer.cornerRadius = 12; iconWrap.clipsToBounds = true
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.isUserInteractionEnabled = false
         let iconImg = UIImageView(image: UIImage(systemName: "doc.fill"))
-        iconImg.tintColor = .white; iconImg.contentMode = .scaleAspectFit
+        iconImg.tintColor = ComponentColors.HomeScreen.actionButtonFill; iconImg.contentMode = .scaleAspectFit
         iconImg.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.addSubview(iconImg)
 

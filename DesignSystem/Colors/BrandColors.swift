@@ -157,7 +157,7 @@ public enum BrandColors {
 
     /// Default 1px separator / card border — Light: #E9E3DB / Dark: #3D3630
     public static let stroke: UIColor = UIColor.adaptive(
-        light: UIColor(hex: "#E9E3DB"),
+        light: UIColor(hex: "#f5a73e"),
         dark:  UIColor(hex: "#3D3630")
     )
 

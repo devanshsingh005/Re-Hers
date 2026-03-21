@@ -426,7 +426,12 @@ class UploadQuizPopup: UIViewController {
     
     // MARK: - Load Question
     private func loadQuestion(at index: Int) {
-        guard index < questions.count else { dismissPopup(); return }
+        guard index < questions.count else {
+            // If quiz is over but upload is still going, just stay on last question
+            // or we could show a "Finalizing..." state. 
+            // For now, let's just avoid dismissing.
+            return 
+        }
         
         isAnswered = false
         let q = questions[index]
@@ -596,6 +601,8 @@ class UploadQuizPopup: UIViewController {
                 : "Closing..."
             if remaining <= 0 {
                 timer.invalidate()
+                // increase to 3 seconds if it felt too fast, but user said "for enough time"
+                // Let's keep it at 5s total but maybe the checkmark animation takes too long?
                 self.dismissPopup()
             }
         }

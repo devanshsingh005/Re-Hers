@@ -310,7 +310,6 @@ final class UploadPageNextViewController: UIViewController {
             self.progressView.isHidden  = true
             self.statusLabel.isHidden   = true
             self.refreshButton.isHidden = true
-            self.onDataReady?()
         }
 
         let projectID = "djqgmowfjxsnjdffdohw"
@@ -602,8 +601,8 @@ final class UploadPageNextViewController: UIViewController {
         timeSignature   = data.timeSignature; tempo = data.tempo
         keySignature    = data.keySignature;  sheetMusicJSON = data.jsonData
 
-        let bpm = tempo.components(separatedBy: " ").first ?? "120"
-        metronomeLabel.text = "Metronome on \(bpm) BPM"
+        let bpm = tempo.components(separatedBy: " ").first ?? "nil"
+    metronomeLabel.text = "Metronome on \(bpm) BPM"
         keyLabel.text       = "Key: \(keySignature)"
         timeLabel.text      = "Time: \(timeSignature)"
         chordLabel.text     = "Chords: \(extractedChords.prefix(3).joined(separator: ", "))"
@@ -614,6 +613,7 @@ final class UploadPageNextViewController: UIViewController {
         progressView.isHidden  = true
         statusLabel.isHidden   = true
         refreshButton.isHidden = true
+        onDataReady?()
     }
 
     private func showErrorState(error: String) {
@@ -635,7 +635,6 @@ final class UploadPageNextViewController: UIViewController {
         progressView.isHidden  = true
         statusLabel.isHidden   = true
         refreshButton.isHidden = true
-        onDataReady?()
     }
 
     private func updatePracticeTips() {
@@ -837,7 +836,7 @@ final class UploadPageNextViewController: UIViewController {
             lbl.font              = .systemFont(ofSize: 12, weight: .medium)
             lbl.textColor         = .secondaryLabel
             lbl.textAlignment     = .center
-            lbl.backgroundColor   = .white
+            lbl.backgroundColor   = ComponentColors.SongDetailScreen.sheetMusicBackground
             lbl.layer.cornerRadius = 8
             lbl.clipsToBounds     = true
             lbl.numberOfLines     = 2
@@ -847,7 +846,7 @@ final class UploadPageNextViewController: UIViewController {
         timeLabel.text  = "Time: 4/4"
         chordLabel.text = "Chords: –"
 
-        metronomeLabel.text      = "Metronome on 120 BPM"
+        //metronomeLabel.text      = "Metronome on 120 BPM"
         metronomeLabel.font      = .systemFont(ofSize: 13, weight: .medium)
         metronomeLabel.textColor = .secondaryLabel
         metronomeLabel.textAlignment = .right
@@ -916,7 +915,7 @@ final class UploadPageNextViewController: UIViewController {
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 18),
+            sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 30),
             sheetHeaderLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 18),
 
             previewButton.centerYAnchor.constraint(equalTo: sheetHeaderLabel.centerYAnchor),

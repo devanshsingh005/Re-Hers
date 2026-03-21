@@ -11,7 +11,7 @@ import UIKit
 import PDFKit
 import Supabase
 
-final class DiscoverSongPreviewViewController: UIViewController {
+final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopupDelegate {
 
     // MARK: - Passed Data
 
@@ -24,6 +24,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
     private var supabaseBase: String     { SupabaseManager.shared.supabaseBaseURL }
 
     private var loadedPDF: PDFDocument?
+    private var uploadPopup: UploadQuizPopup?
 
     // MARK: - UI
 
@@ -45,7 +46,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
     private lazy var cardView: UIView = {
         let v = UIView()
-        v.backgroundColor     = ComponentColors.SongDetailScreen.background
+        v.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
         v.layer.cornerRadius  = 20
         v.layer.shadowColor   = UIColor.black.cgColor
         v.layer.shadowOpacity = 0.08
@@ -66,7 +67,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
     private lazy var sheetCardView: UIView = {
         let v = UIView()
-        v.backgroundColor    = ComponentColors.SongDetailScreen.background
+        v.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicBackground
         v.layer.cornerRadius = 16
         v.layer.borderWidth  = 0.5
         v.layer.borderColor  = UIColor.separator.cgColor
@@ -81,7 +82,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
         let pv = PDFView()
         pv.autoScales               = true
         pv.displayMode              = .singlePage
-        pv.backgroundColor          = ComponentColors.SongDetailScreen.background
+        pv.backgroundColor          = ComponentColors.SongDetailScreen.sheetMusicBackground
         pv.isUserInteractionEnabled = false
         pv.translatesAutoresizingMaskIntoConstraints = false
         return pv
@@ -291,15 +292,31 @@ final class DiscoverSongPreviewViewController: UIViewController {
     // MARK: - Get Converted (reuses UploadScreen pipeline 1:1)
 
     @objc private func getConvertedTapped() {
-        setButtonLoading(true)
+        // Instantiate and present the popup
+        let popup = UploadQuizPopup()
+        popup.delegate = self
+        popup.modalPresentationStyle = .overFullScreen
+        popup.modalTransitionStyle = .crossDissolve
+        self.uploadPopup = popup
+        
+        self.present(popup, animated: true) { [weak self] in
+            self?.startDiscoveryUpload()
+        }
+    }
+
+    private func startDiscoveryUpload() {
         Task {
             do {
+                uploadPopup?.updateProgress(0.1)
                 let pdfData = try await resolvePDFData()
+                uploadPopup?.updateProgress(0.3)
                 try await runUploadPipeline(pdfData: pdfData)
             } catch {
                 await MainActor.run {
-                    self.setButtonLoading(false)
-                    self.presentErrorAlert(error.localizedDescription)
+                    self.uploadPopup?.dismiss(animated: true) {
+                        self.uploadPopup = nil
+                        self.presentErrorAlert(error.localizedDescription)
+                    }
                 }
             }
         }
@@ -380,11 +397,15 @@ final class DiscoverSongPreviewViewController: UIViewController {
                 .eq("id", value: Int(existing.id)).execute()
         }
 
+        uploadPopup?.updateProgress(0.9)
+        
         await MainActor.run {
-            self.setButtonLoading(false)
             let vc       = UploadPageNextViewController()
             vc.jobId     = jobId
             vc.resultURL = outputURL
+            vc.onDataReady = { [weak self] in
+                self?.uploadPopup?.notifyUploadComplete()
+            }
             print("[Convert] → UploadPageNextVC jobId=\(jobId.uuidString)")
             self.navigationController?.pushViewController(vc, animated: true)
         }
@@ -538,6 +559,11 @@ final class DiscoverSongPreviewViewController: UIViewController {
                 value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
             }
         }
+    }
+
+    // MARK: - UploadQuizPopupDelegate
+    func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) {
+        uploadPopup = nil
     }
 }
 

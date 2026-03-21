@@ -268,19 +268,13 @@ class UploadScreen: UIViewController {
         headerLabel.font = .systemFont(ofSize: 20, weight: .bold)
         headerLabel.textColor = SemanticColors.Text.primary
 
-        let seeAllBtn = UIButton(type: .system)
-        seeAllBtn.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
-        seeAllBtn.layer.cornerRadius = 14
-        var cfg = UIButton.Configuration.plain()
-        cfg.title                = "See All"
-        cfg.baseForegroundColor  = ComponentColors.HomeScreen.actionButtonFill
-        cfg.contentInsets        = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-        seeAllBtn.configuration  = cfg
-        seeAllBtn.addAction(UIAction { [weak self] _ in
-            self?.navigationController?.pushViewController(AllUploadsViewController(), animated: true)
-        }, for: .touchUpInside)
+        let seeMoreBtn = UIButton(type: .system)
+        seeMoreBtn.setTitle("See More", for: .normal)
+        seeMoreBtn.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        seeMoreBtn.setTitleColor(BrandColors.brand, for: .normal)
+        seeMoreBtn.addTarget(self, action: #selector(seeMoreTapped), for: .touchUpInside)
 
-        let headerRow = UIStackView(arrangedSubviews: [headerLabel, seeAllBtn])
+        let headerRow = UIStackView(arrangedSubviews: [headerLabel, seeMoreBtn])
         headerRow.axis         = .horizontal
         headerRow.distribution = .equalSpacing
         headerRow.alignment    = .center
@@ -369,13 +363,14 @@ class UploadScreen: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Icon
-        let iconWrap = GradientView(colors: [ComponentColors.HomeScreen.actionButtonGradientStart, ComponentColors.HomeScreen.actionButtonGradientEnd])
+        let iconWrap = UIView()
+        iconWrap.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         iconWrap.layer.cornerRadius  = 12
         iconWrap.clipsToBounds       = true
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.isUserInteractionEnabled = false
         let iconImg = UIImageView(image: UIImage(systemName: "doc.fill"))
-        iconImg.tintColor   = .white
+        iconImg.tintColor   = BrandColors.brand
         iconImg.contentMode = .scaleAspectFit
         iconImg.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.addSubview(iconImg)
@@ -420,10 +415,12 @@ class UploadScreen: UIViewController {
         moreBtn.setImage(UIImage(systemName: "ellipsis"), for: .normal)
         moreBtn.tintColor = SemanticColors.Text.tertiary
         moreBtn.translatesAutoresizingMaskIntoConstraints = false
-        let scanId = scan.id
-        moreBtn.addAction(UIAction { [weak self, weak titleLbl] _ in
-            self?.showRowOptions(for: scanId, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
-        }, for: .touchUpInside)
+        moreBtn.showsMenuAsPrimaryAction = true
+        
+        let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self, weak titleLbl] _ in
+            self?.showRenameAlert(for: scan.id, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
+        }
+        moreBtn.menu = UIMenu(title: "", children: [rename])
 
         card.addSubview(iconWrap); card.addSubview(textStack); card.addSubview(moreBtn)
         NSLayoutConstraint.activate([
@@ -656,7 +653,9 @@ class UploadScreen: UIViewController {
             self.loadRecentUploads()
             let vc       = UploadPageNextViewController()
             vc.jobId     = jobId
-            vc.onDataReady = { popup.notifyUploadComplete() }
+            vc.onDataReady = { [weak self] in
+                popup.notifyUploadComplete()
+            }
             print("[Navigate] jobId=\(jobId.uuidString)")
             self.navigationController?.pushViewController(vc, animated: true)
         }
@@ -928,6 +927,10 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+    }
+    @objc private func seeMoreTapped() {
+        let vc = AllUploadsViewController()
+        navigationController?.pushViewController(vc, animated: true)
     }
 }
 
