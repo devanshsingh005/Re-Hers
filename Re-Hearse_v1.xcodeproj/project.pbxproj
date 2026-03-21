@@ -43,6 +43,7 @@
 		2BC06DB12EEE908E00CBDC03 /* OnboardingQuestion3View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */; };
 		2BC4A97D2F656AB4004FC90E /* RehearsalInfoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC4A97C2F656AB4004FC90E /* RehearsalInfoCard.swift */; };
 		2BDE12352EBA0712001AC579 /* LandscapeNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BDE12342EBA0712001AC579 /* LandscapeNavigationController.swift */; };
+		2BE585682F6DE09D0059620E /* DiscoverSongPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE585672F6DE09D0059620E /* DiscoverSongPreviewViewController.swift */; };
 		39A4CFA913922A6AA9BEC35C /* PitchDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A17EECA87264A9EA407FA9 /* PitchDetector.swift */; };
 		84114B6A2EBCF68300E86F71 /* UploadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B692EBCF68300E86F71 /* UploadScreen.swift */; };
 		84114B6E2EBCF6B100E86F71 /* BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */; };
@@ -101,6 +102,7 @@
 		2BC06DB02EEE908E00CBDC03 /* OnboardingQuestion3View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingQuestion3View.swift; sourceTree = "<group>"; };
 		2BC4A97C2F656AB4004FC90E /* RehearsalInfoCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RehearsalInfoCard.swift; sourceTree = "<group>"; };
 		2BDE12342EBA0712001AC579 /* LandscapeNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LandscapeNavigationController.swift; sourceTree = "<group>"; };
+		2BE585672F6DE09D0059620E /* DiscoverSongPreviewViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSongPreviewViewController.swift; sourceTree = "<group>"; };
 		81A17EECA87264A9EA407FA9 /* PitchDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PitchDetector.swift; sourceTree = "<group>"; };
 		84114B692EBCF68300E86F71 /* UploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomNavbar.swift; sourceTree = "<group>"; };
@@ -386,6 +388,7 @@
 			children = (
 				2B12BD8A2EBA7D0F009795DF /* DiscoverViewController.swift */,
 				2B12BD8D2EBA8D0F009795DF /* DiscoverSongDetailViewController.swift */,
+				2BE585672F6DE09D0059620E /* DiscoverSongPreviewViewController.swift */,
 			);
 			path = MainDiscoverScreen;
 			sourceTree = "<group>";
@@ -582,6 +585,7 @@
 				2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */,
 				23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */,
 				F1A15E19826CAB5F156D28C0 /* ChordRecognition.swift in Sources */,
+				2BE585682F6DE09D0059620E /* DiscoverSongPreviewViewController.swift in Sources */,
 				39A4CFA913922A6AA9BEC35C /* PitchDetector.swift in Sources */,
 				01C024616C4FA0D954572620 /* PianoDataManager.swift in Sources */,
 			);

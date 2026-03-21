@@ -1,0 +1,550 @@
+//
+//  DiscoverSongPreviewViewController.swift
+//  Re-Hearse
+//
+//  Intermediate preview screen shown when a song is tapped in Discover.
+//  "Get Converted" reuses the EXACT same upload pipeline as UploadScreen
+//  (callConversionAPI → scans upsert → push UploadPageNextViewController).
+//
+
+import UIKit
+import PDFKit
+import Supabase
+
+final class DiscoverSongPreviewViewController: UIViewController {
+
+    // MARK: - Passed Data
+
+    var song: Song?
+    var songImage: UIImage?
+
+    // MARK: - Private State
+
+    private var supabase: SupabaseClient { SupabaseManager.shared.client }
+    private var supabaseBase: String     { SupabaseManager.shared.supabaseBaseURL }
+
+    private var loadedPDF: PDFDocument?
+
+    // MARK: - UI
+
+    private let navBar = TopNavBar.make(title: "Discover")
+
+    private lazy var scrollView: UIScrollView = {
+        let sv = UIScrollView()
+        sv.showsVerticalScrollIndicator = false
+        sv.alwaysBounceVertical = true
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        return sv
+    }()
+
+    private lazy var contentView: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
+
+    private lazy var cardView: UIView = {
+        let v = UIView()
+        v.backgroundColor     = ComponentColors.SongDetailScreen.background
+        v.layer.cornerRadius  = 20
+        v.layer.shadowColor   = UIColor.black.cgColor
+        v.layer.shadowOpacity = 0.08
+        v.layer.shadowRadius  = 12
+        v.layer.shadowOffset  = CGSize(width: 0, height: 4)
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
+
+    private lazy var songTitleLabel: UILabel = {
+        let l = UILabel()
+        l.font          = .systemFont(ofSize: 20, weight: .bold)
+        l.textAlignment = .center
+        l.textColor     = ComponentColors.SongDetailScreen.songTitle
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }()
+
+    private lazy var sheetCardView: UIView = {
+        let v = UIView()
+        v.backgroundColor    = ComponentColors.SongDetailScreen.background
+        v.layer.cornerRadius = 16
+        v.layer.borderWidth  = 0.5
+        v.layer.borderColor  = UIColor.separator.cgColor
+        v.clipsToBounds      = true
+        v.translatesAutoresizingMaskIntoConstraints = false
+        let tap = UITapGestureRecognizer(target: self, action: #selector(sheetCardTapped))
+        v.addGestureRecognizer(tap)
+        return v
+    }()
+
+    private lazy var pdfView: PDFView = {
+        let pv = PDFView()
+        pv.autoScales               = true
+        pv.displayMode              = .singlePage
+        pv.backgroundColor          = ComponentColors.SongDetailScreen.background
+        pv.isUserInteractionEnabled = false
+        pv.translatesAutoresizingMaskIntoConstraints = false
+        return pv
+    }()
+
+    private lazy var pdfSpinner: UIActivityIndicatorView = {
+        let s = UIActivityIndicatorView(style: .medium)
+        s.hidesWhenStopped = true
+        s.translatesAutoresizingMaskIntoConstraints = false
+        return s
+    }()
+
+    private lazy var pdfErrorLabel: UILabel = {
+        let l = UILabel()
+        l.text          = "Sheet music unavailable"
+        l.font          = .systemFont(ofSize: 14)
+        l.textColor     = SemanticColors.Text.secondary
+        l.textAlignment = .center
+        l.numberOfLines = 2
+        l.isHidden      = true
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }()
+
+    private lazy var getConvertedButton: UIButton = {
+        var cfg                 = UIButton.Configuration.filled()
+        cfg.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        cfg.baseForegroundColor = ComponentColors.SongDetailScreen.primaryActionText
+        cfg.cornerStyle         = .large
+        var title               = AttributedString("Get Converted")
+        title.font              = .systemFont(ofSize: 18, weight: .bold)
+        cfg.attributedTitle     = title
+        let btn                 = UIButton(configuration: cfg)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }()
+
+    // MARK: - Lifecycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = ComponentColors.DiscoverScreen.background
+        navigationController?.navigationBar.isHidden = true
+
+        setupNavBar()
+        setupLayout()
+        applyData()
+        loadPDF()
+    }
+
+    // MARK: - NavBar
+
+    private func setupNavBar() {
+        view.addSubview(navBar)
+        navBar.isBackButtonVisible = true
+        navBar.isChordIconVisible  = true
+        navBar.isProfileVisible    = true
+        navBar.isStreakVisible     = false
+        navBar.isWelcomeTextHidden = true
+        navBar.setTitle("Discover")
+
+        navBar.backAction    = { [weak self] in self?.navigationController?.popViewController(animated: true) }
+        navBar.chordAction   = { [weak self] in self?.navigationController?.pushViewController(ChordRecognitionViewController(), animated: true) }
+        navBar.profileAction = { [weak self] in self?.navigationController?.pushViewController(UserProfileViewController(), animated: true) }
+
+        NSLayoutConstraint.activate([
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+    }
+
+    // MARK: - Layout
+
+    private func setupLayout() {
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+
+        contentView.addSubview(cardView)
+        cardView.addSubview(songTitleLabel)
+        cardView.addSubview(sheetCardView)
+        sheetCardView.addSubview(pdfView)
+        sheetCardView.addSubview(pdfSpinner)
+        sheetCardView.addSubview(pdfErrorLabel)
+
+        contentView.addSubview(getConvertedButton)
+
+        NSLayoutConstraint.activate([
+            // Scroll
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+            // Card
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+
+            // Song title
+            songTitleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
+            songTitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            songTitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+
+            // Sheet music card directly below title
+            sheetCardView.topAnchor.constraint(equalTo: songTitleLabel.bottomAnchor, constant: 14),
+            sheetCardView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
+            sheetCardView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -12),
+            sheetCardView.heightAnchor.constraint(equalToConstant: 480),
+            sheetCardView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
+
+            // PDF
+            pdfView.topAnchor.constraint(equalTo: sheetCardView.topAnchor),
+            pdfView.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: sheetCardView.bottomAnchor),
+
+            pdfSpinner.centerXAnchor.constraint(equalTo: sheetCardView.centerXAnchor),
+            pdfSpinner.centerYAnchor.constraint(equalTo: sheetCardView.centerYAnchor),
+
+            pdfErrorLabel.centerXAnchor.constraint(equalTo: sheetCardView.centerXAnchor),
+            pdfErrorLabel.centerYAnchor.constraint(equalTo: sheetCardView.centerYAnchor),
+            pdfErrorLabel.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor, constant: 16),
+            pdfErrorLabel.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor, constant: -16),
+
+            // Get Converted button
+            getConvertedButton.topAnchor.constraint(equalTo: cardView.bottomAnchor, constant: 24),
+            getConvertedButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            getConvertedButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            getConvertedButton.heightAnchor.constraint(equalToConstant: 54),
+            getConvertedButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -32),
+        ])
+
+        getConvertedButton.addTarget(self, action: #selector(getConvertedTapped), for: .touchUpInside)
+    }
+
+    // MARK: - Populate
+
+    private func applyData() {
+        songTitleLabel.text = song?.title ?? "Song name"
+    }
+
+    // MARK: - PDF URL Construction
+
+    private func buildPDFCandidates() -> [String] {
+        guard let title = song?.title, !title.isEmpty else { return [] }
+        let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title
+        return [
+            "\(supabaseBase)/storage/v1/object/public/Sheets/\(encoded).pdf"
+        ]
+    }
+
+    // MARK: - PDF Loading (preview only)
+
+    private func loadPDF() {
+        pdfSpinner.startAnimating()
+        pdfView.isHidden       = true
+        pdfErrorLabel.isHidden = true
+
+        let candidates = buildPDFCandidates()
+        guard !candidates.isEmpty else { showPDFError(); return }
+
+        Task {
+            for urlString in candidates {
+                guard let url = URL(string: urlString) else { continue }
+                if let (data, resp) = try? await URLSession.shared.data(from: url),
+                   (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
+                   let doc = PDFDocument(data: data), doc.pageCount > 0 {
+                    await MainActor.run { self.renderPDF(doc) }
+                    return
+                }
+            }
+            await MainActor.run { self.showPDFError() }
+        }
+    }
+
+    private func renderPDF(_ doc: PDFDocument) {
+        loadedPDF        = doc
+        pdfView.document = doc
+        pdfView.isHidden = false
+        pdfSpinner.stopAnimating()
+        if let p = doc.page(at: 0) { pdfView.go(to: p) }
+    }
+
+    private func showPDFError() {
+        pdfSpinner.stopAnimating()
+        pdfView.isHidden       = true
+        pdfErrorLabel.isHidden = false
+    }
+
+    // MARK: - Actions
+
+    @objc private func sheetCardTapped() {
+        guard let doc = loadedPDF else { return }
+        let vc = MaximizeUploadPageViewController()
+        vc.pdfDocument = doc
+        vc.modalPresentationStyle = .fullScreen
+        present(vc, animated: true)
+    }
+
+    // MARK: - Get Converted (reuses UploadScreen pipeline 1:1)
+
+    @objc private func getConvertedTapped() {
+        setButtonLoading(true)
+        Task {
+            do {
+                let pdfData = try await resolvePDFData()
+                try await runUploadPipeline(pdfData: pdfData)
+            } catch {
+                await MainActor.run {
+                    self.setButtonLoading(false)
+                    self.presentErrorAlert(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    // MARK: - Step 1: Resolve PDF Data
+
+    private func resolvePDFData() async throws -> Data {
+        let candidates = buildPDFCandidates()
+        guard !candidates.isEmpty else { throw ConvertError.noPDFSource }
+
+        for urlString in candidates {
+            guard let url = URL(string: urlString) else { continue }
+            if let (data, resp) = try? await URLSession.shared.data(from: url),
+               (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
+               !data.isEmpty {
+                print("[Convert] PDF resolved: \(urlString)")
+                return data
+            }
+        }
+        throw ConvertError.pdfDownloadFailed
+    }
+
+    // MARK: - Step 2+3: Upload Pipeline (mirrors UploadScreen.saveUploadToDatabase)
+
+    private func runUploadPipeline(pdfData: Data) async throws {
+        guard let uidStr = await currentUserId(), let userId = UUID(uuidString: uidStr) else {
+            throw ConvertError.invalidUser
+        }
+        guard let token = await authToken() else {
+            throw ConvertError.missingToken
+        }
+
+        let fileName = generateFilename(for: song?.title)
+
+        let api = try await callConversionAPI(
+            imageData: pdfData, fileName: fileName, fileType: "application/pdf", token: token)
+        print("[Convert] API keys: \(api.keys.sorted())")
+
+        guard let jobIdStr  = api["job_id"]  as? String, let jobId = UUID(uuidString: jobIdStr),
+              let apiUidStr = api["user_id"] as? String
+        else { throw ConvertError.badAPIResponse }
+
+        let outputURL = (api["output_url"] as? String)
+            ?? "\(supabaseBase)/storage/v1/object/public/sheet_data/\(apiUidStr.lowercased())/\(jobIdStr.lowercased())/output.json"
+
+        var jsonDict: [String: Any] = [
+            "uploaded_at":       ISO8601DateFormatter().string(from: Date()),
+            "title":             song?.title ?? fileName,
+            "original_filename": fileName,
+            "job_id":            jobIdStr,
+            "user_id":           apiUidStr,
+            "output_url":        outputURL,
+            "file_size_bytes":   pdfData.count
+        ]
+        let protectedKeys: Set<String> = ["job_id", "user_id", "output_url", "title", "status"]
+        for (k, v) in api where !protectedKeys.contains(k) { jsonDict[k] = v }
+
+        let existingScans: [ScanRecord] = try await supabase.from("scans").select()
+            .eq("user_id", value: userId)
+            .like("json_data->>'job_id'", pattern: "%\(jobIdStr)%")
+            .execute().value
+
+        if existingScans.isEmpty {
+            let ins = ScanInsert(
+                userId: userId, jsonData: AnyCodable(jsonDict),
+                processingId: jobIdStr, status: "pending",
+                originalFilename: fileName, fileType: "application/pdf",
+                processedAt: ISO8601DateFormatter().string(from: Date()))
+            // Fire-and-forget insert — we don't need the returned record
+            try await supabase.from("scans").insert(ins).execute()
+        } else if let existing = existingScans.first {
+            let upd = ScanUpdate(
+                jsonData: AnyCodable(jsonDict), status: "pending",
+                processedAt: ISO8601DateFormatter().string(from: Date()),
+                updatedAt: ISO8601DateFormatter().string(from: Date()))
+            try await supabase.from("scans").update(upd)
+                .eq("id", value: Int(existing.id)).execute()
+        }
+
+        await MainActor.run {
+            self.setButtonLoading(false)
+            let vc       = UploadPageNextViewController()
+            vc.jobId     = jobId
+            vc.resultURL = outputURL
+            print("[Convert] → UploadPageNextVC jobId=\(jobId.uuidString)")
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+    }
+
+    // MARK: - Conversion API (identical to UploadScreen.callConversionAPI)
+
+    private func callConversionAPI(imageData: Data, fileName: String,
+                                   fileType: String, token: String) async throws -> [String: Any] {
+        let url      = URL(string: "http://localhost:8000/convert")!
+        let boundary = UUID().uuidString
+        var req      = URLRequest(url: url)
+        req.httpMethod          = "POST"
+        req.timeoutInterval     = 60
+        req.assumesHTTP3Capable = false
+        req.setValue("Bearer \(token)",                            forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        body.appendStr("--\(boundary)\r\n")
+        body.appendStr("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
+        body.appendStr("Content-Type: \(fileType)\r\n\r\n")
+        body.append(imageData)
+        body.appendStr("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw ConvertError.noResponse }
+        guard (200...299).contains(http.statusCode) else {
+            let msg = String(data: data, encoding: .utf8) ?? ""
+            throw ConvertError.apiError(http.statusCode, msg)
+        }
+        let obj = try JSONSerialization.jsonObject(with: data)
+        if let d = obj as? [String: Any]                    { return d }
+        if let a = obj as? [[String: Any]], let f = a.first { return f }
+        return ["api_response": obj, "status": "success"]
+    }
+
+    // MARK: - Auth Helpers (mirrors UploadScreen)
+
+    private func currentUserId() async -> String? {
+        do    { return try await supabase.auth.session.user.id.uuidString }
+        catch { print("[Auth] \(error)"); return nil }
+    }
+
+    private func authToken() async -> String? {
+        do    { return try await supabase.auth.session.accessToken }
+        catch { print("[Auth] \(error)"); return nil }
+    }
+
+    // MARK: - UI Helpers
+
+    private func setButtonLoading(_ loading: Bool) {
+        getConvertedButton.isEnabled = !loading
+        var cfg = getConvertedButton.configuration ?? UIButton.Configuration.filled()
+        var t   = AttributedString(loading ? "Converting…" : "Get Converted")
+        t.font  = .systemFont(ofSize: 18, weight: .bold)
+        cfg.attributedTitle        = t
+        cfg.showsActivityIndicator = loading
+        getConvertedButton.configuration = cfg
+    }
+
+    private func generateFilename(for title: String?) -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd_HHmmss"
+        let base = title?.replacingOccurrences(of: " ", with: "_") ?? "SheetMusic"
+        return "\(base)_\(f.string(from: Date())).pdf"
+    }
+
+    private func presentErrorAlert(_ message: String) {
+        let a = UIAlertController(title: "Conversion Failed", message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+
+    // MARK: - Error Types
+
+    enum ConvertError: LocalizedError {
+        case noPDFSource, pdfDownloadFailed
+        case invalidUser, missingToken, badAPIResponse, noResponse
+        case apiError(Int, String)
+        var errorDescription: String? {
+            switch self {
+            case .noPDFSource:            return "This song has no sheet music file attached."
+            case .pdfDownloadFailed:      return "Could not download the sheet music PDF."
+            case .invalidUser:            return "Could not retrieve your user ID."
+            case .missingToken:           return "Could not retrieve authentication token."
+            case .badAPIResponse:         return "Missing job_id or user_id in API response."
+            case .noResponse:             return "No response received from the server."
+            case .apiError(let c, let m): return "Server error \(c): \(m)"
+            }
+        }
+    }
+
+    // MARK: - Private Data Models
+
+    private struct ScanRecord: Codable, Identifiable {
+        let id: Int64; let userId: UUID; let jsonData: AnyCodable?
+        let processingId: String?; let status: String?
+        let originalFilename: String?; let fileType: String?
+        let processedAt: String?; let updatedAt: String?
+        enum CodingKeys: String, CodingKey {
+            case id; case userId = "user_id"; case jsonData = "json_data"
+            case processingId = "processing_id"; case status
+            case originalFilename = "original_filename"; case fileType = "file_type"
+            case processedAt = "processed_at"; case updatedAt = "updated_at"
+        }
+    }
+
+    private struct ScanInsert: Encodable {
+        let userId: UUID; let jsonData: AnyCodable; let processingId: String; let status: String
+        let originalFilename: String?; let fileType: String?; let processedAt: String?
+        enum CodingKeys: String, CodingKey {
+            case userId = "user_id"; case jsonData = "json_data"
+            case processingId = "processing_id"; case status
+            case originalFilename = "original_filename"; case fileType = "file_type"
+            case processedAt = "processed_at"
+        }
+    }
+
+    private struct ScanUpdate: Encodable {
+        let jsonData: AnyCodable; let status: String; let processedAt: String; let updatedAt: String
+        enum CodingKeys: String, CodingKey {
+            case jsonData = "json_data"; case status
+            case processedAt = "processed_at"; case updatedAt = "updated_at"
+        }
+    }
+
+    private struct AnyCodable: Codable {
+        let value: Any
+        init(_ value: Any) { self.value = value }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if      let b = try? c.decode(Bool.self)                 { value = b }
+            else if let i = try? c.decode(Int.self)                  { value = i }
+            else if let d = try? c.decode(Double.self)               { value = d }
+            else if let s = try? c.decode(String.self)               { value = s }
+            else if let a = try? c.decode([AnyCodable].self)         { value = a.map { $0.value } }
+            else if let d = try? c.decode([String: AnyCodable].self) { value = d.mapValues { $0.value } }
+            else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch value {
+            case let b as Bool:          try c.encode(b)
+            case let i as Int:           try c.encode(i)
+            case let d as Double:        try c.encode(d)
+            case let s as String:        try c.encode(s)
+            case let a as [Any]:         try c.encode(a.map { AnyCodable($0) })
+            case let d as [String: Any]: try c.encode(d.mapValues { AnyCodable($0) })
+            default: throw EncodingError.invalidValue(
+                value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
+            }
+        }
+    }
+}
+
+// MARK: - Data Helper
+
+private extension Data {
+    mutating func appendStr(_ string: String) {
+        if let d = string.data(using: .utf8) { append(d) }
+    }
+}

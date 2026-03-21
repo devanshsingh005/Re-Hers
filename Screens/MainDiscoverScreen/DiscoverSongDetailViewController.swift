@@ -70,7 +70,7 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Apply Passed Data
 
     private func applyPassedData() {
-        let img = passedImage ?? UIImage(named: "ride_home")
+        let img = passedImage ?? UIImage(named: "trackimage_1")
         albumArtBackgroundView.image = img
         albumArtCardView.image       = img
         songTitleLabel.text = song?.title ?? "Unknown Song"

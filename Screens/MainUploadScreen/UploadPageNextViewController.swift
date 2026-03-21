@@ -984,12 +984,12 @@ final class UploadPageNextViewController: UIViewController {
 
             playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 24),
             playAlongButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            playAlongButton.heightAnchor.constraint(equalToConstant: 54),
+            playAlongButton.heightAnchor.constraint(equalToConstant: 46),
 
             animationButton.centerYAnchor.constraint(equalTo: playAlongButton.centerYAnchor),
             animationButton.leadingAnchor.constraint(equalTo: playAlongButton.trailingAnchor, constant: 12),
             animationButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            animationButton.heightAnchor.constraint(equalToConstant: 54),
+            animationButton.heightAnchor.constraint(equalToConstant: 46),
             animationButton.widthAnchor.constraint(equalTo: playAlongButton.widthAnchor),
             animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
         ])

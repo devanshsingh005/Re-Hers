@@ -132,7 +132,7 @@ extension HomeViewController {
         let songs: [(image: String, song: String, artist: String)] = [
             ("cl_5",      "Ride",      "Pritam"),
             ("cl_4",      "Ride",      "Tanishk"),
-            ("ride_home", "Ride",      "Tanishk"),
+            ("trackimage_1", "Ride",      "Tanishk"),
             ("cl_1",      "Moonlight", "Beethoven"),
             ("cl_2",      "Fur Elise", "Beethoven"),
         ]

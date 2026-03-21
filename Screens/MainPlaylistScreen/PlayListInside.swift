@@ -6,6 +6,14 @@
 import UIKit
 import Foundation
 
+// MARK: - Track Image Placeholder Helper
+/// Returns a stable, deterministic image for a track based on its title.
+/// Maps to trackimage_1 through trackimage_16.
+func trackImagePlaceholder(for title: String) -> UIImage {
+    let hash = abs(title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
+    let index = (hash % 16) + 1
+    return UIImage(named: "trackimage_\(index)") ?? UIImage(systemName: "music.note")!
+}
 
 class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     
@@ -104,7 +112,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         albumArtCardView.image = img
         
         playlistTitleLabel.text = passedTitle ?? "Playlist"
-        playlistArtistLabel.text = passedArtist ?? "Custom Playlist" // Matching design text
+        playlistArtistLabel.text = passedArtist ?? "Custom Playlist"
     }
     
     private func setupTableView() {
@@ -118,7 +126,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         view.addSubview(tracksTableView)
         
         NSLayoutConstraint.activate([
-            tracksTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60), // Space for navbar
+            tracksTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60),
             tracksTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tracksTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tracksTableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -391,7 +399,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "TrackCell", for: indexPath) as! TrackTableViewCell
         let track = trackList[indexPath.row]
-        cell.configure(with: track, index: indexPath.row)
+        cell.configure(with: track)
         cell.selectionStyle = .none
         
         cell.renameHandler = { [weak self] in
@@ -419,7 +427,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
             do {
                 try await PlaylistsManager.shared.updateTrackName(playlistItemId: playlistItemId, newTitle: newTitle)
                 await MainActor.run {
-                    self.fetchTracks() // Refresh data
+                    self.fetchTracks()
                 }
             } catch {
                 print("❌ Track rename error: \(error)")
@@ -429,13 +437,13 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     // MARK: - UITableViewDelegate
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 92 // 80 card height + 12 spacing
+        return 92
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let track = trackList[indexPath.row]
         let vc = PlaylistSongDetailViewController()
-        vc.passedImage = UIImage(named: "cl_\((indexPath.row % 5) + 1)")
+        vc.passedImage = trackImagePlaceholder(for: track.title)   // ← stable random image
         vc.passedSongTitle = track.title
         vc.passedArtist = track.artist
         vc.passedSheetScanId = track.sheetScanId
@@ -477,7 +485,6 @@ class TrackTableViewCell: UITableViewCell {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
         
-        // Playlist/Card color #F4F3EE
         container.backgroundColor = ComponentColors.SongCard.background
         container.layer.cornerRadius = 22
         container.translatesAutoresizingMaskIntoConstraints = false
@@ -524,10 +531,11 @@ class TrackTableViewCell: UITableViewCell {
         ])
     }
     
-    func configure(with track: PlaylistTrack, index: Int) {
+    /// Configure the cell — no index needed; image is derived from the track title.
+    func configure(with track: PlaylistTrack) {
         titleLabel.text = track.title
         artistLabel.text = track.artist
-        artwork.image = UIImage(named: "cl_\((index % 5) + 1)") ?? UIImage(systemName: "music.note")
+        artwork.image = trackImagePlaceholder(for: track.title)   // ← stable random image
     }
     
     @objc private func handleRenameTap() {

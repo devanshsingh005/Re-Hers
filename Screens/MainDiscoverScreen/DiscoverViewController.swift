@@ -1,14 +1,15 @@
 // DiscoverViewController.swift
 // Re-Hearse
 //
-// Complete Discover screen — wired to Supabase songs table
+// Discover screen — Supabase songs, Level/Skill dropdown filters,
+// active-chip dismissal, search. Optimised for iPhone + iPad.
 // Primary color: #EF9408
-// Supports dark + light mode via iOS semantic colors
 
 import UIKit
 import Supabase
 
-// MARK: - Song Model
+// MARK: - Model
+
 struct Song: Codable, Identifiable {
     let id: UUID
     let title: String
@@ -23,6 +24,7 @@ struct Song: Codable, Identifiable {
     let isFree: Bool
     let isActive: Bool
     let sortOrder: Int
+    let sheetUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, composer, level, tempo, hands, initials
@@ -32,142 +34,133 @@ struct Song: Codable, Identifiable {
         case isFree           = "is_free"
         case isActive         = "is_active"
         case sortOrder        = "sort_order"
+        case sheetUrl         = "sheet_url"
     }
 }
 
-// MARK: - Song Service
-class SongService {
+// MARK: - Service
+
+final class SongService {
     static let shared = SongService()
+    private init() {}
 
     func fetchSongs() async throws -> [Song] {
-        let songs: [Song] = try await SupabaseManager.shared.client
-            .from("songs")
-            .select()
+        try await SupabaseManager.shared.client
+            .from("songs").select()
             .order("level", ascending: true)
             .order("sort_order", ascending: true)
-            .execute()
-            .value
-        return songs
+            .execute().value
     }
 }
 
 // MARK: - DiscoverViewController
-class DiscoverViewController: UIViewController {
 
-    // MARK: Data
-    private var allSongs: [Song] = []
+final class DiscoverViewController: UIViewController {
+
+    // MARK: State
+
+    private var allSongs:      [Song] = []
     private var filteredSongs: [Song] = []
-    private var selectedLevel: Int? = nil     // nil = All
-    private var selectedSkill: String? = nil  // nil = All skills
+    private var selectedLevel: Int?    { didSet { refreshFilters() } }
+    private var selectedSkill: String? { didSet { refreshFilters() } }
+
+    // Dynamic height constraint for the non-scrolling table
     private var tableHeightConstraint: NSLayoutConstraint?
+    // Collapses chips row when no filters are active
+    private var chipsHeightConstraint: NSLayoutConstraint?
 
-    // MARK: UI Components
-    
+    // MARK: Filter Options
+
+    private let levelOptions: [(label: String, value: Int?)] = [
+        ("All Levels", nil), ("Lv 1", 1), ("Lv 2", 2), ("Lv 3", 3), ("Lv 4", 4)
+    ]
+    private let skillOptions: [(label: String, value: String?)] = [
+        ("All Skills", nil), ("Melody", "melody"), ("Chords", "chords"),
+        ("Scales", "scales"), ("Arpeggios", "arpeggios")
+    ]
+
+    // MARK: UI
+
     private let navBar = TopNavBar.make(title: "Discover")
-    private let searchController = UISearchController(searchResultsController: nil)
 
-    // Level filter chips scroll
-    private lazy var levelScrollView: UIScrollView = {
-        let sv = UIScrollView()
-        sv.showsHorizontalScrollIndicator = false
-        sv.contentInset = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+    private lazy var searchBar: UISearchBar = {
+        let sb = UISearchBar()
+        sb.placeholder     = "Search songs, composers..."
+        sb.searchBarStyle  = .minimal
+        sb.backgroundImage = UIImage()
+        sb.delegate        = self
+        sb.translatesAutoresizingMaskIntoConstraints = false
+        (sb.value(forKey: "searchField") as? UITextField).map {
+            $0.backgroundColor    = ComponentColors.DiscoverScreen.chipBackgroundDefault
+            $0.layer.cornerRadius = 12
+            $0.clipsToBounds      = true
+        }
+        return sb
+    }()
+
+    private lazy var levelButton = makeFilterButton(icon: "decrease.indent", title: "Level")
+    private lazy var skillButton = makeFilterButton(icon: "pianokeys",        title: "Skill")
+
+    private lazy var filterRow: UIStackView = {
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let sv = UIStackView(arrangedSubviews: [levelButton, skillButton, spacer])
+        sv.spacing = 12
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
 
-    private lazy var levelStackView: UIStackView = {
+    private lazy var chipsScrollView: UIScrollView = {
+        let sv = UIScrollView()
+        sv.showsHorizontalScrollIndicator = false
+        sv.contentInset = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+        sv.alpha = 0   // hidden until a filter is active
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        return sv
+    }()
+
+    private lazy var chipsStack: UIStackView = {
         let sv = UIStackView()
-        sv.axis = .horizontal
         sv.spacing = 8
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
 
-    // Skills section title
-    private lazy var skillsTitleLabel: UILabel = {
-        let lbl = UILabel()
-        lbl.text = "Skills & Games"
-        lbl.font = .systemFont(ofSize: 22, weight: .bold)
-        lbl.textColor = ComponentColors.DiscoverScreen.sectionHeader
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        return lbl
+    private lazy var songsTitleLabel = styledLabel(
+        "Songs", font: .systemFont(ofSize: 22, weight: .bold),
+        color: ComponentColors.DiscoverScreen.sectionHeader)
+
+    private lazy var emptyLabel: UILabel = {
+        let l = styledLabel("No songs found.", font: .systemFont(ofSize: 16),
+                            color: ComponentColors.DiscoverScreen.emptyStateText)
+        l.textAlignment = .center
+        l.isHidden = true
+        return l
     }()
 
-    // Skill tiles scroll
-    private lazy var skillScrollView: UIScrollView = {
-        let sv = UIScrollView()
-        sv.showsHorizontalScrollIndicator = false
-        sv.contentInset = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
-        sv.translatesAutoresizingMaskIntoConstraints = false
-        return sv
-    }()
-
-    private lazy var skillStackView: UIStackView = {
-        let sv = UIStackView()
-        sv.axis = .horizontal
-        sv.spacing = 10
-        sv.translatesAutoresizingMaskIntoConstraints = false
-        return sv
-    }()
-
-    // Songs section header
-    private lazy var songsTitleLabel: UILabel = {
-        let lbl = UILabel()
-        lbl.text = "Popular Songs"
-        lbl.font = .systemFont(ofSize: 22, weight: .bold)
-        lbl.textColor = ComponentColors.DiscoverScreen.sectionHeader
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        return lbl
-    }()
-
-    private lazy var sortButton: UIButton = {
-        var config = UIButton.Configuration.plain()
-        config.title = "By level ↑"
-        config.baseForegroundColor = ComponentColors.HomeScreen.actionButtonFill
-        config.image = UIImage(systemName: "chevron.down")
-        config.imagePlacement = .trailing
-        config.imagePadding = 4
-        
-        let btn = UIButton(configuration: config)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        return btn
-    }()
-
-    // Table view
+    // isScrollEnabled = false → table renders all rows and derives height from content.
+    // We then keep a manual height constraint in sync via updateTableHeight().
     private lazy var tableView: UITableView = {
         let tv = UITableView()
         tv.register(SongCell.self, forCellReuseIdentifier: SongCell.reuseID)
-        tv.dataSource = self
-        tv.delegate = self
-        tv.separatorStyle = .none
-        tv.backgroundColor = .clear
-        tv.rowHeight = UITableView.automaticDimension
-        tv.estimatedRowHeight = 100
+        tv.dataSource         = self
+        tv.delegate           = self
+        tv.separatorStyle     = .none
+        tv.backgroundColor    = .clear
+        tv.rowHeight          = UITableView.automaticDimension
+        tv.estimatedRowHeight = 86
+        tv.isScrollEnabled    = false
         tv.translatesAutoresizingMaskIntoConstraints = false
         return tv
     }()
 
-    // Empty state
-    private lazy var emptyLabel: UILabel = {
-        let lbl = UILabel()
-        lbl.text = "No songs found for this category."
-        lbl.font = .systemFont(ofSize: 16)
-        lbl.textColor = ComponentColors.DiscoverScreen.emptyStateText
-        lbl.textAlignment = .center
-        lbl.isHidden = true
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        return lbl
+    private lazy var spinner: UIActivityIndicatorView = {
+        let s = UIActivityIndicatorView(style: .medium)
+        s.hidesWhenStopped = true
+        s.translatesAutoresizingMaskIntoConstraints = false
+        return s
     }()
 
-    // Loading indicator
-    private lazy var loadingIndicator: UIActivityIndicatorView = {
-        let ai = UIActivityIndicatorView(style: .medium)
-        ai.hidesWhenStopped = true
-        ai.translatesAutoresizingMaskIntoConstraints = false
-        return ai
-    }()
-
-    // Main scroll view wrapping everything
     private lazy var scrollView: UIScrollView = {
         let sv = UIScrollView()
         sv.showsVerticalScrollIndicator = false
@@ -181,317 +174,217 @@ class DiscoverViewController: UIViewController {
         return v
     }()
 
+    // iPad adaptive width — swapped on rotation
+    private var iPadWidthConstraints: [NSLayoutConstraint] = []
+
     // MARK: Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.DiscoverScreen.background
         setupNavBar()
-        setupUI()
-        setupLevelChips()
-        setupSkillTiles()
-        setupSortMenu()
+        setupLayout()
+        buildFilterMenus()
         fetchSongs()
     }
 
-    // MARK: Navigation Setup
+    override func viewWillTransition(to size: CGSize,
+                                     with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { _ in self.applyAdaptiveWidth(for: size.width) })
+    }
+
+    // MARK: NavBar
 
     private func setupNavBar() {
         navigationController?.navigationBar.isHidden = true
         view.addSubview(navBar)
-        navBar.isStreakVisible = false
+        navBar.isStreakVisible     = false
         navBar.isWelcomeTextHidden = true
-        navBar.isChordIconVisible = true
-        
-        // Wire up search controller
-        searchController.searchResultsUpdater = self
-        searchController.obscuresBackgroundDuringPresentation = false
-        searchController.searchBar.placeholder = "Search songs"
-        navigationItem.searchController = searchController
-        navigationItem.hidesSearchBarWhenScrolling = false
-        definesPresentationContext = true
-        
-        navBar.chordAction = { [weak self] in
-            let vc = ChordRecognitionViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
-        }
-        navBar.profileAction = { [weak self] in
-            self?.navigationController?.pushViewController(UserProfileViewController(), animated: true)
-        }
-        
+        navBar.isChordIconVisible  = true
+        navBar.chordAction   = { [weak self] in self?.push(ChordRecognitionViewController()) }
+        navBar.profileAction = { [weak self] in self?.push(UserProfileViewController()) }
         NSLayoutConstraint.activate([
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
     }
 
-    private func setupNavigation() {}
+    // MARK: Layout
 
-    // MARK: UI Setup
-
-    private func setupUI() {
-        // view.backgroundColor = .systemBackground // Already handled in viewDidLoad via token
-
-        // Add scroll view
+    private func setupLayout() {
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
+        chipsScrollView.addSubview(chipsStack)
 
-        // Add all subviews to contentView
-        contentView.addSubview(levelScrollView)
-        levelScrollView.addSubview(levelStackView)
-        contentView.addSubview(skillsTitleLabel)
-        contentView.addSubview(skillScrollView)
-        skillScrollView.addSubview(skillStackView)
+        [searchBar, filterRow, chipsScrollView,
+         songsTitleLabel, tableView, emptyLabel, spinner]
+            .forEach { contentView.addSubview($0) }
 
-        // Songs header row
-        contentView.addSubview(songsTitleLabel)
-        contentView.addSubview(sortButton)
-        contentView.addSubview(tableView)
-        contentView.addSubview(emptyLabel)
-        contentView.addSubview(loadingIndicator)
+        // Install a starting table height constraint (updated after each reload)
+        let initialHeight = tableView.heightAnchor.constraint(equalToConstant: 0)
+        initialHeight.isActive = true
+        tableHeightConstraint = initialHeight
 
+        let c = contentView
         NSLayoutConstraint.activate([
-            // ScrollView fills view
+            // Scroll view
             scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            // ContentView fills scrollView
+            // Content view
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
-            // Level chips
-            levelScrollView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            levelScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            levelScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            levelScrollView.heightAnchor.constraint(equalToConstant: 38),
+            // Search bar
+            searchBar.topAnchor.constraint(equalTo: c.topAnchor, constant: 8),
+            searchBar.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 12),
+            searchBar.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -12),
+            searchBar.heightAnchor.constraint(equalToConstant: 48),
 
-            levelStackView.topAnchor.constraint(equalTo: levelScrollView.topAnchor),
-            levelStackView.leadingAnchor.constraint(equalTo: levelScrollView.leadingAnchor),
-            levelStackView.trailingAnchor.constraint(equalTo: levelScrollView.trailingAnchor),
-            levelStackView.bottomAnchor.constraint(equalTo: levelScrollView.bottomAnchor),
-            levelStackView.heightAnchor.constraint(equalTo: levelScrollView.heightAnchor),
+            // Filter row
+            filterRow.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 12),
+            filterRow.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 20),
+            filterRow.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -20),
+            filterRow.heightAnchor.constraint(equalToConstant: 44),
 
-            // Skills title
-            skillsTitleLabel.topAnchor.constraint(equalTo: levelScrollView.bottomAnchor, constant: 24),
-            skillsTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            // Chips
+            chipsScrollView.topAnchor.constraint(equalTo: filterRow.bottomAnchor, constant: 10),
+            chipsScrollView.leadingAnchor.constraint(equalTo: c.leadingAnchor),
+            chipsScrollView.trailingAnchor.constraint(equalTo: c.trailingAnchor),
 
-            // Skill tiles
-            skillScrollView.topAnchor.constraint(equalTo: skillsTitleLabel.bottomAnchor, constant: 12),
-            skillScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            skillScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            skillScrollView.heightAnchor.constraint(equalToConstant: 100),
+            chipsStack.topAnchor.constraint(equalTo: chipsScrollView.topAnchor),
+            chipsStack.leadingAnchor.constraint(equalTo: chipsScrollView.leadingAnchor),
+            chipsStack.trailingAnchor.constraint(equalTo: chipsScrollView.trailingAnchor),
+            chipsStack.bottomAnchor.constraint(equalTo: chipsScrollView.bottomAnchor),
+            chipsStack.heightAnchor.constraint(equalTo: chipsScrollView.heightAnchor),
 
-            skillStackView.topAnchor.constraint(equalTo: skillScrollView.topAnchor),
-            skillStackView.leadingAnchor.constraint(equalTo: skillScrollView.leadingAnchor),
-            skillStackView.trailingAnchor.constraint(equalTo: skillScrollView.trailingAnchor),
-            skillStackView.bottomAnchor.constraint(equalTo: skillScrollView.bottomAnchor),
-            skillStackView.heightAnchor.constraint(equalTo: skillScrollView.heightAnchor),
+            // Songs header
+            songsTitleLabel.topAnchor.constraint(equalTo: chipsScrollView.bottomAnchor, constant: 10),
+            songsTitleLabel.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 20),
 
-            // Songs title
-            songsTitleLabel.topAnchor.constraint(equalTo: skillScrollView.bottomAnchor, constant: 24),
-            songsTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-
-            sortButton.centerYAnchor.constraint(equalTo: songsTitleLabel.centerYAnchor),
-            sortButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
-
-            // Table view
+            // Table — height driven by tableHeightConstraint, bottom closes contentView
             tableView.topAnchor.constraint(equalTo: songsTitleLabel.bottomAnchor, constant: 12),
-            tableView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
-            tableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 500),
+            tableView.leadingAnchor.constraint(equalTo: c.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: c.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: c.bottomAnchor, constant: -20),
 
-            // Empty state
-            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            // Overlays
+            emptyLabel.centerXAnchor.constraint(equalTo: c.centerXAnchor),
             emptyLabel.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 60),
-
-            // Loading
-            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 60),
+            spinner.centerXAnchor.constraint(equalTo: c.centerXAnchor),
+            spinner.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 60),
         ])
+
+        chipsHeightConstraint = chipsScrollView.heightAnchor.constraint(equalToConstant: 0)
+        chipsHeightConstraint?.isActive = true
+
+        applyAdaptiveWidth(for: view.bounds.width)
     }
 
-    // MARK: - Sort Logic
-    private func setupSortMenu() {
-        let levelAsc = UIAction(title: "Level: Low to High", image: UIImage(systemName: "arrow.up.circle")) { [weak self] _ in
-            self?.sortSongs(by: .levelAsc)
-        }
-        let levelDesc = UIAction(title: "Level: High to Low", image: UIImage(systemName: "arrow.down.circle")) { [weak self] _ in
-            self?.sortSongs(by: .levelDesc)
-        }
-        let titleAsc = UIAction(title: "Title: A-Z", image: UIImage(systemName: "textformat")) { [weak self] _ in
-            self?.sortSongs(by: .titleAsc)
-        }
-        
-        sortButton.menu = UIMenu(title: "Sort Songs", children: [levelAsc, levelDesc, titleAsc])
-        sortButton.showsMenuAsPrimaryAction = true
+    // MARK: Table Height
+
+    /// Call after every reload so the outer scroll view knows the correct content size.
+    private func updateTableHeight() {
+        tableView.layoutIfNeeded()
+        let h = tableView.contentSize.height
+        tableHeightConstraint?.constant = max(h, 1)   // never zero — layout engine needs > 0
+        scrollView.layoutIfNeeded()
     }
 
-    enum SortOption {
-        case levelAsc, levelDesc, titleAsc
-    }
+    // MARK: iPad Adaptive Width
 
-    private func sortSongs(by option: SortOption) {
-        switch option {
-        case .levelAsc:
-            filteredSongs.sort { $0.level < $1.level }
-            sortButton.setTitle("By level ↑", for: .normal)
-        case .levelDesc:
-            filteredSongs.sort { $0.level > $1.level }
-            sortButton.setTitle("By level ↓", for: .normal)
-        case .titleAsc:
-            filteredSongs.sort { $0.title.lowercased() < $1.title.lowercased() }
-            sortButton.setTitle("By title A-Z", for: .normal)
-        }
-        tableView.reloadData()
-    }
+    private func applyAdaptiveWidth(for viewWidth: CGFloat) {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
+        NSLayoutConstraint.deactivate(iPadWidthConstraints)
 
-    // MARK: Level Chips
-
-    private func setupLevelChips() {
-        let levels = ["All", "Lv 1", "Lv 2", "Lv 3", "Lv 4"]
-        for (index, title) in levels.enumerated() {
-            let chip = makeLevelChip(title: title, tag: index)
-            levelStackView.addArrangedSubview(chip)
-        }
-        // Select "All" by default
-        updateChipSelection(selectedTag: 0)
-    }
-
-    private func makeLevelChip(title: String, tag: Int) -> UIButton {
-        var config = UIButton.Configuration.filled()
-        config.title = title
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 18, bottom: 8, trailing: 18)
-        config.cornerStyle = .capsule
-        let btn = UIButton(configuration: config)
-        btn.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        btn.tag = tag
-        btn.addTarget(self, action: #selector(levelChipTapped(_:)), for: .touchUpInside)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        return btn
-    }
-
-    private func updateChipSelection(selectedTag: Int) {
-        let chips = levelStackView.arrangedSubviews.compactMap { $0 as? UIButton }
-        for (idx, btn) in chips.enumerated() {
-            if idx == selectedTag {
-                btn.setTitleColor(ComponentColors.DiscoverScreen.chipTextSelected, for: .normal)
-                btn.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundSelected
-            } else {
-                btn.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
-                btn.setTitleColor(ComponentColors.DiscoverScreen.chipTextDefault, for: .normal)
-            }
-        }
-    }
-
-    @objc private func levelChipTapped(_ sender: UIButton) {
-        selectedLevel = sender.tag == 0 ? nil : sender.tag
-        updateChipSelection(selectedTag: sender.tag)
-        applyFilters()
-    }
-
-    // MARK: Skill Tiles
-
-    private func setupSkillTiles() {
-        let skills: [(icon: String, name: String, tag: String)] = [
-            ("keyboard",            "Chords",    "chords"),
-            ("music.quarternote.3", "Scales",    "scales"),
-            ("music.note",          "Melody",    "melody"),
-            ("music.note.list",     "Arpeggios", "arpeggios"),
+        let maxW = min(viewWidth * 0.74, 800)
+        iPadWidthConstraints = [
+            contentView.widthAnchor.constraint(equalToConstant: maxW),
+            contentView.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
         ]
-        for skill in skills {
-            let tile = makeSkillTile(icon: skill.icon, name: skill.name, tag: skill.tag)
-            skillStackView.addArrangedSubview(tile)
-        }
+        // Deactivate the phone leading-pin so centering works cleanly
+        scrollView.constraints
+            .first { $0.firstItem === contentView && $0.firstAttribute == .leading }
+            .map { $0.isActive = false }
+
+        NSLayoutConstraint.activate(iPadWidthConstraints)
     }
 
-    private func makeSkillTile(icon: String, name: String, tag: String) -> UIButton {
-        let btn = UIButton(type: .system)
-        btn.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
-        btn.layer.cornerRadius = 16
-        
-        // Shadow
-        btn.layer.shadowColor = UIColor.black.cgColor
-        btn.layer.shadowOpacity = 0.05
-        btn.layer.shadowOffset = CGSize(width: 0, height: 2)
-        btn.layer.shadowRadius = 8
+    // MARK: Filter Menus
 
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.widthAnchor.constraint(equalToConstant: 92).isActive = true
+    private func buildFilterMenus() {
+        levelButton.menu = UIMenu(title: "Filter by Level", children: levelOptions.map { opt in
+            UIAction(title: opt.label, state: selectedLevel == opt.value ? .on : .off) { [weak self] _ in
+                self?.selectedLevel = opt.value   // didSet → refreshFilters()
+                self?.buildFilterMenus()
+            }
+        })
+        levelButton.showsMenuAsPrimaryAction = true
 
-        // Icon
-        let iconIV = UIImageView(image: UIImage(systemName: icon))
-        iconIV.contentMode = .scaleAspectFit
-        iconIV.tintColor = ComponentColors.DiscoverScreen.skillTileIcon
-        iconIV.translatesAutoresizingMaskIntoConstraints = false
-
-        // Name label
-        let nameLabel = UILabel()
-        nameLabel.text = name
-        nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        nameLabel.textColor = ComponentColors.DiscoverScreen.skillTileTitle
-        nameLabel.textAlignment = .center
-        nameLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        btn.addSubview(iconIV)
-        btn.addSubview(nameLabel)
-        NSLayoutConstraint.activate([
-            iconIV.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
-            iconIV.topAnchor.constraint(equalTo: btn.topAnchor, constant: 18),
-            iconIV.heightAnchor.constraint(equalToConstant: 30),
-            
-            nameLabel.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
-            nameLabel.bottomAnchor.constraint(equalTo: btn.bottomAnchor, constant: -14)
-        ])
-
-        // Store tag as accessibility identifier
-        btn.accessibilityIdentifier = tag
-        btn.addTarget(self, action: #selector(skillTileTapped(_:)), for: .touchUpInside)
-        return btn
+        skillButton.menu = UIMenu(title: "Filter by Skill", children: skillOptions.map { opt in
+            UIAction(title: opt.label, state: selectedSkill == opt.value ? .on : .off) { [weak self] _ in
+                self?.selectedSkill = opt.value
+                self?.buildFilterMenus()
+            }
+        })
+        skillButton.showsMenuAsPrimaryAction = true
     }
 
-    @objc private func skillTileTapped(_ sender: UIButton) {
-        guard let skill = sender.accessibilityIdentifier else { return }
-        
-        UIView.animate(withDuration: 0.1, animations: {
-            sender.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
-            sender.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
-        }) { _ in
-            UIView.animate(withDuration: 0.1) {
-                sender.transform = .identity
-                sender.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
-            }
-        }
-        print("Skill tapped")
+    // MARK: Refresh (driven by didSet observers)
 
-        if selectedSkill == skill {
-            selectedSkill = nil
-            sender.layer.borderColor = nil
-            sender.layer.borderWidth = 0
-            sender.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
-        } else {
-            for view in skillStackView.arrangedSubviews {
-                view.layer.borderWidth = 0
-                view.backgroundColor = ComponentColors.DiscoverScreen.skillTileBackground
-            }
-            selectedSkill = skill
-            sender.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
-            sender.layer.borderWidth = 2
-            sender.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.05)
+    private func refreshFilters() {
+        let orange = ComponentColors.HomeScreen.actionButtonFill
+
+        func updateBtn(_ btn: UIButton, active: Bool, label: String) {
+            var title = AttributedString("\(label)  ▾")
+            title.font = .systemFont(ofSize: 15, weight: .semibold)
+            btn.configuration?.attributedTitle     = title
+            btn.configuration?.baseBackgroundColor = active
+                ? orange.withAlphaComponent(0.15)
+                : ComponentColors.DiscoverScreen.chipBackgroundDefault
+            btn.configuration?.baseForegroundColor = active
+                ? orange
+                : ComponentColors.DiscoverScreen.chipTextDefault
         }
+
+        updateBtn(levelButton,
+                  active: selectedLevel != nil,
+                  label: levelOptions.first { $0.value == selectedLevel }?.label ?? "Level")
+        updateBtn(skillButton,
+                  active: selectedSkill != nil,
+                  label: skillOptions.first { $0.value == selectedSkill }?.label ?? "Skill")
+        rebuildChips()
         applyFilters()
     }
 
-    // MARK: Data Fetching
+    private func rebuildChips() {
+        chipsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+
+        if let lv = selectedLevel, let m = levelOptions.first(where: { $0.value == lv }) {
+            chipsStack.addArrangedSubview(makeChip(m.label) { [weak self] in self?.selectedLevel = nil })
+        }
+        if let sk = selectedSkill, let m = skillOptions.first(where: { $0.value == sk }) {
+            chipsStack.addArrangedSubview(makeChip(m.label) { [weak self] in self?.selectedSkill = nil })
+        }
+
+        let hasChips = !chipsStack.arrangedSubviews.isEmpty
+        UIView.animate(withDuration: 0.2) {
+            self.chipsHeightConstraint?.constant = hasChips ? 34 : 0
+            self.chipsScrollView.alpha = hasChips ? 1 : 0
+            self.scrollView.layoutIfNeeded()
+        }
+    }
+
+    // MARK: Data & Filtering
 
     private func fetchSongs() {
-        loadingIndicator.startAnimating()
+        spinner.startAnimating()
         tableView.isHidden = true
         emptyLabel.isHidden = true
 
@@ -501,77 +394,119 @@ class DiscoverViewController: UIViewController {
                 await MainActor.run {
                     self.allSongs = songs
                     self.applyFilters()
-                    self.loadingIndicator.stopAnimating()
+                    self.spinner.stopAnimating()
                     self.tableView.isHidden = false
                 }
             } catch {
                 await MainActor.run {
-                    self.loadingIndicator.stopAnimating()
+                    self.spinner.stopAnimating()
                     self.showError(error.localizedDescription)
                 }
             }
         }
     }
 
-    // MARK: Filtering
-
     private func applyFilters() {
         var result = allSongs
-
-        // Level filter
-        if let level = selectedLevel {
-            result = result.filter { $0.level == level }
-        }
-
-        // Skill filter
-        if let skill = selectedSkill {
-            result = result.filter { $0.skillTags.contains(skill) }
-        }
-        
-        // Search filter
-        if let query = searchController.searchBar.text, !query.isEmpty {
-            result = result.filter { 
-                $0.title.lowercased().contains(query.lowercased()) || 
-                $0.composer.lowercased().contains(query.lowercased())
+        if let lv = selectedLevel         { result = result.filter { $0.level == lv } }
+        if let sk = selectedSkill         { result = result.filter { $0.skillTags.contains(sk) } }
+        if let q = searchBar.text, !q.isEmpty {
+            let lq = q.lowercased()
+            result = result.filter {
+                $0.title.lowercased().contains(lq) || $0.composer.lowercased().contains(lq)
             }
         }
+        filteredSongs   = result
 
-        filteredSongs = result
         tableView.reloadData()
+        emptyLabel.isHidden = !result.isEmpty
+        tableView.isHidden  = result.isEmpty
 
-        // Empty state
-        emptyLabel.isHidden = !filteredSongs.isEmpty
-        tableView.isHidden = filteredSongs.isEmpty
-        
-        // Adjust content view height
-        contentView.layoutIfNeeded()
-        let tableHeight = tableView.contentSize.height
-        if let existing = tableHeightConstraint {
-            existing.constant = max(400, tableHeight)
-        } else {
-            tableHeightConstraint = tableView.heightAnchor.constraint(equalToConstant: max(400, tableHeight))
-            tableHeightConstraint?.isActive = true
-        }
+        // Must update height AFTER reloadData so contentSize is fresh
+        updateTableHeight()
     }
 
-    private func showError(_ message: String) {
-        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+    // MARK: Helpers
+
+    private func makeFilterButton(icon: String, title: String) -> UIButton {
+        var cfg = UIButton.Configuration.filled()
+        cfg.baseBackgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
+        cfg.baseForegroundColor = ComponentColors.DiscoverScreen.chipTextDefault
+        cfg.image               = UIImage(systemName: icon)
+        cfg.imagePlacement      = .leading
+        cfg.imagePadding        = 8
+        cfg.contentInsets       = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 14)
+        cfg.cornerStyle         = .medium
+        var attrTitle = AttributedString("\(title)  ▾")
+        attrTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        cfg.attributedTitle = attrTitle
+        let btn = UIButton(configuration: cfg)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }
+
+    private func makeChip(_ label: String, onRemove: @escaping () -> Void) -> UIView {
+        let orange = ComponentColors.HomeScreen.actionButtonFill
+        let chip   = UIView()
+        chip.backgroundColor    = orange.withAlphaComponent(0.18)
+        chip.layer.cornerRadius = 14
+        chip.translatesAutoresizingMaskIntoConstraints = false
+
+        let lbl  = styledLabel(label, font: .systemFont(ofSize: 13, weight: .bold), color: orange)
+        let xBtn = UIButton(type: .system)
+        xBtn.setImage(UIImage(systemName: "xmark",
+                              withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)),
+                      for: .normal)
+        xBtn.tintColor = orange
+        xBtn.translatesAutoresizingMaskIntoConstraints = false
+        xBtn.addAction(UIAction { _ in onRemove() }, for: .touchUpInside)
+
+        [lbl, xBtn].forEach { chip.addSubview($0) }
+        NSLayoutConstraint.activate([
+            lbl.leadingAnchor.constraint(equalTo: chip.leadingAnchor, constant: 12),
+            lbl.centerYAnchor.constraint(equalTo: chip.centerYAnchor),
+            xBtn.leadingAnchor.constraint(equalTo: lbl.trailingAnchor, constant: 6),
+            xBtn.trailingAnchor.constraint(equalTo: chip.trailingAnchor, constant: -10),
+            xBtn.centerYAnchor.constraint(equalTo: chip.centerYAnchor),
+            xBtn.widthAnchor.constraint(equalToConstant: 16),
+            chip.heightAnchor.constraint(equalToConstant: 30),
+        ])
+        return chip
+    }
+
+    private func styledLabel(_ text: String, font: UIFont, color: UIColor) -> UILabel {
+        let l = UILabel()
+        l.text      = text
+        l.font      = font
+        l.textColor = color
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }
+
+    private func push(_ vc: UIViewController) {
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    private func showError(_ msg: String) {
+        let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
     }
 }
 
-// MARK: - UISearchResultsUpdating
-extension DiscoverViewController: UISearchResultsUpdating {
-    func updateSearchResults(for searchController: UISearchController) {
-        applyFilters()
-    }
+// MARK: - UISearchBarDelegate
+
+extension DiscoverViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange _: String) { applyFilters() }
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) { searchBar.resignFirstResponder() }
 }
 
-// MARK: - UITableViewDataSource
-extension DiscoverViewController: UITableViewDataSource {
+// MARK: - Table DataSource + Delegate
+
+extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return filteredSongs.count
+        filteredSongs.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -579,76 +514,61 @@ extension DiscoverViewController: UITableViewDataSource {
         cell.configure(with: filteredSongs[indexPath.row])
         return cell
     }
-}
+    
 
-// MARK: - UITableViewDelegate
-extension DiscoverViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+     
         let song = filteredSongs[indexPath.row]
-        let detailVC = DiscoverSongDetailViewController()
-        detailVC.song = song
-        navigationController?.pushViewController(detailVC, animated: true)
+     
+        // Grab the art image from the visible cell (optional, for a smooth transition)
+        let cell = tableView.cellForRow(at: indexPath) as? SongCell
+     
+        let previewVC         = DiscoverSongPreviewViewController()
+        previewVC.song        = song
+        previewVC.songImage   = cell?.currentArtImage   // see note below
+        push(previewVC)
     }
+    
 }
 
 // MARK: - SongCell
-class SongCell: UITableViewCell {
+
+final class SongCell: UITableViewCell {
     static let reuseID = "SongCell"
 
-    private let orangeColor = ComponentColors.HomeScreen.actionButtonFill
+    private let orange = ComponentColors.HomeScreen.actionButtonFill
 
-    // Art view — initials in grey square
-    private lazy var artView: UIView = {
-        let v = UIView()
-        v.backgroundColor = ComponentColors.DiscoverySongCard.artPlaceholder
-        v.layer.cornerRadius = 8
-        v.translatesAutoresizingMaskIntoConstraints = false
-        return v
+    // Pool of track images from Assets/track_images/
+    private static let trackImages: [UIImage] = (1...16).compactMap {
+        UIImage(named: "trackimage_\($0)")
+    }
+
+    private lazy var artImageView: UIImageView = {
+        let iv = UIImageView()
+        iv.contentMode        = .scaleAspectFill
+        iv.clipsToBounds      = true
+        iv.layer.cornerRadius = 8
+        iv.backgroundColor    = ComponentColors.DiscoverySongCard.artPlaceholder
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        return iv
     }()
+    
 
-    private lazy var initialsLabel: UILabel = {
-        let lbl = UILabel()
-        lbl.font = .systemFont(ofSize: 18, weight: .bold)
-        lbl.textColor = ComponentColors.DiscoverySongCard.artPlaceholderText
-        lbl.textAlignment = .center
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        return lbl
-    }()
+    // Expose the current art image for transition/preview purposes
+    var currentArtImage: UIImage? { artImageView.image }
 
-    private lazy var titleLabel: UILabel = {
-        let lbl = UILabel()
-        lbl.font = .systemFont(ofSize: 17, weight: .semibold)
-        lbl.textColor = ComponentColors.DiscoverySongCard.titleText
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        return lbl
-    }()
+    private lazy var titleLabel    = cellLabel(17, .semibold, ComponentColors.DiscoverySongCard.titleText)
+    private lazy var composerLabel = cellLabel(14, .regular,  SemanticColors.Text.secondary)
 
-    private lazy var composerLabel: UILabel = {
-        let lbl = UILabel()
-        lbl.font = .systemFont(ofSize: 14, weight: .regular)
-        lbl.textColor = SemanticColors.Text.secondary
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        return lbl
-    }()
-
-    private lazy var tagsStackView: UIStackView = {
+    private lazy var tagsStack: UIStackView = {
         let sv = UIStackView()
-        sv.axis = .horizontal
         sv.spacing = 6
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
 
-    private lazy var chevron: UIImageView = {
-        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        let iv = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: config))
-        iv.tintColor = SemanticColors.Text.tertiary
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        return iv
-    }()
-
-    private lazy var separatorLine: UIView = {
+    private lazy var separator: UIView = {
         let v = UIView()
         v.backgroundColor = ComponentColors.DiscoverySongCard.separator
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -656,8 +576,8 @@ class SongCell: UITableViewCell {
     }()
 
     private lazy var infoStack: UIStackView = {
-        let sv = UIStackView()
-        sv.axis = .vertical
+        let sv = UIStackView(arrangedSubviews: [titleLabel, composerLabel, tagsStack])
+        sv.axis    = .vertical
         sv.spacing = 4
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
@@ -665,98 +585,75 @@ class SongCell: UITableViewCell {
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
-        setupCell()
+        backgroundColor = .clear
+        selectionStyle  = .default
+        accessoryType   = .disclosureIndicator
+        [artImageView, infoStack, separator].forEach { contentView.addSubview($0) }
+
+        NSLayoutConstraint.activate([
+            artImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            artImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+            artImageView.widthAnchor.constraint(equalToConstant: 58),
+            artImageView.heightAnchor.constraint(equalToConstant: 58),
+            artImageView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -14),
+
+            infoStack.leadingAnchor.constraint(equalTo: artImageView.trailingAnchor, constant: 14),
+            infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            infoStack.centerYAnchor.constraint(equalTo: artImageView.centerYAnchor),
+
+            separator.leadingAnchor.constraint(equalTo: infoStack.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            separator.heightAnchor.constraint(equalToConstant: 0.5),
+        ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    private func setupCell() {
-        backgroundColor = .clear
-        selectionStyle = .default
-
-        artView.addSubview(initialsLabel)
-        contentView.addSubview(artView)
-        contentView.addSubview(infoStack)
-        contentView.addSubview(chevron)
-        contentView.addSubview(separatorLine)
-
-        infoStack.addArrangedSubview(titleLabel)
-        infoStack.addArrangedSubview(composerLabel)
-        infoStack.addArrangedSubview(tagsStackView)
-
-        NSLayoutConstraint.activate([
-            // Art
-            artView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            artView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
-            artView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -14),
-            artView.widthAnchor.constraint(equalToConstant: 58),
-            artView.heightAnchor.constraint(equalToConstant: 58),
-
-            initialsLabel.centerXAnchor.constraint(equalTo: artView.centerXAnchor),
-            initialsLabel.centerYAnchor.constraint(equalTo: artView.centerYAnchor),
-
-            // Info stack
-            infoStack.leadingAnchor.constraint(equalTo: artView.trailingAnchor, constant: 14),
-            infoStack.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -8),
-            infoStack.centerYAnchor.constraint(equalTo: artView.centerYAnchor),
-
-            // Chevron
-            chevron.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            chevron.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-
-            // Separator
-            separatorLine.leadingAnchor.constraint(equalTo: infoStack.leadingAnchor),
-            separatorLine.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            separatorLine.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            separatorLine.heightAnchor.constraint(equalToConstant: 0.5),
-        ])
-    }
-
     func configure(with song: Song) {
-        initialsLabel.text = song.initials
-        titleLabel.text = song.title
-        composerLabel.text = "\(song.composer) · \(song.skillDescription)"
+        // Pick a random track image; fall back to a plain coloured view if assets missing
+        artImageView.image = SongCell.trackImages.randomElement()
 
-        // Clear previous tags
-        tagsStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        titleLabel.text    = song.title
+        composerLabel.text = song.composer
+        tagsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        // Level tag — orange
-        tagsStackView.addArrangedSubview(makeTag("Lv \(song.level)", color: orangeColor))
+        let tempo = song.tempo == "slow" ? "🐢 Slow" : song.tempo == "fast" ? "🐇 Fast" : "♩ Medium"
+        let hands = song.hands == "right_only" ? "RH only" : song.hands == "left_only" ? "LH only" : "Both hands"
+        [("Lv \(song.level)", orange), (tempo, UIColor.secondaryLabel), (hands, UIColor.secondaryLabel)]
+            .map  { makeTag($0.0, color: $0.1) }
+            .forEach { tagsStack.addArrangedSubview($0) }
 
-        // Tempo tag
-        let tempoText = song.tempo == "slow" ? "🐢 Slow" : song.tempo == "fast" ? "🐇 Fast" : "♩ Medium"
-        tagsStackView.addArrangedSubview(makeTag(tempoText, color: .secondaryLabel))
-
-        // Hands tag
-        let handsText = song.hands == "right_only" ? "RH only" : song.hands == "left_only" ? "LH only" : "Both hands"
-        tagsStackView.addArrangedSubview(makeTag(handsText, color: .secondaryLabel))
-
-        // Spacer
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        tagsStackView.addArrangedSubview(spacer)
+        tagsStack.addArrangedSubview(spacer)
     }
 
     private func makeTag(_ text: String, color: UIColor) -> UIView {
-        let container = UIView()
-        container.layer.cornerRadius = 6
-        container.backgroundColor = color.withAlphaComponent(0.1)
-
-        let label = UILabel()
-        label.text = text
-        label.font = .systemFont(ofSize: 11, weight: .bold)
-        label.textColor = color
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(label)
-        container.translatesAutoresizingMaskIntoConstraints = false
-
+        let lbl = cellLabel(11, .bold, color)
+        lbl.text = text
+        let v = UIView()
+        v.backgroundColor    = color.withAlphaComponent(0.1)
+        v.layer.cornerRadius = 6
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.addSubview(lbl)
         NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: container.topAnchor, constant: 3),
-            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -3),
-            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            lbl.topAnchor.constraint(equalTo: v.topAnchor, constant: 3),
+            lbl.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -3),
+            lbl.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 8),
+            lbl.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -8),
         ])
-        return container
+        return v
+    }
+
+    private func cellLabel(_ size: CGFloat, _ weight: UIFont.Weight,
+                           _ color: UIColor, _ align: NSTextAlignment = .left) -> UILabel {
+        let l = UILabel()
+        l.font          = .systemFont(ofSize: size, weight: weight)
+        l.textColor     = color
+        l.textAlignment = align
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
     }
 }
+

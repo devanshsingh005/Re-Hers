@@ -158,7 +158,7 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
 
     var carouselItems: [ContinueCardItem] {[
         ContinueCardItem(imageName:"Image",     title:"Believer",       subtitle:"Bars 5/15 · Right hand", filledDots:4,  totalDots:12),
-        ContinueCardItem(imageName:"ride_home", title:"Ride",           subtitle:"Bars 8/20 · Full song",  filledDots:6,  totalDots:12),
+        ContinueCardItem(imageName:"trackimage_1", title:"Ride",           subtitle:"Bars 8/20 · Full song",  filledDots:6,  totalDots:12),
         ContinueCardItem(imageName:"cl_4",      title:"Neon Lights",    subtitle:"Bars 2/10 · Left hand",  filledDots:2,  totalDots:12),
         ContinueCardItem(imageName:"cl_5",      title:"Midnight Train", subtitle:"Bars 12/16 · Chords",    filledDots:9,  totalDots:12),
     ]}
