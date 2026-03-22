@@ -30,9 +30,6 @@ final class UploadPageNextViewController: UIViewController {
     private var loadedPDFDocument: PDFDocument? // stored for full-screen preview
     private var pendingPDFPath:   String?       // raw pdf_path from DB, used after processing
 
-    // MARK: - Nav
-    private let navBar = TopNavBar()
-
     // MARK: - Scroll
     private let scrollView  = UIScrollView()
     private let contentView = UIView()
@@ -76,10 +73,17 @@ final class UploadPageNextViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.App.screenBackground
-        setupNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
+        setupNativeNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
         showProcessingState()
         print("[VDL] jobId=\(jobId?.uuidString ?? "nil")  resultURL=\(resultURL ?? "nil")")
         loadFromJobId()
@@ -735,24 +739,10 @@ final class UploadPageNextViewController: UIViewController {
 
     // MARK: - UI Setup
 
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isBackButtonVisible = true; navBar.isChordIconVisible = true
-        navBar.isProfileVisible    = true; navBar.isStreakVisible    = false
-        navBar.isWelcomeTextHidden = true; navBar.setTitle("Practice")
-        navBar.backAction    = { [weak self] in self?.navigationController?.popViewController(animated: true) }
-        navBar.chordAction   = { [weak self] in
-            self?.navigationController?.pushViewController(ChordRecognitionViewController(), animated: true)
-        }
-        navBar.profileAction = { [weak self] in
-            self?.navigationController?.pushViewController(UserProfileViewController(), animated: true)
-        }
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+    private func setupNativeNavBar() {
+        title = "Practice"
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
     }
 
     private func setupUI() {
@@ -900,7 +890,7 @@ final class UploadPageNextViewController: UIViewController {
 
     private func applyConstraints() {
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -990,7 +980,7 @@ final class UploadPageNextViewController: UIViewController {
             animationButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             animationButton.heightAnchor.constraint(equalToConstant: 46),
             animationButton.widthAnchor.constraint(equalTo: playAlongButton.widthAnchor),
-            animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
+            animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
         ])
     }
 }

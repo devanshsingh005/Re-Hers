@@ -52,6 +52,13 @@ class DiscoverSongDetailViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.SongDetailScreen.background

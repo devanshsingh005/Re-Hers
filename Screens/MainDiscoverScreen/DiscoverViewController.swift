@@ -164,6 +164,7 @@ final class DiscoverViewController: UIViewController {
     private lazy var scrollView: UIScrollView = {
         let sv = UIScrollView()
         sv.showsVerticalScrollIndicator = false
+        sv.delegate = self
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
@@ -186,6 +187,36 @@ final class DiscoverViewController: UIViewController {
         setupLayout()
         buildFilterMenus()
         fetchSongs()
+        fetchProfileData()
+        
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
+                self.updateProfileButtonBorder()
+            }
+        }
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: TopNavBar.profileDidUpdateNotification, object: nil)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        syncNavBarAlpha()
+    }
+
+    @objc private func handleProfileUpdate() {
+        fetchProfileData()
+    }
+
+    @available(iOS, deprecated: 17.0)
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            updateProfileButtonBorder()
+        }
+    }
+
+    private func updateProfileButtonBorder() {
+        largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
     }
 
     override func viewWillTransition(to size: CGSize,
@@ -215,6 +246,7 @@ final class DiscoverViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(scrollView)
+        scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.addSubview(contentView)
         chipsScrollView.addSubview(chipsStack)
 
@@ -241,6 +273,7 @@ final class DiscoverViewController: UIViewController {
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
+            // Level chips
             // Search bar
             searchBar.topAnchor.constraint(equalTo: c.topAnchor, constant: 8),
             searchBar.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 12),
@@ -530,6 +563,11 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
         push(previewVC)
     }
     
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if scrollView === self.scrollView {
+            syncNavBarAlpha()
+        }
+    }
 }
 
 // MARK: - SongCell

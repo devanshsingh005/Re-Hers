@@ -73,106 +73,89 @@ extension HomeViewController {
         self.topCardTitleLabel = titleLabel
         wrapper.addSubview(titleLabel)
 
-        // Tag: "RIGHT HAND FOCUS | SLOW"
-        let tagBg = UIView()
-        tagBg.backgroundColor = .white
-        tagBg.layer.cornerRadius = 12
-        tagBg.translatesAutoresizingMaskIntoConstraints = false
-        
-        let tagLabel = UILabel()
-        tagLabel.text = "..."
-        tagLabel.font = .systemFont(ofSize: 10, weight: .bold)
-        tagLabel.textColor = .black
-        tagLabel.translatesAutoresizingMaskIntoConstraints = false
-        self.topCardTagLabel = tagLabel
-        tagBg.addSubview(tagLabel)
-        wrapper.addSubview(tagBg)
+    var carouselItems: [ContinueCardItem] {[
+        ContinueCardItem(imageName:"trackimage_1",     title:"Believer",       subtitle:"Bars 5/15 · Right hand", filledDots:4,  totalDots:12),
+        ContinueCardItem(imageName:"trackimage_2", title:"Ride",           subtitle:"Bars 8/20 · Full song",  filledDots:6,  totalDots:12),
+        ContinueCardItem(imageName:"trackimage_3",      title:"Neon Lights",    subtitle:"Bars 2/10 · Left hand",  filledDots:2,  totalDots:12),
+        ContinueCardItem(imageName:"trackimage_4", title:"Midnight Train", subtitle:"Bars 12/16 · Chords",    filledDots:9,  totalDots:12),
+    ]}
 
-        // Progress section
-        let progressTitle = UILabel()
-        progressTitle.text = "Your Progress"
-        progressTitle.font = .systemFont(ofSize: 12, weight: .medium)
-        progressTitle.textColor = ComponentColors.SongCard.titleText
-        progressTitle.translatesAutoresizingMaskIntoConstraints = false
-        
-        let progressValue = UILabel()
-        progressValue.text = "65%"
-        progressValue.font = .systemFont(ofSize: 12, weight: .semibold)
-        progressValue.textColor = ComponentColors.SongCard.titleText
-        progressValue.translatesAutoresizingMaskIntoConstraints = false
+    func addCarouselSection() {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection    = .horizontal
+        layout.minimumLineSpacing = 14
 
-        let progressTrack = UIView()
-        progressTrack.backgroundColor = ComponentColors.SongCard.border // or similar cream
-        progressTrack.layer.cornerRadius = 3
-        progressTrack.translatesAutoresizingMaskIntoConstraints = false
-        
-        let progressFill = UIView()
-        progressFill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        progressFill.layer.cornerRadius = 3
-        progressFill.translatesAutoresizingMaskIntoConstraints = false
-        progressTrack.addSubview(progressFill)
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        cv.backgroundColor         = .clear
+        cv.showsHorizontalScrollIndicator = false
+        cv.decelerationRate        = .fast
+        cv.clipsToBounds           = false
+        cv.dataSource = self; cv.delegate = self
+        cv.register(ContinueCardCell.self, forCellWithReuseIdentifier: ContinueCardCell.reuseID)
+        cv.translatesAutoresizingMaskIntoConstraints = false
+        cv.tag = 100
 
-        let progressHeaderStack = UIStackView(arrangedSubviews: [progressTitle, UIView(), progressValue])
-        progressHeaderStack.axis = .horizontal
-        progressHeaderStack.translatesAutoresizingMaskIntoConstraints = false
+        // Native UIPageControl
+        let pageControl = UIPageControl()
+        pageControl.numberOfPages                    = carouselItems.count
+        pageControl.currentPage                      = 0
+        pageControl.currentPageIndicatorTintColor    = ComponentColors.HomeScreen.actionButtonFill
+        pageControl.pageIndicatorTintColor           = ComponentColors.SongCard.border
+        pageControl.translatesAutoresizingMaskIntoConstraints = false
 
-        let startBtn = UIButton(type: .system)
-        startBtn.setTitle("Start Practice", for: .normal)
-        startBtn.titleLabel?.font = .systemFont(ofSize: 15, weight: .bold)
-        startBtn.setTitleColor(.white, for: .normal)
-        startBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        startBtn.layer.cornerRadius = 24
-        startBtn.translatesAutoresizingMaskIntoConstraints = false
-        // Placeholder action, can link to player later
-        startBtn.addAction(UIAction { [weak self] _ in self?.openPianoPage() }, for: .touchUpInside)
-
-        wrapper.addSubview(progressHeaderStack)
-        wrapper.addSubview(progressTrack)
-        wrapper.addSubview(startBtn)
+        let wrapper = UIView()
+        wrapper.clipsToBounds = false
+        wrapper.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(cv); wrapper.addSubview(pageControl)
 
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: wrapper.topAnchor),
-            imageView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
-            imageView.heightAnchor.constraint(equalToConstant: 160),
+            cv.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            cv.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            cv.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            cv.heightAnchor.constraint(equalToConstant: 218),
 
-            gradientView.topAnchor.constraint(equalTo: imageView.topAnchor),
-            gradientView.leadingAnchor.constraint(equalTo: imageView.leadingAnchor),
-            gradientView.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
-            gradientView.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
-
-            tagLabel.topAnchor.constraint(equalTo: tagBg.topAnchor, constant: 4),
-            tagLabel.bottomAnchor.constraint(equalTo: tagBg.bottomAnchor, constant: -4),
-            tagLabel.leadingAnchor.constraint(equalTo: tagBg.leadingAnchor, constant: 10),
-            tagLabel.trailingAnchor.constraint(equalTo: tagBg.trailingAnchor, constant: -10),
-
-            tagBg.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
-            tagBg.bottomAnchor.constraint(equalTo: imageView.bottomAnchor, constant: -18),
-            
-            titleLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 18),
-            titleLabel.bottomAnchor.constraint(equalTo: tagBg.topAnchor, constant: -8),
-
-            progressHeaderStack.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 18),
-            progressHeaderStack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 18),
-            progressHeaderStack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -18),
-
-            progressTrack.topAnchor.constraint(equalTo: progressHeaderStack.bottomAnchor, constant: 8),
-            progressTrack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 18),
-            progressTrack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -18),
-            progressTrack.heightAnchor.constraint(equalToConstant: 6),
-
-            progressFill.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
-            progressFill.topAnchor.constraint(equalTo: progressTrack.topAnchor),
-            progressFill.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
-            progressFill.widthAnchor.constraint(equalTo: progressTrack.widthAnchor, multiplier: 0.65),
-
-            startBtn.topAnchor.constraint(equalTo: progressTrack.bottomAnchor, constant: 22),
-            startBtn.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 18),
-            startBtn.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -18),
-            startBtn.heightAnchor.constraint(equalToConstant: 48),
-            startBtn.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -20)
+            pageControl.topAnchor.constraint(equalTo: cv.bottomAnchor, constant: 4),
+            pageControl.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor),
+            pageControl.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
         ])
-        
-        contentView.addArrangedSubview(outerContainer)
+        objc_setAssociatedObject(cv, &AssocKeys.pc, pageControl, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        contentView.addArrangedSubview(wrapper)
+    }
+
+    func collectionView(_ cv: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        cv.tag == 100 ? carouselItems.count : 0
+    }
+    func collectionView(_ cv: UICollectionView, cellForItemAt ip: IndexPath) -> UICollectionViewCell {
+        let cell = cv.dequeueReusableCell(withReuseIdentifier: ContinueCardCell.reuseID, for: ip) as! ContinueCardCell
+        cell.configure(with: carouselItems[ip.item])
+        cell.onStartTapped = { [weak self] in self?.openPianoPage() }
+        return cell
+    }
+    func collectionView(_ cv: UICollectionView, layout _: UICollectionViewLayout, sizeForItemAt _: IndexPath) -> CGSize {
+        CGSize(width: cv.bounds.width, height: 218)
+    }
+    func collectionView(_ cv: UICollectionView, layout _: UICollectionViewLayout, insetForSectionAt _: Int) -> UIEdgeInsets { .zero }
+
+    func scrollViewWillEndDragging(_ sv: UIScrollView, withVelocity v: CGPoint, targetContentOffset t: UnsafeMutablePointer<CGPoint>) {
+        guard let cv = sv as? UICollectionView, cv.tag == 100 else { return }
+        let pageW = cv.bounds.width + 14
+        let raw   = t.pointee.x / pageW
+        let page  = v.x > 0 ? Int(ceil(raw)) : v.x < 0 ? Int(floor(raw)) : Int(round(raw))
+        let clamped = max(0, min(page, carouselItems.count - 1))
+        t.pointee = CGPoint(x: CGFloat(clamped) * pageW, y: 0)
+        if let pc = objc_getAssociatedObject(cv, &AssocKeys.pc) as? UIPageControl { pc.currentPage = clamped }
+    }
+    func scrollViewDidScroll(_ sv: UIScrollView) {
+        if let cv = sv as? UICollectionView, cv.tag == 100 {
+            let pageW = cv.bounds.width + 14
+            let page  = Int((sv.contentOffset.x + pageW / 2) / pageW)
+            if let pc = objc_getAssociatedObject(cv, &AssocKeys.pc) as? UIPageControl {
+                pc.currentPage = max(0, min(page, carouselItems.count - 1))
+            }
+        } else if sv === self.scrollView {
+            syncNavBarAlpha()
+        }
     }
 }
+
+private enum AssocKeys { nonisolated(unsafe) static var pc: UInt8 = 0 }

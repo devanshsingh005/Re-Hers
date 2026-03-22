@@ -455,7 +455,7 @@ final class PlayAlongNavBar: UIView {
     private let brandOrange = ComponentColors.HomeScreen.actionButtonFill
     
     private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-    private let backButton = UIButton(type: .system)
+    private lazy var backButton = NavigationBarHelper.makeCircularBackButton()
     let chordDisplay = UILabel()
     
     private let rightStack = UIStackView()
@@ -490,8 +490,7 @@ final class PlayAlongNavBar: UIView {
     private func setupUI() {
         addSubview(blurView)
         
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        backButton.tintColor = .label
+        // Back button — circular global style
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         
         chordDisplay.font = .systemFont(ofSize: 22, weight: .black)

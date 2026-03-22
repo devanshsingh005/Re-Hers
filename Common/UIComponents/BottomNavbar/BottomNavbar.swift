@@ -12,6 +12,9 @@ class MainTabBarController: UITabBarController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        if #available(iOS 18.0, *) {
+            self.mode = .tabBar
+        }
         setupTabs()
         setupAppearance()
     }
@@ -35,48 +38,80 @@ class MainTabBarController: UITabBarController {
             selectedImage: UIImage(systemName: "plus.square.fill")
         )
         
-        // Discover Tab
-        let discoverVC = DiscoverViewController()
-        let discoverNav = UINavigationController(rootViewController: discoverVC)
-        discoverNav.tabBarItem = UITabBarItem(
-            title: "Discover",
+        // Practice Tab
+        let practiceVC = LessonMapViewController()
+        let practiceNav = UINavigationController(rootViewController: practiceVC)
+        practiceNav.tabBarItem = UITabBarItem(
+            title: "Practice",
+            image: UIImage(systemName: "map"),
+            selectedImage: UIImage(systemName: "map.fill")
+        )
+
+        // Search Tab
+        let searchVC = DiscoverViewController()
+        let searchNav = UINavigationController(rootViewController: searchVC)
+        searchNav.tabBarItem = UITabBarItem(
+            title: "Search",
             image: UIImage(systemName: "magnifyingglass"),
             selectedImage: UIImage(systemName: "magnifyingglass")
         )
         
-        // Play Along Tab
-        let playListVC = PlaylistViewController()
-        let playListNav = UINavigationController(rootViewController: playListVC)
-        playListNav.tabBarItem = UITabBarItem(
-            title: "Playlist",
-            image: UIImage(systemName: "music.note.list"),
-            selectedImage: UIImage(systemName: "music.note.list")
-        )
-        
-        // Set all view controllers
-        viewControllers = [homeNav, uploadNav, discoverNav, playListNav]
+        // Set all view controllers in the new order: Home, Upload, Practice, Search
+        viewControllers = [homeNav, uploadNav, practiceNav, searchNav]
     }
     
     private func setupAppearance() {
-        // Active / inactive icon and label tints — all resolved from the design token layer.
-        tabBar.tintColor             = ComponentColors.TabBar.activeIcon
+        tabBar.tintColor              = ComponentColors.TabBar.activeIcon
         tabBar.unselectedItemTintColor = ComponentColors.TabBar.inactiveIcon
 
-        // iOS 15+ opaque appearance — collapses redundancy between standardAppearance
-        // and scrollEdgeAppearance so the bar never turns transparent on scroll.
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = ComponentColors.TabBar.background
+        // Apply to the global UITabBar appearance proxy so ANY system redraw
+        // (trait change, orientation etc.) picks up the correct attributes.
+        let globalAppearance = UITabBarAppearance()
+        globalAppearance.configureWithDefaultBackground()
+        UITabBar.appearance().standardAppearance   = globalAppearance
+        UITabBar.appearance().scrollEdgeAppearance  = globalAppearance
 
-        // Use the separator token rather than hiding the line entirely.
-        // Passing .clear would fully remove it; the token is a very subtle stroke colour.
+        reapplyTabBarAppearance()
+    }
+
+    /// Reapplies the full tab bar appearance. Called on init and after every selection
+    /// to prevent the OS from resetting labels when a tab is tapped.
+    private func reapplyTabBarAppearance() {
+        let normalAttrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: ComponentColors.TabBar.inactiveIcon,
+            .font: UIFont.systemFont(ofSize: 10, weight: .medium)
+        ]
+        let selectedAttrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: ComponentColors.TabBar.activeIcon,
+            .font: UIFont.systemFont(ofSize: 10, weight: .bold)
+        ]
+
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
         appearance.shadowColor = ComponentColors.TabBar.separator
 
-        tabBar.standardAppearance  = appearance
-        tabBar.scrollEdgeAppearance = appearance
+        // Stacked (default iPhone portrait)
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes   = normalAttrs
+        appearance.stackedLayoutAppearance.normal.iconColor             = ComponentColors.TabBar.inactiveIcon
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttrs
+        appearance.stackedLayoutAppearance.selected.iconColor           = ComponentColors.TabBar.activeIcon
 
-        tabBar.isTranslucent  = false
-        tabBar.clipsToBounds  = false
+        // Inline (iPad / landscape)
+        appearance.inlineLayoutAppearance.normal.titleTextAttributes    = normalAttrs
+        appearance.inlineLayoutAppearance.selected.titleTextAttributes  = selectedAttrs
+
+        // Compact inline (iPhone landscape)
+        appearance.compactInlineLayoutAppearance.normal.titleTextAttributes    = normalAttrs
+        appearance.compactInlineLayoutAppearance.selected.titleTextAttributes  = selectedAttrs
+
+        tabBar.standardAppearance   = appearance
+        tabBar.scrollEdgeAppearance  = appearance
+        tabBar.isTranslucent         = true
+    }
+
+    override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+        // Reapply appearance to prevent iOS from clearing labels after selection
+        reapplyTabBarAppearance()
     }
 
     // MARK: - Orientation Delegation

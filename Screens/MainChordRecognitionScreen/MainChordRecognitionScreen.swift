@@ -15,7 +15,6 @@ final class ChordRecognitionViewController: UIViewController {
     private let useFakeMode = false
 
     // MARK: - UI Components
-    private let navBar = TopNavBar.make(title: "Chord Recognition")
 
     // Main note display
     private let noteContainerView: UIView = {
@@ -131,7 +130,9 @@ final class ChordRecognitionViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
-        setupNavBar()
+        title = "Chord Recognition"
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
         setupUI()
         configureActions()
         setupWaveLayer()
@@ -152,25 +153,6 @@ final class ChordRecognitionViewController: UIViewController {
     }
 
     // MARK: - Setup
-    private func setupNavBar() {
-        navBar.isWelcomeTextHidden = true
-        navBar.isStreakVisible = false
-        navBar.isChordIconVisible = false
-        navBar.isBackButtonVisible = true
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
-
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-    }
-
     private func setupUI() {
         [noteContainerView, statusLabel, frequencyLabel, waveView, controlContainerView].forEach {
             view.addSubview($0)
@@ -191,8 +173,8 @@ final class ChordRecognitionViewController: UIViewController {
         }
 
         NSLayoutConstraint.activate([
-            // Note container
-            noteContainerView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 40),
+            // Note container — anchors from safeArea top
+            noteContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
             noteContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             noteContainerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.85),
             noteContainerView.heightAnchor.constraint(equalToConstant: 160),

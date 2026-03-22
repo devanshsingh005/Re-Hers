@@ -14,7 +14,7 @@ final class LessonNavBarView: UIView {
     private(set) var tempoMultiplier: Double = 1.0
 
     private let blurView    = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-    private let backBtn     = UIButton(type: .system)
+    private lazy var backBtn = NavigationBarHelper.makeCircularBackButton()
     private let titleLabel  = UILabel()
     private let tempoSlider = UISlider()
     private let tempoLabel  = UILabel()
@@ -48,10 +48,7 @@ final class LessonNavBarView: UIView {
             self.layer.addSublayer(border)
         }
 
-        // ── Back button ──────────────────────────────────────────────────
-        let backCfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
-        backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: backCfg), for: .normal)
-        backBtn.tintColor = .label
+        // ── Back button (circular global style) ────────────────────────────────────
         backBtn.addTarget(self, action: #selector(didBack), for: .touchUpInside)
 
         // ── Title ────────────────────────────────────────────────────────

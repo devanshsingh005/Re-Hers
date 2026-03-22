@@ -327,11 +327,20 @@ class LessonMapViewController: UIViewController {
     private var popupCard:    ChapterPopupCard?
     private var popupOverlay: UIView?
     private var nodeViews:    [ChapterNodeView] = []
+    
+    private let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    private let navShadowLayer = UIView()
+    private let largeSubtitleLabel = UILabel()
+    private var inlineSubtitleLabel: UILabel?
+    private let largeProfileButton = UIButton(type: .custom)
 
-    // ── Single source of truth — always loaded from Supabase ─────────────
-    /// Starts as all-locked; replaced on every viewWillAppear from Supabase.
     private var chapters: [MusicChapter] = allChapters.map { $0.with(status: .locked) }
     // ─────────────────────────────────────────────────────────────────────
+
+    // Tracks last fetched progress to avoid redundant rebuilds
+    private var lastFetchedChapterIndex: Int = -1
+    private var lastFetchedStarsMap: [Int: Int] = [:]
+    private var hasSuccessfullyLoadedOnce = false
 
     // Header progress refs
     private var headerProgressLabel:     UILabel?
@@ -350,9 +359,204 @@ class LessonMapViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.HomeScreen.background
+        scrollView.delegate = self
+        setupNavBar()
+        syncNavBarAlpha()
         setupScrollView()
+        setupNavBackground()
+        setupCustomLargeHeader()
         setupHeader()
-        setupPath()
+        fetchProfileData()
+        
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
+                self.updateProfileButtonBorder()
+            }
+        }
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: TopNavBar.profileDidUpdateNotification, object: nil)
+    }
+
+    @objc private func handleProfileUpdate() {
+        fetchProfileData()
+    }
+
+    private func setupNavBar() {
+        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Practice", subtitle: "Select a module")
+        self.inlineSubtitleLabel = subTitle
+        navigationItem.titleView = headerStack
+    }
+
+    private func setupNavBackground() {
+        navBackgroundView.alpha = 0
+        navBackgroundView.isUserInteractionEnabled = false // Allow touches through to header
+        navBackgroundView.contentView.isUserInteractionEnabled = false
+        view.addSubview(navBackgroundView)
+        
+        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
+        navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
+        navShadowLayer.isUserInteractionEnabled = false
+        navBackgroundView.contentView.addSubview(navShadowLayer)
+        
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+        let topPadding = window?.safeAreaInsets.top ?? 0
+        let navHeight: CGFloat = 44 + topPadding
+        
+        NSLayoutConstraint.activate([
+            navBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            navBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
+            
+            navShadowLayer.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
+            navShadowLayer.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
+            navShadowLayer.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
+            navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
+        ])
+        
+        applyLiquidGlass(to: navBackgroundView)
+    }
+
+    private func applyLiquidGlass(to blurView: UIVisualEffectView) {
+        blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        blurView.layer.borderWidth = 0.5
+    }
+
+    private func setupCustomLargeHeader() {
+        let headerContainer = UIView()
+        headerContainer.translatesAutoresizingMaskIntoConstraints = false
+        // Insert at the very top of contentView
+        contentView.addSubview(headerContainer)
+        
+        let labelStack = UIStackView()
+        labelStack.axis = .vertical
+        labelStack.spacing = -2
+        labelStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "Practice"
+        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
+        titleLabel.textColor = ComponentColors.NavBar.title
+        
+        largeSubtitleLabel.text = "Interactive lessons"
+        largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
+        
+        labelStack.addArrangedSubview(titleLabel)
+        labelStack.addArrangedSubview(largeSubtitleLabel)
+        headerContainer.addSubview(labelStack)
+        
+        largeProfileButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
+        largeProfileButton.layer.cornerRadius = 20
+        largeProfileButton.clipsToBounds = true
+        largeProfileButton.layer.borderWidth    = 1.0
+        largeProfileButton.layer.borderColor    = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
+        
+        // Default placeholder
+        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+        largeProfileButton.tintColor = .white
+        largeProfileButton.imageView?.contentMode = .scaleAspectFill
+        
+        largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
+        largeProfileButton.addTarget(self, action: #selector(handleProfileTap), for: .touchUpInside)
+        headerContainer.addSubview(largeProfileButton)
+        
+        NSLayoutConstraint.activate([
+            headerContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 0),
+            headerContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            headerContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            headerContainer.heightAnchor.constraint(equalToConstant: 80),
+            
+            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor),
+            labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor),
+            largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
+            largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
+    }
+
+    private func fetchProfileData() {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else {
+                await MainActor.run {
+                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    largeProfileButton.tintColor = .secondaryLabel
+                }
+                return
+            }
+            do {
+                let profile: Profile = try await SupabaseManager.shared.client
+                    .from("profiles").select().eq("id", value: user.id).single().execute().value
+                if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
+                    await loadAndSetProfileImage(from: avatarUrl)
+                } else {
+                    await MainActor.run {
+                        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                        largeProfileButton.tintColor = .secondaryLabel
+                    }
+                }
+            } catch {
+                print("Profile error: \(error)")
+                await MainActor.run {
+                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    largeProfileButton.tintColor = .secondaryLabel
+                }
+            }
+        }
+    }
+
+    private func loadAndSetProfileImage(from urlString: String) async {
+        if urlString.starts(with: "icon_") {
+            await MainActor.run {
+                if let img = UIImage(named: urlString) {
+                    largeProfileButton.setImage(img, for: .normal)
+                    largeProfileButton.tintColor = .clear
+                }
+            }
+            return
+        }
+        var finalURL = urlString
+        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
+            finalURL = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+        }
+        guard let url = URL(string: finalURL) else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 30))
+            if let img = UIImage(data: data) {
+                await MainActor.run {
+                    self.largeProfileButton.setImage(img, for: .normal)
+                    self.largeProfileButton.tintColor = .clear
+                    self.largeProfileButton.imageView?.contentMode = .scaleAspectFill
+                }
+            } else {
+                await MainActor.run {
+                    self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    self.largeProfileButton.tintColor = .secondaryLabel
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                self.largeProfileButton.tintColor = .secondaryLabel
+            }
+        }
+    }
+
+    func syncNavBarAlpha() {
+        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        let alpha = NavigationBarHelper.calculateNavBarAlpha(offset: offset)
+        
+        navigationItem.titleView?.alpha = alpha
+        navigationItem.titleView?.isHidden = (alpha == 0)
+        navBackgroundView.alpha = alpha
+    }
+
+    @objc private func handleProfileTap() {
+        navigationController?.pushViewController(UserProfileViewController(), animated: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -401,21 +605,35 @@ class LessonMapViewController: UIViewController {
                     starsMap[idx] = max(starsMap[idx] ?? 0, s)
                 }
 
-                // 4. Apply progress on main thread and refresh UI
+                // 4. Apply progress on main thread and refresh UI ONLY if changed
                 await MainActor.run {
-                    self.chapters = applyProgress(
-                        currentChapter: currentChapter,
-                        chapterStars:   starsMap
-                    )
-                    self.rebuildPath()
+                    let chaptersNeedRebuild = (currentChapter != self.lastFetchedChapterIndex) || (starsMap != self.lastFetchedStarsMap) || !self.hasSuccessfullyLoadedOnce
+
+                    if chaptersNeedRebuild {
+                        self.lastFetchedChapterIndex = currentChapter
+                        self.lastFetchedStarsMap      = starsMap
+                        self.hasSuccessfullyLoadedOnce = true
+
+                        self.chapters = applyProgress(
+                            currentChapter: currentChapter,
+                            chapterStars:   starsMap
+                        )
+                        self.rebuildPath()
+                    }
                 }
 
             } catch {
                 print("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
-                // Fall back to chapter 1 being active so the UI isn't empty
+                // Fall back to chapter 1 being active if never loaded
                 await MainActor.run {
-                    self.chapters = applyProgress(currentChapter: 1)
-                    self.rebuildPath()
+                    if !self.hasSuccessfullyLoadedOnce {
+                        self.lastFetchedChapterIndex = 1
+                        self.lastFetchedStarsMap      = [:]
+                        self.hasSuccessfullyLoadedOnce = true
+                        
+                        self.chapters = applyProgress(currentChapter: 1)
+                        self.rebuildPath()
+                    }
                 }
             }
         }
@@ -431,11 +649,11 @@ class LessonMapViewController: UIViewController {
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor), // Overlap for blur
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 90), // Start after status bar
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
@@ -446,30 +664,6 @@ class LessonMapViewController: UIViewController {
     // MARK: - Header
 
     private func setupHeader() {
-        let titleLabel = UILabel()
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text      = "Basics"
-        titleLabel.font      = .systemFont(ofSize: 30, weight: .heavy)
-        titleLabel.textColor = ComponentColors.LearningCurve.headerTitle
-
-        let subtitleLabel = UILabel()
-        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        subtitleLabel.text      = "Interactive lessons"
-        subtitleLabel.font      = .systemFont(ofSize: 14)
-        subtitleLabel.textColor = ComponentColors.LearningCurve.headerSubtitle
-
-        let avatarView = UIView()
-        avatarView.translatesAutoresizingMaskIntoConstraints = false
-        avatarView.backgroundColor     = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.2)
-        avatarView.layer.cornerRadius  = 22
-        avatarView.layer.masksToBounds = true
-        avatarView.layer.borderColor   = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.4).cgColor
-        avatarView.layer.borderWidth   = 2
-        let avatarIcon = UILabel()
-        avatarIcon.translatesAutoresizingMaskIntoConstraints = false
-        avatarIcon.text = "👩"; avatarIcon.font = .systemFont(ofSize: 22)
-        avatarView.addSubview(avatarIcon)
-
         let progressLabel = UILabel()
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
         headerProgressLabel = progressLabel
@@ -487,8 +681,7 @@ class LessonMapViewController: UIViewController {
         progressBG.addSubview(progressFill)
         headerProgressFill = progressFill
 
-        contentView.addSubview(titleLabel); contentView.addSubview(subtitleLabel)
-        contentView.addSubview(avatarView); contentView.addSubview(progressLabel)
+        contentView.addSubview(progressLabel)
         contentView.addSubview(progressBG)
 
         let fillWidth = progressFill.widthAnchor.constraint(equalToConstant: 130 * CGFloat(progress))
@@ -496,21 +689,7 @@ class LessonMapViewController: UIViewController {
         headerProgressFillWidth = fillWidth
 
         NSLayoutConstraint.activate([
-            avatarIcon.centerXAnchor.constraint(equalTo: avatarView.centerXAnchor),
-            avatarIcon.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor),
-
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
-            subtitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-
-            avatarView.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            avatarView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            avatarView.widthAnchor.constraint(equalToConstant: 44),
-            avatarView.heightAnchor.constraint(equalToConstant: 44),
-
-            progressLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 14),
+            progressLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 110),
             progressLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
             progressBG.topAnchor.constraint(equalTo: progressLabel.bottomAnchor, constant: 5),
@@ -724,6 +903,17 @@ class LessonMapViewController: UIViewController {
             guard banner.superview != nil else { return }
             banner.onContinue?()
         }
+    }
+    @available(iOS, deprecated: 17.0)
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            updateProfileButtonBorder()
+        }
+    }
+
+    private func updateProfileButtonBorder() {
+        largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
     }
 }
 
@@ -948,5 +1138,12 @@ class PathCanvasView: UIView {
         default: x = index % 2 == 0 ? rightX : leftX
         }
         return CGPoint(x: x, y: y)
+    }
+}
+
+// MARK: - UIScrollViewDelegate
+extension LessonMapViewController: UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        syncNavBarAlpha()
     }
 }

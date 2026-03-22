@@ -20,16 +20,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// Applies component-level color tokens to every UINavigationBar in the app.
     /// Called once at launch so all screens inherit correct branding automatically.
     private func configureGlobalAppearance() {
-        let navAppearance = UINavigationBarAppearance()
-        navAppearance.configureWithOpaqueBackground()
-        navAppearance.backgroundColor          = ComponentColors.NavBar.background
-        navAppearance.shadowColor              = ComponentColors.NavBar.separator
-        navAppearance.titleTextAttributes      = [.foregroundColor: ComponentColors.NavBar.title]
-        navAppearance.largeTitleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
+        let standardAppearance = UINavigationBarAppearance()
+        standardAppearance.configureWithDefaultBackground()
+        standardAppearance.backgroundColor          = ComponentColors.NavBar.background.withAlphaComponent(0.85)
+        standardAppearance.shadowColor              = ComponentColors.NavBar.separator
+        standardAppearance.titleTextAttributes      = [.foregroundColor: ComponentColors.NavBar.title]
+        standardAppearance.largeTitleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
 
-        UINavigationBar.appearance().standardAppearance   = navAppearance
-        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().compactAppearance    = navAppearance
+        let scrollEdgeAppearance = UINavigationBarAppearance()
+        scrollEdgeAppearance.configureWithTransparentBackground()
+        scrollEdgeAppearance.titleTextAttributes      = [.foregroundColor: ComponentColors.NavBar.title]
+        scrollEdgeAppearance.largeTitleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
+
+        UINavigationBar.appearance().standardAppearance   = standardAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = scrollEdgeAppearance
+        UINavigationBar.appearance().compactAppearance    = standardAppearance
         UINavigationBar.appearance().tintColor            = ComponentColors.NavBar.rightButton
     }
 

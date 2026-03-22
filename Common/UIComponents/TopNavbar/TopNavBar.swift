@@ -24,13 +24,9 @@ public final class TopNavBar: UIView {
 
     // MARK: - UI Components
 
-    private let backButton: UIButton = {
-        let btn = UIButton(type: .system)
-        let icon = UIImage(systemName: "chevron.left")?.withRenderingMode(.alwaysTemplate)
-        btn.setImage(icon, for: .normal)
-        btn.tintColor = .label
+    private lazy var backButton: UIButton = {
+        let btn = NavigationBarHelper.makeCircularBackButton()
         btn.isHidden = true
-        btn.contentHorizontalAlignment = .leading
         return btn
     }()
 

@@ -58,13 +58,36 @@ final class UserProfileViewController: UIViewController {
     private var currentProfile: Profile?
     private var stats = ProfileStats()
 
+    // MARK: - Init
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.hidesBottomBarWhenPushed = true
+    }
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = ComponentColors.ProfileScreen.background // #F8F8F4
-        navigationController?.navigationBar.isHidden = true
+        view.backgroundColor = ComponentColors.ProfileScreen.background
+        // Use native navigation bar: back chevron on left, "Profile" centered, no icons on right
+        // Use floating back button completely instead of the native navigation bar layout
+        title = ""
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        
         setupUI()
         loadData()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Post notification so Home nav bar can refresh profile image when user navigates back
+        if isMovingFromParent {
+            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+        }
     }
 
     // MARK: - Setup UI
@@ -79,7 +102,7 @@ final class UserProfileViewController: UIViewController {
         scrollView.addSubview(contentView)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -95,31 +118,24 @@ final class UserProfileViewController: UIViewController {
         buildStatsSection()
         buildPracticeProgressSection()
         buildSignOutSection()
+        
+        // Floating Back Button
+        let backButton = NavigationBarHelper.makeCircularBackButton()
+        backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
+        view.addSubview(backButton)
+        
+        NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
+        ])
     }
 
     // MARK: - HEADER (avatar + name + username + edit)
     private func buildHeaderSection() {
-        // Back button
-        let backBtn = UIButton(type: .system)
-        backBtn.setImage(UIImage(systemName: "chevron.left",
-                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)),
-                         for: .normal)
-        backBtn.tintColor = ComponentColors.NavBar.backButton
-        backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
-        backBtn.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(backBtn)
-
-        titleLabel.text = "Profile"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
-        titleLabel.textColor = ComponentColors.ProfileScreen.userName
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(titleLabel)
-
         // Avatar ring
         let ringSize: CGFloat = 110
         let ringView = UIView()
         ringView.translatesAutoresizingMaskIntoConstraints = false
-        // Gradient ring via CAGradientLayer mask
         let ringGradient = CAGradientLayer()
         ringGradient.colors = [
             ComponentColors.ProfileScreen.avatarBorder.cgColor,
@@ -168,15 +184,7 @@ final class UserProfileViewController: UIViewController {
         contentView.addSubview(editProfileButton)
 
         NSLayoutConstraint.activate([
-            backBtn.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 16),
-            backBtn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            backBtn.widthAnchor.constraint(equalToConstant: 32),
-            backBtn.heightAnchor.constraint(equalToConstant: 32),
-
-            titleLabel.centerYAnchor.constraint(equalTo: backBtn.centerYAnchor),
-            titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-
-            ringView.topAnchor.constraint(equalTo: backBtn.bottomAnchor, constant: 28),
+            ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
             ringView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             ringView.widthAnchor.constraint(equalToConstant: ringSize),
             ringView.heightAnchor.constraint(equalToConstant: ringSize),
@@ -196,7 +204,6 @@ final class UserProfileViewController: UIViewController {
             editProfileButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
         ])
 
-        // Layout ring gradient after constraints settle
         DispatchQueue.main.async {
             ringGradient.frame = ringView.bounds
         }

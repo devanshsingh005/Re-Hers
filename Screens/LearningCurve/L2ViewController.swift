@@ -278,6 +278,7 @@ class LessonDetailViewController: UIViewController {
         self.lesson = lesson
         self.chapterIndex = chapterIndex
         super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -303,14 +304,9 @@ class LessonDetailViewController: UIViewController {
     // MARK: - UI Setup
 
     private func setupUI() {
-        // Back button
-        let backButton = UIButton(type: .system)
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        backButton.setTitle(" Back", for: .normal)
-        backButton.tintColor = ComponentColors.HomeScreen.actionButtonFill
-        backButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        // Back button — circular style
+        let backButton = NavigationBarHelper.makeCircularBackButton()
         backButton.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
-        backButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(backButton)
 
         let scrollView = UIScrollView()
@@ -1356,12 +1352,19 @@ class TryYourselfViewController: UIViewController {
 
     private let noteName: String
     private var isListening = false
+    private let pitchDetector = PitchDetector()
     private var pulseViews: [UIView] = []
     private var micButton: UIButton!
     private var statusLabel: UILabel!
     private var attemptCount: Int = 0
     private var attemptCounterLabel: UILabel!
     private var doneButton: UIButton!
+
+    // Solfège → English note letter mapping for chord recognition
+    private let solfegeToNote: [String: String] = [
+        "Do": "C", "Re": "D", "Mi": "E", "Fa": "F",
+        "Sol": "G", "La": "A", "Ti": "B", "Si": "B"
+    ]
 
     /// Delivers the number of mic taps (attempts) the user made — used to compute stars
     var onSessionCompleted: ((Int) -> Void)?
@@ -1375,6 +1378,7 @@ class TryYourselfViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+        pitchDetector.delegate = self
         setupUI()
     }
 
@@ -1532,6 +1536,7 @@ class TryYourselfViewController: UIViewController {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
         if isListening {
+            pitchDetector.startListening()
             attemptCount += 1
             let starsHint = attemptCount == 1 ? "⭐⭐⭐" : attemptCount == 2 ? "⭐⭐" : "⭐"
             attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
@@ -1544,6 +1549,7 @@ class TryYourselfViewController: UIViewController {
             UIView.animate(withDuration: 0.3) { self.micButton.transform = CGAffineTransform(scaleX: 1.1, y: 1.1) }
 
         } else {
+            pitchDetector.stopListening()
             let micCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
             micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micCfg), for: .normal)
             statusLabel.text = "Good! Tap mic again to retry, or tap Done ✓"
@@ -1593,6 +1599,42 @@ class TryYourselfViewController: UIViewController {
                 ring.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0).cgColor
                 ring.transform = .identity
             }
+        }
+    }
+}
+
+// MARK: - PitchDetectorDelegate
+
+extension TryYourselfViewController: PitchDetectorDelegate {
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
+        guard isListening, let topNoteWithOctave = notes.first else { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.isListening else { return }
+            
+            // Strip trailing octave digit(s): "C4" → "C", "F#5" → "F#", "A#4" → "A#"
+            var detectedNote = topNoteWithOctave
+            while let last = detectedNote.last, last.isNumber {
+                detectedNote = String(detectedNote.dropLast())
+            }
+            
+            // Resolve solfège name to English note letter (e.g. "Do" → "C", "Sol" → "G")
+            // For non-solfège variants ("C", "Am", etc.) use as-is (just take first character)
+            let targetNote: String
+            if let mapped = self.solfegeToNote[self.noteName] {
+                targetNote = mapped  // solfège → English
+            } else {
+                // Take root note letter from English name (e.g. "Am" → "A", "C#" → "C#")
+                targetNote = String(self.noteName.prefix(while: { !$0.isNumber && $0 != " " }))
+            }
+            
+            // Match: detected note must equal target (ignoring case)
+            // e.g. detected "C" matches target "C"; detected "F#" matches "F#"
+            let isMatch = detectedNote.uppercased() == targetNote.uppercased()
+            
+            let resultStr = isMatch ? "Perfect! 🎯" : "Keep trying! 🎵"
+            self.statusLabel.text = "Heard: \(topNoteWithOctave) - \(resultStr)"
+            self.statusLabel.textColor = isMatch ? ComponentColors.LessonScreen.correctAnswer : ComponentColors.HomeScreen.actionButtonFill
         }
     }
 }
