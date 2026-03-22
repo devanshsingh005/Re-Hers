@@ -15,6 +15,7 @@
 		23542CC22EE5D64D0074B2A2 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CC12EE5D64D0074B2A2 /* Storage */; };
 		23542CC42EE5D6530074B2A2 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CC32EE5D6530074B2A2 /* Supabase */; };
 		236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */; };
+		238B5D8F2F7029B100F4C277 /* AllRecentsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238B5D8E2F7029B100F4C277 /* AllRecentsViewController.swift */; };
 		238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */; };
 		238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1D2ED4CE8200301661 /* PlayListInside.swift */; };
 		23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C736412ED579D100BCD95B /* UserProfileViewController.swift */; };
@@ -74,6 +75,7 @@
 
 /* Begin PBXFileReference section */
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayListScreen.swift; sourceTree = "<group>"; };
+		238B5D8E2F7029B100F4C277 /* AllRecentsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllRecentsViewController.swift; sourceTree = "<group>"; };
 		238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongDetailsPage.swift; sourceTree = "<group>"; };
 		238BCB1D2ED4CE8200301661 /* PlayListInside.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayListInside.swift; sourceTree = "<group>"; };
 		23C736412ED579D100BCD95B /* UserProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileViewController.swift; sourceTree = "<group>"; };
@@ -144,6 +146,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		238B5D5C2F70083400F4C277 /* HomeScreenModels */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HomeScreenModels;
+			sourceTree = "<group>";
+		};
 		23D103FC2F690FC500A6EBD2 /* LearningCurve */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = LearningCurve;
@@ -396,6 +403,8 @@
 		84DBA85C2EBA735F006DF51E /* MainHomeScreen */ = {
 			isa = PBXGroup;
 			children = (
+				238B5D8E2F7029B100F4C277 /* AllRecentsViewController.swift */,
+				238B5D5C2F70083400F4C277 /* HomeScreenModels */,
 				23D103EE2F690FBA00A6EBD2 /* DailyGoalManager.swift */,
 				23D103EF2F690FBA00A6EBD2 /* HomeViewController.swift */,
 				23D103F02F690FBA00A6EBD2 /* HomeViewControllerButtons.swift */,
@@ -460,6 +469,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				238B5D5C2F70083400F4C277 /* HomeScreenModels */,
 				23D103FC2F690FC500A6EBD2 /* LearningCurve */,
 				23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
@@ -585,6 +595,7 @@
 				2BC06DAF2EEE907000CBDC03 /* OnboardingQuestion2View.swift in Sources */,
 				23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */,
 				F1A15E19826CAB5F156D28C0 /* ChordRecognition.swift in Sources */,
+				238B5D8F2F7029B100F4C277 /* AllRecentsViewController.swift in Sources */,
 				2BE585682F6DE09D0059620E /* DiscoverSongPreviewViewController.swift in Sources */,
 				39A4CFA913922A6AA9BEC35C /* PitchDetector.swift in Sources */,
 				01C024616C4FA0D954572620 /* PianoDataManager.swift in Sources */,
