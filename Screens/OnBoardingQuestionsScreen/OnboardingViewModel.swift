@@ -44,73 +44,95 @@ class OnboardingViewModel: ObservableObject {
         "Advanced":          "advanced"
     ]
     
-    func skipOnboarding() {
-        DispatchQueue.main.async {
-            let home = MainTabBarController()
-            guard let scene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-                  let window = scene.keyWindow else { return }
-
-            UIView.transition(with: window,
-                              duration: 0.35,
-                              options: .transitionCrossDissolve,
-                              animations: { window.rootViewController = home },
-                              completion: nil)
+    func skipOnboarding(userId: String? = nil) {
+        if let userId = userId {
+            Task {
+                // Use actual selections even on skip if they exist
+                let level = selectedLevel ?? "skipped"
+                let genres = selectedGenres.isEmpty ? ["skipped"] : Array(selectedGenres)
+                
+                await finalizeOnboarding(
+                    userId: userId,
+                    level: level,
+                    genres: genres,
+                    mins: 10 // Default for skip
+                )
+            }
+        } else {
+            navigateToHome()
         }
+    }
+    
+    private func finalizeOnboarding(userId: String, level: String, genres: [String], mins: Int) async {
+        let client = SupabaseManager.shared.client
+        let randomIcon = "icon_\(Int.random(in: 1...9))"
+        
+        let dbLevel = OnboardingViewModel.levelDBMap[level] ?? level
+        
+        let payload = OnboardingPayload(
+            id: userId,
+            level: dbLevel,
+            genres: genres,
+            practice_mins: mins
+        )
+        
+        do {
+            // 1. Update Profile (Avatar) first to ensure existence
+            try await client
+                .from("profiles")
+                .upsert(["id": userId, "avatar_url": randomIcon])
+                .execute()
+            
+            // 2. Update Onboarding state
+            try await client
+                .from("user_onboarding")
+                .upsert(payload)
+                .execute()
+            
+            print("Successfully finalized onboarding for \(userId) with icon \(randomIcon)")
+        } catch {
+            print("Database error during onboarding finalization: \(error.localizedDescription)")
+        }
+        
+        // Always navigate Home if we have a userId, even if DB updates failed 
+        // (to not get the user stuck, though icon might be missing)
+        await MainActor.run {
+            self.navigateToHome()
+        }
+    }
+    
+    private func navigateToHome() {
+        let home = MainTabBarController()
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let window = scene.keyWindow else { return }
+
+        UIView.transition(with: window,
+                          duration: 0.35,
+                          options: .transitionCrossDissolve,
+                          animations: { window.rootViewController = home },
+                          completion: nil)
     }
 
     func saveToSupabase(userId: String, completion: @escaping (Bool) -> Void) {
-        guard let level = selectedLevel,
-              !selectedGenres.isEmpty else {
-            completion(false)
-            return
-        }
-
         isSaving = true
         errorMessage = nil
 
-        let client = SupabaseManager.shared.client
-
-        let dbLevel  = Self.levelDBMap[level] ?? level.lowercased()
-        let dbGenres = selectedGenres.map { Self.genreDBMap[$0] ?? $0.lowercased() }
-        let randomIcon = "icon_\(Int.random(in: 1...9))"
-
-        let payload = OnboardingPayload(
-            id:            userId,
-            level:         dbLevel,
-            genres:        dbGenres,
-            practice_mins: practiceMins
-        )
-
+        let level = selectedLevel ?? "Absolute beginner"
+        let genres = Array(selectedGenres)
+        
         Task {
-            do {
-                print("Saving onboarding for user: \(userId)")
-
-                try await client
-                    .from("user_onboarding")
-                    .upsert(payload)
-                    .execute()
-
-                print("Onboarding saved — level: \(dbLevel), genres: \(dbGenres), mins: \(practiceMins)")
-
-                try await client
-                    .from("profiles")
-                    .upsert(["id": userId, "avatar_url": randomIcon])
-                    .execute()
-
-                DispatchQueue.main.async {
-                    self.isSaving = false
-                    completion(true)
-                }
-
-            } catch {
-                print("Onboarding save failed: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.errorMessage = "Failed to save: \(error.localizedDescription)"
-                    self.isSaving = false
-                    completion(false)
-                }
+            await finalizeOnboarding(
+                userId: userId,
+                level: level,
+                genres: genres,
+                mins: practiceMins
+            )
+            
+            await MainActor.run {
+                self.isSaving = false
+                completion(true)
             }
         }
     }

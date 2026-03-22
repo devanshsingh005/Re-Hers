@@ -35,15 +35,36 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
 
         if isLoggedIn {
-            // User is already logged in. Go to the Home Page.
-            showMainApp()
-
-            // Silently verify session in the background
+            // User is logged in. Verify session and onboarding status.
             Task {
                 do {
-                    _ = try await SupabaseManager.shared.client.auth.session
+                    let client = SupabaseManager.shared.client
+                    let session = try await client.auth.session
+                    let userId = session.user.id.uuidString
+
+                    // Check onboarding status
+                    struct OnboardingRow: Decodable {
+                        let genres: [String]?
+                    }
+
+                    let row: OnboardingRow? = try? await client
+                        .from("user_onboarding")
+                        .select("genres")
+                        .eq("id", value: userId)
+                        .single()
+                        .execute()
+                        .value
+
+                    await MainActor.run {
+                        if let genres = row?.genres, !genres.isEmpty {
+                            self.showMainApp()
+                        } else {
+                            // Session exists but onboarding not finished
+                            self.showLoginScreen() 
+                        }
+                    }
                 } catch {
-                    // Oops, session expired. Reset flag and take them back to login.
+                    // Session expired or error. take them back to login.
                     await MainActor.run {
                         UserDefaults.standard.set(false, forKey: "isLoggedIn")
                         self.showLoginScreen()

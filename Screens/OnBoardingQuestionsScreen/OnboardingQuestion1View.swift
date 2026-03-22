@@ -133,12 +133,6 @@ struct OnboardingQuestion1View: View {
                         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.selectedLevel)
                 }
                 .disabled(viewModel.selectedLevel == nil)
-                
-                Button("Skip") {
-                    viewModel.skipOnboarding()
-                }
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(Color(SemanticColors.Text.brand))
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)

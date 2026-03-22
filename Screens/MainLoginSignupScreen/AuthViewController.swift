@@ -760,20 +760,22 @@ extension AuthViewController {
                                 let userId = validSession.user.id.uuidString
 
                                 // Check onboarding completion inline
-                                struct OnboardingRow: Decodable { let genre: String? }
+                                struct OnboardingRow: Decodable {
+                                    let genres: [String]?
+                                }
                                 let shouldOnboard: Bool
 
                                 do {
                                     let row: OnboardingRow = try await client
                                         .from("user_onboarding")
-                                        .select("genre")
+                                        .select("genres")
                                         .eq("id", value: userId)
                                         .single()
                                         .execute()
                                         .value
                                         
-                                    print("Google Auth Onboarding Check - Retrieved Genre: \(String(describing: row.genre))")
-                                    shouldOnboard = row.genre == nil || row.genre!.isEmpty
+                                    print("Google Auth Onboarding Check - Retrieved Genres: \(String(describing: row.genres))")
+                                    shouldOnboard = row.genres == nil || row.genres!.isEmpty
                                 } catch {
                                     print("Google Auth Onboarding Check - No record found: \(error.localizedDescription)")
                                     shouldOnboard = true // no record → show onboarding
@@ -891,21 +893,24 @@ extension AuthViewController {
 
                 // Query user_onboarding — check if the user has set their genre (completed onboarding)
                 struct OnboardingRow: Decodable {
-                    let genre: String?
+                    let genres: [String]?
                 }
 
                 do {
                     let row: OnboardingRow = try await client
                         .from("user_onboarding")
-                        .select("genre")
+                        .select("genres")
                         .eq("id", value: userId)
                         .single()
                         .execute()
                         .value
                         
-                    print("Email Auth Onboarding Check - Retrieved Genre: \(String(describing: row.genre))")
+                    print("Email Auth Onboarding Check - Retrieved Genres: \(String(describing: row.genres))")
 
-                    if row.genre != nil && !row.genre!.isEmpty {
+                    // Set isLoggedIn to true since we have a valid session and at least some record
+                    UserDefaults.standard.set(true, forKey: "isLoggedIn")
+
+                    if let genres = row.genres, !genres.isEmpty {
                         // Returning user with completed onboarding → go to main app
                         showHomeScreen()
                     } else {

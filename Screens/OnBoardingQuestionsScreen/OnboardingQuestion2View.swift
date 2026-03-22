@@ -149,11 +149,14 @@ struct OnboardingQuestion2View: View {
                 }
                 .disabled(!hasSelection)
                 
-                Button("Skip") {
-                    viewModel.skipOnboarding()
+                NavigationLink {
+                    OnboardingQuestion3View()
+                        .environmentObject(viewModel)
+                } label: {
+                    Text("Skip")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color(SemanticColors.Text.brand))
                 }
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(Color(SemanticColors.Text.brand))
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)

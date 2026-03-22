@@ -130,7 +130,14 @@ struct OnboardingQuestion3View: View {
                 .disabled(viewModel.isSaving)
                 
                 Button("Skip") {
-                    viewModel.skipOnboarding()
+                    Task {
+                        do {
+                            let session = try await SupabaseManager.shared.client.auth.session
+                            viewModel.skipOnboarding(userId: session.user.id.uuidString)
+                        } catch {
+                            viewModel.skipOnboarding() // Fallback to non-persistent if auth fails
+                        }
+                    }
                 }
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(Color(SemanticColors.Text.brand))
@@ -169,9 +176,7 @@ struct OnboardingQuestion3View: View {
             let userId  = session.user.id.uuidString
 
             viewModel.saveToSupabase(userId: userId) { success in
-                if success {
-                    viewModel.skipOnboarding()
-                }
+                // Navigation is now handled inside viewModel.saveToSupabase -> finalizeOnboarding
             }
         } catch {
             viewModel.errorMessage = "Failed to get session: \(error.localizedDescription)"
