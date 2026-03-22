@@ -1,56 +1,103 @@
 import Foundation
 import Supabase
 import UIKit
-import Combine   // ← REQUIRED FIX
+import Combine
+
+// MARK: - Codable payload matching the DB schema
+private struct OnboardingPayload: Encodable {
+    let id: String
+    let level: String
+    let genres: [String]
+    let practice_mins: Int
+}
 
 class OnboardingViewModel: ObservableObject {
-    @Published var selectedGenre: String?
-    @Published var selectedArtist: String?
+
+    // Q1 — level
     @Published var selectedLevel: String?
+
+    // Q2 — genres (multi-select)
+    @Published var selectedGenres: Set<String> = []
+
+    // Q3 — practice minutes
+    @Published var practiceMins: Int = 10
 
     @Published var isSaving = false
     @Published var errorMessage: String?
 
+    // MARK: - Genre display → DB value map
+    static let genreDBMap: [String: String] = [
+        "Classical":          "classical",
+        "Jazz & Blues":       "jazz_blues",
+        "Contemporary":       "contemporary",
+        "Film Scores":        "film_scores",
+        "Pop Ballads":        "pop_ballads",
+        "Ambient":            "ambient",
+        "Gospel & Sacred":    "gospel_sacred"
+    ]
+
+    // MARK: - Level display → DB value map
+    static let levelDBMap: [String: String] = [
+        "Absolute beginner": "beginner",
+        "Some basics":       "some_basics",
+        "Intermediate":      "intermediate",
+        "Advanced":          "advanced"
+    ]
+    
+    func skipOnboarding() {
+        DispatchQueue.main.async {
+            let home = MainTabBarController()
+            guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+                  let window = scene.keyWindow else { return }
+
+            UIView.transition(with: window,
+                              duration: 0.35,
+                              options: .transitionCrossDissolve,
+                              animations: { window.rootViewController = home },
+                              completion: nil)
+        }
+    }
+
     func saveToSupabase(userId: String, completion: @escaping (Bool) -> Void) {
-        guard let genre = selectedGenre,
-              let artist = selectedArtist,
-              let level = selectedLevel else {
+        guard let level = selectedLevel,
+              !selectedGenres.isEmpty else {
             completion(false)
             return
         }
 
         isSaving = true
-        errorMessage = nil // Reset error state
+        errorMessage = nil
 
         let client = SupabaseManager.shared.client
+
+        let dbLevel  = Self.levelDBMap[level] ?? level.lowercased()
+        let dbGenres = selectedGenres.map { Self.genreDBMap[$0] ?? $0.lowercased() }
         let randomIcon = "icon_\(Int.random(in: 1...9))"
+
+        let payload = OnboardingPayload(
+            id:            userId,
+            level:         dbLevel,
+            genres:        dbGenres,
+            practice_mins: practiceMins
+        )
 
         Task {
             do {
-                print("Starting onboarding save for user: \(userId)")
-                // 1. Save onboarding answers
+                print("Saving onboarding for user: \(userId)")
+
                 try await client
                     .from("user_onboarding")
-                    .upsert([
-                        "id": userId,
-                        "genre": genre,
-                        "artist": artist,
-                        "level": level
-                    ])
+                    .upsert(payload)
                     .execute()
 
-                print("Onboarding table updated.")
+                print("Onboarding saved — level: \(dbLevel), genres: \(dbGenres), mins: \(practiceMins)")
 
-                // 2. Also update profiles table so NavBar and Profile screen see the new icon
                 try await client
                     .from("profiles")
-                    .upsert([
-                        "id": userId,
-                        "avatar_url": randomIcon
-                    ])
+                    .upsert(["id": userId, "avatar_url": randomIcon])
                     .execute()
-
-                print("Profiles table updated with icon: \(randomIcon)")
 
                 DispatchQueue.main.async {
                     self.isSaving = false
