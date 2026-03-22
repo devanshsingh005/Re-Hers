@@ -1,5 +1,7 @@
 import UIKit
 import Supabase
+import Auth
+import PostgREST
 
 // Minimal profile model for the navbar
 private struct NavbarProfile: Decodable {
@@ -201,7 +203,11 @@ public final class TopNavBar: UIView {
     }
 
     // MARK: - Actions
-    @objc private func handleBack()     { backAction?() }
+    @objc private func handleBack() {
+        NavigationBarHelper.animateButtonPress(backButton) { [weak self] in
+            self?.backAction?()
+        }
+    }
     @objc private func handleDayBadge() { dayBadgeAction?() }
     @objc private func handleChord()    { chordAction?() }
     @objc private func handleProfile()  { profileAction?() }

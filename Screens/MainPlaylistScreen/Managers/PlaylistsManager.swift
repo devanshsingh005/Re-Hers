@@ -1,6 +1,8 @@
 import Foundation
 import UIKit
 import Supabase
+import Auth
+import PostgREST
 
 public final class PlaylistsManager {
     public static let shared = PlaylistsManager()

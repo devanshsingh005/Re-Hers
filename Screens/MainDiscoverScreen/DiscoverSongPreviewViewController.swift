@@ -10,6 +10,8 @@
 import UIKit
 import PDFKit
 import Supabase
+import Auth
+import PostgREST
 
 final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopupDelegate {
 
@@ -28,7 +30,6 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     // MARK: - UI
 
-    private let navBar = TopNavBar.make(title: "Discover")
 
     private lazy var scrollView: UIScrollView = {
         let sv = UIScrollView()
@@ -122,11 +123,20 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     // MARK: - Lifecycle
 
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.hidesBottomBarWhenPushed = true
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.DiscoverScreen.background
-        navigationController?.navigationBar.isHidden = true
-
+        
         setupNavBar()
         setupLayout()
         applyData()
@@ -144,26 +154,32 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         }
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+    }
+
     // MARK: - NavBar
 
     private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.isBackButtonVisible = true
-        navBar.isChordIconVisible  = true
-        navBar.isProfileVisible    = true
-        navBar.isStreakVisible     = false
-        navBar.isWelcomeTextHidden = true
-        navBar.setTitle("Discover")
+        title = "Practice"
+        navigationController?.navigationBar.isHidden = false
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        // Use custom circular back button in the nav bar for uniformity and to avoid overlapping issues
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+    }
 
-        navBar.backAction    = { [weak self] in self?.navigationController?.popViewController(animated: true) }
-        navBar.chordAction   = { [weak self] in self?.navigationController?.pushViewController(ChordRecognitionViewController(), animated: true) }
-        navBar.profileAction = { [weak self] in self?.navigationController?.pushViewController(UserProfileViewController(), animated: true) }
-
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+    @objc private func backAction() {
+        // Find the button inside the custom view if possible, or just animate the view
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
 
     // MARK: - Layout
@@ -183,7 +199,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
         NSLayoutConstraint.activate([
             // Scroll
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -234,6 +250,10 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         ])
 
         getConvertedButton.addTarget(self, action: #selector(getConvertedTapped), for: .touchUpInside)
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(sheetCardTapped))
+        sheetCardView.addGestureRecognizer(tap)
+        sheetCardView.isUserInteractionEnabled = true
     }
 
     // MARK: - Populate
@@ -293,25 +313,31 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     // MARK: - Actions
 
     @objc private func sheetCardTapped() {
-        guard let doc = loadedPDF else { return }
-        let vc = MaximizeUploadPageViewController()
-        vc.pdfDocument = doc
-        vc.modalPresentationStyle = .fullScreen
-        present(vc, animated: true)
+        NavigationBarHelper.animateButtonPress(sheetCardView) { [weak self] in
+            guard let self = self else { return }
+            guard let doc = self.loadedPDF else { return }
+            let vc = MaximizeUploadPageViewController()
+            vc.pdfDocument = doc
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
     }
 
     // MARK: - Get Converted (reuses UploadScreen pipeline 1:1)
 
     @objc private func getConvertedTapped() {
-        // Instantiate and present the popup
-        let popup = UploadQuizPopup()
-        popup.delegate = self
-        popup.modalPresentationStyle = .overFullScreen
-        popup.modalTransitionStyle = .crossDissolve
-        self.uploadPopup = popup
-        
-        self.present(popup, animated: true) { [weak self] in
-            self?.startDiscoveryUpload()
+        NavigationBarHelper.animateButtonPress(getConvertedButton) { [weak self] in
+            guard let self = self else { return }
+            // Instantiate and present the popup
+            let popup = UploadQuizPopup()
+            popup.delegate = self
+            popup.modalPresentationStyle = .overFullScreen
+            popup.modalTransitionStyle = .crossDissolve
+            self.uploadPopup = popup
+            
+            self.present(popup, animated: true) { [weak self] in
+                self?.startDiscoveryUpload()
+            }
         }
     }
 

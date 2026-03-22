@@ -80,7 +80,7 @@ struct OnboardingQuestion3View: View {
                                 viewModel.practiceMins = currentMins
                             }
                             .tint(Color(SemanticColors.DataViz.progressFill))
-                            .onChange(of: sliderIndex) { _ in
+                            .onChange(of: sliderIndex) { _, _ in
                                 viewModel.practiceMins = currentMins
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()

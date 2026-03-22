@@ -1,5 +1,7 @@
 import Foundation
 import Supabase
+import Auth
+import PostgREST
 import UIKit
 import Combine
 

@@ -130,7 +130,11 @@ final class LessonNavBarView: UIView {
         return img
     }
 
-    @objc private func didBack() { onBackTap?() }
+    @objc private func didBack() {
+        NavigationBarHelper.animateButtonPress(backBtn) { [weak self] in
+            self?.onBackTap?()
+        }
+    }
     @objc private func didMenu() { onMenuTap?() }
 
     @objc private func sliderMoved() {

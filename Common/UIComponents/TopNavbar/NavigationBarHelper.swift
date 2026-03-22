@@ -1,5 +1,6 @@
 import UIKit
 import Supabase
+import Auth
 
 public final class NavigationBarHelper {
     
@@ -111,68 +112,86 @@ public final class NavigationBarHelper {
         return [UIBarButtonItem(customView: pillContainer)]
     }
     
-    /// Creates a circular white back button with a chevron, matching the global back button style for use in UINavigationBar.
     public static func createCustomBackButton(target: Any?, action: Selector) -> UIBarButtonItem {
-        // Wrapper view to prevent UINavigationBar from clipping the button's bounds/shadow
-        // and to fix Auto Layout conflicts inside the native navigation bar item.
-        let wrapper = UIView(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
-        wrapper.translatesAutoresizingMaskIntoConstraints = false
-        wrapper.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        wrapper.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        
-        let btn = UIButton(type: .system)
-        btn.frame = wrapper.bounds
-        btn.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        
-        let cfg = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        btn.setImage(UIImage(systemName: "chevron.left", withConfiguration: cfg), for: .normal)
-        btn.tintColor          = .label
-        btn.backgroundColor    = .systemBackground
-        btn.layer.cornerRadius = 22
-        btn.layer.shadowColor  = UIColor.black.cgColor
-        btn.layer.shadowOpacity = 0.10
-        btn.layer.shadowRadius  = 6
-        btn.layer.shadowOffset  = CGSize(width: 0, height: 2)
-        
+        let btn = makeCircularBackButton()
         if let target = target {
             btn.addTarget(target, action: action, for: .touchUpInside)
         }
         
-        wrapper.addSubview(btn)
-        return UIBarButtonItem(customView: wrapper)
+        // Wrapping in a stack view prevents the system from adding "halo" layers
+        // or resizing the button unpredictably in iOS 16+.
+        let stack = UIStackView(arrangedSubviews: [btn])
+        stack.axis = .horizontal
+        stack.alignment = .fill
+        stack.distribution = .fill
+        stack.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        
+        return UIBarButtonItem(customView: stack)
     }
 
-    /// Returns a standalone circular frosted glass back UIButton imitating iOS 18 appearance.
+    /// A specialized button that maintains its circular shape and premium styling.
+    private class PremiumBackButton: UIButton {
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            setup()
+        }
+        
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            setup()
+        }
+        
+        private func setup() {
+            var config = UIButton.Configuration.plain()
+            
+            let chevronCfg = UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
+            config.image = UIImage(systemName: "chevron.backward", withConfiguration: chevronCfg)
+            
+            // Clean Native Styling (No backgrounds, no shadows)
+            config.baseForegroundColor = .label // Adaptive black/white
+            
+            config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 12)
+            
+            self.configuration = config
+            
+            // Remove Shadow (Reset to default)
+            layer.shadowColor = UIColor.clear.cgColor
+            layer.shadowOpacity = 0
+            layer.shadowRadius = 0
+            layer.shadowOffset = .zero
+        }
+        
+        override var intrinsicContentSize: CGSize {
+            return CGSize(width: 44, height: 44)
+        }
+    }
+
     public static func makeCircularBackButton() -> UIButton {
-        var config = UIButton.Configuration.plain()
-        
-        let cfg = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
-        config.image = UIImage(systemName: "chevron.backward", withConfiguration: cfg)
-        config.baseForegroundColor = .label
-        
-        // Use a UIVisualEffectView as the button's background natively
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-        blur.layer.cornerRadius = 22
-        blur.clipsToBounds = true
-        blur.layer.borderWidth = 0.5
-        blur.layer.borderColor = UIColor.separator.cgColor
-        
-        config.background.customView = blur
-        config.background.cornerRadius = 22
-        
-        let btn = UIButton(configuration: config)
-        
-        btn.layer.shadowColor = UIColor.black.cgColor
-        btn.layer.shadowOpacity = 0.05
-        btn.layer.shadowRadius = 4
-        btn.layer.shadowOffset = CGSize(width: 0, height: 2)
+        let btn = PremiumBackButton(type: .custom)
         btn.translatesAutoresizingMaskIntoConstraints = false
-        
         NSLayoutConstraint.activate([
             btn.widthAnchor.constraint(equalToConstant: 44),
             btn.heightAnchor.constraint(equalToConstant: 44)
         ])
         return btn
+    }
+
+    /// Performs a gentle, calming "shrink and grow" animation on a button with haptic feedback.
+    public static func animateButtonPress(_ button: UIView, completion: (() -> Void)? = nil) {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        generator.impactOccurred()
+
+        // Match UploadScreen's snappy feel (0.96 scale)
+        UIView.animate(withDuration: 0.10, delay: 0, options: .curveEaseOut, animations: {
+            button.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
+        }) { _ in
+            UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.5, options: .curveEaseInOut, animations: {
+                button.transform = .identity
+            }) { _ in
+                completion?()
+            }
+        }
     }
     
     public static func fetchWelcomeName(completion: @escaping (String) -> Void) {

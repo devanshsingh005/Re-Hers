@@ -11,6 +11,7 @@ final class MaximizeUploadPageViewController: UIViewController {
     var pdfDocument: PDFDocument?
 
     private let pdfView   = PDFView()
+    private lazy var customBackBtn = NavigationBarHelper.makeCircularBackButton()
     private let closeBtn  = UIButton(type: .system)
     private let zoomInBtn = UIButton(type: .system)
     private let zoomOutBtn = UIButton(type: .system)
@@ -29,6 +30,9 @@ final class MaximizeUploadPageViewController: UIViewController {
         pdfView.maxScaleFactor   = 8.0
         pdfView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(pdfView)
+
+        customBackBtn.addTarget(self, action: #selector(close), for: .touchUpInside)
+        view.addSubview(customBackBtn)
 
         // Button bar (back | zoom out | zoom in) — bottom center
         let bar = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
@@ -67,6 +71,10 @@ final class MaximizeUploadPageViewController: UIViewController {
             pdfView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             pdfView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             pdfView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // Custom Back button (top left)
+            customBackBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            customBackBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
 
             // Bar — bottom center
             bar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
@@ -107,16 +115,26 @@ final class MaximizeUploadPageViewController: UIViewController {
     }
 
     // MARK: - Actions
-    @objc private func close() { dismiss(animated: true) }
+    @objc private func close() {
+        NavigationBarHelper.animateButtonPress(closeBtn) { [weak self] in
+            self?.dismiss(animated: true)
+        }
+    }
 
     @objc private func zoomIn() {
-        let next = min(pdfView.scaleFactor * 1.4, pdfView.maxScaleFactor)
-        UIView.animate(withDuration: 0.2) { self.pdfView.scaleFactor = next }
+        NavigationBarHelper.animateButtonPress(zoomInBtn) { [weak self] in
+            guard let self = self else { return }
+            let next = min(self.pdfView.scaleFactor * 1.4, self.pdfView.maxScaleFactor)
+            UIView.animate(withDuration: 0.2) { self.pdfView.scaleFactor = next }
+        }
     }
 
     @objc private func zoomOut() {
-        let next = max(pdfView.scaleFactor / 1.4, pdfView.minScaleFactor)
-        UIView.animate(withDuration: 0.2) { self.pdfView.scaleFactor = next }
+        NavigationBarHelper.animateButtonPress(zoomOutBtn) { [weak self] in
+            guard let self = self else { return }
+            let next = max(self.pdfView.scaleFactor / 1.4, self.pdfView.minScaleFactor)
+            UIView.animate(withDuration: 0.2) { self.pdfView.scaleFactor = next }
+        }
     }
 
     // MARK: - Helper

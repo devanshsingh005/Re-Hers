@@ -7,6 +7,8 @@ import UIKit
 import AVFoundation
 import Photos
 import Supabase
+import Auth
+import PostgREST
 import PDFKit
 import Vision
 import VisionKit
@@ -812,7 +814,7 @@ class UploadScreen: UIViewController {
             self.loadRecentUploads()
             let vc       = UploadPageNextViewController()
             vc.jobId     = jobId
-            vc.onDataReady = { [weak self] in
+            vc.onDataReady = {
                 popup.notifyUploadComplete()
             }
             print("[Navigate] jobId=\(jobId.uuidString)")

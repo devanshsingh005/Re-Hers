@@ -5,6 +5,8 @@
 
 import UIKit
 import Supabase
+import Auth
+import PostgREST
 
 class HomeViewController: UIViewController {
 
@@ -174,7 +176,7 @@ class HomeViewController: UIViewController {
         navShadowLayer.isUserInteractionEnabled = false
         navBackgroundView.contentView.addSubview(navShadowLayer)
         
-        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.windows.first
+        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
         let topPadding = window?.safeAreaInsets.top ?? 0
         let navHeight: CGFloat = 44 + topPadding
         
@@ -375,6 +377,7 @@ class HomeViewController: UIViewController {
         return "\(days)d ago"
     }
 
+    @available(iOS, deprecated: 17.0)
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {

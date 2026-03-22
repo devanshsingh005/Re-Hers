@@ -51,7 +51,7 @@ class MainTabBarController: UITabBarController {
         let searchVC = DiscoverViewController()
         let searchNav = UINavigationController(rootViewController: searchVC)
         searchNav.tabBarItem = UITabBarItem(
-            title: "Search",
+            title: "Discover",
             image: UIImage(systemName: "magnifyingglass"),
             selectedImage: UIImage(systemName: "magnifyingglass")
         )

@@ -43,6 +43,8 @@
 // inject onto file-scope types when the app entry point is @MainActor.
 @preconcurrency import Foundation
 @preconcurrency import Supabase
+@preconcurrency import Auth
+@preconcurrency import PostgREST
 
 // MARK: - Payload structs
 // Declared at file scope with explicit nonisolated(unsafe) so the compiler

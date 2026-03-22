@@ -1,5 +1,4 @@
-//
-//  AppChapters.swift
+//  LessonModels.swift
 //  Re-Hearse_v1
 //
 //  All 10 chapters with full music-theory content.
@@ -622,3 +621,36 @@ let allChapters: [MusicChapter] = [
         )
     ),
 ]
+
+// MARK: - Legacy Data Model Compatibility
+// (Kept for reference or transition if needed)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Shared music logic and mappings for the Practice tab and Chord Recognition.
+public enum MusicHelper {
+    
+    /// Solfège to standard English note letter mapping.
+    public static let solfegeToNote: [String: String] = [
+        "Do": "C", "Re": "D", "Mi": "E", "Fa": "F",
+        "Sol": "G", "La": "A", "Ti": "B", "Si": "B"
+    ]
+    
+    /// Mapping of various lesson terms to their root note letters for detection consistency.
+    public static let noteMapping: [String: String] = [
+        "Do": "C", "Re": "D", "Mi": "E", "Fa": "F", "Sol": "G", "La": "A", "Ti": "B",
+        "Treble": "G", "Bass": "F", "Alto": "C", "Tenor": "C", "Soprano": "G", "Mezzo": "G", "Violin": "G",
+        "Minor": "C", "Major": "C", "Sharp": "C#", "Dim": "C", "Aug": "C", "Flat": "Cb",
+        "Diminished": "C", "Augmented": "C", "7th": "C",
+        "C": "C", "D": "D", "E": "E", "F": "F", "G": "G", "A": "A", "B": "B"
+    ]
+    
+    /// Resolves a note letter from a variant string.
+    public static func getNoteLetter(from variant: String, fallback: String = "C") -> String {
+        if let mapped = noteMapping[variant] { return mapped }
+        if let mapped = solfegeToNote[variant] { return mapped }
+        
+        // Root note letter from English name (e.g. "Am" -> "A", "C#" -> "C#")
+        let root = String(variant.prefix(while: { !$0.isNumber && $0 != " " }))
+        return ["C","D","E","F","G","A","B"].contains(root.prefix(1)) ? root : String(fallback.prefix(1))
+    }
+}

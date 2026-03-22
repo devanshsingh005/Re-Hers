@@ -68,7 +68,7 @@
 		84AFA4462EF82681004A8110 /* PlayAlongViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */; };
 		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
-		84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */; };
+		84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */; };
 		AA1BC2D42F8000010001ABCD /* UploadPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */; };
 		C7CF4171E017AB9C2DE571DB /* NavigationBarHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0110DC55172A44C69E9FCC1 /* NavigationBarHelper.swift */; };
 		F1A15E19826CAB5F156D28C0 /* ChordRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3C0D13FC97FE0B50919FB24 /* ChordRecognition.swift */; };
@@ -130,7 +130,7 @@
 		84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayAlongViewController.swift; sourceTree = "<group>"; };
 		84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopNavBar.swift; sourceTree = "<group>"; };
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
-		84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/Wurlitzer210.sf2; sourceTree = "<group>"; };
+		84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/Wurlitzer210.sf2; sourceTree = "<group>"; };
 		A8B6FEB9F6EB754D1A71C261 /* PianoDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PianoDataManager.swift; sourceTree = "<group>"; };
 		AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPickerViewController.swift; sourceTree = "<group>"; };
 		B0110DC55172A44C69E9FCC1 /* NavigationBarHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavigationBarHelper.swift; sourceTree = "<group>"; };
@@ -155,29 +155,21 @@
 		};
 		23D103FC2F690FC500A6EBD2 /* LearningCurve */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = LearningCurve;
 			sourceTree = "<group>";
 		};
 		23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = MainLoginSignupScreen;
 			sourceTree = "<group>";
 		};
 		23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = SupabaseBackend;
 			sourceTree = "<group>";
 		};
 		2BE584CC2F6D19520059620E /* DesignSystem */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = DesignSystem;
 			sourceTree = "<group>";
 		};
@@ -313,7 +305,7 @@
 		842B08322EBA0465001AC579 = {
 			isa = PBXGroup;
 			children = (
-				84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */,
+				84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
 				84DBA8592EBA72C7006DF51E /* Screens */,
@@ -542,7 +534,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */,
+				84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */,
 				84ADF6A12F5EAABA009F3D7D /* sheet_test.json in Resources */,
 				842B088B2EBA594A001AC579 /* .gitignore in Resources */,
 			);

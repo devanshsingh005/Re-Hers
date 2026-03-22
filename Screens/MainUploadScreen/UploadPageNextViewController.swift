@@ -5,6 +5,8 @@
 
 import UIKit
 import Supabase
+import Auth
+import PostgREST
 import PDFKit
 
 final class UploadPageNextViewController: UIViewController {
@@ -95,6 +97,12 @@ final class UploadPageNextViewController: UIViewController {
             if let p = doc.page(at: 0) { pdfView.go(to: p) }
             pdfView.layoutIfNeeded()
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.isHidden = false
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -661,40 +669,46 @@ final class UploadPageNextViewController: UIViewController {
     @objc private func didTapRefresh() { loadFromJobId() }
 
     @objc private func didTapPreview() {
-        guard let doc = pdfView.document else {
-            let a = UIAlertController(title: "Not Ready", message: "PDF is still loading.", preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default))
-            present(a, animated: true)
-            return
+        NavigationBarHelper.animateButtonPress(previewButton) { [weak self] in
+            guard let self = self else { return }
+            guard let doc = self.pdfView.document else {
+                let a = UIAlertController(title: "Not Ready", message: "PDF is still loading.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            let vc = MaximizeUploadPageViewController()
+            vc.pdfDocument = doc
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
         }
-        let vc = MaximizeUploadPageViewController()
-        vc.pdfDocument = doc
-        vc.modalPresentationStyle = .fullScreen
-        present(vc, animated: true)
     }
 
     @objc private func didTapPlayAlong() {
-        if isProcessing { 
-            let a = UIAlertController(title: "Processing", message: "Please wait for the analysis to complete.", preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default))
-            present(a, animated: true)
-            return
+        NavigationBarHelper.animateButtonPress(playAlongButton) { [weak self] in
+            guard let self = self else { return }
+            if self.isProcessing { 
+                let a = UIAlertController(title: "Processing", message: "Please wait for the analysis to complete.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            
+            guard let json = self.sheetMusicJSON else {
+                let a = UIAlertController(title: "No Data", message: "No sheet music data available for this upload.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            
+            let a = UIAlertController(
+                title: "Play Along",
+                message: "Start practice session for this piece?\nTempo: \(self.tempo)",
+                preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong(with: json) })
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            self.present(a, animated: true)
         }
-        
-        guard let json = sheetMusicJSON else {
-            let a = UIAlertController(title: "No Data", message: "No sheet music data available for this upload.", preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default))
-            present(a, animated: true)
-            return
-        }
-        
-        let a = UIAlertController(
-            title: "Play Along",
-            message: "Start practice session for this piece?\nTempo: \(tempo)",
-            preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong(with: json) })
-        a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        present(a, animated: true)
     }
 
     private func startPlayAlong(with json: [String: Any]) {
@@ -708,16 +722,19 @@ final class UploadPageNextViewController: UIViewController {
         let vc = PlayAlongViewController()
         vc.sheetMusicData = data
         let nav = LandscapeNavigationController(rootViewController: vc)
-        nav.modalPresentationStyle = UIModalPresentationStyle.fullScreen
+        nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }
 
     @objc private func didTapAnimation() {
-        if isProcessing { showAnimationError("Still processing. Please wait."); return }
-        guard let json = sheetMusicJSON else {
-            showAnimationError("No sheet music data available."); return
+        NavigationBarHelper.animateButtonPress(animationButton) { [weak self] in
+            guard let self = self else { return }
+            if self.isProcessing { self.showAnimationError("Still processing. Please wait."); return }
+            guard let json = self.sheetMusicJSON else {
+                self.showAnimationError("No sheet music data available."); return
+            }
+            self.navigateToAnimation(withJSON: json)
         }
-        navigateToAnimation(withJSON: json)
     }
 
     private func navigateToAnimation(withJSON json: [String: Any]) {
@@ -727,7 +744,7 @@ final class UploadPageNextViewController: UIViewController {
         let vc = AnimationViewController()
         vc.sheetMusicData = data
         let nav = LandscapeNavigationController(rootViewController: vc)
-        nav.modalPresentationStyle = UIModalPresentationStyle.fullScreen
+        nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }
 
@@ -743,6 +760,18 @@ final class UploadPageNextViewController: UIViewController {
         title = "Practice"
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationItem.largeTitleDisplayMode = .never
+        
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+    }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
 
     private func setupUI() {

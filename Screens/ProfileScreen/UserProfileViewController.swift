@@ -4,6 +4,8 @@
 
 import UIKit
 import Supabase
+import Auth
+import PostgREST
 
 struct Profile: Decodable {
     let id: UUID
@@ -73,13 +75,40 @@ final class UserProfileViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.ProfileScreen.background
-        // Use native navigation bar: back chevron on left, "Profile" centered, no icons on right
-        // Use floating back button completely instead of the native navigation bar layout
-        title = ""
-        navigationController?.setNavigationBarHidden(true, animated: false)
+        
+        // Match the uniform "Practice" style
+        title = "Profile"
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        let navBar = navigationController?.navigationBar
+        navBar?.titleTextAttributes = [
+            .foregroundColor: UIColor.white,
+            .font: UIFont.systemFont(ofSize: 17, weight: .bold)
+        ]
+        
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
         
         setupUI()
         loadData()
+    }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+            navigationController?.popViewController(animated: true)
+        }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -118,16 +147,6 @@ final class UserProfileViewController: UIViewController {
         buildStatsSection()
         buildPracticeProgressSection()
         buildSignOutSection()
-        
-        // Floating Back Button
-        let backButton = NavigationBarHelper.makeCircularBackButton()
-        backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
-        view.addSubview(backButton)
-        
-        NSLayoutConstraint.activate([
-            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
-        ])
     }
 
     // MARK: - HEADER (avatar + name + username + edit)
@@ -562,10 +581,6 @@ final class UserProfileViewController: UIViewController {
     }
 
     // MARK: - Actions
-    @objc private func goBack() {
-        NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
-        navigationController?.popViewController(animated: true)
-    }
 
     @objc private func signOutTapped() {
         let alert = UIAlertController(title: "Sign Out",

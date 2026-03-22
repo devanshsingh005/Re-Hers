@@ -7,6 +7,8 @@
 
 import UIKit
 import Supabase
+import Auth
+import PostgREST
 
 // MARK: - Model
 
@@ -81,7 +83,11 @@ final class DiscoverViewController: UIViewController {
 
     // MARK: UI
 
-    private let navBar = TopNavBar.make(title: "Discover")
+    private let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    private let navShadowLayer = UIView()
+    private let largeProfileButton = UIButton(type: .custom)
+    private let largeSubtitleLabel = UILabel()
+    private var inlineSubtitleLabel: UILabel?
 
     private lazy var searchBar: UISearchBar = {
         let sb = UISearchBar()
@@ -184,7 +190,10 @@ final class DiscoverViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.DiscoverScreen.background
         setupNavBar()
+        navigationItem.titleView?.alpha = 0
+        syncNavBarAlpha()
         setupLayout()
+        setupNavBackground()
         buildFilterMenus()
         fetchSongs()
         fetchProfileData()
@@ -200,6 +209,12 @@ final class DiscoverViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        navigationItem.titleView?.alpha = 0
+        syncNavBarAlpha()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
         syncNavBarAlpha()
     }
 
@@ -228,18 +243,98 @@ final class DiscoverViewController: UIViewController {
     // MARK: NavBar
 
     private func setupNavBar() {
-        navigationController?.navigationBar.isHidden = true
-        view.addSubview(navBar)
-        navBar.isStreakVisible     = false
-        navBar.isWelcomeTextHidden = true
-        navBar.isChordIconVisible  = true
-        navBar.chordAction   = { [weak self] in self?.push(ChordRecognitionViewController()) }
-        navBar.profileAction = { [weak self] in self?.push(UserProfileViewController()) }
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Discover", subtitle: "Find new music")
+        headerStack.alpha = 0
+        self.inlineSubtitleLabel = subTitle
+        navigationItem.titleView = headerStack
+        navigationItem.rightBarButtonItems = nil
+    }
+
+    private func setupNavBackground() {
+        navBackgroundView.alpha = 0
+        navBackgroundView.isUserInteractionEnabled = false
+        navBackgroundView.contentView.isUserInteractionEnabled = false
+        view.addSubview(navBackgroundView)
+        
+        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
+        navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
+        navBackgroundView.contentView.addSubview(navShadowLayer)
+        
+        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        let topPadding = window?.safeAreaInsets.top ?? 0
+        let navHeight: CGFloat = 44 + topPadding
+        
+        navBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            navBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
+            
+            navShadowLayer.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
+            navShadowLayer.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
+            navShadowLayer.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
+            navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
         ])
+        navBackgroundView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        navBackgroundView.layer.borderWidth = 0.5
+    }
+
+    private func setupCustomLargeHeader() -> UIView {
+        let headerContainer = UIView()
+        headerContainer.translatesAutoresizingMaskIntoConstraints = false
+        
+        let labelStack = UIStackView()
+        labelStack.axis = .vertical
+        labelStack.spacing = -2
+        labelStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "Discover"
+        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
+        titleLabel.textColor = ComponentColors.NavBar.title
+        
+        largeSubtitleLabel.text = "Find new music"
+        largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
+        
+        labelStack.addArrangedSubview(titleLabel)
+        labelStack.addArrangedSubview(largeSubtitleLabel)
+        headerContainer.addSubview(labelStack)
+        
+        largeProfileButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
+        largeProfileButton.layer.cornerRadius = 20
+        largeProfileButton.layer.masksToBounds = true
+        largeProfileButton.clipsToBounds = true
+        largeProfileButton.layer.borderWidth = 1.0
+        largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
+        largeProfileButton.imageView?.contentMode = .scaleAspectFill
+        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+        largeProfileButton.tintColor = .secondaryLabel
+        largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
+        largeProfileButton.addTarget(self, action: #selector(handleProfileTap), for: .touchUpInside)
+        
+        headerContainer.addSubview(largeProfileButton)
+        
+        NSLayoutConstraint.activate([
+            headerContainer.heightAnchor.constraint(equalToConstant: 80),
+            
+            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 20),
+            labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            
+            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
+            largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
+            largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
+        return headerContainer
+    }
+    
+    @objc private func handleProfileTap() {
+        push(UserProfileViewController())
     }
 
     // MARK: Layout
@@ -249,6 +344,9 @@ final class DiscoverViewController: UIViewController {
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.addSubview(contentView)
         chipsScrollView.addSubview(chipsStack)
+
+        let headerContainer = setupCustomLargeHeader()
+        contentView.addSubview(headerContainer)
 
         [searchBar, filterRow, chipsScrollView,
          songsTitleLabel, tableView, emptyLabel, spinner]
@@ -262,20 +360,24 @@ final class DiscoverViewController: UIViewController {
         let c = contentView
         NSLayoutConstraint.activate([
             // Scroll view
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // Content view
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 90),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
-            // Level chips
+            // header container
+            headerContainer.topAnchor.constraint(equalTo: c.topAnchor, constant: 0),
+            headerContainer.leadingAnchor.constraint(equalTo: c.leadingAnchor),
+            headerContainer.trailingAnchor.constraint(equalTo: c.trailingAnchor),
+            
             // Search bar
-            searchBar.topAnchor.constraint(equalTo: c.topAnchor, constant: 8),
+            searchBar.topAnchor.constraint(equalTo: headerContainer.bottomAnchor, constant: 16),
             searchBar.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 12),
             searchBar.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -12),
             searchBar.heightAnchor.constraint(equalToConstant: 48),
@@ -523,7 +625,81 @@ final class DiscoverViewController: UIViewController {
     private func showError(_ msg: String) {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
+        a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    private func fetchProfileData() {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { 
+                await MainActor.run {
+                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    largeProfileButton.tintColor = .secondaryLabel
+                }
+                return 
+            }
+            
+            do {
+                let profile: Profile = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .select()
+                    .eq("id", value: user.id)
+                    .single()
+                    .execute()
+                    .value
+                
+                if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
+                    await loadAndSetProfileImage(from: avatarUrl)
+                } else {
+                    await MainActor.run {
+                        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                        largeProfileButton.tintColor = .secondaryLabel
+                    }
+                }
+            } catch {
+                print("Error fetching profile: \(error)")
+                await MainActor.run {
+                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    largeProfileButton.tintColor = .secondaryLabel
+                }
+            }
+        }
+    }
+
+    private func loadAndSetProfileImage(from urlString: String) async {
+        if urlString.starts(with: "icon_") {
+            await MainActor.run {
+                if let img = UIImage(named: urlString) {
+                    largeProfileButton.setImage(img, for: .normal)
+                    largeProfileButton.tintColor = .clear
+                }
+            }
+            return
+        }
+        
+        var finalURL = urlString
+        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
+            finalURL = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+        }
+        
+        guard URL(string: finalURL) != nil else { return }
+        
+        ImageLoader.shared.loadImage(from: finalURL) { [weak self] img in
+            guard let self = self, let img = img else { return }
+            DispatchQueue.main.async {
+                self.largeProfileButton.setImage(img, for: .normal)
+                self.largeProfileButton.tintColor = .clear
+            }
+        }
+    }
+
+    private func syncNavBarAlpha() {
+        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        let alpha = NavigationBarHelper.calculateNavBarAlpha(offset: offset)
+        
+        navigationItem.titleView?.alpha = alpha
+        navigationItem.titleView?.isHidden = (alpha == 0)
+        navBackgroundView.alpha = alpha
     }
 }
 
@@ -568,6 +744,7 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
             syncNavBarAlpha()
         }
     }
+
 }
 
 // MARK: - SongCell

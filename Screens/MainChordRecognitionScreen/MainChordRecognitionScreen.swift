@@ -133,10 +133,23 @@ final class ChordRecognitionViewController: UIViewController {
         title = "Chord Recognition"
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationItem.largeTitleDisplayMode = .never
+        
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+        
         setupUI()
         configureActions()
         setupWaveLayer()
         pitchDetector.delegate = self
+    }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -144,6 +157,11 @@ final class ChordRecognitionViewController: UIViewController {
         AVAudioApplication.requestRecordPermission { granted in
             print("Mic permission granted:", granted)
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
