@@ -11,8 +11,11 @@ struct Profile: Decodable {
     var username: String?
     var avatar_url: String?
     var bio: String?
-    var daily_goal_minutes: Int?
     var total_study_seconds: Int?
+}
+
+struct OnboardingData: Codable {
+    let practice_mins: Int
 }
 
 // MARK: - Stats model fetched from lesson_events
@@ -43,6 +46,7 @@ final class UserProfileViewController: UIViewController {
 
     // Practice Progress
     private let weeklyHoursLabel = UILabel()
+    private let goalBadgeBg = UIView()
     private let goalBadgeLabel = UILabel()
     private var chartBars: [UIView] = []
     private var chartDots: [UIView] = []
@@ -309,9 +313,10 @@ final class UserProfileViewController: UIViewController {
         card.addSubview(titleLabel)
 
         // Goal badge
-        let goalBadgeBg = UIView()
         goalBadgeBg.backgroundColor = ComponentColors.ProfileScreen.statCardFill
         goalBadgeBg.layer.cornerRadius = 12
+        goalBadgeBg.isUserInteractionEnabled = true
+        goalBadgeBg.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(dailyGoalBadgeTapped)))
         goalBadgeBg.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(goalBadgeBg)
 
@@ -435,15 +440,28 @@ final class UserProfileViewController: UIViewController {
             await MainActor.run {
                 nameLabel.text = profile.full_name?.isEmpty == false ? profile.full_name : "No Name"
                 usernameLabel.text = profile.username.map { "@\($0)" } ?? "@username"
-
-                if let goalMins = profile.daily_goal_minutes {
+                updateAvatar(with: profile.avatar_url)
+            }
+            
+            // Fetch daily goal from user_onboarding
+            do {
+                let onboarding: OnboardingData = try await SupabaseManager.shared.client
+                    .from("user_onboarding")
+                    .select("practice_mins")
+                    .eq("id", value: user.id.uuidString)
+                    .single()
+                    .execute()
+                    .value
+                
+                await MainActor.run {
+                    let goalMins = onboarding.practice_mins
                     let goalHours = Double(goalMins) / 60.0
                     goalBadgeLabel.text = goalHours == goalHours.rounded() ?
                         "Goal: \(Int(goalHours))h" : String(format: "Goal: %.1fh", goalHours)
                     DailyGoalManager.shared.dailyGoalMinutes = goalMins
                 }
-
-                updateAvatar(with: profile.avatar_url)
+            } catch {
+                print("Error loading onboarding goal:", error)
             }
         } catch {
             print("Error loading profile:", error)
@@ -620,6 +638,46 @@ final class UserProfileViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func dailyGoalBadgeTapped() {
+        showDailyGoalPicker()
+    }
+
+    private func showDailyGoalPicker() {
+        let alert = UIAlertController(title: "Select Daily Goal", message: "Choose your practice target in minutes.", preferredStyle: .actionSheet)
+        let goals = [10, 15, 20, 30, 45, 60]
+        for mins in goals {
+            alert.addAction(UIAlertAction(title: "\(mins) minutes", style: .default) { _ in
+                self.updateDailyGoal(minutes: mins)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let pop = alert.popoverPresentationController {
+            pop.sourceView = goalBadgeBg
+            pop.sourceRect = goalBadgeBg.bounds
+        }
+        present(alert, animated: true)
+    }
+
+    private func updateDailyGoal(minutes: Int) {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("user_onboarding")
+                    .update(["practice_mins": minutes])
+                    .eq("id", value: user.id.uuidString).execute()
+                
+                await MainActor.run {
+                    self.goalBadgeLabel.text = "Goal: \(minutes)m"
+                    DailyGoalManager.shared.dailyGoalMinutes = minutes
+                    self.showAlert(title: "Success", message: "Daily goal updated!")
+                }
+            } catch {
+                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
+            }
+        }
+    }
+
     func updateProfile(fullName: String, username: String) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
@@ -718,7 +776,6 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     username: self.currentProfile?.username,
                     avatar_url: publicURL,
                     bio: self.currentProfile?.bio,
-                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes,
                     total_study_seconds: self.currentProfile?.total_study_seconds
                 )
                 await MainActor.run {
