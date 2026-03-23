@@ -664,7 +664,7 @@ class UploadScreen: UIViewController {
     // MARK: - Conversion API
     private func callConversionAPI(imageData: Data, fileName: String,
                                    fileType: String, token: String) async throws -> [String: Any] {
-        let url      = URL(string: "http://localhost:8000/convert")!
+        let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
         let boundary = UUID().uuidString
         var req      = URLRequest(url: url)
         req.httpMethod  = "POST"

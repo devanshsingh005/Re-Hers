@@ -22,7 +22,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
 _root_logger = logging.getLogger()
-_log_path = '/Users/user30/Documents/Re-Hers/backend/logs/dispatcher.log'
+_log_path = os.path.join(os.getenv("LOG_DIR", "/tmp"), "dispatcher.log")
 if not any(
     isinstance(h, logging.FileHandler)
     and getattr(h, 'baseFilename', '').endswith('dispatcher.log')
