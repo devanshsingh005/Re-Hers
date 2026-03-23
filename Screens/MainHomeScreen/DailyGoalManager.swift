@@ -158,6 +158,6 @@ extension HomeViewController {
     }
 
     @objc private func dailyGoalTapped() {
-        tabBarController?.selectedIndex = 2
+        navigationController?.pushViewController(LessonMapViewController(), animated: true)
     }
 }
