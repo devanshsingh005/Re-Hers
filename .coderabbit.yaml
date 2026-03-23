@@ -3,129 +3,23 @@ reviews:
 
   auto_review:
     enabled: true
-    drafts: false
 
-  request_changes_workflow: true
-
-  high_level_summary: true
   review_status: true
-  collapse_walkthrough: false
 
   path_filters:
+    - "**/*.swift"
+    - "**/*.py"
     - "ios/**"
-    - "app/**"
     - "backend/**"
     - "api/**"
-    - "ml/**"
-    - "*.swift"
-    - "*.py"
 
 ignore:
   - "node_modules/**"
   - "venv/**"
   - "__pycache__/**"
-  - ".pytest_cache/**"
-  - "dist/**"
-  - "build/**"
   - "DerivedData/**"
+  - "build/**"
   - "*.log"
   - "*.lock"
-  - "*.pbxproj"
-  - "*.xcworkspace"
-  - "*.xcodeproj/project.xcworkspace/**"
 
-# 🔐 STRICT SECURITY (App Store level)
-security:
-  enabled: true
-  severity: "high"
-
-  checks:
-    - "hardcoded secrets"
-    - "insecure API endpoints"
-    - "missing authentication"
-    - "token exposure"
-    - "sql injection"
-    - "unsafe deserialization"
-    - "insecure storage (UserDefaults sensitive data)"
-    - "missing HTTPS enforcement"
-
-# ⚡ PERFORMANCE (critical for iOS apps)
-performance:
-  enabled: true
-
-  checks:
-    - "main thread blocking"
-    - "heavy UI operations"
-    - "inefficient loops"
-    - "large payload handling"
-    - "memory leaks"
-    - "redundant API calls"
-    - "slow DB queries"
-    - "unoptimized JSON parsing"
-
-# 🧱 ARCHITECTURE ENFORCEMENT
-architecture:
-  enabled: true
-
-  enforce:
-    - "MVVM or Clean Architecture"
-    - "no business logic in ViewControllers"
-    - "separate networking layer"
-    - "modular services"
-    - "dependency injection preferred"
-
-# 🐍 BACKEND RULES (Django / ML)
-language_specific:
-  python:
-    enforce:
-      - "type hints required"
-      - "no unused imports"
-      - "proper exception handling"
-      - "no hardcoded secrets"
-      - "input validation on all endpoints"
-      - "rate limiting awareness"
-      - "async where beneficial"
-      - "optimized DB queries (select_related/prefetch_related)"
-      - "no blocking operations in async routes"
-
-  # 📱 SWIFT RULES (App Store level)
-  swift:
-    enforce:
-      - "NO force unwraps (!)"
-      - "use weak self in closures"
-      - "no retain cycles"
-      - "proper error handling (Result / do-catch)"
-      - "UI updates only on main thread"
-      - "no heavy work on main thread"
-      - "avoid massive view controllers"
-      - "MVVM separation required"
-      - "use structs over classes where possible"
-      - "no hardcoded strings (use constants/localization)"
-      - "safe optional handling (guard/if let)"
-
-# 🧪 CODE QUALITY
-quality:
-  enabled: true
-
-  enforce:
-    - "meaningful variable naming"
-    - "small functions (single responsibility)"
-    - "no duplicated code"
-    - "consistent formatting"
-    - "comments only where necessary"
-
-# 🧾 API & DATA VALIDATION
-api:
-  enabled: true
-
-  checks:
-    - "consistent response format"
-    - "error handling standardization"
-    - "status code correctness"
-    - "input validation"
-    - "no sensitive data in responses"
-
-# 💬 REVIEW STYLE
-comments:
-  tone: "strict"
-  summarize: true
+# Keep it minimal + valid — CodeRabbit doesn't support deep custom rules yet
