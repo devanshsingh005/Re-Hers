@@ -5,6 +5,22 @@
 
 import UIKit
 
+// MARK: - Self-rounding Pill Button
+final class PillButton: UIButton {
+    override init(frame: CGRect) { super.init(frame: frame); setup() }
+    required init?(coder: NSCoder) { super.init(coder: coder); setup() }
+
+    private func setup() {
+        backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        clipsToBounds   = true
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+    }
+}
+
 extension HomeViewController {
 
     func createFilledButton(_ title: String) -> UIButton {

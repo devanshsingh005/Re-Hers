@@ -414,14 +414,22 @@ public final class PlaylistsManager {
         
         var coverImageUrl: String? = nil
         
-        if let image = image {
-            do {
-                coverImageUrl = try await uploadImageToStorage(image: image, userId: userId)
-            } catch {
-                print("⚠️ Image upload failed, falling back to local storage: \(error)")
-                if let localFile = saveImageToDocuments(image: image) {
-                    coverImageUrl = localFile
-                }
+        // Use provided image or fallback to a default app asset
+        let finalImage: UIImage
+        if let userImg = image {
+            finalImage = userImg
+        } else {
+            let defaultNames = (1...16).map { "trackimage_\($0)" }
+            let randomName = defaultNames.randomElement()!
+            finalImage = UIImage(named: randomName) ?? UIImage(named: "trackimage_1")!
+        }
+        
+        do {
+            coverImageUrl = try await uploadImageToStorage(image: finalImage, userId: userId)
+        } catch {
+            print("⚠️ Image upload failed, falling back to local storage: \(error)")
+            if let localFile = saveImageToDocuments(image: finalImage) {
+                coverImageUrl = localFile
             }
         }
         
@@ -459,22 +467,21 @@ public final class PlaylistsManager {
         
         let fileName = "\(UUID().uuidString).jpg"
         
-        try await SupabaseManager.shared.client.storage
-            .from("playlistcover")
-            .upload(
-                fileName,
-                data: imageData,
-                options: FileOptions(contentType: "image/jpeg")
-            )
+        let client = SupabaseManager.shared.client.storage.from("PlayListCover")
+        let options = FileOptions(contentType: "image/jpeg")
         
-        let signedUrl = try await SupabaseManager.shared.client.storage
-            .from("playlistcover")
-            .createSignedURL(
-                path: fileName,
-                expiresIn: 31536000 // 1 year expiry
-            )
+        do {
+            try await client.upload(fileName, data: imageData, options: options)
+        } catch let nsError as NSError where nsError.domain == NSURLErrorDomain && nsError.code == -1005 {
+            // Known iOS Simulator networking bug: "Network connection lost."
+            print("⚠️ Re-attempting upload due to Simulator HTTP -1005 bug...")
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            try await client.upload(fileName, data: imageData, options: options)
+        }
         
-        return signedUrl.absoluteString
+        let publicUrl = try client.getPublicURL(path: fileName)
+            
+        return publicUrl.absoluteString
     }
     
     private func saveImageToDocuments(image: UIImage) -> String? {

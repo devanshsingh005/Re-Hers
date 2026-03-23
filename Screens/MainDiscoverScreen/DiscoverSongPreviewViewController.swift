@@ -131,6 +131,17 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         setupLayout()
         applyData()
         loadPDF()
+
+        // Record this song as recently played
+        if let songId = song?.id {
+            Task {
+                do {
+                    try await RecentPlayService.shared.recordPlay(songId: songId)
+                } catch {
+                    print("[SongPreview] ❌ Failed to record play: \(error)")
+                }
+            }
+        }
     }
 
     // MARK: - NavBar

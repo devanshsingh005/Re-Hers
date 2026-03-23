@@ -65,6 +65,17 @@ class DiscoverSongDetailViewController: UIViewController {
 
         applyPassedData()
         loadSheetData()
+
+        // Record this song as recently played
+        if let songId = song?.id {
+            Task {
+                do {
+                    try await RecentPlayService.shared.recordPlay(songId: songId)
+                } catch {
+                    print("[DiscoverDetail] ❌ Failed to record play: \(error)")
+                }
+            }
+        }
     }
 
     // MARK: - Apply Passed Data
