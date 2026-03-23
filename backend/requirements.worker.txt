@@ -1,0 +1,9 @@
+requests==2.31.0
+python-dotenv==1.0.0
+supabase==2.0.0
+redis==5.0.1
+rq==1.16.2
+pydantic
+pymupdf==1.24.14
+azure-identity
+azure-mgmt-compute
