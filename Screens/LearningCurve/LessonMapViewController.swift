@@ -1,7 +1,7 @@
 import UIKit
 @preconcurrency import Supabase
 @preconcurrency import Auth
-@preconcurrency import PostgREST
+@preconcurrency internal import PostgREST
 
 class LessonMapViewController: UIViewController {
 

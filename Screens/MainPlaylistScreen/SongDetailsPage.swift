@@ -7,7 +7,7 @@ import UIKit
 import PDFKit
 import Supabase
 import Auth
-import PostgREST
+internal import PostgREST
 
 class PlaylistSongDetailViewController: UIViewController {
 

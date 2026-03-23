@@ -8,7 +8,7 @@ import AVFoundation
 import Photos
 import Supabase
 import Auth
-import PostgREST
+internal import PostgREST
 import PDFKit
 import Vision
 import VisionKit

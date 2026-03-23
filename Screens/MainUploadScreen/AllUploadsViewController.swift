@@ -6,7 +6,7 @@
 import UIKit
 import Supabase
 import Auth
-import PostgREST
+internal import PostgREST
 
 class AllUploadsViewController: UIViewController {
 

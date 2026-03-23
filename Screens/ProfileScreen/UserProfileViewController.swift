@@ -5,7 +5,7 @@
 import UIKit
 import Supabase
 import Auth
-import PostgREST
+internal import PostgREST
 
 struct Profile: Decodable {
     let id: UUID

@@ -8,7 +8,7 @@
 import UIKit
 import Supabase
 import Auth
-import PostgREST
+internal import PostgREST
 
 // MARK: - Model
 

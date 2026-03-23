@@ -1,7 +1,7 @@
 import UIKit
 import Supabase
 import Auth
-import PostgREST
+internal import PostgREST
 
 // Minimal profile model for the navbar
 private struct NavbarProfile: Decodable {
