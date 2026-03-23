@@ -18,7 +18,7 @@ extension HomeViewController {
 
         // ── Cream card ──
         let card = UIView()
-        card.backgroundColor   = kAppCream
+        card.backgroundColor   = ComponentColors.SongCard.background
         card.layer.cornerRadius = 20
         card.layer.masksToBounds = true
         card.translatesAutoresizingMaskIntoConstraints = false
