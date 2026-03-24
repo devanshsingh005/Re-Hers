@@ -5,6 +5,8 @@
 
 import UIKit
 import Supabase
+import Auth
+internal import PostgREST
 
 class AllUploadsViewController: UIViewController {
 
@@ -20,7 +22,7 @@ class AllUploadsViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
+        view.backgroundColor = ComponentColors.App.screenBackground
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
         setupScrollView()
@@ -74,7 +76,7 @@ class AllUploadsViewController: UIViewController {
     }
 
     private func setupLoadingIndicator() {
-        loadingIndicator.color = UIColor(hex: "#FF6B00")
+        loadingIndicator.color = ComponentColors.HomeScreen.actionButtonFill
         loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(loadingIndicator)
         NSLayoutConstraint.activate([
@@ -143,7 +145,7 @@ class AllUploadsViewController: UIViewController {
 
         // Card
         let card = UIButton(type: .custom)
-        card.backgroundColor     = .systemBackground
+        card.backgroundColor = ComponentColors.SongCard.background
         card.layer.cornerRadius  = 16
         card.layer.shadowColor   = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.05
@@ -153,12 +155,13 @@ class AllUploadsViewController: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Icon
-        let iconWrap = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        let iconWrap = UIView()
+        iconWrap.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         iconWrap.layer.cornerRadius = 12; iconWrap.clipsToBounds = true
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.isUserInteractionEnabled = false
         let iconImg = UIImageView(image: UIImage(systemName: "doc.fill"))
-        iconImg.tintColor = .white; iconImg.contentMode = .scaleAspectFit
+        iconImg.tintColor = ComponentColors.HomeScreen.actionButtonFill; iconImg.contentMode = .scaleAspectFit
         iconImg.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.addSubview(iconImg)
 
@@ -169,8 +172,8 @@ class AllUploadsViewController: UIViewController {
 
         let badge = UILabel()
         badge.text = fileType; badge.font = .systemFont(ofSize: 11, weight: .bold)
-        badge.textColor = UIColor(hex: "#FF6B00")
-        badge.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        badge.textColor = ComponentColors.SongCard.fileIcon
+        badge.backgroundColor = ComponentColors.SongCard.fileIcon.withAlphaComponent(0.12)
         badge.layer.cornerRadius = 5; badge.clipsToBounds = true; badge.textAlignment = .center
         badge.translatesAutoresizingMaskIntoConstraints = false
         badge.widthAnchor.constraint(equalToConstant: 38).isActive = true

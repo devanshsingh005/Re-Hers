@@ -31,21 +31,16 @@ final class AnimatedPianoKeyView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupAppearance() {
-        layer.cornerRadius = keyType == .white ? 6 : 4
-        clipsToBounds = false
+        layer.cornerRadius = keyType == .white ? 4 : 3
+        layer.masksToBounds = false
+        
+        // Premium Shadow (Deeper for black keys)
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOffset = CGSize(width: 0, height: 2.5)
+        layer.shadowRadius = keyType == .white ? 2 : 4
+        layer.shadowOpacity = keyType == .white ? 0.12 : 0.5
+        
         resetAppearance()
-        // 3D depth shadow for keys
-        if keyType == .white {
-            layer.shadowColor = UIColor.black.cgColor
-            layer.shadowOpacity = 0.18
-            layer.shadowRadius = 2.5
-            layer.shadowOffset = CGSize(width: 0, height: 2)
-        } else {
-            layer.shadowColor = UIColor.black.cgColor
-            layer.shadowOpacity = 0.45
-            layer.shadowRadius = 3
-            layer.shadowOffset = CGSize(width: 0, height: 3)
-        }
     }
 
     // MARK: - Plain Text Key Label
@@ -74,7 +69,7 @@ final class AnimatedPianoKeyView: UIView {
     // MARK: - Colours
     // LEFT hand = blue, RIGHT hand = red
 
-    static let leftColor  = UIColor.systemBlue   // blue for left hand
+    static let leftColor  = BrandColors.brand   // blue for left hand
     static let rightColor = UIColor.systemRed     // red for right hand
 
     func animatePress(hand: HandType? = nil, color overrideColor: UIColor? = nil) {
@@ -85,39 +80,53 @@ final class AnimatedPianoKeyView: UIView {
             color = hand == .left ? AnimatedPianoKeyView.leftColor : AnimatedPianoKeyView.rightColor
         }
         
-        UIView.animate(withDuration: 0.1) {
+        UIView.animate(withDuration: 0.08, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
             self.backgroundColor = color
-            self.transform = CGAffineTransform(scaleX: 0.97, y: 0.98)
+            // Add a "Luminous" glow on press
+            self.layer.shadowColor = color.cgColor
+            self.layer.shadowOpacity = 0.6
+            self.layer.shadowRadius = 8
+            self.transform = CGAffineTransform(scaleX: 0.96, y: 0.97)
         }
     }
 
     func animateRelease() {
-        UIView.animate(withDuration: 0.2) {
+        UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseIn, .allowUserInteraction]) {
             self.updateAppearance()
+            self.layer.shadowColor = UIColor.black.cgColor
+            self.layer.shadowOpacity = self.keyType == .white ? 0.12 : 0.5
+            self.layer.shadowRadius = self.keyType == .white ? 2 : 4
             self.transform = .identity
         }
     }
 
     private func updateAppearance() {
         if isHinted {
-            backgroundColor = UIColor.systemBlue.withAlphaComponent(0.4)
-            layer.borderColor = UIColor.systemBlue.cgColor
+            // "Luminous" hint — glowing soft blue
+            backgroundColor = BrandColors.brand.withAlphaComponent(0.25)
+            layer.borderColor = BrandColors.brand.withAlphaComponent(0.5).cgColor
             layer.borderWidth = 1.5
+            
+            // Subtle glow even when not pressed
+            layer.shadowColor = BrandColors.brand.cgColor
+            layer.shadowOpacity = 0.3
+            layer.shadowRadius = 4
         } else {
             resetAppearance()
         }
     }
 
     func resetAppearance() {
+        layer.borderWidth = 0.5
         switch keyType {
         case .white:
-            backgroundColor       = UIColor(white: 0.97, alpha: 1)
-            layer.borderWidth     = 0.5
-            layer.borderColor     = UIColor(white: 0.82, alpha: 1).cgColor
+            // Ivory base instead of pure flat gray
+            backgroundColor = ComponentColors.HomeScreen.background
+            layer.borderColor = UIColor(white: 0.88, alpha: 1).cgColor
         case .black:
-            backgroundColor       = UIColor(white: 0.08, alpha: 1)
-            layer.borderWidth     = 0.5
-            layer.borderColor     = UIColor(white: 0.22, alpha: 1).cgColor
+            // Obsidian base
+            backgroundColor = UIColor(white: 0.05, alpha: 1)
+            layer.borderColor = UIColor(white: 0.2, alpha: 1).cgColor
         }
     }
 

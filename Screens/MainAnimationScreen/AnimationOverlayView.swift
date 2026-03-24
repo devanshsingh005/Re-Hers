@@ -20,7 +20,7 @@ final class AnimationOverlayView: UIView {
     // Example placeholder animation
     func animateNote(at x: CGFloat) {
         let note = UIView()
-        note.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.7)
+        note.backgroundColor = BrandColors.brand.withAlphaComponent(0.7)
         note.layer.cornerRadius = 6
 
         addSubview(note)

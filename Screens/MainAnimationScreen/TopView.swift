@@ -14,7 +14,7 @@ final class LessonNavBarView: UIView {
     private(set) var tempoMultiplier: Double = 1.0
 
     private let blurView    = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-    private let backBtn     = UIButton(type: .system)
+    private lazy var backBtn = NavigationBarHelper.makeCircularBackButton()
     private let titleLabel  = UILabel()
     private let tempoSlider = UISlider()
     private let tempoLabel  = UILabel()
@@ -48,10 +48,7 @@ final class LessonNavBarView: UIView {
             self.layer.addSublayer(border)
         }
 
-        // ── Back button ──────────────────────────────────────────────────
-        let backCfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
-        backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: backCfg), for: .normal)
-        backBtn.tintColor = .label
+        // ── Back button (circular global style) ────────────────────────────────────
         backBtn.addTarget(self, action: #selector(didBack), for: .touchUpInside)
 
         // ── Title ────────────────────────────────────────────────────────
@@ -64,7 +61,7 @@ final class LessonNavBarView: UIView {
         tempoSlider.minimumValue = 0.5
         tempoSlider.maximumValue = 2.0
         tempoSlider.value        = 1.0
-        tempoSlider.minimumTrackTintColor = .systemBlue
+        tempoSlider.minimumTrackTintColor = BrandColors.brand
         tempoSlider.maximumTrackTintColor = .systemGray4
         tempoSlider.setThumbImage(thumbImage(), for: .normal)
         tempoSlider.addTarget(self, action: #selector(sliderMoved), for: .valueChanged)
@@ -126,14 +123,18 @@ final class LessonNavBarView: UIView {
     private func thumbImage() -> UIImage {
         let s = CGSize(width: 16, height: 16)
         UIGraphicsBeginImageContextWithOptions(s, false, 0)
-        UIColor.systemBlue.setFill()
+        BrandColors.brand.setFill()
         UIBezierPath(ovalIn: CGRect(origin: .zero, size: s)).fill()
         let img = UIGraphicsGetImageFromCurrentImageContext()!
         UIGraphicsEndImageContext()
         return img
     }
 
-    @objc private func didBack() { onBackTap?() }
+    @objc private func didBack() {
+        NavigationBarHelper.animateButtonPress(backBtn) { [weak self] in
+            self?.onBackTap?()
+        }
+    }
     @objc private func didMenu() { onMenuTap?() }
 
     @objc private func sliderMoved() {

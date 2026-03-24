@@ -4,6 +4,8 @@
 
 import UIKit
 import Supabase
+import Auth
+internal import PostgREST
 
 struct Profile: Decodable {
     let id: UUID
@@ -11,120 +13,113 @@ struct Profile: Decodable {
     var username: String?
     var avatar_url: String?
     var bio: String?
-    var daily_goal_minutes: Int?
+    var total_study_seconds: Int?
 }
 
-final class UserProfileViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+struct OnboardingData: Codable {
+    let practice_mins: Int
+}
+
+// MARK: - Stats model fetched from lesson_events
+struct ProfileStats {
+    var totalPracticeSeconds: Int = 0
+    var totalLessons: Int = 0
+    var currentStreak: Int = 0
+    var weeklyData: [CGFloat] = [0, 0, 0, 0, 0, 0, 0] // Mon–Sun in hours
+}
+
+final class UserProfileViewController: UIViewController {
 
     // MARK: - UI
-    private let navBar = UIView()
-    private let backButton = UIButton(type: .system)
-
     private let scrollView = UIScrollView()
-    private let contentView = UIStackView()
-    
-    // Header elements we update
+    private let contentView = UIView()
+
+    // Header
     private let profileImageView = UIImageView()
-    private let cameraBadgeView = UIView()
     private let nameLabel = UILabel()
     private let usernameLabel = UILabel()
-    private let bioLabel = UILabel()
-    private let editButton = UIButton(type: .system)
+    private let titleLabel = UILabel()
+    private let editProfileButton = UIButton(type: .system)
+
+    // Stat cards
+    private let practiceLabel = UILabel()
+    private let lessonsLabel = UILabel()
+    private let streakLabel = UILabel()
+
+    // Practice Progress
+    private let weeklyHoursLabel = UILabel()
+    private let goalBadgeBg = UIView()
+    private let goalBadgeLabel = UILabel()
+    private var chartBars: [UIView] = []
+    private var chartDots: [UIView] = []
+
+    // Sign out
     private let signOutButton = UIButton(type: .system)
-    
-    // Background gradient
-    private let backgroundGradient = CAGradientLayer()
-    
-    // Daily goal UI elements
-    private let dailyGoalProgressView = UIProgressView()
-    private let dailyGoalTimeLabel = UILabel()
-    
+
     // Data
     private var currentProfile: Profile?
-    private var currentDailyGoalMinutes: Int = 20
-    private var currentDailyProgressMinutes: Int = 14
+    private var stats = ProfileStats()
+
+    // MARK: - Init
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.hidesBottomBarWhenPushed = true
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        view.backgroundColor = UIColor(red: 0.96, green: 0.94, blue: 0.90, alpha: 1.0) // Light cream/beige
-        navigationController?.navigationBar.isHidden = true
-
-        setupGradientBackground()
-        setupNavBar()
-        setupScroll()
-        buildUI()
-        view.bringSubviewToFront(navBar)
+        view.backgroundColor = ComponentColors.ProfileScreen.background
         
-        loadProfile()
-    }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        backgroundGradient.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: view.bounds.height * 0.45)
-    }
-    
-    // MARK: - Gradient Background
-    private func setupGradientBackground() {
-        backgroundGradient.colors = [
-            UIColor(red: 1.0, green: 0.78, blue: 0.36, alpha: 1.0).cgColor,  // Warm orange/gold
-            UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1.0).cgColor,  // Lighter gold
-            UIColor(red: 0.96, green: 0.94, blue: 0.90, alpha: 1.0).cgColor  // Fade to cream
+        // Match the uniform "Practice" style
+        title = "Profile"
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        let navBar = navigationController?.navigationBar
+        navBar?.titleTextAttributes = [
+            .foregroundColor: UIColor.white,
+            .font: UIFont.systemFont(ofSize: 17, weight: .bold)
         ]
-        backgroundGradient.locations = [0.0, 0.5, 1.0]
-        backgroundGradient.startPoint = CGPoint(x: 0.5, y: 0)
-        backgroundGradient.endPoint = CGPoint(x: 0.5, y: 1)
-        view.layer.insertSublayer(backgroundGradient, at: 0)
+        navBar?.tintColor = .white
+        
+        setupUI()
+        loadData()
     }
 
-    // MARK: - NAVBAR
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.backgroundColor = .clear
 
-        // Back button - simple chevron without background
-        backButton.setImage(UIImage(systemName: "chevron.left", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)), for: .normal)
-        backButton.tintColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
-        backButton.addTarget(self, action: #selector(goBack), for: .touchUpInside)
-        backButton.translatesAutoresizingMaskIntoConstraints = false
-        navBar.addSubview(backButton)
-
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 56),
-
-            backButton.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
-            backButton.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            backButton.widthAnchor.constraint(equalToConstant: 40),
-            backButton.heightAnchor.constraint(equalToConstant: 40)
-        ])
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
-    @objc private func goBack() {
-        // Send notification before popping to refresh navbar
-        NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
-        navigationController?.popViewController(animated: true)
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Post notification so Home nav bar can refresh profile image when user navigates back
+        if isMovingFromParent {
+            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+        }
     }
 
-    // MARK: - ScrollView
-    private func setupScroll() {
-        view.addSubview(scrollView)
+    // MARK: - Setup UI
+    private func setupUI() {
+        // Scroll
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.alwaysBounceVertical = true
         scrollView.showsVerticalScrollIndicator = false
+        view.addSubview(scrollView)
 
-        scrollView.addSubview(contentView)
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.axis = .vertical
-        contentView.spacing = 20
-        contentView.alignment = .fill
+        scrollView.addSubview(contentView)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -135,1227 +130,704 @@ final class UserProfileViewController: UIViewController, UIImagePickerController
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
         ])
+
+        buildHeaderSection()
+        buildStatsSection()
+        buildPracticeProgressSection()
+        buildSignOutSection()
     }
 
-    // MARK: - Build Screen UI
-    private func buildUI() {
-        // Avatar with edit button (compact header)
-        contentView.addArrangedSubview(buildCompactHeader())
-        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
-        
-        // Daily goal section
-        contentView.addArrangedSubview(buildDailyGoalSection())
-        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
-        
-        // Practice graph section
-        contentView.addArrangedSubview(buildPracticeGraphSection())
-        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
-        
-        // Stats section (Days Streak & Hours Spent)
-        contentView.addArrangedSubview(buildAchievementsSection())
-        contentView.setCustomSpacing(24, after: contentView.arrangedSubviews.last!)
-        
-        // Add Sign Out Button
-        contentView.addArrangedSubview(buildSignOutButton())
-        contentView.setCustomSpacing(32, after: contentView.arrangedSubviews.last!)
+    // MARK: - HEADER (avatar + name + username + edit)
+    private func buildHeaderSection() {
+        // Avatar ring
+        let ringSize: CGFloat = 110
+        let ringView = UIView()
+        ringView.translatesAutoresizingMaskIntoConstraints = false
+        let ringGradient = CAGradientLayer()
+        ringGradient.colors = [
+            ComponentColors.ProfileScreen.avatarBorder.cgColor,
+            ComponentColors.ProfileScreen.avatarBorder.cgColor
+        ]
+        ringGradient.startPoint = CGPoint(x: 0, y: 0)
+        ringGradient.endPoint = CGPoint(x: 1, y: 1)
+        ringGradient.cornerRadius = ringSize / 2
+        ringView.layer.addSublayer(ringGradient)
+        ringView.layer.cornerRadius = ringSize / 2
+        ringView.clipsToBounds = false
+        contentView.addSubview(ringView)
 
-        // Add bottom spacer
-        let spacer = UIView()
-        spacer.heightAnchor.constraint(equalToConstant: 60).isActive = true
-        contentView.addArrangedSubview(spacer)
-    }
-
-    // MARK: - COMPACT HEADER (Avatar + Edit)
-    private func buildCompactHeader() -> UIView {
-        let container = UIView()
-        
-        let header = UIView()
-        header.backgroundColor = .clear
-        header.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(header)
-        
-        // Profile image - larger and more prominent
         profileImageView.image = UIImage(systemName: "person.fill")
         profileImageView.tintColor = .white
-        profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
-        profileImageView.layer.cornerRadius = 40
+        profileImageView.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
+        profileImageView.contentMode = .scaleAspectFill
         profileImageView.clipsToBounds = true
-        profileImageView.layer.borderColor = UIColor.white.cgColor
-        profileImageView.layer.borderWidth = 3
-        profileImageView.layer.shadowColor = UIColor.black.cgColor
-        profileImageView.layer.shadowOpacity = 0.15
-        profileImageView.layer.shadowOffset = CGSize(width: 0, height: 4)
-        profileImageView.layer.shadowRadius = 8
+        profileImageView.layer.cornerRadius = (ringSize - 8) / 2
         profileImageView.isUserInteractionEnabled = true
         profileImageView.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
         )
         profileImageView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Camera badge overlay
-        cameraBadgeView.backgroundColor = UIColor.systemOrange
-        cameraBadgeView.layer.cornerRadius = 14
-        cameraBadgeView.layer.shadowColor = UIColor.black.cgColor
-        cameraBadgeView.layer.shadowOpacity = 0.2
-        cameraBadgeView.layer.shadowOffset = CGSize(width: 0, height: 2)
-        cameraBadgeView.layer.shadowRadius = 4
-        cameraBadgeView.isUserInteractionEnabled = true
-        cameraBadgeView.addGestureRecognizer(
-            UITapGestureRecognizer(target: self, action: #selector(changeAvatarTapped))
-        )
-        cameraBadgeView.translatesAutoresizingMaskIntoConstraints = false
-        
-        let cameraIcon = UIImageView(image: UIImage(systemName: "camera.fill"))
-        cameraIcon.tintColor = .white
-        cameraIcon.contentMode = .scaleAspectFit
-        cameraBadgeView.addSubview(cameraIcon)
-        cameraIcon.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Name and username in vertical stack
+        contentView.addSubview(profileImageView)
+
         nameLabel.text = "Loading..."
-        nameLabel.font = .systemFont(ofSize: 20, weight: .bold)
-        nameLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        nameLabel.font = .systemFont(ofSize: 24, weight: .bold)
+        nameLabel.textColor = ComponentColors.ProfileScreen.userName
+        nameLabel.textAlignment = .center
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+        contentView.addSubview(nameLabel)
+
         usernameLabel.text = "@username"
-        usernameLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        usernameLabel.textColor = UIColor(red: 0.4, green: 0.4, blue: 0.4, alpha: 1.0)
+        usernameLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        usernameLabel.textColor = ComponentColors.ProfileScreen.userHandle
+        usernameLabel.textAlignment = .center
         usernameLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        let textStack = UIStackView(arrangedSubviews: [nameLabel, usernameLabel])
-        textStack.axis = .vertical
-        textStack.alignment = .leading
-        textStack.spacing = 4
-        textStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Edit button - pill shape
-        editButton.setImage(UIImage(systemName: "pencil"), for: .normal)
-        editButton.tintColor = .white
-        editButton.backgroundColor = UIColor.systemOrange
-        editButton.layer.cornerRadius = 20
-        editButton.layer.shadowColor = UIColor.systemOrange.cgColor
-        editButton.layer.shadowOpacity = 0.4
-        editButton.layer.shadowOffset = CGSize(width: 0, height: 4)
-        editButton.layer.shadowRadius = 8
-        editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
-        editButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        header.addSubviews(profileImageView, cameraBadgeView, textStack, editButton)
-        
+        contentView.addSubview(usernameLabel)
+
+        editProfileButton.setTitle("Profile", for: .normal)
+        editProfileButton.setTitleColor(ComponentColors.ProfileScreen.editProfileText, for: .normal)
+        editProfileButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        editProfileButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
+        editProfileButton.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(editProfileButton)
+
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: container.topAnchor),
-            header.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            header.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            header.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            header.heightAnchor.constraint(equalToConstant: 80),
-            
-            profileImageView.leadingAnchor.constraint(equalTo: header.leadingAnchor),
-            profileImageView.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            profileImageView.widthAnchor.constraint(equalToConstant: 80),
-            profileImageView.heightAnchor.constraint(equalToConstant: 80),
-            
-            cameraBadgeView.widthAnchor.constraint(equalToConstant: 28),
-            cameraBadgeView.heightAnchor.constraint(equalToConstant: 28),
-            cameraBadgeView.trailingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 4),
-            cameraBadgeView.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 4),
-            
-            cameraIcon.centerXAnchor.constraint(equalTo: cameraBadgeView.centerXAnchor),
-            cameraIcon.centerYAnchor.constraint(equalTo: cameraBadgeView.centerYAnchor),
-            cameraIcon.widthAnchor.constraint(equalToConstant: 14),
-            cameraIcon.heightAnchor.constraint(equalToConstant: 14),
-            
-            textStack.leadingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 16),
-            textStack.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            
-            editButton.trailingAnchor.constraint(equalTo: header.trailingAnchor),
-            editButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            editButton.widthAnchor.constraint(equalToConstant: 44),
-            editButton.heightAnchor.constraint(equalToConstant: 44)
+            ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
+            ringView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            ringView.widthAnchor.constraint(equalToConstant: ringSize),
+            ringView.heightAnchor.constraint(equalToConstant: ringSize),
+
+            profileImageView.centerXAnchor.constraint(equalTo: ringView.centerXAnchor),
+            profileImageView.centerYAnchor.constraint(equalTo: ringView.centerYAnchor),
+            profileImageView.widthAnchor.constraint(equalToConstant: ringSize - 8),
+            profileImageView.heightAnchor.constraint(equalToConstant: ringSize - 8),
+
+            nameLabel.topAnchor.constraint(equalTo: ringView.bottomAnchor, constant: 16),
+            nameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+
+            usernameLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
+            usernameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+
+            editProfileButton.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 8),
+            editProfileButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
         ])
-        
-        return container
-    }
-    
-    // MARK: - DAILY GOAL SECTION
-    private func buildDailyGoalSection() -> UIView {
-        let container = UIView()
-        
-        let card = UIView()
-        card.backgroundColor = UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 0.95) // Dark charcoal
-        card.layer.cornerRadius = 20
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.15
-        card.layer.shadowOffset = CGSize(width: 0, height: 4)
-        card.layer.shadowRadius = 12
-        card.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(card)
-        
-        let label = UILabel()
-        label.text = "Daily goal"
-        label.font = .systemFont(ofSize: 15, weight: .medium)
-        label.textColor = UIColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1.0) // Cream white
-        label.translatesAutoresizingMaskIntoConstraints = false
-        
-        dailyGoalProgressView.progress = 0.7
-        dailyGoalProgressView.progressTintColor = UIColor(red: 0.3, green: 0.75, blue: 0.45, alpha: 1.0) // Fresh green
-        dailyGoalProgressView.trackTintColor = UIColor.white.withAlphaComponent(0.15)
-        dailyGoalProgressView.layer.cornerRadius = 4
-        dailyGoalProgressView.clipsToBounds = true
-        dailyGoalProgressView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Make progress bar thicker
-        dailyGoalProgressView.transform = CGAffineTransform(scaleX: 1.0, y: 2.0)
-        
-        // Add tap to edit
-        let tapCard = UITapGestureRecognizer(target: self, action: #selector(editDailyGoalTapped))
-        card.addGestureRecognizer(tapCard)
-        card.isUserInteractionEnabled = true
-        
-        dailyGoalTimeLabel.text = "20 mins"
-        dailyGoalTimeLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        dailyGoalTimeLabel.textColor = UIColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1.0)
-        dailyGoalTimeLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        card.addSubviews(label, dailyGoalProgressView, dailyGoalTimeLabel)
-        
-        NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: container.topAnchor),
-            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            card.heightAnchor.constraint(equalToConstant: 56),
-            
-            label.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            label.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            
-            dailyGoalProgressView.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 16),
-            dailyGoalProgressView.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            dailyGoalProgressView.trailingAnchor.constraint(equalTo: dailyGoalTimeLabel.leadingAnchor, constant: -16),
-            
-            dailyGoalTimeLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            dailyGoalTimeLabel.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            dailyGoalTimeLabel.widthAnchor.constraint(equalToConstant: 60)
-        ])
-        
-        return container
+
+        DispatchQueue.main.async {
+            ringGradient.frame = ringView.bounds
+        }
     }
 
-    // MARK: - PRACTICE GRAPH SECTION
-    private func buildPracticeGraphSection() -> UIView {
-        let container = UIView()
-        
-        let card = UIView()
-        card.backgroundColor = UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 0.95) // Dark charcoal
-        card.layer.cornerRadius = 20
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.15
-        card.layer.shadowOffset = CGSize(width: 0, height: 4)
-        card.layer.shadowRadius = 12
-        // Dashed border effect
-        card.layer.borderWidth = 1.5
-        card.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        card.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(card)
-        
-        // Title
-        let titleLabel = UILabel()
-        titleLabel.text = "Practice Graph"
-        titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
-        titleLabel.textColor = .white
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Toggle buttons container
-        let toggleContainer = UIView()
-        toggleContainer.backgroundColor = UIColor.white.withAlphaComponent(0.1)
-        toggleContainer.layer.cornerRadius = 10
-        toggleContainer.translatesAutoresizingMaskIntoConstraints = false
-        
-        let sevenDaysBtn = UIButton(type: .system)
-        sevenDaysBtn.setTitle("7 Days", for: .normal)
-        sevenDaysBtn.backgroundColor = .white
-        sevenDaysBtn.layer.cornerRadius = 8
-        sevenDaysBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
-        sevenDaysBtn.setTitleColor(UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0), for: .normal)
-        sevenDaysBtn.translatesAutoresizingMaskIntoConstraints = false
-        
-        let oneMonthBtn = UIButton(type: .system)
-        oneMonthBtn.setTitle("1 Month", for: .normal)
-        oneMonthBtn.backgroundColor = .clear
-        oneMonthBtn.layer.cornerRadius = 8
-        oneMonthBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
-        oneMonthBtn.setTitleColor(.white, for: .normal)
-        oneMonthBtn.translatesAutoresizingMaskIntoConstraints = false
-        
-        toggleContainer.addSubview(sevenDaysBtn)
-        toggleContainer.addSubview(oneMonthBtn)
-        
-        // Y-axis labels
-        let yAxisStack = UIStackView()
-        yAxisStack.axis = .vertical
-        yAxisStack.distribution = .equalSpacing
-        yAxisStack.alignment = .trailing
-        yAxisStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        for minutes in ["30m", "25m", "20m", "15m", "10m", "5m", "0m"] {
-            let label = UILabel()
-            label.text = minutes
-            label.font = .systemFont(ofSize: 9, weight: .regular)
-            label.textColor = UIColor.white.withAlphaComponent(0.5)
-            yAxisStack.addArrangedSubview(label)
-        }
-        
-        // Simple static graph
-        let graphView = buildStaticPracticeGraph()
-        
-        card.addSubviews(titleLabel, toggleContainer, yAxisStack, graphView)
-        
+    // MARK: - STATS (3 cards: Practice, Lessons, Streak)
+    private func buildStatsSection() {
+        let statsContainer = UIView()
+        statsContainer.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(statsContainer)
+
+        // Find editProfileButton to anchor below it
+        let brandColor = ComponentColors.ProfileScreen.editProfileText // #EF9408
+        let cards = [
+            makeStatCard(iconName: "clock", iconColor: brandColor,
+                         valueLabel: practiceLabel, valueText: "–", subtitleText: "Practice"),
+            makeStatCard(iconName: "book.fill", iconColor: brandColor,
+                         valueLabel: lessonsLabel, valueText: "–", subtitleText: "Lessons"),
+            makeStatCard(iconName: "flame.fill", iconColor: brandColor,
+                         valueLabel: streakLabel, valueText: "–", subtitleText: "Streak")
+        ]
+
+        let stack = UIStackView(arrangedSubviews: cards)
+        stack.axis = .horizontal
+        stack.distribution = .fillEqually
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        statsContainer.addSubview(stack)
+
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: container.topAnchor),
-            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            card.heightAnchor.constraint(equalToConstant: 300),
-            
-            titleLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            
-            toggleContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            toggleContainer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            toggleContainer.heightAnchor.constraint(equalToConstant: 32),
-            toggleContainer.widthAnchor.constraint(equalToConstant: 140),
-            
-            sevenDaysBtn.leadingAnchor.constraint(equalTo: toggleContainer.leadingAnchor, constant: 3),
-            sevenDaysBtn.topAnchor.constraint(equalTo: toggleContainer.topAnchor, constant: 3),
-            sevenDaysBtn.bottomAnchor.constraint(equalTo: toggleContainer.bottomAnchor, constant: -3),
-            sevenDaysBtn.widthAnchor.constraint(equalToConstant: 64),
-            
-            oneMonthBtn.trailingAnchor.constraint(equalTo: toggleContainer.trailingAnchor, constant: -3),
-            oneMonthBtn.topAnchor.constraint(equalTo: toggleContainer.topAnchor, constant: 3),
-            oneMonthBtn.bottomAnchor.constraint(equalTo: toggleContainer.bottomAnchor, constant: -3),
-            oneMonthBtn.widthAnchor.constraint(equalToConstant: 64),
-            
-            yAxisStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
-            yAxisStack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
-            yAxisStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -50),
-            yAxisStack.widthAnchor.constraint(equalToConstant: 28),
-            
-            graphView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
-            graphView.leadingAnchor.constraint(equalTo: yAxisStack.trailingAnchor, constant: 8),
-            graphView.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            graphView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
+            stack.topAnchor.constraint(equalTo: statsContainer.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: statsContainer.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: statsContainer.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: statsContainer.bottomAnchor),
         ])
-        
-        return container
-    }
-    
-    private func buildStaticPracticeGraph() -> UIView {
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        
-        let days = ["mon", "tues", "wed", "thurs", "fri", "sat", "sun"]
-        let values: [CGFloat] = [0, 0, 18, 22, 16, 25, 28] // minutes - first two days no activity
-        let maxValue: CGFloat = 30
-        
-        let graphHeight: CGFloat = 160
-        let barWidth: CGFloat = 30
-        let spacing: CGFloat = 10
-        
-        for (index, day) in days.enumerated() {
-            let value = values[index]
-            let barHeight = max((value / maxValue) * graphHeight, value > 0 ? 20 : 0)
-            
-            // Bar with gradient look
-            let bar = UIView()
-            if value > 0 {
-                bar.backgroundColor = UIColor.systemOrange
-                bar.layer.cornerRadius = 4
-            } else {
-                bar.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-                bar.layer.cornerRadius = 4
-            }
-            bar.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(bar)
-            
-            // Day label
-            let label = UILabel()
-            label.text = day
-            label.font = .systemFont(ofSize: 10, weight: .medium)
-            label.textColor = UIColor.white.withAlphaComponent(0.6)
-            label.textAlignment = .center
-            label.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(label)
-            
-            let xPos = CGFloat(index) * (barWidth + spacing)
-            
-            NSLayoutConstraint.activate([
-                bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: xPos),
-                bar.widthAnchor.constraint(equalToConstant: barWidth),
-                bar.heightAnchor.constraint(equalToConstant: barHeight),
-                bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -28),
-                
-                label.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
-                label.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: 8)
-            ])
-        }
-        
-        return container
-    }
-    
-    // MARK: - ACHIEVEMENTS SECTION (Days Streak & Hours Spent)
-    private func buildAchievementsSection() -> UIView {
-        let container = UIView()
-        
-        let streakCard = UIView()
-        streakCard.backgroundColor = .white
-        streakCard.layer.cornerRadius = 20
-        streakCard.layer.shadowColor = UIColor.black.cgColor
-        streakCard.layer.shadowOpacity = 0.08
-        streakCard.layer.shadowRadius = 12
-        streakCard.layer.shadowOffset = CGSize(width: 0, height: 4)
-        streakCard.translatesAutoresizingMaskIntoConstraints = false
-        
-        let hoursCard = UIView()
-        hoursCard.backgroundColor = .white
-        hoursCard.layer.cornerRadius = 20
-        hoursCard.layer.shadowColor = UIColor.black.cgColor
-        hoursCard.layer.shadowOpacity = 0.08
-        hoursCard.layer.shadowRadius = 12
-        hoursCard.layer.shadowOffset = CGSize(width: 0, height: 4)
-        hoursCard.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Streak card content
-        let streakIcon = UIImageView(image: UIImage(systemName: "flame.fill"))
-        streakIcon.tintColor = UIColor(red: 1.0, green: 0.4, blue: 0.3, alpha: 1.0)
-        streakIcon.contentMode = .scaleAspectFit
-        streakIcon.translatesAutoresizingMaskIntoConstraints = false
-        
-        let streakNumber = UILabel()
-        streakNumber.text = "5"
-        streakNumber.font = .systemFont(ofSize: 42, weight: .bold)
-        streakNumber.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
-        streakNumber.textAlignment = .center
-        streakNumber.translatesAutoresizingMaskIntoConstraints = false
-        
-        let streakLabel = UILabel()
-        streakLabel.text = "Days Streak"
-        streakLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        streakLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
-        streakLabel.textAlignment = .center
-        streakLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        streakCard.addSubviews(streakIcon, streakNumber, streakLabel)
-        
-        // Hours card content
-        let hoursIcon = UIImageView(image: UIImage(systemName: "stopwatch.fill"))
-        hoursIcon.tintColor = .systemOrange
-        hoursIcon.contentMode = .scaleAspectFit
-        hoursIcon.translatesAutoresizingMaskIntoConstraints = false
-        
-        let hoursNumber = UILabel()
-        hoursNumber.text = "24"
-        hoursNumber.font = .systemFont(ofSize: 42, weight: .bold)
-        hoursNumber.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
-        hoursNumber.textAlignment = .center
-        hoursNumber.translatesAutoresizingMaskIntoConstraints = false
-        
-        let hoursLabel = UILabel()
-        hoursLabel.text = "Hours Spent"
-        hoursLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        hoursLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
-        hoursLabel.textAlignment = .center
-        hoursLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        hoursCard.addSubviews(hoursIcon, hoursNumber, hoursLabel)
-        
-        // Layout cards side by side
-        container.addSubviews(streakCard, hoursCard)
-        
+
+        // Anchor statsContainer below editProfileButton
         NSLayoutConstraint.activate([
-            streakCard.topAnchor.constraint(equalTo: container.topAnchor),
-            streakCard.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            streakCard.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            streakCard.heightAnchor.constraint(equalToConstant: 150),
-            
-            hoursCard.topAnchor.constraint(equalTo: container.topAnchor),
-            hoursCard.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            hoursCard.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            hoursCard.heightAnchor.constraint(equalToConstant: 150),
-            
-            streakCard.trailingAnchor.constraint(equalTo: hoursCard.leadingAnchor, constant: -16),
-            streakCard.widthAnchor.constraint(equalTo: hoursCard.widthAnchor),
-            
-            // Streak card contents
-            streakIcon.topAnchor.constraint(equalTo: streakCard.topAnchor, constant: 18),
-            streakIcon.centerXAnchor.constraint(equalTo: streakCard.centerXAnchor),
-            streakIcon.widthAnchor.constraint(equalToConstant: 36),
-            streakIcon.heightAnchor.constraint(equalToConstant: 36),
-            
-            streakNumber.topAnchor.constraint(equalTo: streakIcon.bottomAnchor, constant: 8),
-            streakNumber.centerXAnchor.constraint(equalTo: streakCard.centerXAnchor),
-            
-            streakLabel.topAnchor.constraint(equalTo: streakNumber.bottomAnchor, constant: 4),
-            streakLabel.centerXAnchor.constraint(equalTo: streakCard.centerXAnchor),
-            
-            // Hours card contents
-            hoursIcon.topAnchor.constraint(equalTo: hoursCard.topAnchor, constant: 18),
-            hoursIcon.centerXAnchor.constraint(equalTo: hoursCard.centerXAnchor),
-            hoursIcon.widthAnchor.constraint(equalToConstant: 36),
-            hoursIcon.heightAnchor.constraint(equalToConstant: 36),
-            
-            hoursNumber.topAnchor.constraint(equalTo: hoursIcon.bottomAnchor, constant: 8),
-            hoursNumber.centerXAnchor.constraint(equalTo: hoursCard.centerXAnchor),
-            
-            hoursLabel.topAnchor.constraint(equalTo: hoursNumber.bottomAnchor, constant: 4),
-            hoursLabel.centerXAnchor.constraint(equalTo: hoursCard.centerXAnchor)
+            statsContainer.topAnchor.constraint(equalTo: editProfileButton.bottomAnchor, constant: 28),
+            statsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            statsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            statsContainer.heightAnchor.constraint(equalToConstant: 100),
         ])
-        
-        return container
     }
-    
-    // MARK: - MOST PLAYED SECTION
-    private func buildMostPlayedSection() -> UIView {
-        let container = UIView()
-        
-        // Section header
-        let headerLabel = UILabel()
-        headerLabel.text = "Most Played"
-        headerLabel.font = .systemFont(ofSize: 20, weight: .bold)
-        headerLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
-        headerLabel.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(headerLabel)
-        
+
+    private func makeStatCard(iconName: String, iconColor: UIColor,
+                               valueLabel: UILabel, valueText: String,
+                               subtitleText: String) -> UIView {
         let card = UIView()
-        card.backgroundColor = .white
+        card.backgroundColor = ComponentColors.ProfileScreen.statCardFill // #FBF1DA 80%
+        card.layer.cornerRadius = 16
+        card.layer.borderWidth = 0.5
+        card.layer.borderColor = ComponentColors.ProfileScreen.statCardBorder.cgColor // #EF9408 at 40%
+
+        let icon = UIImageView(image: UIImage(systemName: iconName))
+        icon.tintColor = iconColor
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        valueLabel.text = valueText
+        valueLabel.font = .systemFont(ofSize: 22, weight: .bold)
+        valueLabel.textColor = ComponentColors.ProfileScreen.userName
+        valueLabel.textAlignment = .center
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let subtitle = UILabel()
+        subtitle.text = subtitleText
+        subtitle.font = .systemFont(ofSize: 10, weight: .semibold)
+        subtitle.textColor = ComponentColors.ProfileScreen.statLabel
+        subtitle.textAlignment = .center
+        let subtitleAttrs = NSMutableAttributedString(string: subtitleText)
+        subtitleAttrs.addAttribute(.kern, value: 1.2, range: NSRange(location: 0, length: subtitleText.count))
+        subtitle.attributedText = subtitleAttrs
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
+
+        card.addSubview(icon)
+        card.addSubview(valueLabel)
+        card.addSubview(subtitle)
+
+        NSLayoutConstraint.activate([
+            icon.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            icon.centerXAnchor.constraint(equalTo: card.centerXAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 22),
+            icon.heightAnchor.constraint(equalToConstant: 22),
+
+            valueLabel.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 6),
+            valueLabel.centerXAnchor.constraint(equalTo: card.centerXAnchor),
+
+            subtitle.topAnchor.constraint(equalTo: valueLabel.bottomAnchor, constant: 2),
+            subtitle.centerXAnchor.constraint(equalTo: card.centerXAnchor),
+        ])
+
+        return card
+    }
+
+    // MARK: - PRACTICE PROGRESS SECTION
+    private func buildPracticeProgressSection() {
+        let card = UIView()
+        card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
         card.layer.cornerRadius = 20
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
-        card.layer.shadowRadius = 12
         card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        card.layer.shadowRadius = 16
         card.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(card)
-        
-        let stack = UIStackView(arrangedSubviews: [
-            mostPlayedRow(title: "Go Away", artist: "Weezer", plays: "23\nTimes"),
-            mostPlayedRow(title: "Ride Home", artist: "Weezer", plays: "16\nTimes")
-        ])
-        stack.axis = .vertical
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(card)
 
-        card.addSubview(stack)
-        
-        NSLayoutConstraint.activate([
-            headerLabel.topAnchor.constraint(equalTo: container.topAnchor),
-            headerLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            
-            card.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 16),
-            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
-        ])
-
-        return container
-    }
-    
-    private func mostPlayedRow(title: String, artist: String, plays: String) -> UIView {
-        let row = UIView()
-
-        // Album art placeholder
-        let albumArt = UIView()
-        albumArt.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.15)
-        albumArt.layer.cornerRadius = 12
-        albumArt.clipsToBounds = true
-        albumArt.translatesAutoresizingMaskIntoConstraints = false
-        
-        let musicIcon = UIImageView(image: UIImage(systemName: "music.note"))
-        musicIcon.tintColor = .systemOrange
-        musicIcon.contentMode = .scaleAspectFit
-        musicIcon.translatesAutoresizingMaskIntoConstraints = false
-        albumArt.addSubview(musicIcon)
-
+        // Title row
         let titleLabel = UILabel()
-        titleLabel.text = title
-        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        titleLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
+        titleLabel.text = "Practice Progress"
+        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.textColor = ComponentColors.ProfileScreen.userName
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(titleLabel)
 
-        let artistLabel = UILabel()
-        artistLabel.text = artist
-        artistLabel.font = .systemFont(ofSize: 13, weight: .regular)
-        artistLabel.textColor = UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
-        artistLabel.translatesAutoresizingMaskIntoConstraints = false
+        // Goal badge
+        goalBadgeBg.backgroundColor = ComponentColors.ProfileScreen.statCardFill
+        goalBadgeBg.layer.cornerRadius = 12
+        goalBadgeBg.isUserInteractionEnabled = true
+        goalBadgeBg.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(dailyGoalBadgeTapped)))
+        goalBadgeBg.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(goalBadgeBg)
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, artistLabel])
-        textStack.axis = .vertical
-        textStack.spacing = 4
-        textStack.translatesAutoresizingMaskIntoConstraints = false
+        goalBadgeLabel.text = "Goal: –"
+        goalBadgeLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        goalBadgeLabel.textColor = ComponentColors.ProfileScreen.editProfileText
+        goalBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        goalBadgeBg.addSubview(goalBadgeLabel)
 
-        let playsLabel = UILabel()
-        playsLabel.text = plays
-        playsLabel.font = .systemFont(ofSize: 16, weight: .bold)
-        playsLabel.textColor = UIColor(red: 0.3, green: 0.3, blue: 0.3, alpha: 1.0)
-        playsLabel.numberOfLines = 2
-        playsLabel.textAlignment = .right
-        playsLabel.translatesAutoresizingMaskIntoConstraints = false
+        // Weekly hours
+        weeklyHoursLabel.text = "– h"
+        weeklyHoursLabel.font = .systemFont(ofSize: 36, weight: .bold)
+        weeklyHoursLabel.textColor = ComponentColors.ProfileScreen.userName
+        weeklyHoursLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(weeklyHoursLabel)
 
-        row.addSubviews(albumArt, textStack, playsLabel)
-        
+        let thisWeekLabel = UILabel()
+        thisWeekLabel.text = "This Week"
+        thisWeekLabel.font = .systemFont(ofSize: 14, weight: .regular)
+        thisWeekLabel.textColor = ComponentColors.ProfileScreen.statLabel
+        thisWeekLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(thisWeekLabel)
+
+        // Chart area
+        let chartContainer = buildAreaChartView()
+        chartContainer.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(chartContainer)
+
+        // Find statsContainer (3rd subview of contentView after back btn, titleLabel)
+        // We'll anchor card below statsContainer
+        // Get statsContainer by finding the last added subview before this
+        let statsContainer = contentView.subviews.last(where: { $0 != card })!
+
         NSLayoutConstraint.activate([
-            albumArt.leadingAnchor.constraint(equalTo: row.leadingAnchor),
-            albumArt.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-            albumArt.heightAnchor.constraint(equalToConstant: 56),
-            albumArt.widthAnchor.constraint(equalToConstant: 56),
-            
-            musicIcon.centerXAnchor.constraint(equalTo: albumArt.centerXAnchor),
-            musicIcon.centerYAnchor.constraint(equalTo: albumArt.centerYAnchor),
-            musicIcon.widthAnchor.constraint(equalToConstant: 24),
-            musicIcon.heightAnchor.constraint(equalToConstant: 24),
+            card.topAnchor.constraint(equalTo: statsContainer.bottomAnchor, constant: 20),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
 
-            textStack.leadingAnchor.constraint(equalTo: albumArt.trailingAnchor, constant: 14),
-            textStack.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            titleLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
 
-            playsLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor),
-            playsLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-            playsLabel.widthAnchor.constraint(equalToConstant: 60),
+            goalBadgeBg.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            goalBadgeBg.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            goalBadgeBg.heightAnchor.constraint(equalToConstant: 28),
 
-            row.heightAnchor.constraint(equalToConstant: 72)
+            goalBadgeLabel.topAnchor.constraint(equalTo: goalBadgeBg.topAnchor, constant: 6),
+            goalBadgeLabel.bottomAnchor.constraint(equalTo: goalBadgeBg.bottomAnchor, constant: -6),
+            goalBadgeLabel.leadingAnchor.constraint(equalTo: goalBadgeBg.leadingAnchor, constant: 10),
+            goalBadgeLabel.trailingAnchor.constraint(equalTo: goalBadgeBg.trailingAnchor, constant: -10),
+
+            weeklyHoursLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            weeklyHoursLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+
+            thisWeekLabel.leadingAnchor.constraint(equalTo: weeklyHoursLabel.trailingAnchor, constant: 8),
+            thisWeekLabel.lastBaselineAnchor.constraint(equalTo: weeklyHoursLabel.lastBaselineAnchor),
+
+            chartContainer.topAnchor.constraint(equalTo: weeklyHoursLabel.bottomAnchor, constant: 8),
+            chartContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 8),
+            chartContainer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -8),
+            chartContainer.heightAnchor.constraint(equalToConstant: 130),
+            chartContainer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
         ])
-
-        return row
     }
 
-    private func buildSignOutButton() -> UIView {
-        let container = UIView()
-        
+    private func buildAreaChartView() -> UIView {
+        // We'll draw this as a custom CAShapeLayer view
+        let chartView = PracticeChartView()
+        chartView.weeklyData = stats.weeklyData
+        chartView.tag = 9901 // so we can find and update it
+        return chartView
+    }
+
+    // MARK: - SIGN OUT SECTION
+    private func buildSignOutSection() {
         signOutButton.setTitle("Sign Out", for: .normal)
-        signOutButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
-        signOutButton.setTitleColor(.white, for: .normal)
-        signOutButton.backgroundColor = .primaryColor
-        signOutButton.layer.cornerRadius = 28 // Unified pill shape
-        signOutButton.layer.shadowColor = UIColor.black.cgColor
-        signOutButton.layer.shadowOpacity = 0.08
-        signOutButton.layer.shadowOffset = CGSize(width: 0, height: 4)
-        signOutButton.layer.shadowRadius = 8
+        signOutButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
+        signOutButton.setTitleColor(ComponentColors.ProfileScreen.destructiveText, for: .normal)
+        signOutButton.backgroundColor = ComponentColors.DestructiveButton.fill
+        signOutButton.layer.cornerRadius = 28
         signOutButton.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
         signOutButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        container.addSubview(signOutButton)
-        
+        contentView.addSubview(signOutButton)
+
+        // Anchor below practice progress card
+        let practiceCard = contentView.subviews.last(where: { $0 != signOutButton })!
+
         NSLayoutConstraint.activate([
-            signOutButton.topAnchor.constraint(equalTo: container.topAnchor),
-            signOutButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            signOutButton.widthAnchor.constraint(equalToConstant: 240), // Slightly wider for consistency with login buttons
+            signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
+            signOutButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            signOutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -48),
             signOutButton.heightAnchor.constraint(equalToConstant: 56),
-            signOutButton.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
         ])
-        
-        return container
     }
 
-    @objc private func signOutTapped() {
-        let alert = UIAlertController(title: "Sign Out",
-                                      message: "Are you sure you want to log out?",
-                                      preferredStyle: .alert)
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Sign Out", style: .destructive, handler: { _ in
-            self.performSignOut()
-        }))
-        
-        present(alert, animated: true)
-    }
-    
-    private func performSignOut() {
+    // MARK: - Load Data
+    private func loadData() {
         Task {
-            do {
-                try await SupabaseManager.shared.client.auth.signOut()
-                
-                await MainActor.run {
-                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
-                    // Transition to Login Screen
-                    let storyboard = UIStoryboard(name: "Main", bundle: nil)
-                    if let loginVC = storyboard.instantiateInitialViewController() {
-                        if let window = self.view.window {
-                            window.rootViewController = loginVC
-                            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: nil)
-                        }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.showAlert(title: "Error", message: "Failed to sign out: \(error.localizedDescription)")
-                }
-            }
+            await loadProfile()
+            await loadStats()
         }
     }
 
-    @objc private func editDailyGoalTapped() {
-        let alert = UIAlertController(title: "Set Daily Goal",
-                                      message: "Enter your daily practice goal in minutes",
-                                      preferredStyle: .alert)
-        
-        alert.addTextField { tf in
-            tf.placeholder = "Minutes"
-            tf.text = "\(self.currentDailyGoalMinutes)"
-            tf.keyboardType = .numberPad
+    private func loadProfile() async {
+        guard let user = SupabaseManager.shared.client.auth.currentUser else {
+            await MainActor.run { nameLabel.text = "Not logged in" }
+            return
         }
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        alert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
-            if let minutesStr = alert.textFields?[0].text,
-               let minutes = Int(minutesStr),
-               minutes > 0 {
-                self.currentDailyGoalMinutes = minutes
-                self.updateDailyGoal(minutes: minutes)
-            } else {
-                self.showAlert(title: "Invalid Input", message: "Please enter a valid number")
-            }
-        }))
-        
-        present(alert, animated: true)
-    }
-    
-    private func updateDailyGoal(minutes: Int) {
-        Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
-            
-            do {
-                let updates: [String: Int] = ["daily_goal_minutes": minutes]
-                
-                _ = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .update(updates)
-                    .eq("id", value: user.id.uuidString)
-                    .execute()
-                
-                self.currentProfile?.daily_goal_minutes = minutes
-                
-                await MainActor.run {
-                    // Update DailyGoalManager to sync with home screen
-                    DailyGoalManager.shared.dailyGoalMinutes = minutes
-                    
-                    self.dailyGoalTimeLabel.text = "\(minutes) mins"
-                    self.showAlert(title: "Success", message: "Daily goal updated!")
-                }
-            } catch {
-                print("Error updating daily goal:", error)
-                await MainActor.run {
-                    self.showAlert(title: "Error", message: error.localizedDescription)
-                }
-            }
-        }
-    }
-}
 
-// MARK: - Supabase: Load & Update Profile
-private extension UserProfileViewController {
-    
-    func loadProfile() {
-        Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else {
-                await MainActor.run {
-                    self.nameLabel.text = "Not logged in"
-                    self.usernameLabel.text = "@username"
-                }
-                return
+        do {
+            let profile: Profile = try await SupabaseManager.shared.client
+                .from("profiles")
+                .select()
+                .eq("id", value: user.id.uuidString)
+                .single()
+                .execute()
+                .value
+
+            self.currentProfile = profile
+
+            await MainActor.run {
+                nameLabel.text = profile.full_name?.isEmpty == false ? profile.full_name : "No Name"
+                usernameLabel.text = profile.username.map { "@\($0)" } ?? "@username"
+                updateAvatar(with: profile.avatar_url)
             }
             
+            // Fetch daily goal from user_onboarding
             do {
-                let profile: Profile = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .select()
+                let onboarding: OnboardingData = try await SupabaseManager.shared.client
+                    .from("user_onboarding")
+                    .select("practice_mins")
                     .eq("id", value: user.id.uuidString)
                     .single()
                     .execute()
                     .value
                 
-                self.currentProfile = profile
-                
-                // Update name with user's name
-                let displayName = profile.full_name?.isEmpty == false ? profile.full_name ?? "User" : "User"
-                
                 await MainActor.run {
-                    self.nameLabel.text = displayName
-                    
-                    if let username = profile.username, !username.isEmpty {
-                        self.usernameLabel.text = "@\(username)"
-                    } else {
-                        self.usernameLabel.text = "@username"
-                    }
-                    
-                    // Set daily goal and sync with DailyGoalManager
-                    if let goalMinutes = profile.daily_goal_minutes {
-                        self.currentDailyGoalMinutes = goalMinutes
-                        DailyGoalManager.shared.dailyGoalMinutes = goalMinutes
-                        self.dailyGoalTimeLabel.text = "\(goalMinutes) mins"
-                        self.dailyGoalProgressView.progress = Float(self.currentDailyProgressMinutes) / Float(goalMinutes)
-                    }
-                    
-                    self.updateAvatar(with: profile.avatar_url)
+                    let goalMins = onboarding.practice_mins
+                    let goalHours = Double(goalMins) / 60.0
+                    goalBadgeLabel.text = goalHours == goalHours.rounded() ?
+                        "Goal: \(Int(goalHours))h" : String(format: "Goal: %.1fh", goalHours)
+                    DailyGoalManager.shared.dailyGoalMinutes = goalMins
                 }
             } catch {
-                print("Error loading profile:", error)
-                await MainActor.run {
-                    self.nameLabel.text = "Profile Error"
-                    self.usernameLabel.text = "@username"
-                    self.updateAvatar(with: nil)
-                }
+                print("Error loading onboarding goal:", error)
             }
+        } catch {
+            print("Error loading profile:", error)
+            await MainActor.run { nameLabel.text = "Error" }
         }
     }
-    
-    /// Load avatar image from a URL string stored in `avatar_url`
-    func updateAvatar(with urlString: String?) {
-        // Reset to default first
-        self.profileImageView.image = UIImage(systemName: "person.fill")
-        self.profileImageView.tintColor = .white
-        self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
-        self.profileImageView.contentMode = .center
-        
-        guard
-            let urlString = urlString,
-            !urlString.isEmpty
-        else {
-            return  // keep default
+
+    private func loadStats() async {
+        guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+
+        do {
+            // Fetch lesson_events for this user
+            struct LessonEvent: Decodable {
+                let duration_seconds: Int?
+                let occurred_at: String
+                let event_type: String?
+            }
+
+            let events: [LessonEvent] = try await SupabaseManager.shared.client
+                .from("lesson_events")
+                .select("duration_seconds, occurred_at, event_type")
+                .eq("user_id", value: user.id.uuidString)
+                .execute()
+                .value
+
+            // Calculate totals
+            let totalSeconds = events.compactMap { $0.duration_seconds }.reduce(0, +)
+            let totalLessons = events.count
+
+            // Weekly data (last 7 days Mon–Sun)
+            var weeklySeconds = [Double](repeating: 0, count: 7)
+            let calendar = Calendar.current
+            let now = Date()
+
+            // Find the most recent Monday
+            let weekday = calendar.component(.weekday, from: now) // 1=Sun, 2=Mon...
+            let daysSinceMonday = (weekday + 5) % 7
+            guard let monday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: calendar.startOfDay(for: now)) else { return }
+
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            for event in events {
+                guard let seconds = event.duration_seconds,
+                      let date = formatter.date(from: event.occurred_at) else { continue }
+                let dayStart = calendar.startOfDay(for: date)
+                let diff = calendar.dateComponents([.day], from: monday, to: dayStart).day ?? -1
+                if diff >= 0 && diff < 7 {
+                    weeklySeconds[diff] += Double(seconds)
+                }
+            }
+
+            let weeklyHours = weeklySeconds.map { $0 / 3600.0 }
+            let thisWeekHours = weeklyHours.reduce(0, +)
+
+            // Streak: consecutive days with practice up to today
+            var streak = 0
+            var checkDate = calendar.startOfDay(for: now)
+            let practicedDays = Set(events.compactMap { event -> Date? in
+                guard let date = formatter.date(from: event.occurred_at) else { return nil }
+                return calendar.startOfDay(for: date)
+            })
+
+            while practicedDays.contains(checkDate) {
+                streak += 1
+                checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate) ?? checkDate
+            }
+
+            await MainActor.run {
+                // Practice hours label
+                let totalHours = Double(totalSeconds) / 3600.0
+                practiceLabel.text = totalHours < 10 ?
+                    String(format: "%.1fh", totalHours) : "\(Int(totalHours))h"
+
+                lessonsLabel.text = "\(totalLessons)"
+                streakLabel.text = "\(streak)"
+
+                let weekHours = thisWeekHours < 10 ?
+                    String(format: "%.1fh", thisWeekHours) : "\(Int(thisWeekHours))h"
+                weeklyHoursLabel.text = weekHours
+
+                // Update chart
+                if let chart = contentView.viewWithTag(9901) as? PracticeChartView {
+                    chart.weeklyData = weeklyHours.map { CGFloat($0) }
+                    chart.setNeedsDisplay()
+                }
+            }
+        } catch {
+            print("Error loading stats:", error)
         }
-        
+    }
+
+    // MARK: - Actions
+
+    @objc private func signOutTapped() {
+        let alert = UIAlertController(title: "Sign Out",
+                                      message: "Are you sure you want to sign out?",
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Sign Out", style: .destructive, handler: { _ in
+            self.performSignOut()
+        }))
+        present(alert, animated: true)
+    }
+
+    private func performSignOut() {
         Task {
             do {
-                // Check if URL is valid
-                var finalURLString = urlString
-                
-                // Fix the URL if it's missing /public/
-                if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-                    // Replace /object/useprofile/ with /object/public/useprofile/
-                    finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-                }
-                
-                guard let url = URL(string: finalURLString) else {
-                    print("Invalid URL string: \(finalURLString)")
-                    return
-                }
-                
-                print("Loading avatar from: \(url)")
-                
-                // Load image with timeout
-                let request = URLRequest(url: url, timeoutInterval: 30)
-                let (data, _) = try await URLSession.shared.data(for: request)
-                
-                if let image = UIImage(data: data) {
-                    await MainActor.run {
-                        self.profileImageView.image = image
-                        self.profileImageView.contentMode = .scaleAspectFill
-                        self.profileImageView.backgroundColor = .clear
-                        self.profileImageView.tintColor = .clear
+                try await SupabaseManager.shared.client.auth.signOut()
+                await MainActor.run {
+                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
+                    if let sceneDelegate = self.view.window?.windowScene?.delegate as? SceneDelegate {
+                        sceneDelegate.showSplashAndRoute()
                     }
                 }
             } catch {
-                print("Failed to load avatar image:", error)
-                print("URL attempted: \(urlString)")
+                await MainActor.run {
+                    showAlert(title: "Error", message: "Failed to sign out: \(error.localizedDescription)")
+                }
             }
         }
     }
 
-    // MARK: - Edit Profile (name/username and password) - PENCIL BUTTON
+    // MARK: - Edit Profile
     @objc func editProfileTapped() {
-        let alert = UIAlertController(title: "Edit Profile",
-                                      message: "What would you like to update?",
-                                      preferredStyle: .actionSheet)
-        
-        alert.addAction(UIAlertAction(title: "Update Name & Username", style: .default, handler: { _ in
+        let alert = UIAlertController(title: "Edit Profile", message: nil, preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Update Name & Username", style: .default) { _ in
             self.showNameUsernameEditor()
-        }))
-        
-        alert.addAction(UIAlertAction(title: "Change Password", style: .default, handler: { _ in
+        })
+        alert.addAction(UIAlertAction(title: "Change Password", style: .default) { _ in
             self.showPasswordChangeDialog()
-        }))
-        
+        })
+        alert.addAction(UIAlertAction(title: "Change Profile Photo", style: .default) { _ in
+            self.changeAvatarTapped()
+        })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        // For iPad
-        if let popoverController = alert.popoverPresentationController {
-            popoverController.sourceView = editButton
-            popoverController.sourceRect = editButton.bounds
+        if let pop = alert.popoverPresentationController {
+            pop.sourceView = editProfileButton
+            pop.sourceRect = editProfileButton.bounds
         }
-        
         present(alert, animated: true)
     }
-    
+
     private func showNameUsernameEditor() {
-        let alert = UIAlertController(title: "Update Profile",
-                                      message: "Update your name and username",
-                                      preferredStyle: .alert)
-        
-        alert.addTextField { tf in
-            tf.placeholder = "Full Name"
-            tf.text = self.currentProfile?.full_name ?? self.nameLabel.text
-        }
-        alert.addTextField { tf in
-            tf.placeholder = "Username"
-            if let username = self.currentProfile?.username {
-                tf.text = username
-            } else if let text = self.usernameLabel.text, text.hasPrefix("@") {
-                tf.text = String(text.dropFirst())
-            }
-        }
-        
+        let alert = UIAlertController(title: "Update Profile", message: nil, preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "Full Name"; $0.text = self.currentProfile?.full_name }
+        alert.addTextField { $0.placeholder = "Username"; $0.text = self.currentProfile?.username }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        alert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
-            let fullName = alert.textFields?[0].text ?? ""
-            let username = alert.textFields?[1].text ?? ""
-            self.updateProfile(fullName: fullName, username: username)
-        }))
-        
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            let name = alert.textFields?[0].text ?? ""
+            let user = alert.textFields?[1].text ?? ""
+            self.updateProfile(fullName: name, username: user)
+        })
         present(alert, animated: true)
     }
-    
+
     private func showPasswordChangeDialog() {
-        let alert = UIAlertController(title: "Change Password",
-                                      message: "Enter your new password",
-                                      preferredStyle: .alert)
-        
-        alert.addTextField { tf in
-            tf.placeholder = "New Password"
-            tf.isSecureTextEntry = true
-        }
-        
-        alert.addTextField { tf in
-            tf.placeholder = "Confirm New Password"
-            tf.isSecureTextEntry = true
-        }
-        
+        let alert = UIAlertController(title: "Change Password", message: nil, preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "New Password"; $0.isSecureTextEntry = true }
+        alert.addTextField { $0.placeholder = "Confirm Password"; $0.isSecureTextEntry = true }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        alert.addAction(UIAlertAction(title: "Change", style: .default, handler: { _ in
-            let newPassword = alert.textFields?[0].text ?? ""
-            let confirmPassword = alert.textFields?[1].text ?? ""
-            
-            if newPassword.isEmpty {
-                self.showAlert(title: "Error", message: "Password cannot be empty")
-            } else if newPassword != confirmPassword {
-                self.showAlert(title: "Error", message: "Passwords do not match")
-            } else if newPassword.count < 6 {
-                self.showAlert(title: "Error", message: "Password must be at least 6 characters")
-            } else {
-                self.updatePassword(newPassword: newPassword)
-            }
-        }))
-        
+        alert.addAction(UIAlertAction(title: "Change", style: .default) { _ in
+            let pw = alert.textFields?[0].text ?? ""
+            let pw2 = alert.textFields?[1].text ?? ""
+            if pw.isEmpty { self.showAlert(title: "Error", message: "Password cannot be empty") }
+            else if pw != pw2 { self.showAlert(title: "Error", message: "Passwords don't match") }
+            else if pw.count < 6 { self.showAlert(title: "Error", message: "Min 6 characters") }
+            else { self.updatePassword(newPassword: pw) }
+        })
         present(alert, animated: true)
     }
-    
+
+    @objc private func dailyGoalBadgeTapped() {
+        showDailyGoalPicker()
+    }
+
+    private func showDailyGoalPicker() {
+        let alert = UIAlertController(title: "Select Daily Goal", message: "Choose your practice target in minutes.", preferredStyle: .actionSheet)
+        let goals = [10, 15, 20, 30, 45, 60]
+        for mins in goals {
+            alert.addAction(UIAlertAction(title: "\(mins) minutes", style: .default) { _ in
+                self.updateDailyGoal(minutes: mins)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let pop = alert.popoverPresentationController {
+            pop.sourceView = goalBadgeBg
+            pop.sourceRect = goalBadgeBg.bounds
+        }
+        present(alert, animated: true)
+    }
+
+    private func updateDailyGoal(minutes: Int) {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("user_onboarding")
+                    .update(["practice_mins": minutes])
+                    .eq("id", value: user.id.uuidString)
+                    .select()
+                    .execute()
+                
+                await MainActor.run {
+                    self.goalBadgeLabel.text = "Goal: \(minutes)m"
+                    DailyGoalManager.shared.dailyGoalMinutes = minutes
+                    self.showAlert(title: "Success", message: "Daily goal updated!")
+                }
+            } catch {
+                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
+            }
+        }
+    }
+
     func updateProfile(fullName: String, username: String) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
-            
-            // Create updates dictionary with only String values
-            var updates: [String: String?] = [
-                "full_name": fullName.isEmpty ? nil : fullName
-            ]
-            
-            // Only add username if it's not empty
-            if !username.isEmpty {
-                updates["username"] = username
-            } else {
-                updates["username"] = nil
-            }
-            
+            var updates: [String: String] = [:]
+            if !fullName.isEmpty { updates["full_name"] = fullName }
+            if !username.isEmpty { updates["username"] = username }
             do {
-                // Filter out nil values for the update
-                let filteredUpdates = updates.compactMapValues { $0 }
-                
                 _ = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .update(filteredUpdates)
+                    .from("profiles").update(updates)
                     .eq("id", value: user.id.uuidString)
+                    .select()
                     .execute()
-                
-                // Create a new Profile object with updated values
-                self.currentProfile = Profile(
-                    id: self.currentProfile?.id ?? user.id,
-                    full_name: fullName.isEmpty ? nil : fullName,
-                    username: username.isEmpty ? nil : username,
-                    avatar_url: self.currentProfile?.avatar_url,
-                    bio: self.currentProfile?.bio,
-                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes
-                )
-                
                 await MainActor.run {
-                    self.nameLabel.text = fullName.isEmpty ? "No Name" : fullName
-                    self.usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
-                    self.showAlert(title: "Success", message: "Profile updated successfully")
-                    
-                    // Send notification to refresh navbar
+                    nameLabel.text = fullName.isEmpty ? "No Name" : fullName
+                    usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
                     NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
                 }
             } catch {
-                print("Error updating profile:", error)
-                await MainActor.run {
-                    self.showAlert(title: "Update failed", message: error.localizedDescription)
-                }
+                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
             }
         }
-        
     }
-    
+
     func updatePassword(newPassword: String) {
         Task {
             do {
                 try await SupabaseManager.shared.client.auth.update(user: .init(password: newPassword))
-                
-                await MainActor.run {
-                    self.showAlert(title: "Success", message: "Password updated successfully")
-                }
+                await MainActor.run { showAlert(title: "Success", message: "Password updated!") }
             } catch {
-                print("Error updating password:", error)
-                await MainActor.run {
-                    self.showAlert(title: "Update failed", message: error.localizedDescription)
-                }
+                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
             }
         }
     }
 }
 
-// MARK: - Avatar: Pick & Upload to Supabase (bucket: useprofile) - CAMERA BADGE
-extension UserProfileViewController {
-    
+// MARK: - Avatar
+extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+
     @objc func changeAvatarTapped() {
-        let alert = UIAlertController(title: "Change Profile Picture",
-                                      message: "Choose an option",
-                                      preferredStyle: .actionSheet)
-        
-        alert.addAction(UIAlertAction(title: "Choose from Library", style: .default, handler: { _ in
-            self.openPhotoLibrary()
-        }))
-        
+        let alert = UIAlertController(title: "Change Photo", message: nil, preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Photo Library", style: .default) { _ in self.openPhotoLibrary() })
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            alert.addAction(UIAlertAction(title: "Take Photo", style: .default, handler: { _ in
-                self.openCamera()
-            }))
+            alert.addAction(UIAlertAction(title: "Camera", style: .default) { _ in self.openCamera() })
         }
-        
-        // Check if user has existing avatar to allow removal
-        if let currentProfile = currentProfile, currentProfile.avatar_url != nil {
-            alert.addAction(UIAlertAction(title: "Remove Current Photo", style: .destructive, handler: { _ in
-                self.removeAvatar()
-            }))
-        }
-        
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        // For iPad
-        if let popoverController = alert.popoverPresentationController {
-            popoverController.sourceView = cameraBadgeView
-            popoverController.sourceRect = cameraBadgeView.bounds
+        if let pop = alert.popoverPresentationController {
+            pop.sourceView = profileImageView
+            pop.sourceRect = profileImageView.bounds
         }
-        
         present(alert, animated: true)
     }
-    
+
     private func openPhotoLibrary() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.allowsEditing = true
         picker.delegate = self
-        picker.modalPresentationStyle = .fullScreen
         present(picker, animated: true)
     }
-    
+
     private func openCamera() {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.allowsEditing = true
         picker.delegate = self
-        picker.modalPresentationStyle = .fullScreen
         present(picker, animated: true)
     }
-    
-    private func removeAvatar() {
-        Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
-            
-            do {
-                // Update database to remove avatar_url
-                let updates: [String: String?] = [
-                    "avatar_url": nil
-                ]
-                
-                // Filter out nil values
-                let filteredUpdates = updates.compactMapValues { $0 }
-                
-                _ = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .update(filteredUpdates)
-                    .eq("id", value: user.id.uuidString)
-                    .execute()
-                
-                // Create a new Profile object without avatar_url
-                self.currentProfile = Profile(
-                    id: self.currentProfile?.id ?? user.id,
-                    full_name: self.currentProfile?.full_name,
-                    username: self.currentProfile?.username,
-                    avatar_url: nil,
-                    bio: self.currentProfile?.bio,
-                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes
-                )
-                
-                await MainActor.run {
-                    self.profileImageView.image = UIImage(systemName: "person.fill")
-                    self.profileImageView.tintColor = .white
-                    self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
-                    self.profileImageView.contentMode = .center
-                    self.showAlert(title: "Success", message: "Profile picture removed")
-                }
-            } catch {
-                print("Error removing avatar:", error)
-                await MainActor.run {
-                    self.showAlert(title: "Error", message: error.localizedDescription)
-                }
-            }
-        }
-    }
-    
-    // UIImagePickerControllerDelegate
+
     func imagePickerController(_ picker: UIImagePickerController,
-                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         picker.dismiss(animated: true)
-        
-        guard let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage else {
-            self.showAlert(title: "Error", message: "Could not select image")
-            return
-        }
-        
-        // Update UI immediately
-        self.profileImageView.image = image
-        self.profileImageView.contentMode = .scaleAspectFill
-        self.profileImageView.backgroundColor = .clear
-        self.profileImageView.tintColor = .clear
-        
-        // Upload to Supabase Storage
+        guard let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage else { return }
+        profileImageView.image = image
+        profileImageView.contentMode = .scaleAspectFill
         uploadAvatarImage(image)
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
     }
-    
+
     func uploadAvatarImage(_ image: UIImage) {
         Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else {
-                await MainActor.run {
-                    self.showAlert(title: "Error", message: "Not logged in")
-                }
-                return
-            }
-            
-            guard let jpegData = image.jpegData(compressionQuality: 0.85) else {
-                await MainActor.run {
-                    self.showAlert(title: "Error", message: "Could not prepare image data.")
-                }
-                return
-            }
-            
+            guard let user = SupabaseManager.shared.client.auth.currentUser,
+                  let jpegData = image.jpegData(compressionQuality: 0.85) else { return }
             let client = SupabaseManager.shared.client
-            
-            // Unique file name
-            let timestamp = Int(Date().timeIntervalSince1970)
-            let fileName = "avatar_\(user.id.uuidString)_\(timestamp).jpg"
-            
+            let fileName = "avatar_\(user.id.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
             do {
-                // METHOD 1: Try simplest upload without options
-                try await client.storage
-                    .from("useprofile")
-                    .upload(
-                        path: fileName,
-                        file: jpegData
-                    )
-                
-                print("✅ Upload successful")
-                
-            } catch {
-                print("❌ Method 1 failed, trying Method 2:", error)
-                
-                // METHOD 2: Try with FileOptions (FIXED ORDER - cacheControl before contentType)
-                do {
-                    try await client.storage
-                        .from("useprofile")
-                        .upload(
-                            path: fileName,
-                            file: jpegData,
-                            options: FileOptions(
-                                cacheControl: "3600",
-                                contentType: "image/jpeg"
-                            )
-                        )
-                    
-                    print("✅ Method 2 upload successful")
-                    
-                } catch {
-                    print("❌ All upload methods failed:", error)
-                    await MainActor.run {
-                        // Revert to default image
-                        self.profileImageView.image = UIImage(systemName: "person.fill")
-                        self.profileImageView.tintColor = .white
-                        self.profileImageView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.35)
-                        self.profileImageView.contentMode = .center
-                        
-                        let errorMessage: String
-                        if (error as NSError).code == -1005 {
-                            errorMessage = "Network connection lost. Please check your internet and try again."
-                        } else {
-                            errorMessage = "Upload failed: \(error.localizedDescription)"
-                        }
-                        self.showAlert(title: "Upload Error", message: errorMessage)
-                    }
-                    return
-                }
-            }
-            
-            // If we get here, upload was successful
-            // Get the correct public URL
-            let projectRef = "djqgmowfjxsnjdffdohw" // REPLACE WITH YOUR PROJECT REF
-            let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
-            
-            // Save URL in profiles.avatar_url
-            let updates: [String: String] = [
-                "avatar_url": publicURL
-            ]
-            
-            do {
-                _ = try await client
-                    .from("profiles")
-                    .update(updates)
+                try await client.storage.from("useprofile").upload(fileName, data: jpegData)
+                let projectRef = "djqgmowfjxsnjdffdohw"
+                let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
+                _ = try await client.from("profiles")
+                    .update(["avatar_url": publicURL])
                     .eq("id", value: user.id.uuidString)
+                    .select()
                     .execute()
-                
-                // Create a new Profile object with updated avatar_url
                 self.currentProfile = Profile(
                     id: self.currentProfile?.id ?? user.id,
                     full_name: self.currentProfile?.full_name,
                     username: self.currentProfile?.username,
                     avatar_url: publicURL,
                     bio: self.currentProfile?.bio,
-                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes
+                    total_study_seconds: self.currentProfile?.total_study_seconds
                 )
-                
                 await MainActor.run {
-                    self.showAlert(title: "Success", message: "Profile picture updated!")
-                    
-                    // Send notification to refresh navbar
                     NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+                    showAlert(title: "Success", message: "Photo updated!")
                 }
-                
             } catch {
-                print("❌ Error saving to database:", error)
+                print("Profile upload error: \(error)")
+                await MainActor.run { showAlert(title: "Upload Error", message: error.localizedDescription) }
+            }
+        }
+    }
+
+    func updateAvatar(with urlString: String?) {
+        profileImageView.image = UIImage(systemName: "person.fill")
+        profileImageView.tintColor = .white
+        profileImageView.contentMode = .center
+        guard let urlString = urlString, !urlString.isEmpty else { return }
+
+        if urlString.lowercased().hasPrefix("icon_"), let img = UIImage(named: urlString) {
+            profileImageView.image = img
+            profileImageView.contentMode = .scaleAspectFill
+            return
+        }
+
+        Task {
+            var finalURL = urlString
+            if finalURL.contains("/object/useprofile/") && !finalURL.contains("/public/") {
+                finalURL = finalURL.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+            }
+            guard let url = URL(string: finalURL) else { return }
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let img = UIImage(data: data) {
                 await MainActor.run {
-                    self.showAlert(title: "Database Error", message: "Image uploaded but couldn't update profile.")
+                    profileImageView.image = img
+                    profileImageView.contentMode = .scaleAspectFill
                 }
             }
         }
@@ -1365,48 +837,148 @@ extension UserProfileViewController {
 // MARK: - Helpers
 private extension UserProfileViewController {
     func showAlert(title: String, message: String) {
-        if presentedViewController is UIAlertController { return }
-        
-        let alert = UIAlertController(title: title,
-                                      message: message,
-                                      preferredStyle: .alert)
+        guard !(presentedViewController is UIAlertController) else { return }
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
 }
 
-// MARK: - Gradient Header
-final class GradientHeaderView: UIView {
-    private let gradient = CAGradientLayer()
+// MARK: - Practice Chart View (Area Chart)
+final class PracticeChartView: UIView {
+
+    var weeklyData: [CGFloat] = [0, 0, 0, 0, 0, 0, 0] {
+        didSet { setNeedsDisplay() }
+    }
+
+    private let days = ["M", "T", "W", "T", "F", "S", "S"]
+    private let accentColor = ComponentColors.ProfileScreen.editProfileText // #EF9408
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        setup()
+        backgroundColor = .clear
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setup()
+        backgroundColor = .clear
     }
 
-    private func setup() {
-        gradient.colors = [
-            UIColor(red: 1.0, green: 0.75, blue: 0.36, alpha: 1).cgColor,
-            UIColor(red: 1.0, green: 0.93, blue: 0.83, alpha: 1).cgColor
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+
+        let labelHeight: CGFloat = 20
+        let chartRect = CGRect(x: 16, y: 8,
+                               width: rect.width - 32,
+                               height: rect.height - labelHeight - 16)
+
+        let maxVal = max(weeklyData.max() ?? 1, 1)
+        let count = weeklyData.count
+        let step = chartRect.width / CGFloat(count - 1)
+
+        // Build points
+        var points: [CGPoint] = []
+        for (i, val) in weeklyData.enumerated() {
+            let x = chartRect.minX + CGFloat(i) * step
+            let y = chartRect.maxY - (val / maxVal) * chartRect.height
+            points.append(CGPoint(x: x, y: y))
+        }
+
+        // Area path
+        let areaPath = UIBezierPath()
+        areaPath.move(to: CGPoint(x: points[0].x, y: chartRect.maxY))
+        areaPath.addLine(to: points[0])
+
+        // Smooth curve with control points
+        for i in 1..<points.count {
+            let prev = points[i - 1]
+            let curr = points[i]
+            let cpX = (prev.x + curr.x) / 2
+            areaPath.addCurve(to: curr,
+                              controlPoint1: CGPoint(x: cpX, y: prev.y),
+                              controlPoint2: CGPoint(x: cpX, y: curr.y))
+        }
+
+        areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartRect.maxY))
+        areaPath.close()
+
+        // Gradient fill
+        ctx.saveGState()
+        areaPath.addClip()
+        let gradColors = [accentColor.withAlphaComponent(0.35).cgColor,
+                          accentColor.withAlphaComponent(0.0).cgColor]
+        let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                              colors: gradColors as CFArray,
+                              locations: [0.0, 1.0])!
+        ctx.drawLinearGradient(grad,
+                               start: CGPoint(x: 0, y: chartRect.minY),
+                               end: CGPoint(x: 0, y: chartRect.maxY),
+                               options: [])
+        ctx.restoreGState()
+
+        // Line
+        let linePath = UIBezierPath()
+        linePath.move(to: points[0])
+        for i in 1..<points.count {
+            let prev = points[i - 1]
+            let curr = points[i]
+            let cpX = (prev.x + curr.x) / 2
+            linePath.addCurve(to: curr,
+                              controlPoint1: CGPoint(x: cpX, y: prev.y),
+                              controlPoint2: CGPoint(x: cpX, y: curr.y))
+        }
+        accentColor.setStroke()
+        linePath.lineWidth = 2
+        linePath.stroke()
+
+        // Dots at data points (only non-zero)
+        for (i, pt) in points.enumerated() {
+            guard weeklyData[i] > 0 else { continue }
+            let dotRect = CGRect(x: pt.x - 4, y: pt.y - 4, width: 8, height: 8)
+            let dotPath = UIBezierPath(ovalIn: dotRect)
+            UIColor.white.setFill()
+            dotPath.fill()
+            accentColor.setStroke()
+            dotPath.lineWidth = 2
+            dotPath.stroke()
+        }
+
+        // Day labels
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: ComponentColors.ProfileScreen.graphAxisLabel
         ]
-        gradient.startPoint = CGPoint(x: 0.5, y: 0)
-        gradient.endPoint = CGPoint(x: 0.5, y: 1)
-        layer.insertSublayer(gradient, at: 0)
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        gradient.frame = bounds
+        for (i, day) in days.enumerated() {
+            let x = chartRect.minX + CGFloat(i) * step
+            let str = NSAttributedString(string: day, attributes: labelAttrs)
+            let strSize = str.size()
+            str.draw(at: CGPoint(x: x - strSize.width / 2,
+                                 y: chartRect.maxY + 6))
+        }
     }
 }
+
+
 
 extension UIView {
     func addSubviews(_ views: UIView...) {
         views.forEach { addSubview($0) }
     }
+}
+
+// MARK: - Gradient Header (kept for other usage)
+final class GradientHeaderView: UIView {
+    private let gradient = CAGradientLayer()
+    override init(frame: CGRect) { super.init(frame: frame); setup() }
+    required init?(coder: NSCoder) { super.init(coder: coder); setup() }
+    private func setup() {
+        gradient.colors = [
+            ComponentColors.ProfileScreen.graphLine.withAlphaComponent(0.6).cgColor,
+            ComponentColors.ProfileScreen.graphAreaFill.cgColor
+        ]
+        gradient.startPoint = CGPoint(x: 0.5, y: 0)
+        gradient.endPoint = CGPoint(x: 0.5, y: 1)
+        layer.insertSublayer(gradient, at: 0)
+    }
+    override func layoutSubviews() { super.layoutSubviews(); gradient.frame = bounds }
 }

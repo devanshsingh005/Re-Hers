@@ -14,6 +14,9 @@ final class SheetMusicView: UIView {
     private let noteRadius:  CGFloat = 4.5
     private let clefW:       CGFloat = 110   // column for brace + clef symbols (increased)
     private let msrW:        CGFloat = 260  // pixels per measure on canvas
+    
+    // Brand Color
+    private let brandOrange = UIColor(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0, alpha: 1.0) // #EF9408
 
     private var staffH: CGFloat { 4 * lineSpacing }   // 5 lines = 4 gaps
 
@@ -77,8 +80,8 @@ final class SheetMusicView: UIView {
         backgroundColor = UIColor(white: 0.97, alpha: 1)
         layer.addSublayer(contentLayer)
 
-        // Fix: thin solid blue playhead line (not wide band)
-        playhead.backgroundColor    = UIColor.systemBlue
+        // Fix: thin solid playhead line
+        playhead.backgroundColor    = brandOrange // Use brand orange instead of standard blue
         playhead.layer.cornerRadius = 0
         playhead.isUserInteractionEnabled = false
         addSubview(playhead)
@@ -95,15 +98,17 @@ final class SheetMusicView: UIView {
         addSubview(progressBarTrack)
         
         // Progress bar fill
-        let orangeColor = UIColor(red: 0.91, green: 0.44, blue: 0.05, alpha: 1.0)
-        progressBar.backgroundColor = orangeColor
+        progressBar.backgroundColor = brandOrange
         progressBar.layer.cornerRadius = 4
         progressBar.isUserInteractionEnabled = false
         progressBarTrack.addSubview(progressBar)
         
         // Progress thumb (circle)
-        progressThumb.backgroundColor = orangeColor
+        progressThumb.backgroundColor = brandOrange
         progressThumb.layer.cornerRadius = 8
+        progressThumb.layer.shadowColor = brandOrange.cgColor
+        progressThumb.layer.shadowOpacity = 0.4
+        progressThumb.layer.shadowRadius = 4
         progressThumb.isUserInteractionEnabled = false
         progressBarTrack.addSubview(progressThumb)
 
@@ -273,8 +278,13 @@ final class SheetMusicView: UIView {
     }
 
     private func parseJSON(_ data: Data) {
+        print("📄 [SheetMusicView] parseJSON starting, data size: \(data.count) bytes")
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String:Any]
-        else { return }
+        else { 
+            print("❌ [SheetMusicView] parseJSON failed: Invalid JSON format")
+            return 
+        }
+        print("🔍 [SheetMusicView] Root keys: \(root.keys.joined(separator: ", "))")
 
         // "part" is [[String:Any]] (array), not [String:Any] — must handle both
         var raw: [[String:Any]]?
@@ -345,7 +355,7 @@ final class SheetMusicView: UIView {
                 let staffStr = MusicJSONLoader.strVal(d["staff"]) ?? "1"
                 let dur = MusicJSONLoader.intVal(d["duration"]) ?? 0
                 let isChord = d["chord"] != nil
-                let isRest = d["rest"] != nil
+                _ = d["rest"] != nil
 
                 let tickKey = "\(staffStr)-\(voice)"
                 let localCur = localTick[tickKey, default: 0]
@@ -675,7 +685,7 @@ final class SheetMusicView: UIView {
         l.string=s
         l.fontSize=sz
         l.foregroundColor=UIColor.black.cgColor
-        l.contentsScale=UIScreen.main.scale
+        l.contentsScale=UITraitCollection.current.displayScale
         l.alignmentMode = .center
         l.isWrapped=false
         return l

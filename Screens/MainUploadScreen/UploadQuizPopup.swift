@@ -179,7 +179,7 @@ class UploadQuizPopup: UIViewController {
     }
     
     private func setupCard() {
-        cardView.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
+        cardView.backgroundColor = ComponentColors.App.screenBackground
         cardView.layer.cornerRadius = 28
         cardView.clipsToBounds = true
         cardView.translatesAutoresizingMaskIntoConstraints = false
@@ -204,12 +204,12 @@ class UploadQuizPopup: UIViewController {
         cardView.addSubview(closeBtn)
         
         // Cloud icon wrap (orange tinted circle)
-        cloudIconWrap.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        cloudIconWrap.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         cloudIconWrap.layer.cornerRadius = 26
         cloudIconWrap.translatesAutoresizingMaskIntoConstraints = false
         
         cloudIcon.image = UIImage(systemName: "icloud.and.arrow.up")
-        cloudIcon.tintColor = UIColor(hex: "#FF6B00")
+        cloudIcon.tintColor = ComponentColors.HomeScreen.actionButtonFill
         cloudIcon.contentMode = .scaleAspectFit
         cloudIcon.translatesAutoresizingMaskIntoConstraints = false
         cloudIconWrap.addSubview(cloudIcon)
@@ -232,8 +232,8 @@ class UploadQuizPopup: UIViewController {
         cardView.addSubview(subtitleLabel)
         
         // Progress bar
-        progressBar.progressTintColor = UIColor(hex: "#EF9408")
-        progressBar.trackTintColor = UIColor(hex: "#EF9408").withAlphaComponent(0.15)
+        progressBar.progressTintColor = ComponentColors.QuizScreen.progressFill
+        progressBar.trackTintColor = ComponentColors.QuizScreen.progressTrack
         progressBar.layer.cornerRadius = 3
         progressBar.clipsToBounds = true
         progressBar.setProgress(0.15, animated: false)
@@ -273,7 +273,7 @@ class UploadQuizPopup: UIViewController {
     
     // MARK: - Quiz Card
     private func setupQuizCard() {
-        quizCard.backgroundColor = .systemBackground
+        quizCard.backgroundColor = ComponentColors.QuizScreen.questionCardFill
         quizCard.layer.cornerRadius = 20
         quizCard.layer.shadowColor = UIColor.black.cgColor
         quizCard.layer.shadowOpacity = 0.06
@@ -336,8 +336,8 @@ class UploadQuizPopup: UIViewController {
             let dot = UIView()
             dot.layer.cornerRadius = 4
             dot.backgroundColor = i == 0
-                ? UIColor(hex: "#FF6B00")
-                : UIColor(hex: "#FF6B00").withAlphaComponent(0.25)
+                ? ComponentColors.HomeScreen.actionButtonFill
+                : ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.25)
             dot.translatesAutoresizingMaskIntoConstraints = false
             dot.widthAnchor.constraint(equalToConstant: i == 0 ? 16 : 8).isActive = true
             dot.heightAnchor.constraint(equalToConstant: 8).isActive = true
@@ -353,7 +353,7 @@ class UploadQuizPopup: UIViewController {
     
     // MARK: - Done Overlay
     private func setupDoneOverlay() {
-        doneOverlay.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
+        doneOverlay.backgroundColor = ComponentColors.App.screenBackground
         doneOverlay.layer.cornerRadius = 28
         doneOverlay.clipsToBounds = true
         doneOverlay.alpha = 0
@@ -367,13 +367,13 @@ class UploadQuizPopup: UIViewController {
         ])
         
         // Check circle
-        checkCircle.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        checkCircle.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         checkCircle.layer.cornerRadius = 40
         checkCircle.translatesAutoresizingMaskIntoConstraints = false
         doneOverlay.addSubview(checkCircle)
         
         // Check layer (animated stroke)
-        checkLayer.strokeColor = UIColor(hex: "#FF6B00").cgColor
+        checkLayer.strokeColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         checkLayer.fillColor = UIColor.clear.cgColor
         checkLayer.lineWidth = 4
         checkLayer.lineCap = .round
@@ -399,7 +399,7 @@ class UploadQuizPopup: UIViewController {
         var config = UIButton.Configuration.filled()
         config.title = "Done"
         config.baseForegroundColor = .white
-        config.baseBackgroundColor = UIColor(hex: "#FF6B00")
+        config.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
         config.cornerStyle = .capsule
         config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 40, bottom: 12, trailing: 40)
         closeDoneBtn.configuration = config
@@ -426,7 +426,12 @@ class UploadQuizPopup: UIViewController {
     
     // MARK: - Load Question
     private func loadQuestion(at index: Int) {
-        guard index < questions.count else { dismissPopup(); return }
+        guard index < questions.count else {
+            // If quiz is over but upload is still going, just stay on last question
+            // or we could show a "Finalizing..." state. 
+            // For now, let's just avoid dismissing.
+            return 
+        }
         
         isAnswered = false
         let q = questions[index]
@@ -447,10 +452,10 @@ class UploadQuizPopup: UIViewController {
             
             if i == q.correctIndex {
                 // Pre-mark correct answer button with orange style
-                btn.setTitleColor(UIColor(hex: "#FF6B00"), for: .normal)
-                btn.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.10)
+                btn.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
+                btn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
                 btn.layer.borderWidth = 1.5
-                btn.layer.borderColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.3).cgColor
+                btn.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
             } else {
                 btn.setTitleColor(.label, for: .normal)
                 btn.backgroundColor = UIColor.systemGray6
@@ -526,15 +531,15 @@ class UploadQuizPopup: UIViewController {
     // MARK: - Dot Updates
     private func updateDots(activeIndex: Int) {
         for (i, dot) in dotsStack.arrangedSubviews.enumerated() {
-            guard let dotView = dot as? UIView else { continue }
+            guard let dotView = dot as UIView? else { continue }
             UIView.animate(withDuration: 0.2) {
                 if i == activeIndex {
-                    dotView.backgroundColor = UIColor(hex: "#FF6B00")
+                    dotView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
                     dotView.constraints.forEach {
                         if $0.firstAttribute == .width { $0.constant = 16 }
                     }
                 } else {
-                    dotView.backgroundColor = UIColor(hex: "#FF6B00").withAlphaComponent(0.25)
+                    dotView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.25)
                     dotView.constraints.forEach {
                         if $0.firstAttribute == .width { $0.constant = 8 }
                     }
@@ -596,6 +601,8 @@ class UploadQuizPopup: UIViewController {
                 : "Closing..."
             if remaining <= 0 {
                 timer.invalidate()
+                // increase to 3 seconds if it felt too fast, but user said "for enough time"
+                // Let's keep it at 5s total but maybe the checkmark animation takes too long?
                 self.dismissPopup()
             }
         }
@@ -643,8 +650,8 @@ class StaffDrawingView: UIView {
     
     var drawingType: StaffDrawingType = .noteOnLine(line: 1, noteName: "E")
     
-    private let orangeColor = UIColor(hex: "#FF6B00")
-    private let staffColor   = UIColor(red: 0.55, green: 0.55, blue: 0.6, alpha: 1.0)
+    private let orangeColor = ComponentColors.HomeScreen.actionButtonFill
+    private let staffColor   = ComponentColors.QuizScreen.staffLines
     
     override func draw(_ rect: CGRect) {
         super.draw(rect)

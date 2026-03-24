@@ -52,7 +52,6 @@ final class ChordDetector {
     
     private func normalizeNote(_ note: String) -> String {
         var result = ""
-        var hasSharp = false
         var hasFlat = false
         
         // Extract components
@@ -60,7 +59,6 @@ final class ChordDetector {
             if char.isLetter {
                 result.append(char.uppercased())
             } else if char == "#" {
-                hasSharp = true
                 result.append("#")
             } else if char == "b" {
                 hasFlat = true

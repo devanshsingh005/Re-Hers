@@ -8,6 +8,7 @@
 import UIKit
 import Supabase
 import Auth
+import SwiftUI
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -18,54 +19,79 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
 
         guard let windowScene = (scene as? UIWindowScene) else { return }
-        
+
         let window = UIWindow(windowScene: windowScene)
         self.window = window
 
-        // Synchronous check: Do we believe the user is logged in?
+        // Always show the animated SwiftUI splash screen as the primary entry point
+        showSplashAndRoute()
+        window.makeKeyAndVisible()
+    }
+
+
+
+    /// Decides where to go after the splash screen finishes
+    private func performInitialRouting() {
         let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
 
         if isLoggedIn {
-            // User is supposedly logged in. Show the seamless loading spinner while
-            // the async Supabase session check completely verifies the token.
-            let loadingVC = LaunchLoadingViewController()
-            window.rootViewController = loadingVC
-            window.makeKeyAndVisible()
-
+            // User is logged in. Verify session and onboarding status.
             Task {
                 do {
-                    _ = try await SupabaseManager.shared.client.auth.session
-                    await MainActor.run { self.showMainApp() }
+                    let client = SupabaseManager.shared.client
+                    let session = try await client.auth.session
+                    let userId = session.user.id.uuidString
+
+                    // Check onboarding status
+                    struct OnboardingRow: Decodable {
+                        let genres: [String]?
+                    }
+
+                    let row: OnboardingRow? = try? await client
+                        .from("user_onboarding")
+                        .select("genres")
+                        .eq("id", value: userId)
+                        .single()
+                        .execute()
+                        .value
+
+                    await MainActor.run {
+                        if let genres = row?.genres, !genres.isEmpty {
+                            self.showMainApp()
+                        } else {
+                            // Session exists but onboarding not finished
+                            self.showLoginScreen() 
+                        }
+                    }
                 } catch {
-                    // Token expired or invalid. Reset flag and show login.
-                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
-                    await MainActor.run { self.showGetStartedSplash() }
+                    // Session expired or error. take them back to login.
+                    await MainActor.run {
+                        UserDefaults.standard.set(false, forKey: "isLoggedIn")
+                        self.showLoginScreen()
+                    }
                 }
             }
         } else {
-            // User is explicitly logged out or a first-time user.
-            // Immediately show the onboarding/Get Started splash with NO intermediate screen.
-            let storyboard = UIStoryboard(name: "Main", bundle: nil)
-            guard let splashVC = storyboard.instantiateInitialViewController() else { return }
-            
-            window.rootViewController = splashVC
-            window.makeKeyAndVisible()
+            // New or logged-out user: go to Login
+            showLoginScreen()
         }
     }
 
     // MARK: - Navigation Helpers
 
-    /// Route to the main dashboard (already authenticated)
+    /// Shows the animated splash screen and then routes to Login or Home
+    func showSplashAndRoute() {
+        let splashView = SplashScreenView { [weak self] in
+            self?.performInitialRouting()
+        }
+        let hostingController = UIHostingController(rootView: splashView)
+        setRootViewController(hostingController)
+    }
+
+    /// Route to the main dashboard
     func showMainApp() {
         let tabBar = MainTabBarController()
         setRootViewController(tabBar)
-    }
-
-    /// Route to the "Get Started" splash screen (unauthenticated)
-    func showGetStartedSplash() {
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        guard let splashVC = storyboard.instantiateInitialViewController() else { return }
-        setRootViewController(splashVC)
     }
 
     /// Route to the login / sign-up screen
@@ -76,14 +102,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         setRootViewController(nav)
     }
 
-    /// Smoothly swap the root view controller with a cross-dissolve
-    private func setRootViewController(_ vc: UIViewController) {
+    /// Smoothly swap the root view controller with a cross-dissolve if a root already exists
+    private func setRootViewController(_ vc: UIViewController, animated: Bool = true) {
         guard let window = self.window else { return }
-        UIView.transition(with: window,
-                          duration: 0.35,
-                          options: .transitionCrossDissolve,
-                          animations: { window.rootViewController = vc },
-                          completion: nil)
+        
+        // If we don't have a root yet (initial launch), don't animate to avoid a black flash.
+        // If animated is false, just set it directly.
+        if animated, window.rootViewController != nil {
+            UIView.transition(with: window,
+                              duration: 0.35,
+                              options: .transitionCrossDissolve,
+                              animations: { window.rootViewController = vc },
+                              completion: nil)
+        } else {
+            window.rootViewController = vc
+        }
     }
 
 

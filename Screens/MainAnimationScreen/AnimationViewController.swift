@@ -109,11 +109,8 @@ final class AnimationViewController: UIViewController {
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func forceLandscape() {
-        if #available(iOS 16.0, *) {
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
+        self.setNeedsUpdateOfSupportedInterfaceOrientations()
         UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
-        UIViewController.attemptRotationToDeviceOrientation()
     }
 
     // MARK: - Layout
@@ -127,33 +124,33 @@ final class AnimationViewController: UIViewController {
         overlay.alpha = 0
         view.addSubview(overlay)
 
-        // Nav bar (liquid glass, overlaid at top)
+        // Nav bar (permanently visible at top)
         navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.alpha = 0
+        navBar.alpha = 1
         view.addSubview(navBar)
         navBar.setSongTitle(songTitle)
 
-        let topC = navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: -kNavH)
+        let topC = navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
         navBarTopConstraint = topC
 
         NSLayoutConstraint.activate([
-            // Sheet card fills top portion
-            sheetCard.topAnchor.constraint(equalTo: view.topAnchor),
+            // Nav bar pinned to top safe area
+            topC,
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBar.heightAnchor.constraint(equalToConstant: kNavH),
+
+            // Sheet card starts under nar bar
+            sheetCard.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
             sheetCard.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             sheetCard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-           sheetCard.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -kPianoH),
+            sheetCard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -kPianoH),
 
             // Overlay = full screen
             overlay.topAnchor.constraint(equalTo: view.topAnchor),
             overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            // Nav bar pinned to top safe area
-            topC,
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: kNavH)
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
         // Gestures
@@ -176,23 +173,7 @@ final class AnimationViewController: UIViewController {
             s.isPlaying ? s.stopPlayback(reset: false) : s.startPlayback()
         }
 
-        // Reveal navbar with a swipe down from the top
-        let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeDown(_:)))
-        swipeDown.direction = .down
-        view.addGestureRecognizer(swipeDown)
-
-        // Hide navbar with a swipe up
-        let swipeUp = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeUp(_:)))
-        swipeUp.direction = .up
-        view.addGestureRecognizer(swipeUp)
-    }
-
-    @objc private func didSwipeDown(_ gr: UISwipeGestureRecognizer) {
-        setNavBar(visible: true, animated: true)
-    }
-
-    @objc private func didSwipeUp(_ gr: UISwipeGestureRecognizer) {
-        setNavBar(visible: false, animated: true)
+        // Removed swipe up/down gestures since NavBar is always visible
     }
 
     // MARK: - Fix 2: Piano fills to physical bottom (no gap)
@@ -218,8 +199,11 @@ final class AnimationViewController: UIViewController {
     private func wireCallbacks() {
         navBar.onBackTap = { [weak self] in
             self?.stopPlayback(reset: true)
-            if let nc = self?.navigationController { nc.popViewController(animated: true) }
-            else { self?.dismiss(animated: true) }
+            if let nc = self?.navigationController, nc.viewControllers.count > 1 {
+                nc.popViewController(animated: true)
+            } else {
+                self?.dismiss(animated: true)
+            }
         }
         navBar.onTempoChanged = { [weak self] m in self?.tempoMultiplier = m }
         navBar.onMenuTap      = { [weak self] in self?.showSoundPicker() }
@@ -270,15 +254,6 @@ final class AnimationViewController: UIViewController {
     private func setOverlay(visible: Bool, animated: Bool) {
         let block = { self.overlay.alpha = visible ? 1 : 0 }
         animated ? UIView.animate(withDuration: 0.22, animations: block) : block()
-    }
-
-    private func setNavBar(visible: Bool, animated: Bool) {
-        let block = { 
-            self.navBar.alpha = visible ? 1 : 0 
-            self.navBarTopConstraint?.constant = visible ? 0 : -self.kNavH
-            self.view.layoutIfNeeded()
-        }
-        animated ? UIView.animate(withDuration: 0.3, animations: block) : block()
     }
 
     private func showOverlayBriefly() {

@@ -5,6 +5,8 @@
 
 import UIKit
 import Supabase
+import Auth
+internal import PostgREST
 import PDFKit
 
 final class UploadPageNextViewController: UIViewController {
@@ -29,9 +31,6 @@ final class UploadPageNextViewController: UIViewController {
     private var refreshHeightConstraint:    NSLayoutConstraint?
     private var loadedPDFDocument: PDFDocument? // stored for full-screen preview
     private var pendingPDFPath:   String?       // raw pdf_path from DB, used after processing
-
-    // MARK: - Nav
-    private let navBar = TopNavBar()
 
     // MARK: - Scroll
     private let scrollView  = UIScrollView()
@@ -76,10 +75,17 @@ final class UploadPageNextViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
-        setupNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
+        view.backgroundColor = ComponentColors.App.screenBackground
+        setupNativeNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
         showProcessingState()
         print("[VDL] jobId=\(jobId?.uuidString ?? "nil")  resultURL=\(resultURL ?? "nil")")
         loadFromJobId()
@@ -91,6 +97,12 @@ final class UploadPageNextViewController: UIViewController {
             if let p = doc.page(at: 0) { pdfView.go(to: p) }
             pdfView.layoutIfNeeded()
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.isHidden = false
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -141,17 +153,17 @@ final class UploadPageNextViewController: UIViewController {
             self.pendingPDFPath = row.pdfPath
 
             // Determine effective result URL
-            let effectiveResultURL: String
+            let _: String
             if let preSupplied = self.resultURL, !preSupplied.isEmpty {
                 print("[Load] ✅ Using pre-supplied resultURL: \(preSupplied)")
-                effectiveResultURL = preSupplied
+                _ = preSupplied
             } else if let dbURL = row.resultUrl, !dbURL.isEmpty {
                 print("[Load] Using DB result_url: \(dbURL)")
-                effectiveResultURL = dbURL
+                _ = dbURL
             } else {
                 let derived = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
                 print("[Load] No result_url — using derived: \(derived)")
-                effectiveResultURL = derived
+                _ = derived
             }
 
             // Start polling job status — backend owns all transitions
@@ -310,7 +322,6 @@ final class UploadPageNextViewController: UIViewController {
             self.progressView.isHidden  = true
             self.statusLabel.isHidden   = true
             self.refreshButton.isHidden = true
-            self.onDataReady?()
         }
 
         let projectID = "djqgmowfjxsnjdffdohw"
@@ -334,11 +345,28 @@ final class UploadPageNextViewController: UIViewController {
         // Download output.json and populate chord/key/time/tempo fields
         if let jobId, let rawPath = pendingPDFPath {
             let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: rawPath)
-            if let url = URL(string: jsonURL),
-               let (data, _) = try? await URLSession.shared.data(from: url),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                print("[Result] Keys: \(json.keys.sorted())")
-                await parseAndDisplayJSON(json)
+            print("[JSON] 🔄 Fetching output.json: \(jsonURL)")
+            
+            Task {
+                do {
+                    let (data, response) = try await URLSession.shared.data(from: URL(string: jsonURL)!)
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    print("[JSON] HTTP \(code)  bytes=\(data.count)")
+                    
+                    guard (200...299).contains(code) else {
+                        print("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
+                        return
+                    }
+                    
+                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        print("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
+                        await parseAndDisplayJSON(json)
+                    } else {
+                        print("❌ [JSON] output.json is not a dictionary")
+                    }
+                } catch {
+                    print("❌ [JSON] Error fetching/parsing output.json: \(error)")
+                }
             }
         }
     }
@@ -436,7 +464,7 @@ final class UploadPageNextViewController: UIViewController {
                     }
                 }
                 guard !steps.isEmpty else { continue }
-                let label = steps.sorted().joined()   // e.g. "ADE" → use root only
+                let _ = steps.sorted().joined()   // e.g. "ADE" → use root only
                 let root  = steps.sorted().first ?? "C"
                 if !seen.contains(root) { seen.insert(root); chords.append(root) }
             }
@@ -585,8 +613,8 @@ final class UploadPageNextViewController: UIViewController {
         timeSignature   = data.timeSignature; tempo = data.tempo
         keySignature    = data.keySignature;  sheetMusicJSON = data.jsonData
 
-        let bpm = tempo.components(separatedBy: " ").first ?? "120"
-        metronomeLabel.text = "Metronome on \(bpm) BPM"
+        let bpm = tempo.components(separatedBy: " ").first ?? "nil"
+    metronomeLabel.text = "Metronome on \(bpm) BPM"
         keyLabel.text       = "Key: \(keySignature)"
         timeLabel.text      = "Time: \(timeSignature)"
         chordLabel.text     = "Chords: \(extractedChords.prefix(3).joined(separator: ", "))"
@@ -597,6 +625,7 @@ final class UploadPageNextViewController: UIViewController {
         progressView.isHidden  = true
         statusLabel.isHidden   = true
         refreshButton.isHidden = true
+        onDataReady?()
     }
 
     private func showErrorState(error: String) {
@@ -618,7 +647,6 @@ final class UploadPageNextViewController: UIViewController {
         progressView.isHidden  = true
         statusLabel.isHidden   = true
         refreshButton.isHidden = true
-        onDataReady?()
     }
 
     private func updatePracticeTips() {
@@ -641,43 +669,72 @@ final class UploadPageNextViewController: UIViewController {
     @objc private func didTapRefresh() { loadFromJobId() }
 
     @objc private func didTapPreview() {
-        guard let doc = pdfView.document else {
-            let a = UIAlertController(title: "Not Ready", message: "PDF is still loading.", preferredStyle: .alert)
+        NavigationBarHelper.animateButtonPress(previewButton) { [weak self] in
+            guard let self = self else { return }
+            guard let doc = self.pdfView.document else {
+                let a = UIAlertController(title: "Not Ready", message: "PDF is still loading.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            let vc = MaximizeUploadPageViewController()
+            vc.pdfDocument = doc
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
+    }
+
+    @objc private func didTapPlayAlong() {
+        NavigationBarHelper.animateButtonPress(playAlongButton) { [weak self] in
+            guard let self = self else { return }
+            if self.isProcessing { 
+                let a = UIAlertController(title: "Processing", message: "Please wait for the analysis to complete.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            
+            guard let json = self.sheetMusicJSON else {
+                let a = UIAlertController(title: "No Data", message: "No sheet music data available for this upload.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            
+            let a = UIAlertController(
+                title: "Play Along",
+                message: "Start practice session for this piece?\nTempo: \(self.tempo)",
+                preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong(with: json) })
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            self.present(a, animated: true)
+        }
+    }
+
+    private func startPlayAlong(with json: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else {
+            let a = UIAlertController(title: "Error", message: "Failed to prepare data for Play Along.", preferredStyle: .alert)
             a.addAction(UIAlertAction(title: "OK", style: .default))
             present(a, animated: true)
             return
         }
-        let vc = MaximizeUploadPageViewController()
-        vc.pdfDocument = doc
-        vc.modalPresentationStyle = .fullScreen
-        present(vc, animated: true)
-    }
-
-    @objc private func didTapPlayAlong() {
-        let a = UIAlertController(
-            title: "Play Along",
-            message: "Chords: \(extractedChords.joined(separator: " - "))\nTempo: \(tempo)",
-            preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong() })
-        a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        present(a, animated: true)
-    }
-
-    private func startPlayAlong() {
-        let a = UIAlertController(
-            title: "Playing…",
-            message: "\(extractedChords.joined(separator: " → "))\n\(tempo)",
-            preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Stop", style: .destructive))
-        present(a, animated: true)
+        
+        let vc = PlayAlongViewController()
+        vc.sheetMusicData = data
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     @objc private func didTapAnimation() {
-        if isProcessing { showAnimationError("Still processing. Please wait."); return }
-        guard let json = sheetMusicJSON else {
-            showAnimationError("No sheet music data available."); return
+        NavigationBarHelper.animateButtonPress(animationButton) { [weak self] in
+            guard let self = self else { return }
+            if self.isProcessing { self.showAnimationError("Still processing. Please wait."); return }
+            guard let json = self.sheetMusicJSON else {
+                self.showAnimationError("No sheet music data available."); return
+            }
+            self.navigateToAnimation(withJSON: json)
         }
-        navigateToAnimation(withJSON: json)
     }
 
     private func navigateToAnimation(withJSON json: [String: Any]) {
@@ -699,24 +756,22 @@ final class UploadPageNextViewController: UIViewController {
 
     // MARK: - UI Setup
 
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isBackButtonVisible = true; navBar.isChordIconVisible = true
-        navBar.isProfileVisible    = true; navBar.isStreakVisible    = false
-        navBar.isWelcomeTextHidden = true; navBar.setTitle("Practice")
-        navBar.backAction    = { [weak self] in self?.navigationController?.popViewController(animated: true) }
-        navBar.chordAction   = { [weak self] in
-            self?.navigationController?.pushViewController(ChordRecognitionViewController(), animated: true)
+    private func setupNativeNavBar() {
+        title = "Practice"
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+    }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
         }
-        navBar.profileAction = { [weak self] in
-            self?.navigationController?.pushViewController(UserProfileViewController(), animated: true)
-        }
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
     }
 
     private func setupUI() {
@@ -725,7 +780,7 @@ final class UploadPageNextViewController: UIViewController {
         scrollView.alwaysBounceVertical = true
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
-        sheetContainer.backgroundColor    = UIColor(red: 0.93, green: 0.92, blue: 0.90, alpha: 1.0)
+        sheetContainer.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicCardFill
         sheetContainer.layer.cornerRadius = 24
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -737,7 +792,7 @@ final class UploadPageNextViewController: UIViewController {
         var previewConfig = UIButton.Configuration.filled()
         previewConfig.title              = "Preview"
         previewConfig.baseForegroundColor  = .white
-        previewConfig.baseBackgroundColor  = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        previewConfig.baseBackgroundColor  = ComponentColors.HomeScreen.actionButtonFill
         previewConfig.contentInsets      = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
         previewConfig.cornerStyle        = .fixed
         previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
@@ -751,7 +806,7 @@ final class UploadPageNextViewController: UIViewController {
         pdfView.autoScales          = true
         pdfView.displayMode         = .singlePageContinuous
         pdfView.displayDirection    = .vertical
-        pdfView.backgroundColor     = UIColor(red: 0.99, green: 0.98, blue: 0.97, alpha: 1.0)
+        pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
         pdfView.layer.cornerRadius  = 14
         pdfView.clipsToBounds       = false
         pdfView.minScaleFactor      = 0.1
@@ -762,15 +817,15 @@ final class UploadPageNextViewController: UIViewController {
         sheetImageView.contentMode       = .scaleAspectFit
         sheetImageView.clipsToBounds     = true
         sheetImageView.layer.cornerRadius = 14
-        sheetImageView.backgroundColor   = UIColor(red: 0.99, green: 0.98, blue: 0.97, alpha: 1.0)
+        sheetImageView.backgroundColor   = ComponentColors.SongDetailScreen.sheetMusicBackground
         sheetImageView.isHidden          = true
         sheetImageView.translatesAutoresizingMaskIntoConstraints = false
 
-        sheetLoadingIndicator.color             = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        sheetLoadingIndicator.color             = ComponentColors.HomeScreen.actionButtonFill
         sheetLoadingIndicator.hidesWhenStopped  = true
         sheetLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
 
-        progressView.progressTintColor  = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        progressView.progressTintColor  = ComponentColors.HomeScreen.actionButtonFill
         progressView.trackTintColor     = UIColor.secondaryLabel.withAlphaComponent(0.2)
         progressView.layer.cornerRadius = 3
         progressView.clipsToBounds      = true
@@ -786,7 +841,7 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         refreshButton.setTitle("Refresh", for: .normal)
-        refreshButton.setTitleColor(UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0), for: .normal)
+        refreshButton.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
         refreshButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
         refreshButton.isHidden         = true
         refreshButton.translatesAutoresizingMaskIntoConstraints = false
@@ -800,7 +855,7 @@ final class UploadPageNextViewController: UIViewController {
             lbl.font              = .systemFont(ofSize: 12, weight: .medium)
             lbl.textColor         = .secondaryLabel
             lbl.textAlignment     = .center
-            lbl.backgroundColor   = .white
+            lbl.backgroundColor   = ComponentColors.SongDetailScreen.sheetMusicBackground
             lbl.layer.cornerRadius = 8
             lbl.clipsToBounds     = true
             lbl.numberOfLines     = 2
@@ -810,13 +865,13 @@ final class UploadPageNextViewController: UIViewController {
         timeLabel.text  = "Time: 4/4"
         chordLabel.text = "Chords: –"
 
-        metronomeLabel.text      = "Metronome on 120 BPM"
+        //metronomeLabel.text      = "Metronome on 120 BPM"
         metronomeLabel.font      = .systemFont(ofSize: 13, weight: .medium)
         metronomeLabel.textColor = .secondaryLabel
         metronomeLabel.textAlignment = .right
         metronomeLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        tipsContainer.backgroundColor    = UIColor(red: 0.93, green: 0.92, blue: 0.90, alpha: 1.0)
+        tipsContainer.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicCardFill
         tipsContainer.layer.cornerRadius = 20
         tipsContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -834,7 +889,7 @@ final class UploadPageNextViewController: UIViewController {
         var playConfig = UIButton.Configuration.filled()
         playConfig.title              = "Play Along"
         playConfig.baseForegroundColor  = .white
-        playConfig.baseBackgroundColor  = UIColor(red: 0.937, green: 0.580, blue: 0.031, alpha: 1.0)
+        playConfig.baseBackgroundColor  = ComponentColors.HomeScreen.actionButtonFill
         playConfig.cornerStyle        = .capsule
         playAlongButton.configuration = playConfig
         playAlongButton.translatesAutoresizingMaskIntoConstraints = false
@@ -842,7 +897,7 @@ final class UploadPageNextViewController: UIViewController {
         var animConfig = UIButton.Configuration.filled()
         animConfig.title              = "Animation"
         animConfig.baseForegroundColor  = .label
-        animConfig.baseBackgroundColor  = UIColor(red: 0.90, green: 0.89, blue: 0.87, alpha: 1.0)
+        animConfig.baseBackgroundColor  = ComponentColors.SongDetailScreen.sheetMusicBackground
         animConfig.cornerStyle        = .capsule
         animationButton.configuration = animConfig
         animationButton.translatesAutoresizingMaskIntoConstraints = false
@@ -864,7 +919,7 @@ final class UploadPageNextViewController: UIViewController {
 
     private func applyConstraints() {
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -879,7 +934,7 @@ final class UploadPageNextViewController: UIViewController {
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 18),
+            sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 30),
             sheetHeaderLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 18),
 
             previewButton.centerYAnchor.constraint(equalTo: sheetHeaderLabel.centerYAnchor),
@@ -947,14 +1002,14 @@ final class UploadPageNextViewController: UIViewController {
 
             playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 24),
             playAlongButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            playAlongButton.heightAnchor.constraint(equalToConstant: 54),
+            playAlongButton.heightAnchor.constraint(equalToConstant: 46),
 
             animationButton.centerYAnchor.constraint(equalTo: playAlongButton.centerYAnchor),
             animationButton.leadingAnchor.constraint(equalTo: playAlongButton.trailingAnchor, constant: 12),
             animationButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            animationButton.heightAnchor.constraint(equalToConstant: 54),
+            animationButton.heightAnchor.constraint(equalToConstant: 46),
             animationButton.widthAnchor.constraint(equalTo: playAlongButton.widthAnchor),
-            animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
+            animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
         ])
     }
 }

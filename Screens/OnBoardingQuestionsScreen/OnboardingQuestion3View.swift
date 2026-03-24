@@ -2,125 +2,184 @@ import SwiftUI
 import UIKit
 import Supabase
 
+// MARK: - Q3: How long can you practice each day?
 struct OnboardingQuestion3View: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selection: String?
 
-    let levels = [
-        ("🌱", "Beginner"),
-        ("✨", "Intermediate"),
-        ("🚀", "Advanced")
-    ]
+    // Slider steps: 5, 10, 15, 20, 30, 45, 60
+    private let steps: [Int] = [5, 10, 15, 20, 30, 45, 60]
+    @State private var sliderIndex: Double = 1   // default index 1 = 10 min
 
-    // Adaptive padding for iPad vs iPhone
-    var horizontalPadding: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .pad ? 180 : 24
+    private var currentMins: Int { steps[Int(sliderIndex.rounded())] }
+
+    private var moodLabel: String {
+        switch currentMins {
+        case 5:        return "A micro-habit — easy to keep 🌿"
+        case 10:       return "A sustainable daily habit 🌱"
+        case 15:       return "Solid progress every day 🎵"
+        case 20:       return "You'll see real improvement 🎼"
+        case 30:       return "Committed and consistent 🎹"
+        case 45:       return "Serious about this 🏅"
+        default:       return "An hour a day — dedicated 🔥"
+        }
     }
 
     var body: some View {
-        VStack(spacing: 24) {
-
-            ProgressIndicator(step: 3)
-
-            Text("How do you want to start learning?")
-                .font(.title2.bold())
-                .foregroundColor(.black)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Text("We'll adjust the notes and practice tips for your pace.")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            CustomOnboardingNavBar(step: 3)
+                .padding(.top, 10)
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 18) {
-                    ForEach(levels, id: \.1) { icon, level in
+                VStack(alignment: .leading, spacing: 20) {
+                    
+                    // Header text
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("STEP 3 OF 3")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(SemanticColors.Text.brand))
+                            .shadow(color: Color(SemanticColors.Text.brand).opacity(0.3), radius: 4, x: 0, y: 2)
+                        
+                        Text("How long can you practice each day?")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(Color(SemanticColors.Text.primary))
 
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selection = level
-                                viewModel.selectedLevel = level
+                        Text("Even 10 minutes a day adds up to something beautiful.")
+                            .font(.system(size: 15))
+                            .foregroundColor(Color(SemanticColors.Text.secondary))
+                    }
+                    .padding(.top, 24)
+
+                    // Liquid Glass Card
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Big number display
+                        HStack(alignment: .lastTextBaseline, spacing: 6) {
+                            Text("\(currentMins)")
+                                .font(.system(size: 64, weight: .bold))
+                                .foregroundColor(Color(SemanticColors.Text.primary))
+                                .contentTransition(.numericText())
+                                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: currentMins)
+                                .shadow(color: Color(SemanticColors.Text.primary).opacity(0.2), radius: 8, x: 0, y: 4)
+
+                            Text("min / day")
+                                .font(.system(size: 18))
+                                .foregroundColor(Color(SemanticColors.Text.secondary))
+                        }
+                        .padding(.top, 24)
+                        .padding(.horizontal, 24)
+                        
+                        Text(moodLabel)
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(SemanticColors.Text.secondary))
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 32)
+                            .padding(.top, 4)
+
+                        // Slider
+                        VStack(spacing: 8) {
+                            Slider(value: $sliderIndex, in: 0...Double(steps.count - 1), step: 1) { _ in
+                                viewModel.practiceMins = currentMins
                             }
-                        } label: {
+                            .tint(Color(SemanticColors.DataViz.progressFill))
+                            .onChange(of: sliderIndex) { _, _ in
+                                viewModel.practiceMins = currentMins
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                            }
+
                             HStack {
-                                Text(icon)
-                                Text(level)
+                                Text("5 min")
                                 Spacer()
+                                Text("60 min")
                             }
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                selection == level
-                                ? Color(UIColor.secondaryColor)
-                                : Color(UIColor.lightGray)
-                            )
-                            .foregroundColor(selection == level ? .white : .black)
-                            .cornerRadius(12)
-                            .scaleEffect(selection == level ? 1.03 : 1.0)
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(SemanticColors.Text.tertiary))
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(SemanticColors.Background.card))
+                    )
+                    .padding(.bottom, 24)
+                }
+                .padding(.horizontal, 24)
+            }
+
+            // Bottom Action Area
+            VStack(spacing: 16) {
+                Button {
+                    viewModel.practiceMins = currentMins
+                    Task { await submit() }
+                } label: {
+                    Group {
+                        if viewModel.isSaving {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                        } else {
+                            Text("Finish setup")
+                                .font(.system(size: 16, weight: .bold))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Color(SemanticColors.Background.primaryButton))
+                    .foregroundColor(Color(SemanticColors.Text.onBrand))
+                    .cornerRadius(26)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.isSaving)
+                }
+                .disabled(viewModel.isSaving)
+                
+                Button("Skip") {
+                    Task {
+                        do {
+                            let session = try await SupabaseManager.shared.client.auth.session
+                            viewModel.skipOnboarding(userId: session.user.id.uuidString)
+                        } catch {
+                            viewModel.skipOnboarding() // Fallback to non-persistent if auth fails
                         }
                     }
                 }
-                .padding(.horizontal, 4)
-                .padding(.top, 12)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(Color(SemanticColors.Text.brand))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Button {
-                Task { await submit() }
-            } label: {
-                Text(viewModel.isSaving ? "Saving…" : "Finish")
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(selection == nil ? Color(UIColor.systemGray4) : Color(UIColor.primaryColor))
-                    .foregroundColor(.white)
-                    .cornerRadius(28)
-            }
-            .disabled(selection == nil || viewModel.isSaving)
-
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+            .padding(.top, 10)
         }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.top, 40)
-        .background(Color(UIColor.appBackground))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            GlassBackgroundView()
+                .ignoresSafeArea()
+        )
+        .navigationBarHidden(true)
+        .alert("Error", isPresented: Binding<Bool>(
+            get: { viewModel.errorMessage != nil },
+            set: { _ in viewModel.errorMessage = nil }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let msg = viewModel.errorMessage {
+                Text(msg)
+            }
+        }
+        .onAppear {
+            if let idx = steps.firstIndex(of: viewModel.practiceMins) {
+                sliderIndex = Double(idx)
+            }
+        }
     }
 
-    // MARK: - SAVE DATA
+    // MARK: - Save & navigate
     func submit() async {
         let client = SupabaseManager.shared.client
-
         do {
             let session = try await client.auth.session
-            let userId = session.user.id.uuidString
+            let userId  = session.user.id.uuidString
 
             viewModel.saveToSupabase(userId: userId) { success in
-                guard success else { return }
-                // ⚠️ saveToSupabase callback runs on a background thread —
-                // all UIKit transitions MUST happen on the main thread.
-                DispatchQueue.main.async {
-                    showHomeScreen()
-                }
+                // Navigation is now handled inside viewModel.saveToSupabase -> finalizeOnboarding
             }
-
         } catch {
-            print("Failed to get session: \(error.localizedDescription)")
+            viewModel.errorMessage = "Failed to get session: \(error.localizedDescription)"
         }
-    }
-
-    // MARK: - Navigation
-    func showHomeScreen() {
-        let home = MainTabBarController()
-
-        // Use the modern non-deprecated keyWindow lookup
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-              let window = scene.keyWindow else { return }
-
-        UIView.transition(with: window,
-                          duration: 0.35,
-                          options: .transitionCrossDissolve,
-                          animations: { window.rootViewController = home },
-                          completion: nil)
     }
 }

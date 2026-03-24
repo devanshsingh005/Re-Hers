@@ -6,7 +6,7 @@
 import UIKit
 import Foundation
 
-class SongDetailViewController: UIViewController {
+class PlayAlongSongDetailViewController: UIViewController {
     
     // MARK: - Passed Data From Previous Page
     var passedImage: UIImage?
@@ -46,7 +46,7 @@ class SongDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = ComponentColors.SongDetailScreen.background
         navigationController?.navigationBar.isHidden = true
         
         setupUI()
@@ -61,7 +61,7 @@ class SongDetailViewController: UIViewController {
     
     // MARK: - Apply Passed Data
     private func applyPassedData() {
-        let img = passedImage ?? UIImage(named: "ride_home")
+        let img = passedImage ?? UIImage(named: "trackimage_1")
         albumArtBackgroundView.image = img
         albumArtCardView.image = img
         songTitleLabel.text = passedSongTitle ?? "Unknown Song"
@@ -70,7 +70,7 @@ class SongDetailViewController: UIViewController {
     
     // MARK: - Navbar UI
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = ComponentColors.SongDetailScreen.background
         navigationController?.navigationBar.isHidden = true
         setupNavBar()
     }
@@ -146,7 +146,7 @@ class SongDetailViewController: UIViewController {
         contentView.addSubview(albumArtCardView)
         
         bookmarkButton.setImage(UIImage(systemName: "bookmark"), for: .normal)
-        bookmarkButton.tintColor = .systemGray
+        bookmarkButton.tintColor = ComponentColors.SongCard.chevronIcon
         bookmarkButton.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(bookmarkButton)
         
@@ -157,19 +157,19 @@ class SongDetailViewController: UIViewController {
         
         artistLabel.textAlignment = .center
         artistLabel.font = .systemFont(ofSize: 14)
-        artistLabel.textColor = .darkGray
+        artistLabel.textColor = ComponentColors.SongDetailScreen.artistName
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
         
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.layer.cornerRadius = 12
-        playAlongButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
         
         animationButton.setTitle("Animation", for: .normal)
         animationButton.layer.cornerRadius = 12
-        animationButton.setTitleColor(.darkGray, for: .normal)
-        animationButton.backgroundColor = .systemGray5
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         
         playAlongButton.layer.shadowOpacity = 0.15
         playAlongButton.layer.shadowRadius = 6
@@ -282,21 +282,23 @@ class SongDetailViewController: UIViewController {
 
     @objc private func openPlayAlongVC() {
         // Update button visual state
-        playAlongButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        playAlongButton.setTitleColor(.white, for: .normal)
-        animationButton.backgroundColor = .systemGray5
-        animationButton.setTitleColor(.darkGray, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         let vc = PlayAlongViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     @objc private func openPianoAnimationVC() {
         // Update button visual state
-        animationButton.backgroundColor = UIColor(red: 0.96, green: 0.71, blue: 0.13, alpha: 1)
-        animationButton.setTitleColor(.white, for: .normal)
-        playAlongButton.backgroundColor = .systemGray5
-        playAlongButton.setTitleColor(.darkGray, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
+        animationButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
+        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         let vc = AnimationViewController()
         vc.songTitle = passedSongTitle ?? "Animation"
@@ -327,18 +329,10 @@ class SongDetailViewController: UIViewController {
     }
 
     @objc private func bookmarkTapped() {
-        let bookmarked = bookmarkButton.tintColor == .systemYellow
-        bookmarkButton.tintColor = bookmarked ? .systemGray : .systemYellow
+        let bookmarked = bookmarkButton.tintColor == UIColor.systemYellow
+        bookmarkButton.tintColor = bookmarked ? ComponentColors.SongCard.chevronIcon : .systemYellow
         bookmarkButton.setImage(UIImage(systemName: bookmarked ? "bookmark" : "bookmark.fill"), for: .normal)
     }
 }
 
-// MARK: - LandscapeNavigationController
-// Forces landscape for AnimationViewController presentation.
-final class LandscapeNavigationController: UINavigationController {
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
-    override var shouldAutorotate: Bool { true }
-    override var prefersStatusBarHidden: Bool { topViewController?.prefersStatusBarHidden ?? true }
-}
 

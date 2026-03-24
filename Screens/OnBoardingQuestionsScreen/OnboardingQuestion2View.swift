@@ -1,101 +1,171 @@
 import SwiftUI
 import UIKit
 
-struct OnboardingQuestion2View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selection: String?
-
-    struct Artist: Identifiable {
-        let id = UUID()
-        let imageName: String
-        
-    }
-
-    let artists: [Artist] = [
-        .init(imageName: "artist1"),
-        .init(imageName: "artist2"),
-        .init(imageName: "artist3"),
-        .init(imageName: "artist4"),
-        .init(imageName: "artist5"),
-        .init(imageName: "artist6"),
-        .init(imageName: "artist7"),
-        .init(imageName: "artist8")
-    ]
-
-    // 2 columns that scale naturally on iPad
-    let grid = [
-        GridItem(.flexible(), spacing: 20),
-        GridItem(.flexible(), spacing: 20)
-    ]
-
-    // Adaptive padding for iPad vs iPhone
-    var horizontalPadding: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .pad ? 180 : 24
-    }
+// MARK: - Square genre card
+struct GenreSquareCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let isSelected: Bool
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-
-            ProgressIndicator(step: 2)
-
-            Text("Any favorite songs or artists?")
-                .font(.title2.bold())
-                .foregroundColor(.black)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Text("Type a few names so we can shape your first playlist.")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: grid, spacing: 22) {
-
-                    ForEach(artists) { artist in
-                        Button {
-                            selection = artist.imageName
-                            viewModel.selectedArtist = artist.imageName
-                        } label: {
-                            Image(artist.imageName)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 140, height: 140)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(
-                                            selection == artist.imageName
-                                            ? Color(UIColor.secondaryColor)
-                                            : Color.clear,
-                                            lineWidth: 3
-                                        )
-                                )
-                        }
-
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    Text(icon)
+                        .font(.system(size: 28))
+                    
+                    Spacer()
+                    
+                    // Animated Checkmark
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(Color(SemanticColors.Icon.active))
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .padding(.top, 12)
+                
+                Spacer()
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color(SemanticColors.Text.primary))
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(SemanticColors.Text.secondary))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            NavigationLink {
-                OnboardingQuestion3View()
-                    .environmentObject(viewModel)
-            } label: {
-                Text("Continue")
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(selection == nil ? Color(UIColor.systemGray4) : Color(UIColor.primaryColor))
-                    .foregroundColor(.white)
-                    .cornerRadius(28)
-            }
-            .disabled(selection == nil)
-
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isSelected ? Color(SemanticColors.Background.brandTint) : Color(SemanticColors.Background.card))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(isSelected ? Color(SemanticColors.Border.active) : Color(SemanticColors.Border.default), lineWidth: 1.5)
+            )
+            .animation(.spring(response: 0.35, dampingFraction: 0.65), value: isSelected)
         }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.top, 40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.appBackground))
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Q2: What style of piano music?
+struct OnboardingQuestion2View: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+
+    let genres: [(icon: String, title: String, subtitle: String)] = [
+        ("🎼", "Classical",        "Bach, Chopin, Mozart"),
+        ("🎷", "Jazz & Blues",     "Standards, improv"),
+        ("🎹", "Contemporary",     "Einaudi, Yiruma"),
+        ("🎬", "Film Scores",      "Zimmer, Williams"),
+        ("🎤", "Pop Ballads",      "Adele, Elton John"),
+        ("🌿", "Ambient",          "Lo-fi, meditative"),
+        ("🎶", "Gospel & Sacred",  "Hymns, worship")
+    ]
+
+    let grid = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    var hasSelection: Bool { !viewModel.selectedGenres.isEmpty }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            CustomOnboardingNavBar(step: 2)
+                .padding(.top, 10)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    
+                    // Header text
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("STEP 2 OF 3")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(SemanticColors.Text.brand))
+                            .shadow(color: Color(SemanticColors.Text.brand).opacity(0.3), radius: 4, x: 0, y: 2)
+                        
+                        Text("What style of piano music?")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(Color(SemanticColors.Text.primary))
+
+                        Text("Select all that interest you — your song library will be built around these.")
+                            .font(.system(size: 15))
+                            .foregroundColor(Color(SemanticColors.Text.secondary))
+                    }
+                    .padding(.top, 24)
+
+                    LazyVGrid(columns: grid, spacing: 16) {
+                        ForEach(genres, id: \.title) { item in
+                            GenreSquareCard(
+                                icon: item.icon,
+                                title: item.title,
+                                subtitle: item.subtitle,
+                                isSelected: viewModel.selectedGenres.contains(item.title),
+                                action: {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    
+                                    if viewModel.selectedGenres.contains(item.title) {
+                                        viewModel.selectedGenres.remove(item.title)
+                                    } else {
+                                        viewModel.selectedGenres.insert(item.title)
+                                    }
+                                }
+                            )
+                            .frame(minHeight: 140)
+                        }
+                    }
+                    .padding(.bottom, 24)
+                }
+                .padding(.horizontal, 24)
+            }
+
+            // Bottom Action Area
+            VStack(spacing: 16) {
+                NavigationLink {
+                    OnboardingQuestion3View()
+                        .environmentObject(viewModel)
+                } label: {
+                    Text("Continue")
+                        .font(.system(size: 16, weight: .bold))
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(
+                            !hasSelection
+                            ? Color(SemanticColors.Background.disabledButton)
+                            : Color(SemanticColors.Background.primaryButton)
+                        )
+                        .foregroundColor(!hasSelection ? Color(SemanticColors.Text.disabled) : Color(SemanticColors.Text.onBrand))
+                        .cornerRadius(26)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasSelection)
+                }
+                .disabled(!hasSelection)
+                
+                NavigationLink {
+                    OnboardingQuestion3View()
+                        .environmentObject(viewModel)
+                } label: {
+                    Text("Skip")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color(SemanticColors.Text.brand))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+            .padding(.top, 10)
+        }
+        .background(
+            GlassBackgroundView()
+                .ignoresSafeArea()
+        )
+        .navigationBarHidden(true)
     }
 }

@@ -7,6 +7,8 @@ import UIKit
 import AVFoundation
 import Photos
 import Supabase
+import Auth
+internal import PostgREST
 import PDFKit
 import Vision
 import VisionKit
@@ -15,7 +17,7 @@ class UploadScreen: UIViewController {
 
     // MARK: - Constants
     private enum Constants {
-        static let horizontalPadding: CGFloat = 20
+        static let horizontalPadding: CGFloat = 24
         static let sectionSpacing:    CGFloat = 24
         static let cornerRadius:      CGFloat = 20
         static let buttonHeight:      CGFloat = 52
@@ -43,21 +45,35 @@ class UploadScreen: UIViewController {
     private let storageBaseURL = "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/public"
 
     // MARK: - UI
-    private let navBar      = TopNavBar.make(title: "Upload")
     private let scrollView  = UIScrollView()
     private let contentView = UIStackView()
+    
+    private let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    private let navShadowLayer = UIView()
+    private let largeSubtitleLabel = UILabel()
+    private var inlineSubtitleLabel: UILabel?
+    private let largeProfileButton = UIButton(type: .custom)
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.96, green: 0.95, blue: 0.94, alpha: 1.0)
-        navigationController?.navigationBar.isHidden = true
+        view.backgroundColor = ComponentColors.HomeScreen.background
+        scrollView.delegate = self
         setupNavBar()
+        syncNavBarAlpha()
         setupScrollView()
-        setupHeaderSection()
+        setupNavBackground()
+        setupCustomLargeHeader()
         setupActionCards()
         setupRecentUploadsSection()
         loadRecentUploads()
+        fetchProfileData()
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: TopNavBar.profileDidUpdateNotification, object: nil)
+    }
+
+    @objc private func handleProfileUpdate() {
+        fetchProfileData()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -69,28 +85,181 @@ class UploadScreen: UIViewController {
 
     // MARK: - NavBar
     private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isStreakVisible       = false
-        navBar.isWelcomeTextHidden   = true
-        navBar.isChordIconVisible    = true
-        navBar.chordAction = { [weak self] in
-            guard let self else { return }
-            let vc = ChordRecognitionViewController()
-            if let nav = self.navigationController { nav.pushViewController(vc, animated: true) }
-            else { vc.modalPresentationStyle = .fullScreen; self.present(vc, animated: true) }
-        }
-        navBar.profileAction = { [weak self] in
-            self?.navigationController?.pushViewController(UserProfileViewController(), animated: true)
-        }
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
+        navigationItem.title = "" 
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Upload", subtitle: "Upload a new song")
+        self.inlineSubtitleLabel = subTitle
+        navigationItem.titleView = headerStack
+        
+        navigationItem.rightBarButtonItems = nil
+    }
+
+    private func setupNavBackground() {
+        navBackgroundView.alpha = 0
+        navBackgroundView.isUserInteractionEnabled = false // Allow touches through to header
+        navBackgroundView.contentView.isUserInteractionEnabled = false
+        view.addSubview(navBackgroundView)
+        
+        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
+        navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
+        navBackgroundView.contentView.addSubview(navShadowLayer)
+        
+        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        let topPadding = window?.safeAreaInsets.top ?? 0
+        let navHeight: CGFloat = 44 + topPadding
+        
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
+            navBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            navBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
+            
+            navShadowLayer.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
+            navShadowLayer.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
+            navShadowLayer.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
+            navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
         ])
+        
+        applyLiquidGlass(to: navBackgroundView)
+    }
+
+    private func applyLiquidGlass(to blurView: UIVisualEffectView) {
+        blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        blurView.layer.borderWidth = 0.5
+    }
+
+    private func setupCustomLargeHeader() {
+        let headerContainer = UIView()
+        headerContainer.translatesAutoresizingMaskIntoConstraints = false
+        contentView.insertArrangedSubview(headerContainer, at: 0)
+        
+        let labelStack = UIStackView()
+        labelStack.axis = .vertical
+        labelStack.spacing = -2
+        labelStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "Upload"
+        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
+        titleLabel.textColor = ComponentColors.NavBar.title
+        
+        largeSubtitleLabel.text = "Capture or import your documents"
+        largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
+        
+        labelStack.addArrangedSubview(titleLabel)
+        labelStack.addArrangedSubview(largeSubtitleLabel)
+        headerContainer.addSubview(labelStack)
+        
+        largeProfileButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
+        largeProfileButton.layer.cornerRadius = 20
+        largeProfileButton.clipsToBounds = true
+        largeProfileButton.layer.borderWidth    = 1.0
+        largeProfileButton.layer.borderColor    = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
+        
+        // Default placeholder
+        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+        largeProfileButton.tintColor = .white
+        largeProfileButton.imageView?.contentMode = .scaleAspectFill
+        
+        largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
+        largeProfileButton.addTarget(self, action: #selector(handleProfileTap), for: .touchUpInside)
+        headerContainer.addSubview(largeProfileButton)
+        
+        NSLayoutConstraint.activate([
+            headerContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 0),
+            headerContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 0),
+            headerContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
+            headerContainer.heightAnchor.constraint(equalToConstant: 80),
+            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor),
+            labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor),
+            largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
+            largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
+    }
+
+    private func fetchProfileData() {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else {
+                await MainActor.run {
+                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    largeProfileButton.tintColor = .secondaryLabel
+                }
+                return
+            }
+            do {
+                let profile: Profile = try await SupabaseManager.shared.client
+                    .from("profiles").select().eq("id", value: user.id).single().execute().value
+                if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
+                    await loadAndSetProfileImage(from: avatarUrl)
+                } else {
+                    await MainActor.run {
+                        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                        largeProfileButton.tintColor = .secondaryLabel
+                    }
+                }
+            } catch {
+                print("Profile error: \(error)")
+                await MainActor.run {
+                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    largeProfileButton.tintColor = .secondaryLabel
+                }
+            }
+        }
+    }
+
+    private func loadAndSetProfileImage(from urlString: String) async {
+        if urlString.starts(with: "icon_") {
+            await MainActor.run {
+                if let img = UIImage(named: urlString) {
+                    largeProfileButton.setImage(img, for: .normal)
+                    largeProfileButton.tintColor = .clear
+                }
+            }
+            return
+        }
+        var finalURL = urlString
+        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
+            finalURL = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+        }
+        guard let url = URL(string: finalURL) else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 30))
+            if let img = UIImage(data: data) {
+                await MainActor.run {
+                    self.largeProfileButton.setImage(img, for: .normal)
+                    self.largeProfileButton.tintColor = .clear
+                    self.largeProfileButton.imageView?.contentMode = .scaleAspectFill
+                }
+            } else {
+                await MainActor.run {
+                    self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    self.largeProfileButton.tintColor = .secondaryLabel
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                self.largeProfileButton.tintColor = .secondaryLabel
+            }
+        }
+    }
+
+    private func syncNavBarAlpha() {
+        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        let alpha = NavigationBarHelper.calculateNavBarAlpha(offset: offset)
+        
+        navigationItem.titleView?.alpha = alpha
+        navigationItem.titleView?.isHidden = (alpha == 0)
+        navBackgroundView.alpha = alpha
+    }
+
+    @objc private func handleProfileTap() {
+        navigationController?.pushViewController(UserProfileViewController(), animated: true)
     }
 
     // MARK: - Scroll + Content Stack
@@ -99,16 +268,17 @@ class UploadScreen: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.alwaysBounceVertical        = true
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.addSubview(contentView)
         contentView.axis    = .vertical
         contentView.spacing = Constants.sectionSpacing
         contentView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor), // Overlap for blur
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 8),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 90), // Space for status bar offset
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20),
             contentView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor,
                                                   constant: Constants.horizontalPadding),
@@ -119,16 +289,7 @@ class UploadScreen: UIViewController {
         ])
     }
 
-    // MARK: - Header
-    private func setupHeaderSection() {
-        let sub = UILabel()
-        sub.text      = "Capture or import your documents"
-        sub.font      = .systemFont(ofSize: 16, weight: .regular)
-        sub.textColor = .secondaryLabel
-        let stack = UIStackView(arrangedSubviews: [sub])
-        stack.axis = .vertical; stack.spacing = 4
-        contentView.addArrangedSubview(stack)
-    }
+    // SetupActionCards follows...
 
     // MARK: - Action Cards
     private func setupActionCards() {
@@ -142,7 +303,7 @@ class UploadScreen: UIViewController {
 
     private func makeScanCard() -> UIView {
         let card = cardButton()
-        let gradient = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        let gradient = GradientView(colors: [ComponentColors.HomeScreen.actionButtonGradientStart, ComponentColors.HomeScreen.actionButtonGradientEnd])
         gradient.isUserInteractionEnabled = false
         gradient.translatesAutoresizingMaskIntoConstraints = false
         card.insertSubview(gradient, at: 0)
@@ -151,7 +312,7 @@ class UploadScreen: UIViewController {
                                                bg: UIColor.white.withAlphaComponent(0.25))
         let mainLbl = cardLabel("Scan",         size: 22, weight: .bold,    color: .white)
         let subLbl  = cardLabel("Music Sheet",  size: 11, weight: .semibold,
-                                color: UIColor.white.withAlphaComponent(0.75), tracking: 1.5)
+                                color: UIColor.white.withAlphaComponent(0.9), tracking: 1.5)
         [iconWrap, mainLbl, subLbl].forEach { card.addSubview($0) }
         NSLayoutConstraint.activate(
             gradient.pinEdges(to: card) + [
@@ -174,16 +335,16 @@ class UploadScreen: UIViewController {
     }
 
     private func makeUploadCard() -> UIView {
-        let orange = UIColor(hex: "#FF6B00")
+        let orange = BrandColors.brand
         let card   = cardButton()
-        card.backgroundColor = UIColor(hex: "#FF740E").withAlphaComponent(0.08)
-        card.layer.borderColor = orange.withAlphaComponent(0.18).cgColor
+        card.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.08)
+        card.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18).cgColor
         card.layer.borderWidth = 1.5
 
         let (iconWrap, iconImg) = makeCardIcon(systemName: "icloud.and.arrow.up", tint: orange,
                                                bg: orange.withAlphaComponent(0.15))
-        let mainLbl = cardLabel("Upload",      size: 22, weight: .bold,    color: .label)
-        let subLbl  = cardLabel("Music Sheet", size: 11, weight: .semibold, color: .secondaryLabel, tracking: 1.5)
+        let mainLbl = cardLabel("Upload",      size: 22, weight: .bold,    color: SemanticColors.Text.primary)
+        let subLbl  = cardLabel("Music Sheet", size: 11, weight: .semibold, color: SemanticColors.Text.secondary, tracking: 1.5)
         [iconWrap, mainLbl, subLbl].forEach { card.addSubview($0) }
         NSLayoutConstraint.activate([
             iconWrap.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
@@ -264,23 +425,17 @@ class UploadScreen: UIViewController {
     // MARK: - Recent Uploads Section
     private func setupRecentUploadsSection() {
         let headerLabel = UILabel()
-        headerLabel.text      = "Recent Uploads"
-        headerLabel.font      = .systemFont(ofSize: 20, weight: .bold)
-        headerLabel.textColor = .label
+        headerLabel.text = "Recent Uploads"
+        headerLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        headerLabel.textColor = SemanticColors.Text.primary
 
-        let seeAllBtn = UIButton(type: .system)
-        seeAllBtn.backgroundColor    = UIColor(hex: "#FF6B00").withAlphaComponent(0.10)
-        seeAllBtn.layer.cornerRadius = 14
-        var cfg = UIButton.Configuration.plain()
-        cfg.title                = "See All"
-        cfg.baseForegroundColor  = UIColor(hex: "#FF6B00")
-        cfg.contentInsets        = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-        seeAllBtn.configuration  = cfg
-        seeAllBtn.addAction(UIAction { [weak self] _ in
-            self?.navigationController?.pushViewController(AllUploadsViewController(), animated: true)
-        }, for: .touchUpInside)
+        let seeMoreBtn = UIButton(type: .system)
+        seeMoreBtn.setTitle("See More", for: .normal)
+        seeMoreBtn.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        seeMoreBtn.setTitleColor(BrandColors.brand, for: .normal)
+        seeMoreBtn.addTarget(self, action: #selector(seeMoreTapped), for: .touchUpInside)
 
-        let headerRow = UIStackView(arrangedSubviews: [headerLabel, seeAllBtn])
+        let headerRow = UIStackView(arrangedSubviews: [headerLabel, seeMoreBtn])
         headerRow.axis         = .horizontal
         headerRow.distribution = .equalSpacing
         headerRow.alignment    = .center
@@ -359,7 +514,7 @@ class UploadScreen: UIViewController {
     private func makeUploadRow(title: String, fileType: String, meta: String, scan: Scan) -> UIView {
         // Card
         let card = UIButton(type: .custom)
-        card.backgroundColor       = .systemBackground
+        card.backgroundColor       = ComponentColors.SongCard.background
         card.layer.cornerRadius    = 16
         card.layer.shadowColor     = UIColor.black.cgColor
         card.layer.shadowOpacity   = 0.05
@@ -369,13 +524,14 @@ class UploadScreen: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Icon
-        let iconWrap = GradientView(colors: [UIColor(hex: "#EF9408"), UIColor(hex: "#FF6B00")])
+        let iconWrap = UIView()
+        iconWrap.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         iconWrap.layer.cornerRadius  = 12
         iconWrap.clipsToBounds       = true
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.isUserInteractionEnabled = false
         let iconImg = UIImageView(image: UIImage(systemName: "doc.fill"))
-        iconImg.tintColor   = .white
+        iconImg.tintColor   = BrandColors.brand
         iconImg.contentMode = .scaleAspectFit
         iconImg.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.addSubview(iconImg)
@@ -384,14 +540,14 @@ class UploadScreen: UIViewController {
         let titleLbl = UILabel()
         titleLbl.text          = title
         titleLbl.font          = .systemFont(ofSize: 15, weight: .semibold)
-        titleLbl.textColor     = .label
+        titleLbl.textColor     = SemanticColors.Text.primary
         titleLbl.lineBreakMode = .byTruncatingTail
 
         let badgeLbl = UILabel()
         badgeLbl.text              = fileType
         badgeLbl.font              = .systemFont(ofSize: 11, weight: .bold)
-        badgeLbl.textColor         = UIColor(hex: "#FF6B00")
-        badgeLbl.backgroundColor   = UIColor(hex: "#FF6B00").withAlphaComponent(0.12)
+        badgeLbl.textColor         = ComponentColors.HomeScreen.actionButtonFill
+        badgeLbl.backgroundColor   = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
         badgeLbl.layer.cornerRadius = 5
         badgeLbl.clipsToBounds     = true
         badgeLbl.textAlignment     = .center
@@ -402,7 +558,7 @@ class UploadScreen: UIViewController {
         let dateLbl = UILabel()
         dateLbl.text      = meta
         dateLbl.font      = .systemFont(ofSize: 12)
-        dateLbl.textColor = .tertiaryLabel
+        dateLbl.textColor = SemanticColors.Text.tertiary
 
         let metaRow = UIStackView(arrangedSubviews: [badgeLbl, dateLbl])
         metaRow.axis      = .horizontal
@@ -418,12 +574,14 @@ class UploadScreen: UIViewController {
         // More button
         let moreBtn = UIButton(type: .system)
         moreBtn.setImage(UIImage(systemName: "ellipsis"), for: .normal)
-        moreBtn.tintColor = .tertiaryLabel
+        moreBtn.tintColor = SemanticColors.Text.tertiary
         moreBtn.translatesAutoresizingMaskIntoConstraints = false
-        let scanId = scan.id
-        moreBtn.addAction(UIAction { [weak self, weak titleLbl] _ in
-            self?.showRowOptions(for: scanId, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
-        }, for: .touchUpInside)
+        moreBtn.showsMenuAsPrimaryAction = true
+        
+        let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self, weak titleLbl] _ in
+            self?.showRenameAlert(for: scan.id, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
+        }
+        moreBtn.menu = UIMenu(title: "", children: [rename])
 
         card.addSubview(iconWrap); card.addSubview(textStack); card.addSubview(moreBtn)
         NSLayoutConstraint.activate([
@@ -606,7 +764,7 @@ class UploadScreen: UIViewController {
         print("[Upload] API keys: \(api.keys.sorted())")
 
         guard let jobIdStr  = api["job_id"]  as? String, let jobId  = UUID(uuidString: jobIdStr),
-              let apiUidStr = api["user_id"] as? String, let apiUid = UUID(uuidString: apiUidStr)
+              let apiUidStr = api["user_id"] as? String, let _ = UUID(uuidString: apiUidStr)
         else { throw UploadError.badAPIResponse }
 
         let pdfPath   = "\(apiUidStr.lowercased())/\(jobIdStr.lowercased())/input.pdf"
@@ -656,7 +814,9 @@ class UploadScreen: UIViewController {
             self.loadRecentUploads()
             let vc       = UploadPageNextViewController()
             vc.jobId     = jobId
-            vc.onDataReady = { popup.notifyUploadComplete() }
+            vc.onDataReady = {
+                popup.notifyUploadComplete()
+            }
             print("[Navigate] jobId=\(jobId.uuidString)")
             self.navigationController?.pushViewController(vc, animated: true)
         }
@@ -665,7 +825,7 @@ class UploadScreen: UIViewController {
     // MARK: - Conversion API
     private func callConversionAPI(imageData: Data, fileName: String,
                                    fileType: String, token: String) async throws -> [String: Any] {
-        let url      = URL(string: "http://localhost:8000/convert")!
+        let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
         let boundary = UUID().uuidString
         var req      = URLRequest(url: url)
         req.httpMethod  = "POST"
@@ -720,12 +880,12 @@ class UploadScreen: UIViewController {
                                 y: (Constants.pdfPageSize.height - h) / 2,
                                 width: w, height: h))
             let txt   = "\(i + 1)"
-            let attrs: [NSAttributedString.Key: Any] = [
+            let attributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.gray
             ]
-            let sz = txt.size(withAttributes: attrs)
+            let sz = txt.size(withAttributes: attributes)
             txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2,
-                                y: 10, width: sz.width, height: sz.height), withAttributes: attrs)
+                                y: 10, width: sz.width, height: sz.height), withAttributes: attributes)
         }
         UIGraphicsEndPDFContext()
         return pdf as Data
@@ -929,6 +1089,10 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
     }
+    @objc private func seeMoreTapped() {
+        let vc = AllUploadsViewController()
+        navigationController?.pushViewController(vc, animated: true)
+    }
 }
 
 // MARK: - UIColor Hex
@@ -994,5 +1158,19 @@ private extension UIView {
 private extension Data {
     mutating func append(_ string: String) {
         if let d = string.data(using: .utf8) { append(d) }
+    }
+}
+
+// MARK: - UIScrollViewDelegate
+extension UploadScreen: UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        syncNavBarAlpha()
+    }
+    @available(iOS, deprecated: 17.0)
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
+        }
     }
 }

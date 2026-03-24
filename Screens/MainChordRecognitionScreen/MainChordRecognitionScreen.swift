@@ -15,7 +15,6 @@ final class ChordRecognitionViewController: UIViewController {
     private let useFakeMode = false
 
     // MARK: - UI Components
-    private let navBar = TopNavBar.make(title: "Chord Recognition")
 
     // Main note display
     private let noteContainerView: UIView = {
@@ -74,7 +73,7 @@ final class ChordRecognitionViewController: UIViewController {
         view.backgroundColor = .white
         view.layer.cornerRadius = 12
         view.layer.borderWidth = 1
-        view.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.3).cgColor
+        view.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
         return view
     }()
     
@@ -99,7 +98,6 @@ final class ChordRecognitionViewController: UIViewController {
         b.backgroundColor = .systemGreen
         b.layer.cornerRadius = 40
         b.imageView?.contentMode = .scaleAspectFit
-        b.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         return b
     }()
     
@@ -110,7 +108,6 @@ final class ChordRecognitionViewController: UIViewController {
         btn.backgroundColor = .systemRed
         btn.layer.cornerRadius = 40
         btn.imageView?.contentMode = .scaleAspectFit
-        btn.imageEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         btn.alpha = 0.7
         return btn
     }()
@@ -133,18 +130,38 @@ final class ChordRecognitionViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
-        setupNavBar()
+        title = "Chord Recognition"
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+        
         setupUI()
         configureActions()
         setupWaveLayer()
         pitchDetector.delegate = self
     }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
+    }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        AVAudioApplication.requestRecordPermission { granted in
             print("Mic permission granted:", granted)
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -154,25 +171,6 @@ final class ChordRecognitionViewController: UIViewController {
     }
 
     // MARK: - Setup
-    private func setupNavBar() {
-        navBar.isWelcomeTextHidden = true
-        navBar.isStreakVisible = false
-        navBar.isChordIconVisible = false
-        navBar.isBackButtonVisible = true
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
-
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-    }
-
     private func setupUI() {
         [noteContainerView, statusLabel, frequencyLabel, waveView, controlContainerView].forEach {
             view.addSubview($0)
@@ -193,8 +191,8 @@ final class ChordRecognitionViewController: UIViewController {
         }
 
         NSLayoutConstraint.activate([
-            // Note container
-            noteContainerView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 40),
+            // Note container — anchors from safeArea top
+            noteContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
             noteContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             noteContainerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.85),
             noteContainerView.heightAnchor.constraint(equalToConstant: 160),
@@ -247,7 +245,7 @@ final class ChordRecognitionViewController: UIViewController {
     private func setupWaveLayer() {
         let waveLayer = CAShapeLayer()
         waveLayer.fillColor = UIColor.clear.cgColor
-        waveLayer.strokeColor = UIColor.systemOrange.cgColor
+        waveLayer.strokeColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         waveLayer.lineWidth = 3.0
         waveLayer.lineCap = .round
         waveLayer.lineJoin = .round
@@ -296,13 +294,13 @@ final class ChordRecognitionViewController: UIViewController {
         let orangeShade: UIColor
         switch waveUpdateCounter % 4 {
         case 0:
-            orangeShade = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // Bright orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.85) // Bright orange
         case 1:
-            orangeShade = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0) // Pure orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill // Pure orange
         case 2:
-            orangeShade = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 1.0) // Light orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.75) // Light orange
         default:
-            orangeShade = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1.0) // Dark orange
+            orangeShade = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.90) // Dark orange
         }
         
         waveLayer.strokeColor = orangeShade.cgColor
@@ -404,9 +402,9 @@ final class ChordRecognitionViewController: UIViewController {
 }
 
 extension ChordRecognitionViewController: PitchDetectorDelegate {
-    func pitchDetectorDidDetect(note: String, frequency: Float, amplitude: CGFloat) {
-        // Only update UI if we receive a valid note
-        guard note != "—" else {
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
+        // Only update UI if we receive valid notes
+        guard let note = notes.first, note != "—" else {
             noteLabel.text = "—"
             frequencyLabel.text = "Frequency: — Hz"
             statusLabel.text = "No signal"

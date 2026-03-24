@@ -85,7 +85,7 @@ final class PianoAnimationkeyboardViewController: UIViewController {
         ])
 
         pianoKeyboard.onKeyPressed = { [weak self] note, pressed in
-            guard let self else { return }
+            guard self != nil else { return }
             if let m = AudioEngineManager.shared.midiNumber(from: note) {
                 pressed ? AudioEngineManager.shared.startNote(midi: m)
                         : AudioEngineManager.shared.stopNote(midi: m)
@@ -95,7 +95,7 @@ final class PianoAnimationkeyboardViewController: UIViewController {
 
     // MARK: - L / R Labels
     private func buildLabels() {
-        configureLabel(leftLabel,  text: "L", color: .systemBlue)
+        configureLabel(leftLabel,  text: "L", color: BrandColors.brand)
         configureLabel(rightLabel, text: "R", color: .systemRed)
 
         [leftLabel, rightLabel].forEach { $0.alpha = 0; view.addSubview($0) }

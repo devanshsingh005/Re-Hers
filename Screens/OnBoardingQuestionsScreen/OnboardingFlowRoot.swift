@@ -1,10 +1,3 @@
-//
-//  OnboardingFlowRoot.swift
-//  Re-Hearse_v1
-//
-//  Created by DEVANSH on 14/12/25.
-//
-
 import SwiftUI
 import UIKit
 
@@ -18,4 +11,3 @@ struct OnboardingFlowRoot: View {
         }
     }
 }
-

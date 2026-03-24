@@ -4,7 +4,7 @@ import Accelerate
 
 /// Reports the strongest detected note and its frequency.
 public protocol PitchDetectorDelegate: AnyObject {
-    func pitchDetectorDidDetect(note: String, frequency: Float, amplitude: CGFloat)
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat)
 }
 
 /// A reusable real-time FFT pitch detector based on the logic from ChordRecognitionViewController.
@@ -22,7 +22,10 @@ public final class PitchDetector {
     // Audio processing
     private let minMagnitudeThreshold: Float = 0.001
     private var frequencyHistory: [Float] = []
-    private let historySize = 3
+    private let historySize = 5 // Increased from 3 for smoother note tracking
+    
+    // Antigravity: Session-based permission flag
+    private static var hasRequestedPermissionInSession = false
     
     // MARK: - Init / Deinit
     init() {
@@ -38,7 +41,17 @@ public final class PitchDetector {
     
     /// Requests microphone permission and starts the audio engine.
     func startListening() {
-        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+        // If already requested in this run, just check status and start
+        if PitchDetector.hasRequestedPermissionInSession {
+            if AVAudioApplication.shared.recordPermission == .granted {
+                self.startEngine()
+            }
+            return
+        }
+        
+        // First time in this session
+        PitchDetector.hasRequestedPermissionInSession = true
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self = self, granted else { return }
             
             DispatchQueue.main.async {
@@ -65,7 +78,7 @@ public final class PitchDetector {
     
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true)
     }
     
@@ -123,6 +136,13 @@ public final class PitchDetector {
     private func process(buffer: AVAudioPCMBuffer, window: [Float]) {
         guard let channel = buffer.floatChannelData?[0], let setup = fftSetup else { return }
         
+        // Calculate root mean square (RMS) amplitude as a noise gate
+        var rms: Float = 0
+        vDSP_rmsqv(channel, 1, &rms, vDSP_Length(buffer.frameLength))
+        if rms < 0.015 { 
+            return // Ignore very quiet background noise 
+        }
+        
         var samples = [Float](repeating: 0, count: bufferSize)
         let copySize = min(Int(buffer.frameLength), bufferSize)
         // Copy audio data
@@ -134,24 +154,29 @@ public final class PitchDetector {
         let half = bufferSize / 2
         var real = [Float](repeating: 0, count: half)
         var imag = [Float](repeating: 0, count: half)
-        var split = DSPSplitComplex(realp: &real, imagp: &imag)
         
-        samples.withUnsafeBufferPointer {
-            $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
-                vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
+        real.withUnsafeMutableBufferPointer { realBuf in
+            imag.withUnsafeMutableBufferPointer { imagBuf in
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                
+                samples.withUnsafeBufferPointer {
+                    $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
+                        vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
+                    }
+                }
+                
+                // Perform Forward FFT
+                vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
+                
+                var magnitudes = [Float](repeating: 0, count: half)
+                // Convert complex array to magnitudes
+                vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
+                
+                let peaks = findSignificantPeaks(in: magnitudes)
+                DispatchQueue.main.async { [weak self] in
+                    self?.handleDetectedPeaks(peaks)
+                }
             }
-        }
-        
-        // Perform Forward FFT
-        vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
-        
-        var magnitudes = [Float](repeating: 0, count: half)
-        // Convert complex array to magnitudes
-        vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
-        
-        let peaks = findSignificantPeaks(in: magnitudes)
-        DispatchQueue.main.async { [weak self] in
-            self?.handleDetectedPeaks(peaks)
         }
     }
     
@@ -186,7 +211,7 @@ public final class PitchDetector {
         }
         
         peaks.sort { $0.magnitude > $1.magnitude }
-        return peaks.isEmpty ? [] : [peaks[0]] // Return only the strongest peak
+        return Array(peaks.prefix(3)) // Return up to 3 strongest peaks
     }
     
     private func quadraticInterpolation(index: Int, magnitudes: [Float], sampleRate: Float, fftSize: Int) -> Float {
@@ -203,27 +228,14 @@ public final class PitchDetector {
     }
     
     private func handleDetectedPeaks(_ peaks: [(frequency: Float, magnitude: Float)]) {
-        guard let strongest = peaks.first else { return }
+        guard !peaks.isEmpty else { return }
         
-        let frequency = strongest.frequency
-        
-        // Stabilize over history
-        frequencyHistory.append(frequency)
-        if frequencyHistory.count > historySize {
-            frequencyHistory.removeFirst()
-        }
-        
-        let stableFreq: Float
-        if !frequencyHistory.isEmpty {
-            stableFreq = frequencyHistory.reduce(0, +) / Float(frequencyHistory.count)
-        } else {
-            stableFreq = frequency
-        }
-        
-        let note = PitchDetector.frequencyToNoteName(stableFreq)
+        // Return top notes found
+        let foundNotes = peaks.prefix(3).map { PitchDetector.frequencyToNoteName($0.frequency) }
+        let strongest = peaks[0]
         let amplitude = CGFloat(min(1.0, Double(strongest.magnitude) * 500))
         
-        delegate?.pitchDetectorDidDetect(note: note, frequency: stableFreq, amplitude: amplitude)
+        delegate?.pitchDetectorDidDetect(notes: foundNotes, frequency: strongest.frequency, amplitude: amplitude)
     }
     
     // MARK: - Utilities

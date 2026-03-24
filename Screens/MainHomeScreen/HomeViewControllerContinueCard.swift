@@ -2,163 +2,219 @@
 //  HomeViewControllerContinueCard.swift
 //  Re-Hearse_v1
 //
-//  Created by Devvvv on 07/12/25.
-//
-
-import Foundation
-//
-//  HomeViewController+ContinueCard.swift
-//  Re-Hearse_v1
-//
 
 import UIKit
 
-extension HomeViewController {
+struct PracticeCardTheme {
+    let start: UIColor
+    let end: UIColor
+    let shadow: UIColor
+    let bgLight: UIColor
+    let bgDark: UIColor
     
+    static let palettes: [PracticeCardTheme] = [
+        // Deep Purple
+        PracticeCardTheme(
+            start: UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0),
+            end: UIColor(red: 0.42, green: 0.00, blue: 0.71, alpha: 1.0),
+            shadow: UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0),
+            bgLight: UIColor(hex: "#F4F2F8"), bgDark: UIColor(hex: "#0A0514")
+        ),
+        // Ocean Blue
+        PracticeCardTheme(
+            start: UIColor(red: 0.00, green: 0.23, blue: 0.48, alpha: 1.0),
+            end: UIColor(red: 0.00, green: 0.40, blue: 0.80, alpha: 1.0),
+            shadow: UIColor(red: 0.00, green: 0.23, blue: 0.48, alpha: 1.0),
+            bgLight: UIColor(hex: "#F2F5F8"), bgDark: UIColor(hex: "#050A14")
+        ),
+        // Forest Green
+        PracticeCardTheme(
+            start: UIColor(red: 0.00, green: 0.34, blue: 0.18, alpha: 1.0),
+            end: UIColor(red: 0.00, green: 0.54, blue: 0.29, alpha: 1.0),
+            shadow: UIColor(red: 0.00, green: 0.34, blue: 0.18, alpha: 1.0),
+            bgLight: UIColor(hex: "#F2F8F4"), bgDark: UIColor(hex: "#05140A")
+        ),
+        // Crimson Red
+        PracticeCardTheme(
+            start: UIColor(red: 0.48, green: 0.00, blue: 0.08, alpha: 1.0),
+            end: UIColor(red: 0.71, green: 0.00, blue: 0.14, alpha: 1.0),
+            shadow: UIColor(red: 0.48, green: 0.00, blue: 0.08, alpha: 1.0),
+            bgLight: UIColor(hex: "#F8F2F3"), bgDark: UIColor(hex: "#140508")
+        )
+    ]
     
-    // MARK: - Padded Label Class
-    final class PaddingLabel: UILabel {
-        
-        private var topInset: CGFloat
-        private var leftInset: CGFloat
-        private var bottomInset: CGFloat
-        private var rightInset: CGFloat
-        
-        init(top: CGFloat, left: CGFloat, bottom: CGFloat, right: CGFloat) {
-            self.topInset = top
-            self.leftInset = left
-            self.bottomInset = bottom
-            self.rightInset = right
-            super.init(frame: .zero)
-        }
-        
-        required init?(coder: NSCoder) {
-            self.topInset = 4
-            self.leftInset = 8
-            self.bottomInset = 4
-            self.rightInset = 8
-            super.init(coder: coder)
-        }
-        
-        override func drawText(in rect: CGRect) {
-            let insetRect = rect.inset(by: UIEdgeInsets(
-                top: topInset,
-                left: leftInset,
-                bottom: bottomInset,
-                right: rightInset
-            ))
-            super.drawText(in: insetRect)
-        }
-        
-        override var intrinsicContentSize: CGSize {
-            let size = super.intrinsicContentSize
-            return CGSize(
-                width: size.width + leftInset + rightInset,
-                height: size.height + topInset + bottomInset
-            )
-        }
+    static func theme(for title: String) -> PracticeCardTheme {
+        let hash = abs(title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
+        return palettes[hash % palettes.count]
     }
-    
-    // MARK: - Tag Label Factory
-    func createTagLabel(_ text: String) -> UILabel {
-        let label = PaddingLabel(top: 4, left: 10, bottom: 4, right: 10)
-        label.text = text
-        label.textColor = .black
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.backgroundColor = UIColor.white.withAlphaComponent(0.7)
-        label.layer.cornerRadius = 6
-        label.clipsToBounds = true
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
+}
+
+final class PracticeCardBackgroundView: UIView {
+    private let gradientLayer = CAGradientLayer()
+    private let musicNoteView = UIImageView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
     }
-    
-    // MARK: - Main Card Builder
-    func addContinueCard() {
-        let card = UIView()
-        card.backgroundColor = UIColor.black.withAlphaComponent(0.85)
-        card.layer.cornerRadius = 22
-        card.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Image
-        let image = UIImageView()
-        image.image = UIImage(named: "Image") ?? UIImage(systemName: "music.note")
-        image.layer.cornerRadius = 10
-        image.clipsToBounds = true
-        image.contentMode = .scaleAspectFill
-        image.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Title + Subtitle
-        let title = UILabel()
-        title.text = "Beliver"
-        title.textColor = .white
-        title.font = .systemFont(ofSize: 19, weight: .bold)
-        
-        let subtitle = UILabel()
-        subtitle.text = "Bars 5–6 | Right-Hand focus"
-        subtitle.textColor = .lightGray
-        subtitle.font = .systemFont(ofSize: 13)
-        
-        let titleStack = UIStackView(arrangedSubviews: [title, subtitle])
-        titleStack.axis = .vertical
-        titleStack.spacing = 4
-        titleStack.alignment = .leading
-        
-        let topRow = UIStackView(arrangedSubviews: [image, titleStack])
-        topRow.axis = .horizontal
-        topRow.spacing = 12
-        topRow.alignment = .top
-        
-        // Progress
-        let progressView = UIProgressView()
-        progressView.progress = 0.4
-        progressView.progressTintColor = .appBackground
-        progressView.trackTintColor = .darkGray1
-        progressView.layer.cornerRadius = 2
-        progressView.clipsToBounds = true
-        progressView.translatesAutoresizingMaskIntoConstraints = false
-        progressView.heightAnchor.constraint(equalToConstant: 4).isActive = true
-        
-        // Buttons
-        let continueBtn = createFilledButton("Continue")
-        continueBtn.addTarget(self, action: #selector(openPianoPage), for: .touchUpInside)
-        
-        let playBtn = createBorderedButton("Play Along")
-        playBtn.addTarget(self, action: #selector(playAlongTapped), for: .touchUpInside)
-        
-        continueBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        playBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        
-        let buttonStack = UIStackView(arrangedSubviews: [continueBtn, playBtn])
-        buttonStack.axis = .horizontal
-        buttonStack.spacing = 12
-        buttonStack.distribution = .fillEqually
-        
-        // Main Stack
-        let mainStack = UIStackView(arrangedSubviews: [
-            topRow,
-            progressView,
-            buttonStack
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func setup() {
+        gradientLayer.colors = [
+            UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).cgColor,
+            UIColor(red: 0.42, green: 0.00, blue: 0.71, alpha: 1.0).cgColor
+        ]
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+        layer.insertSublayer(gradientLayer, at: 0)
+
+        musicNoteView.image = UIImage(systemName: "music.note")
+        musicNoteView.tintColor = .white.withAlphaComponent(0.08)
+        musicNoteView.contentMode = .scaleAspectFit
+        musicNoteView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(musicNoteView)
+
+        NSLayoutConstraint.activate([
+            musicNoteView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 40),
+            musicNoteView.topAnchor.constraint(equalTo: topAnchor, constant: -20),
+            musicNoteView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.6),
+            musicNoteView.heightAnchor.constraint(equalTo: widthAnchor, multiplier: 0.6)
         ])
-        mainStack.axis = .vertical
-        mainStack.spacing = 0
-        mainStack.alignment = .fill
-        mainStack.translatesAutoresizingMaskIntoConstraints = false
+    }
+    
+    func updateColors(start: UIColor, end: UIColor) {
+        UIView.animate(withDuration: 0.4) {
+            self.gradientLayer.colors = [start.cgColor, end.cgColor]
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+    }
+}
+
+extension HomeViewController {
+    func addTopPracticeCardView() -> UIView {
+        let wrapper = PracticeCardBackgroundView()
+        wrapper.tag = 991
+        wrapper.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.layer.cornerRadius = 28
+        wrapper.layer.masksToBounds = true
         
-        mainStack.setCustomSpacing(18, after: topRow)
-        mainStack.setCustomSpacing(22, after: progressView)
-        
-        card.addSubview(mainStack)
+        let outerContainer = UIView()
+        outerContainer.tag = 992
+        outerContainer.translatesAutoresizingMaskIntoConstraints = false
+        outerContainer.layer.shadowColor = UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).cgColor
+        outerContainer.layer.shadowOpacity = 0.3
+        outerContainer.layer.shadowRadius = 24
+        outerContainer.layer.shadowOffset = CGSize(width: 0, height: 12)
+        outerContainer.addSubview(wrapper)
         
         NSLayoutConstraint.activate([
-            mainStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
-            mainStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            mainStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 24),
-            mainStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -24),
-            
-            image.widthAnchor.constraint(equalToConstant: 80),
-            image.heightAnchor.constraint(equalToConstant: 80)
+            wrapper.topAnchor.constraint(equalTo: outerContainer.topAnchor),
+            wrapper.leadingAnchor.constraint(equalTo: outerContainer.leadingAnchor),
+            wrapper.trailingAnchor.constraint(equalTo: outerContainer.trailingAnchor),
+            wrapper.bottomAnchor.constraint(equalTo: outerContainer.bottomAnchor),
+        ])
+
+        // Tags Container (Top Left)
+        let tagsStack = UIStackView()
+        tagsStack.axis = .horizontal
+        tagsStack.spacing = 8
+        tagsStack.translatesAutoresizingMaskIntoConstraints = false
+        self.topCardTagsStack = tagsStack
+        wrapper.addSubview(tagsStack)
+
+        // We'll store a reference to the tagsStack to update it dynamically
+        self.topCardTagLabel = UILabel() // dummy
+        self.topCardTagLabel?.isHidden = true
+
+        // Initial placeholders
+        tagsStack.addArrangedSubview(makePillTag(text: "MEDIUM"))
+        tagsStack.addArrangedSubview(makePillTag(text: "RIGHT_ONLY"))
+
+        // Dynamic Title
+        let titleLabel = UILabel()
+        titleLabel.text = "Twinkle Twinkle Little Star"
+        titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
+        titleLabel.textColor = .white
+        titleLabel.numberOfLines = 2
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        self.topCardTitleLabel = titleLabel
+        wrapper.addSubview(titleLabel)
+
+        // Replacement for Progress/Mastery: Song Insights Row
+        let detailsStack = UIStackView()
+        detailsStack.axis = .horizontal
+        detailsStack.distribution = .equalCentering
+        detailsStack.translatesAutoresizingMaskIntoConstraints = false
+        self.topCardDetailsStack = detailsStack
+        
+        detailsStack.addArrangedSubview(self.makeDetailItem(icon: "gauge.with.needle", text: "Intermediate"))
+        detailsStack.addArrangedSubview(self.makeDetailItem(icon: "person.fill", text: "Traditional"))
+        detailsStack.addArrangedSubview(self.makeDetailItem(icon: "metronome", text: "72 BPM"))
+
+        let startBtn = UIButton(type: .system)
+        startBtn.setTitle("Start Practice", for: .normal)
+        startBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
+        startBtn.setTitleColor(.white, for: .normal)
+        startBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        startBtn.layer.cornerRadius = 20
+        startBtn.translatesAutoresizingMaskIntoConstraints = false
+        
+        startBtn.addAction(UIAction { [weak self] _ in 
+            guard let self = self else { return }
+            NavigationBarHelper.animateButtonPress(startBtn) {
+                self.openPianoPage()
+            }
+        }, for: .touchUpInside)
+
+        wrapper.addSubview(detailsStack)
+        wrapper.addSubview(startBtn)
+
+        NSLayoutConstraint.activate([
+            tagsStack.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 16),
+            tagsStack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 24),
+
+            titleLabel.topAnchor.constraint(equalTo: tagsStack.bottomAnchor, constant: 16),
+            titleLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 24),
+            titleLabel.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -24),
+
+            detailsStack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            detailsStack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 24),
+            detailsStack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -24),
+
+            startBtn.topAnchor.constraint(equalTo: detailsStack.bottomAnchor, constant: 24),
+            startBtn.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 24),
+            startBtn.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -24),
+            startBtn.heightAnchor.constraint(equalToConstant: 54),
+            startBtn.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -24)
         ])
         
-        contentView.addArrangedSubview(card)
+        return outerContainer
+    }
+
+    // MARK: - Helpers
+    func makePillTag(text: String) -> UIView {
+        let tagView = UIView()
+        tagView.backgroundColor = .white.withAlphaComponent(0.15)
+        tagView.layer.cornerRadius = 14
+        
+        let label = UILabel()
+        label.text = text.uppercased()
+        label.font = .systemFont(ofSize: 11, weight: .bold)
+        label.textColor = .white
+        label.translatesAutoresizingMaskIntoConstraints = false
+        tagView.addSubview(label)
+        
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: tagView.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: tagView.bottomAnchor, constant: -6),
+            label.leadingAnchor.constraint(equalTo: tagView.leadingAnchor, constant: 14),
+            label.trailingAnchor.constraint(equalTo: tagView.trailingAnchor, constant: -14)
+        ])
+        return tagView
     }
 }

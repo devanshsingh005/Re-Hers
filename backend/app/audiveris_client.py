@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 _session = requests.Session()
 
 
-def run_audiveris(pdf_path: str) -> Dict[str, Any]:
+def run_audiveris(pdf_path: str, override_url: str = None) -> Dict[str, Any]:
     """Call Audiveris API with PDF file and return JSON output.
     
     Args:
@@ -26,7 +26,7 @@ def run_audiveris(pdf_path: str) -> Dict[str, Any]:
         FileNotFoundError: If the PDF file doesn't exist.
     """
     # Prepare the API endpoint
-    url = f"{AUDIVERIS_API_URL}?format=json"
+    url = f"{override_url or AUDIVERIS_API_URL}?format=json"
     logger.info(f"Calling Audiveris API at {url}")
     
     try:
@@ -34,7 +34,7 @@ def run_audiveris(pdf_path: str) -> Dict[str, Any]:
             files = {'file': (pdf_path.split('/')[-1], pdf_file, 'application/pdf')}
             
             logger.debug(f"Sending PDF to Audiveris: {pdf_path}")
-            response = _session.post(url, files=files)
+            response = _session.post(url, files=files, timeout=120)
             
             logger.info(f"Audiveris response status: {response.status_code}")
     except FileNotFoundError as e:
