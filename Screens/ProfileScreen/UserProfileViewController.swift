@@ -598,7 +598,6 @@ final class UserProfileViewController: UIViewController {
             do {
                 try await SupabaseManager.shared.client.auth.signOut()
                 await MainActor.run {
-                    UserDefaults.standard.set(false, forKey: "isLoggedIn")
                     if let sceneDelegate = self.view.window?.windowScene?.delegate as? SceneDelegate {
                         sceneDelegate.showSplashAndRoute()
                     }
@@ -791,10 +790,10 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
             let fileName = "avatar_\(user.id.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
             do {
                 try await client.storage.from("useprofile").upload(fileName, data: jpegData)
-                let projectRef = "djqgmowfjxsnjdffdohw"
-                let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
+                let signedURL = try await client.storage.from("useprofile")
+                    .createSignedURL(path: fileName, expiresIn: 3600)
                 _ = try await client.from("profiles")
-                    .update(["avatar_url": publicURL])
+                    .update(["avatar_url": fileName])
                     .eq("id", value: user.id.uuidString)
                     .select()
                     .execute()
@@ -802,7 +801,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     id: self.currentProfile?.id ?? user.id,
                     full_name: self.currentProfile?.full_name,
                     username: self.currentProfile?.username,
-                    avatar_url: publicURL,
+                    avatar_url: signedURL.absoluteString,
                     bio: self.currentProfile?.bio,
                     total_study_seconds: self.currentProfile?.total_study_seconds
                 )
@@ -830,11 +829,8 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
         }
 
         Task {
-            var finalURL = urlString
-            if finalURL.contains("/object/useprofile/") && !finalURL.contains("/public/") {
-                finalURL = finalURL.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-            }
-            guard let url = URL(string: finalURL) else { return }
+            guard let finalURL = await NavigationBarHelper.signedProfileURLString(from: urlString),
+                  let url = URL(string: finalURL) else { return }
             let (data, _) = try await URLSession.shared.data(from: url)
             if let img = UIImage(data: data) {
                 await MainActor.run {

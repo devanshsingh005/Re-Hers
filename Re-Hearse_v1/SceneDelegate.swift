@@ -32,15 +32,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// Decides where to go after the splash screen finishes
     private func performInitialRouting() {
-        let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
+        Task {
+            let client = SupabaseManager.shared.client
+            let session = try? await client.auth.session
+            let hasSession = session != nil
 
-        if isLoggedIn {
-            // User is logged in. Verify session and onboarding status.
-            Task {
+            if hasSession, let validSession = session {
                 do {
-                    let client = SupabaseManager.shared.client
-                    let session = try await client.auth.session
-                    let userId = session.user.id.uuidString
+                    let userId = validSession.user.id.uuidString
 
                     // Check onboarding status
                     struct OnboardingRow: Decodable {
@@ -59,21 +58,19 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                         if let genres = row?.genres, !genres.isEmpty {
                             self.showMainApp()
                         } else {
-                            // Session exists but onboarding not finished
-                            self.showLoginScreen() 
+                            self.showLoginScreen()
                         }
                     }
                 } catch {
-                    // Session expired or error. take them back to login.
                     await MainActor.run {
-                        UserDefaults.standard.set(false, forKey: "isLoggedIn")
                         self.showLoginScreen()
                     }
                 }
+            } else {
+                await MainActor.run {
+                    self.showLoginScreen()
+                }
             }
-        } else {
-            // New or logged-out user: go to Login
-            showLoginScreen()
         }
     }
 
@@ -128,13 +125,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        // Called when the scene has moved from an inactive state to an active state.
-        // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+        SupabaseManager.shared.startAutoRefresh()
+        (scene as? UIWindowScene)?.windows.first?.viewWithTag(9999)?.removeFromSuperview()
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
-        // Called when the scene will move from an active state to an inactive state.
-        // This may occur due to temporary interruptions (ex. an incoming phone call).
+        guard let window = (scene as? UIWindowScene)?.windows.first else { return }
+        if window.viewWithTag(9999) == nil {
+            let overlay = UIView(frame: window.bounds)
+            overlay.backgroundColor = .systemBackground
+            overlay.tag = 9999
+            window.addSubview(overlay)
+        }
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
@@ -143,6 +145,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        SupabaseManager.shared.stopAutoRefresh()
         // Called as the scene transitions from the foreground to the background.
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
@@ -156,4 +159,3 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
 }
-

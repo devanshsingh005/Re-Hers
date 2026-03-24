@@ -1,6 +1,7 @@
 """RQ worker process with Azure VM lifecycle management for Audiveris."""
 import logging
 import os
+import sys
 import time
 
 import redis
@@ -11,7 +12,7 @@ from rq import Queue, Worker
 
 import app.audiveris_client as audiveris_client
 import app.dispatcher as dispatcher
-from app.config import AUDIVERIS_API_URL, settings
+from app.config import AUDIVERIS_API_URL, settings, validate_audiveris_api_url
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ AUDIVERIS_PORT_LOCK_PREFIX = "audiveris_port_"
 redis_conn = redis.from_url(settings.REDIS_URL)
 queue = Queue(QUEUE_NAME, connection=redis_conn)
 http_session = requests.Session()
+http_session.verify = True
 
 _credential = None
 _compute_client = None
@@ -273,7 +275,7 @@ class ManagedAudiverisWorker(Worker):
                     vm_lock = acquire_vm_lock()
                     ensure_audiveris_ready()
                     break
-                except Exception as exc:  # noqa: BLE001
+                except (ConnectionError, TimeoutError, OSError) as exc:
                     if attempt == MAX_AUDIVERIS_RETRIES:
                         raise
                     delay = min(5 * (2 ** (attempt - 1)), 60)
@@ -313,6 +315,17 @@ class ManagedAudiverisWorker(Worker):
 
 
 if __name__ == "__main__":
+    try:
+        validate_audiveris_api_url(AUDIVERIS_API_URL)
+        _required_env("AZURE_TENANT_ID")
+        _required_env("AZURE_CLIENT_ID")
+        _required_env("AZURE_CLIENT_SECRET")
+        _required_env("AZURE_SUBSCRIPTION_ID")
+        _required_env("AZURE_RESOURCE_GROUP")
+        _required_env("AUDIVERIS_VM_NAME")
+    except (RuntimeError, ValueError) as exc:
+        logger.error("Worker configuration error: %s", exc)
+        sys.exit(1)
     logger.info("Starting RQ worker on queue '%s' (Redis: %s)", QUEUE_NAME, settings.REDIS_URL)
     worker = ManagedAudiverisWorker([queue], connection=redis_conn, default_worker_ttl=420)
     worker.work()

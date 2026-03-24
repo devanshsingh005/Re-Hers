@@ -429,7 +429,7 @@ public final class PlaylistsManager {
         do {
             coverImageUrl = try await uploadImageToStorage(image: finalImage, userId: userId)
         } catch {
-            print("⚠️ Image upload failed, falling back to local storage: \(error)")
+            print("⚠️ Image upload failed, falling back to local cache")
             if let localFile = saveImageToDocuments(image: finalImage) {
                 coverImageUrl = localFile
             }
@@ -481,7 +481,7 @@ public final class PlaylistsManager {
             try await client.upload(fileName, data: imageData, options: options)
         }
         
-        let publicUrl = try client.getPublicURL(path: fileName)
+        let publicUrl = try await client.createSignedURL(path: fileName, expiresIn: 86400)
             
         return publicUrl.absoluteString
     }
@@ -492,7 +492,7 @@ public final class PlaylistsManager {
         let url = FileManager.default.urls(for: .documentDirectory,
                                            in: .userDomainMask).first!.appendingPathComponent(filename)
         do {
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
             return filename
         } catch {
             print("❌ Failed to save image to documents:", error)

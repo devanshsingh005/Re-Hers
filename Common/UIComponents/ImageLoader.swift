@@ -2,6 +2,12 @@ import UIKit
 
 public class ImageLoader {
     public static let shared = ImageLoader()
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
     private var cache = NSCache<NSString, UIImage>()
     private var loadingTasks: [String: URLSessionDataTask] = [:]
     
@@ -23,13 +29,17 @@ public class ImageLoader {
         loadingTasks[urlString]?.cancel()
         
         // Create new download task
-        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+        let task = ImageLoader.session.dataTask(with: url) { [weak self] data, response, error in
             guard let self = self else { return }
             
             // Remove task from dictionary
             self.loadingTasks.removeValue(forKey: urlString)
             
-            guard let data = data,
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200,
+                  let mimeType = httpResponse.mimeType,
+                  mimeType.hasPrefix("image/"),
+                  let data = data,
                   let image = UIImage(data: data),
                   error == nil else {
                 completion(nil)

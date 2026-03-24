@@ -255,12 +255,8 @@ public final class NavigationBarHelper {
             return
         }
         
-        var finalURLString = urlString
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        
-        guard let url = URL(string: finalURLString) else { return }
+        guard let finalURLString = await NavigationBarHelper.signedProfileURLString(from: urlString),
+              let url = URL(string: finalURLString) else { return }
         
         do {
             let request = URLRequest(url: url, timeoutInterval: 30)

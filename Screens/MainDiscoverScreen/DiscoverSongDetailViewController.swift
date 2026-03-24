@@ -7,6 +7,7 @@
 
 import UIKit
 import PDFKit
+import Supabase
 
 class DiscoverSongDetailViewController: UIViewController {
 
@@ -17,11 +18,6 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Private State
     private var loadedPDFDocument: PDFDocument?
     private var sheetMusicJSON: [String: Any]?
-
-    private let projectID  = "djqgmowfjxsnjdffdohw"
-    private var publicBase: String {
-        "https://\(projectID).supabase.co/storage/v1/object/public"
-    }
 
     // MARK: - Scroll Container
     private let mainScrollView = UIScrollView()
@@ -401,17 +397,18 @@ class DiscoverSongDetailViewController: UIViewController {
 
         Task {
             // 1. Fetch PDF (labeled or original)
-            let pdfURLStrings = [
-                "\(publicBase)/sheet_data/discover/\(sheetId.uuidString)/labeled.pdf",
-                "\(publicBase)/sheet_data/discover/\(sheetId.uuidString).pdf",
-                "\(publicBase)/pdf_uploads/\(sheetId.uuidString)/labeled.pdf",
-                "\(publicBase)/pdf_uploads/\(sheetId.uuidString).pdf"
+            let pdfPaths = [
+                ("sheet_data", "discover/\(sheetId.uuidString)/labeled.pdf"),
+                ("sheet_data", "discover/\(sheetId.uuidString).pdf"),
+                ("pdf_uploads", "\(sheetId.uuidString)/labeled.pdf"),
+                ("pdf_uploads", "\(sheetId.uuidString).pdf")
             ]
 
             var pdfFound = false
-            for urlString in pdfURLStrings {
-                guard let url = URL(string: urlString) else { continue }
-                print("[DiscoverDetail][PDF] trying: \(url)")
+            for (bucket, path) in pdfPaths {
+                guard let url = try? await SupabaseManager.shared.client.storage
+                    .from(bucket)
+                    .createSignedURL(path: path, expiresIn: 3600) else { continue }
                 if let (data, resp) = try? await URLSession.shared.data(from: url),
                    (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
                    let doc = PDFDocument(data: data), doc.pageCount > 0 {
@@ -428,14 +425,15 @@ class DiscoverSongDetailViewController: UIViewController {
             }
 
             // 2. Fetch output.json for Animation (run in parallel but sequentially for simplicity)
-            let jsonURLStrings = [
-                "\(publicBase)/sheet_data/discover/\(sheetId.uuidString)/output.json",
-                "\(publicBase)/pdf_uploads/\(sheetId.uuidString)/output.json"
+            let jsonPaths = [
+                ("sheet_data", "discover/\(sheetId.uuidString)/output.json"),
+                ("pdf_uploads", "\(sheetId.uuidString)/output.json")
             ]
 
-            for urlString in jsonURLStrings {
-                guard let url = URL(string: urlString) else { continue }
-                print("[DiscoverDetail][JSON] trying: \(url)")
+            for (bucket, path) in jsonPaths {
+                guard let url = try? await SupabaseManager.shared.client.storage
+                    .from(bucket)
+                    .createSignedURL(path: path, expiresIn: 3600) else { continue }
                 if let (data, resp) = try? await URLSession.shared.data(from: url),
                    (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
                    let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
