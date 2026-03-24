@@ -7,19 +7,32 @@ import UIKit
 
 extension HomeViewController {
 
-    func addPlaylistSection() {
-        contentView.addArrangedSubview(makeSectionHeader("Your Playlist", action: {}))
-        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
+    // MARK: - Playlist Section
+
+    func addPlaylistSectionView() -> UIView {
+        let sectionStack = UIStackView()
+        sectionStack.axis = .vertical
+        sectionStack.spacing = 8
+        sectionStack.translatesAutoresizingMaskIntoConstraints = false
+
+        sectionStack.addArrangedSubview(makeSectionHeader("Your Playlist", action: { [weak self] in
+            guard let self = self else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            let vc = PlaylistViewController()
+            vc.hidesBottomBarWhenPushed = true
+            self.navigationController?.pushViewController(vc, animated: true)
+        }))
 
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.clipsToBounds = false
-        contentView.addArrangedSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.heightAnchor.constraint(equalToConstant: 200).isActive = true
+        sectionStack.addArrangedSubview(scrollView)
 
         let stackView = UIStackView()
         stackView.axis = .horizontal; stackView.spacing = 16
-        self.playlistStackView = stackView // save for async population
+        self.playlistStackView = stackView
         scrollView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -29,24 +42,25 @@ extension HomeViewController {
             stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor),
         ])
+        
+        return sectionStack
     }
 
     func createPlaylistCard(playlist: Playlist, imageName: String) -> UIView {
         let size: CGFloat = 136
-        let wrapper = UIView()
+        let wrapper = UIButton(type: .custom)
         wrapper.translatesAutoresizingMaskIntoConstraints = false
 
         let imageView = UIImageView(image: UIImage(named: imageName))
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 16
+        // No border — clean card look per user request
         imageView.translatesAutoresizingMaskIntoConstraints = false
 
         if let url = playlist.coverImageURL {
             ImageLoader.shared.loadImage(from: url) { [weak imageView] img in
-                if let img = img {
-                    imageView?.image = img
-                }
+                if let img = img { imageView?.image = img }
             }
         }
 
@@ -57,7 +71,7 @@ extension HomeViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let tracksLabel = UILabel()
-        tracksLabel.text = playlist.description ?? "0 TRACKS"
+        tracksLabel.text = playlist.description ?? "Custom Playlist"
         tracksLabel.textColor = ComponentColors.SongCard.metadataText
         tracksLabel.font = .systemFont(ofSize: 10, weight: .medium)
         tracksLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -68,62 +82,84 @@ extension HomeViewController {
 
         NSLayoutConstraint.activate([
             wrapper.widthAnchor.constraint(equalToConstant: size),
-
             imageView.topAnchor.constraint(equalTo: wrapper.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
             imageView.heightAnchor.constraint(equalToConstant: size),
-
             titleLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 4),
             titleLabel.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
-
             tracksLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
             tracksLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 4),
             tracksLabel.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
             tracksLabel.bottomAnchor.constraint(lessThanOrEqualTo: wrapper.bottomAnchor)
         ])
+        
+        wrapper.addAction(UIAction { [weak self] _ in
+            guard let self = self else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            NavigationBarHelper.animateButtonPress(wrapper) { [weak self] in
+                guard let self = self else { return }
+                let vc = PlaylistDetailViewController()
+                vc.hidesBottomBarWhenPushed = true
+                vc.passedTitle  = playlist.name
+                vc.passedArtist = playlist.description ?? "Custom Playlist"
+                vc.playlistId   = playlist.id
+                if let url = playlist.coverImageURL {
+                    ImageLoader.shared.loadImage(from: url) { [weak vc] img in vc?.passedImage = img }
+                }
+                self.navigationController?.pushViewController(vc, animated: true)
+            }
+        }, for: .touchUpInside)
+        
         return wrapper
     }
 
-    func addRecentsSection() {
-        contentView.addArrangedSubview(makeSectionHeader("Recents", action: { [weak self] in
+    // MARK: - Recents Section
+
+    func addRecentsSectionView() -> UIView {
+        let sectionStack = UIStackView()
+        sectionStack.axis = .vertical
+        sectionStack.spacing = 8
+        sectionStack.translatesAutoresizingMaskIntoConstraints = false
+
+        sectionStack.addArrangedSubview(makeSectionHeader("Recents", action: { [weak self] in
+            guard let self = self else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             let vc = AllRecentsViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
+            vc.hidesBottomBarWhenPushed = true
+            self.navigationController?.pushViewController(vc, animated: true)
         }))
-        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
         
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 12
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         self.recentsStackView = stack
-        contentView.addArrangedSubview(stack)
+        sectionStack.addArrangedSubview(stack)
 
         // Placeholder shown until data arrives
         let placeholder = UILabel()
         placeholder.text = "Play a song to see your recents here!"
         placeholder.font = .systemFont(ofSize: 14, weight: .medium)
-        placeholder.textColor = .gray
+        placeholder.textColor = ComponentColors.SongCard.metadataText
         placeholder.textAlignment = .center
         placeholder.tag = 999
         stack.addArrangedSubview(placeholder)
 
-        // Bottom spacer to ensure scrolling above tab bar doesn't cut off recents block
+        // Bottom spacer
         let bottomSpacer = UIView()
         bottomSpacer.heightAnchor.constraint(equalToConstant: 40).isActive = true
-        contentView.addArrangedSubview(bottomSpacer)
+        sectionStack.addArrangedSubview(bottomSpacer)
+        
+        return sectionStack
     }
 
     func createRecentRow(song: Song, timeAgo: String, imageName: String) -> UIView {
-        let cardBgColor = UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : .white }
-        let card = UIView()
-        card.backgroundColor = cardBgColor
+        let card = UIButton(type: .custom)
+        card.backgroundColor = ComponentColors.SongCard.background
         card.layer.cornerRadius = 16
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.05
-        card.layer.shadowRadius = 8
-        card.layer.shadowOffset = CGSize(width: 0, height: 2)
+        // No border — clean look
         card.translatesAutoresizingMaskIntoConstraints = false
         
         let imageView = UIImageView(image: UIImage(named: imageName) ?? UIImage(named: "trackimage_1"))
@@ -144,11 +180,12 @@ extension HomeViewController {
         
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical; textStack.spacing = 2
+        textStack.isUserInteractionEnabled = false
         textStack.translatesAutoresizingMaskIntoConstraints = false
         
-        let playBtn = UIButton(type: .system)
+        let playBtn = UIImageView()
         let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
-        playBtn.setImage(UIImage(systemName: "play.circle.fill", withConfiguration: config), for: .normal)
+        playBtn.image = UIImage(systemName: "play.circle.fill", withConfiguration: config)
         playBtn.tintColor = ComponentColors.HomeScreen.actionButtonFill
         playBtn.translatesAutoresizingMaskIntoConstraints = false
         
@@ -158,21 +195,31 @@ extension HomeViewController {
         
         NSLayoutConstraint.activate([
             card.heightAnchor.constraint(equalToConstant: 80),
-            
             imageView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
             imageView.centerYAnchor.constraint(equalTo: card.centerYAnchor),
             imageView.widthAnchor.constraint(equalToConstant: 52),
             imageView.heightAnchor.constraint(equalToConstant: 52),
-            
             textStack.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 14),
             textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor),
             textStack.trailingAnchor.constraint(lessThanOrEqualTo: playBtn.leadingAnchor, constant: -10),
-            
             playBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
             playBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor),
             playBtn.widthAnchor.constraint(equalToConstant: 32),
             playBtn.heightAnchor.constraint(equalToConstant: 32)
         ])
+        
+        // Tap: open song in DiscoverSongPreviewViewController (same flow as Discover screen)
+        card.addAction(UIAction { [weak self] _ in
+            guard let self = self else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            NavigationBarHelper.animateButtonPress(card) { [weak self] in
+                guard let self = self else { return }
+                let vc = DiscoverSongPreviewViewController()
+                vc.hidesBottomBarWhenPushed = true
+                vc.song = song
+                self.navigationController?.pushViewController(vc, animated: true)
+            }
+        }, for: .touchUpInside)
         
         return card
     }

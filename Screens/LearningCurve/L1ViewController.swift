@@ -651,7 +651,6 @@ class LessonMapViewController: UIViewController {
 
     private func setupPath() {
         let totalHeight  = CGFloat(chapters.count) * vSpacing + 140
-        let pathTopOffset: CGFloat = 120
         let w: CGFloat = {
             if view.bounds.width > 0 { return view.bounds.width }
             if let screen = view.window?.windowScene?.screen { return screen.bounds.width }

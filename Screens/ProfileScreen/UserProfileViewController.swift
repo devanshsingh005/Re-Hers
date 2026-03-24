@@ -87,24 +87,12 @@ final class UserProfileViewController: UIViewController {
             .foregroundColor: UIColor.white,
             .font: UIFont.systemFont(ofSize: 17, weight: .bold)
         ]
-        
-        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+        navBar?.tintColor = .white
         
         setupUI()
         loadData()
     }
 
-    @objc private func backAction() {
-        if let btn = navigationItem.leftBarButtonItem?.customView {
-            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
-                NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
-                self?.navigationController?.popViewController(animated: true)
-            }
-        } else {
-            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
-            navigationController?.popViewController(animated: true)
-        }
-    }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)

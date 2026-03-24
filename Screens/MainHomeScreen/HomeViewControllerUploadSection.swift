@@ -8,16 +8,18 @@ import UIKit
 extension HomeViewController {
 
     @discardableResult
-    func addUploadSection() -> UIView {
+    func addUploadSectionView() -> UIView {
         let wrapper = UIView()
         wrapper.clipsToBounds = false
         wrapper.translatesAutoresizingMaskIntoConstraints = false
 
-        let cardBgColor = UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : .white }
+        let cardBgColor = ComponentColors.SongCard.background
         let container = UIView()
         container.backgroundColor = cardBgColor
         container.layer.cornerRadius = 18
-        container.layer.masksToBounds = false
+        container.layer.masksToBounds = true
+        container.layer.borderWidth = 1.0
+        container.layer.borderColor = ComponentColors.SongCard.border.cgColor
         container.translatesAutoresizingMaskIntoConstraints = false
 
         let iconContainer = UIView()
@@ -35,12 +37,12 @@ extension HomeViewController {
         let titleLabel = UILabel()
         titleLabel.text = "Stuck on a sheet?"
         titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
-        titleLabel.textColor = UIColor { trait in trait.userInterfaceStyle == .dark ? .white : .black }
+        titleLabel.textColor = ComponentColors.SongCard.titleText
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = "Upload it and we'll guide you."
         subtitleLabel.font = .systemFont(ofSize: 12, weight: .regular)
-        subtitleLabel.textColor = .gray
+        subtitleLabel.textColor = ComponentColors.SongCard.metadataText
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical; textStack.spacing = 2; textStack.alignment = .leading
@@ -57,11 +59,11 @@ extension HomeViewController {
         wrapper.addSubview(illustration)
 
         NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 12),
-            container.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -12),
+            container.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 6),
+            container.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -6),
             container.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
-            container.heightAnchor.constraint(equalToConstant: 76),
+            container.heightAnchor.constraint(equalToConstant: 80),
 
             iconContainer.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             iconContainer.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -77,25 +79,23 @@ extension HomeViewController {
             textStack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             textStack.trailingAnchor.constraint(lessThanOrEqualTo: illustration.leadingAnchor, constant: -4),
 
-            illustration.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -8),
-            illustration.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -4),
-            illustration.widthAnchor.constraint(equalToConstant: 96),
-            illustration.heightAnchor.constraint(equalToConstant: 96),
+            illustration.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -4),
+            illustration.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -6),
+            illustration.widthAnchor.constraint(equalToConstant: 100),
+            illustration.heightAnchor.constraint(equalToConstant: 100),
         ])
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(openUploadScreenFromHome))
         container.addGestureRecognizer(tap); container.isUserInteractionEnabled = true
 
-        contentView.addArrangedSubview(wrapper)
-
-        let spacer = UIView()
-        spacer.heightAnchor.constraint(equalToConstant: 16).isActive = true
-        contentView.addArrangedSubview(spacer)
-
         return wrapper
     }
 
     @objc private func openUploadScreenFromHome() {
+        executeUploadTransition()
+    }
+
+    private func executeUploadTransition() {
         guard let tabBarController = self.tabBarController else { return }
         tabBarController.selectedIndex = 1
         if let nav = tabBarController.viewControllers?[1] as? UINavigationController,

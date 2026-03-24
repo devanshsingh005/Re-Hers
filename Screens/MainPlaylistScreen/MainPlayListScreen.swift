@@ -12,11 +12,9 @@ func albumPlaceholder(for id: UUID) -> UIImage {
     return UIImage(named: "album_\(index)") ?? UIImage()
 }
 
-// MARK: - PlaylistViewController
 class PlaylistViewController: UIViewController {
 
     // MARK: - UI Components
-    private let navBar = TopNavBar.make(title: "PlayList")
     private var collectionView: UICollectionView!
     private let refreshControl = UIRefreshControl()
 
@@ -88,6 +86,7 @@ class PlaylistViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
         fetchPlaylists()
     }
 
@@ -99,11 +98,16 @@ class PlaylistViewController: UIViewController {
         }
     }
 
-    // MARK: - Setup UI
     private func setupUI() {
         view.backgroundColor = ComponentColors.App.screenBackground
-        navigationController?.navigationBar.isHidden = true
-        setupNavBar()
+        
+        title = "Playlists"
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationBar.tintColor = .white
+        let textAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.titleTextAttributes = textAttributes
+        
         setupCollectionView()
         setupSelectionModeLabel()
     }
@@ -125,7 +129,7 @@ class PlaylistViewController: UIViewController {
     private func setupSelectionModeLabel() {
         view.addSubview(selectionModeLabel)
         NSLayoutConstraint.activate([
-            selectionModeLabel.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
+            selectionModeLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
             selectionModeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor,
                                                         constant: isPad ? 40 : 20),
             selectionModeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor,
@@ -134,33 +138,6 @@ class PlaylistViewController: UIViewController {
         ])
     }
 
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-
-        navBar.isStreakVisible = false
-        navBar.isWelcomeTextHidden = true
-        navBar.isChordIconVisible = true
-
-        navBar.chordAction = { [weak self] in
-            let vc = ChordRecognitionViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
-        }
-        navBar.profileAction = { [weak self] in
-            let vc = UserProfileViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
-        }
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
-
-        let sidePadding: CGFloat = isPad ? 40 : 10
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: sidePadding),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -sidePadding)
-        ])
-    }
 
     // MARK: - Collection View
     private func setupCollectionView() {
@@ -196,7 +173,7 @@ class PlaylistViewController: UIViewController {
         collectionView.alwaysBounceVertical = true
 
         NSLayoutConstraint.activate([
-            collectionView.topAnchor.constraint(equalTo: navBar.bottomAnchor,
+            collectionView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor,
                                                 constant: isPad ? 20 : 14),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
