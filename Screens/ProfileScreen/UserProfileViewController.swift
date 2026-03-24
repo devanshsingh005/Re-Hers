@@ -785,8 +785,10 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
 
     func uploadAvatarImage(_ image: UIImage) {
         Task {
+            // Resize to max 500x500 and compress more (0.7) to avoid "network connection was lost" errors
+            let resized = image.resizedImage(to: CGSize(width: 500, height: 500))
             guard let user = SupabaseManager.shared.client.auth.currentUser,
-                  let jpegData = image.jpegData(compressionQuality: 0.85) else { return }
+                  let jpegData = resized.jpegData(compressionQuality: 0.7) else { return }
             let client = SupabaseManager.shared.client
             let fileName = "avatar_\(user.id.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
             do {
@@ -847,6 +849,16 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     profileImageView.contentMode = .scaleAspectFill
                 }
             }
+        }
+    }
+}
+
+// MARK: - Image Utilities
+private extension UIImage {
+    func resizedImage(to size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: size))
         }
     }
 }
