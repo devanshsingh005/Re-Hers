@@ -96,7 +96,7 @@ final class AuthViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = ComponentColors.AuthScreen.background
         
         // default to LOGIN (design in screenshot)
         modeSegment.selectedSegmentIndex = 0
@@ -145,12 +145,12 @@ private extension AuthViewController {
         appTitleLabel.text = "Rehearse"
         appTitleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
         appTitleLabel.textAlignment = .center
-        appTitleLabel.textColor = UIColor(named: "TextPrimary") ?? .label
+        appTitleLabel.textColor = ComponentColors.AuthScreen.headlineText
         
         screenTitleLabel.text = "Sign In"
         screenTitleLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         screenTitleLabel.textAlignment = .center
-        screenTitleLabel.textColor = .secondaryLabel
+        screenTitleLabel.textColor = ComponentColors.AuthScreen.bodyText
         
         // MARK: - Email / password labels
         
@@ -166,14 +166,17 @@ private extension AuthViewController {
         fullNameTitleLabel.text = "Full Name"
         fullNameTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
         fullNameTitleLabel.textColor = .label
+        fullNameTitleLabel.text = "FULL NAME"
+        fullNameTitleLabel.textColor = ComponentColors.AuthScreen.inputText
+        fullNameTitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
         
-        usernameTitleLabel.text = "Username"
-        usernameTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        usernameTitleLabel.textColor = .label
+        usernameTitleLabel.text = "USERNAME"
+        usernameTitleLabel.textColor = ComponentColors.AuthScreen.inputText
+        usernameTitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
         
-        confirmPasswordTitleLabel.text = "Confirm Password"
-        confirmPasswordTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        confirmPasswordTitleLabel.textColor = .label
+        confirmPasswordTitleLabel.text = "CONFIRM PASSWORD"
+        confirmPasswordTitleLabel.textColor = ComponentColors.AuthScreen.inputText
+        confirmPasswordTitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
         
         // Container style (rounded rectangle like screenshot)
         [emailContainerView,
@@ -220,7 +223,7 @@ private extension AuthViewController {
         
         // Eye button for password
         passwordToggleButton.setImage(UIImage(systemName: "eye"), for: .normal)
-        passwordToggleButton.tintColor = .systemGray2
+        passwordToggleButton.tintColor = SemanticColors.Icon.inactive
         passwordToggleButton.addTarget(self,
                                        action: #selector(togglePasswordVisibility),
                                        for: .touchUpInside)
@@ -244,7 +247,7 @@ private extension AuthViewController {
         
         forgotPasswordButton.setTitle("Forgot Password ?", for: .normal)
         forgotPasswordButton.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .regular)
-        forgotPasswordButton.setTitleColor(primaryOrangeColor, for: .normal)
+        forgotPasswordButton.setTitleColor(ComponentColors.AuthScreen.linkText, for: .normal)
         forgotPasswordButton.contentHorizontalAlignment = .right
         forgotPasswordButton.addTarget(self,
                                        action: #selector(forgotPasswordTapped),
@@ -252,10 +255,10 @@ private extension AuthViewController {
         
         // MARK: - Primary button
         
-        primaryButton.setTitle("NEXT", for: .normal)
-        primaryButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
-        primaryButton.backgroundColor = .primaryColor
-        primaryButton.setTitleColor(.white, for: .normal)
+        primaryButton.setTitle("signup", for: .normal)
+        primaryButton.backgroundColor = ComponentColors.AuthScreen.ctaFill
+        primaryButton.setTitleColor(ComponentColors.AuthScreen.ctaText, for: .normal)
+        primaryButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
         primaryButton.layer.cornerRadius = 28 // Unified pill shape
         primaryButton.addTarget(self,
                                 action: #selector(primaryButtonTapped),
@@ -264,12 +267,12 @@ private extension AuthViewController {
         
         // MARK: - Separator "Or"
         
-        leftSeparatorLine.backgroundColor = UIColor.systemGray4
-        rightSeparatorLine.backgroundColor = UIColor.systemGray4
+        leftSeparatorLine.backgroundColor = ComponentColors.Divider.color
+        rightSeparatorLine.backgroundColor = ComponentColors.Divider.color
         
-        orLabel.text = "Or"
-        orLabel.font = UIFont.systemFont(ofSize: 12, weight: .regular)
-        orLabel.textColor = .systemGray
+        orLabel.text = "OR"
+        orLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        orLabel.textColor = ComponentColors.AuthScreen.bodyText
         
         [leftSeparatorLine, rightSeparatorLine, orLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -284,11 +287,11 @@ private extension AuthViewController {
         
         let googleLabel = UILabel()
         googleLabel.text = "Continue with Google"
-        googleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         googleLabel.textColor = .label
+        googleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         googleLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        let googleArrowView = UIImageView(image: UIImage(systemName: "arrow.right"))
+        let googleArrowView = UIImageView(image: UIImage(systemName: "chevron.right"))
         googleArrowView.tintColor = .label
         googleArrowView.contentMode = .scaleAspectFit
         googleArrowView.translatesAutoresizingMaskIntoConstraints = false
@@ -322,7 +325,7 @@ private extension AuthViewController {
         
         switchModeButton.setTitle("Create a Account", for: .normal)
         switchModeButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .regular)
-        switchModeButton.setTitleColor(.darkGray, for: .normal)
+        switchModeButton.setTitleColor(ComponentColors.AuthScreen.bodyText, for: .normal)
         switchModeButton.addTarget(self,
                                    action: #selector(switchModeTapped),
                                    for: .touchUpInside)
@@ -330,7 +333,7 @@ private extension AuthViewController {
         // MARK: - Error + Activity
         
         errorLabel.font = .systemFont(ofSize: 13)
-        errorLabel.textColor = .systemRed
+        errorLabel.textColor = ComponentColors.AuthScreen.inputErrorText
         errorLabel.numberOfLines = 0
         errorLabel.textAlignment = .center
         errorLabel.isHidden = true
@@ -524,10 +527,10 @@ private extension AuthViewController {
     }
     
     func configureContainerView(_ v: UIView) {
-        v.backgroundColor = .white
-        v.layer.cornerRadius = 6
+        v.backgroundColor = ComponentColors.AuthScreen.inputFill
+        v.layer.cornerRadius = 12
         v.layer.borderWidth = 1
-        v.layer.borderColor = UIColor.systemGray4.cgColor
+        v.layer.borderColor = ComponentColors.AuthScreen.inputBorder.cgColor
     }
     
     func configureTextField(_ tf: UITextField,
@@ -556,24 +559,24 @@ private extension AuthViewController {
         if !title.isEmpty {
             button.setTitle("  " + title, for: .normal)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .medium)
-            button.setTitleColor(.label, for: .normal)
+            button.setTitleColor(ComponentColors.AuthScreen.secondaryText, for: .normal)
         }
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        button.layer.cornerRadius = 25 // Modified
+        button.layer.borderWidth = 0 // Modified
+        button.layer.borderColor = ComponentColors.AuthScreen.secondaryBorder.cgColor
         
-        button.layer.cornerRadius = 28 // Pill shaped (height 56 / 2)
-        button.layer.borderWidth = 1.0
-        button.layer.borderColor = UIColor.systemGray5.cgColor
+        button.layer.shadowOffset = CGSize(width: 0, height: 2)
+        button.layer.shadowRadius = 4
+        button.layer.shadowOpacity = 0.1
+        button.backgroundColor = ComponentColors.AuthScreen.secondaryFill
+        button.layer.shadowColor = UIColor.black.cgColor
         button.contentHorizontalAlignment = .center
         
         if let image = image {
             button.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal)
             button.imageView?.contentMode = .scaleAspectFit
         }
-        
-        button.backgroundColor = .white
-        button.layer.shadowColor = UIColor.black.cgColor
-        button.layer.shadowOpacity = 0.08 // Slightly more prominent shadow for consistency
-        button.layer.shadowOffset = CGSize(width: 0, height: 4)
-        button.layer.shadowRadius = 8
         
         button.translatesAutoresizingMaskIntoConstraints = false
     }
@@ -603,7 +606,7 @@ private extension AuthViewController {
         }
         
         screenTitleLabel.text = isLoginMode ? "Sign In" : "Sign Up"
-        primaryButton.setTitle(isLoginMode ? "NEXT" : "Sign Up", for: .normal)
+        primaryButton.setTitle(isLoginMode ? "Login" : "Sign Up", for: .normal)
         switchModeButton.setTitle(isLoginMode ? "Create a Account" : "Already have an account? Sign In", for: .normal)
         
         errorLabel.isHidden = true
