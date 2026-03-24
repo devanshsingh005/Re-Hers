@@ -309,12 +309,12 @@ public enum ComponentColors {
         public static let background:        UIColor = SemanticColors.Background.screen
         
         // Node / Lesson Bubble
-        public static let nodeCompletedFill: UIColor = SemanticColors.Background.card
+        public static let nodeCompletedFill: UIColor = SemanticColors.Background.primaryButton
         public static let nodeActiveFill:    UIColor = SemanticColors.Background.card
         public static let nodeLockedFill:    UIColor = SemanticColors.Background.secondaryButton
         public static let nodeLockedBorder:  UIColor = SemanticColors.Border.default
         
-        public static let nodeIconCompleted: UIColor = SemanticColors.State.correct
+        public static let nodeIconCompleted: UIColor = SemanticColors.Text.onBrand
         public static let nodeIconActive:    UIColor = SemanticColors.Text.brand
         public static let nodeIconLocked:    UIColor = SemanticColors.Icon.inactive
         

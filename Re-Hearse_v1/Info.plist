@@ -36,5 +36,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Re-Hers needs the microphone to detect the notes you sing or play.</string>
 </dict>
 </plist>
