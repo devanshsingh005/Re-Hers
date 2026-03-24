@@ -7,7 +7,6 @@ import UIKit
 
 final class AllRecentsViewController: UIViewController {
 
-    private let navBar = TopNavBar.make(title: "Recent History")
     private let scrollView  = UIScrollView()
     private let contentStack = UIStackView()
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -15,27 +14,21 @@ final class AllRecentsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.HomeScreen.background
-        navigationController?.navigationBar.isHidden = true
-        setupNavBar()
+        
+        title = "Recent History"
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationBar.tintColor = .white
+        let textAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.titleTextAttributes = textAttributes
+        
         setupScroll()
         fetchAll()
     }
-
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isBackButtonVisible = true
-        navBar.isChordIconVisible  = false
-        navBar.isProfileVisible    = false
-        navBar.isStreakVisible      = false
-        navBar.isWelcomeTextHidden = true
-        navBar.setTitle("Recent History")
-        navBar.backAction = { [weak self] in self?.navigationController?.popViewController(animated: true) }
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-        ])
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
     private func setupScroll() {
@@ -53,7 +46,7 @@ final class AllRecentsViewController: UIViewController {
         view.addSubview(spinner)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 12),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),

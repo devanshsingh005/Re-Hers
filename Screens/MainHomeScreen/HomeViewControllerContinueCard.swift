@@ -5,7 +5,51 @@
 
 import UIKit
 
-private final class PracticeCardBackgroundView: UIView {
+struct PracticeCardTheme {
+    let start: UIColor
+    let end: UIColor
+    let shadow: UIColor
+    let bgLight: UIColor
+    let bgDark: UIColor
+    
+    static let palettes: [PracticeCardTheme] = [
+        // Deep Purple
+        PracticeCardTheme(
+            start: UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0),
+            end: UIColor(red: 0.42, green: 0.00, blue: 0.71, alpha: 1.0),
+            shadow: UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0),
+            bgLight: UIColor(hex: "#F4F2F8"), bgDark: UIColor(hex: "#0A0514")
+        ),
+        // Ocean Blue
+        PracticeCardTheme(
+            start: UIColor(red: 0.00, green: 0.23, blue: 0.48, alpha: 1.0),
+            end: UIColor(red: 0.00, green: 0.40, blue: 0.80, alpha: 1.0),
+            shadow: UIColor(red: 0.00, green: 0.23, blue: 0.48, alpha: 1.0),
+            bgLight: UIColor(hex: "#F2F5F8"), bgDark: UIColor(hex: "#050A14")
+        ),
+        // Forest Green
+        PracticeCardTheme(
+            start: UIColor(red: 0.00, green: 0.34, blue: 0.18, alpha: 1.0),
+            end: UIColor(red: 0.00, green: 0.54, blue: 0.29, alpha: 1.0),
+            shadow: UIColor(red: 0.00, green: 0.34, blue: 0.18, alpha: 1.0),
+            bgLight: UIColor(hex: "#F2F8F4"), bgDark: UIColor(hex: "#05140A")
+        ),
+        // Crimson Red
+        PracticeCardTheme(
+            start: UIColor(red: 0.48, green: 0.00, blue: 0.08, alpha: 1.0),
+            end: UIColor(red: 0.71, green: 0.00, blue: 0.14, alpha: 1.0),
+            shadow: UIColor(red: 0.48, green: 0.00, blue: 0.08, alpha: 1.0),
+            bgLight: UIColor(hex: "#F8F2F3"), bgDark: UIColor(hex: "#140508")
+        )
+    ]
+    
+    static func theme(for title: String) -> PracticeCardTheme {
+        let hash = abs(title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
+        return palettes[hash % palettes.count]
+    }
+}
+
+final class PracticeCardBackgroundView: UIView {
     private let gradientLayer = CAGradientLayer()
     private let musicNoteView = UIImageView()
 
@@ -18,8 +62,8 @@ private final class PracticeCardBackgroundView: UIView {
 
     private func setup() {
         gradientLayer.colors = [
-            UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).cgColor, // Deep Purple
-            UIColor(red: 0.42, green: 0.00, blue: 0.71, alpha: 1.0).cgColor  // Vibrant Purple
+            UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).cgColor,
+            UIColor(red: 0.42, green: 0.00, blue: 0.71, alpha: 1.0).cgColor
         ]
         gradientLayer.startPoint = CGPoint(x: 0, y: 0)
         gradientLayer.endPoint = CGPoint(x: 1, y: 1)
@@ -38,6 +82,12 @@ private final class PracticeCardBackgroundView: UIView {
             musicNoteView.heightAnchor.constraint(equalTo: widthAnchor, multiplier: 0.6)
         ])
     }
+    
+    func updateColors(start: UIColor, end: UIColor) {
+        UIView.animate(withDuration: 0.4) {
+            self.gradientLayer.colors = [start.cgColor, end.cgColor]
+        }
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -46,13 +96,15 @@ private final class PracticeCardBackgroundView: UIView {
 }
 
 extension HomeViewController {
-    func addTopPracticeCard() {
+    func addTopPracticeCardView() -> UIView {
         let wrapper = PracticeCardBackgroundView()
+        wrapper.tag = 991
         wrapper.translatesAutoresizingMaskIntoConstraints = false
         wrapper.layer.cornerRadius = 28
         wrapper.layer.masksToBounds = true
         
         let outerContainer = UIView()
+        outerContainer.tag = 992
         outerContainer.translatesAutoresizingMaskIntoConstraints = false
         outerContainer.layer.shadowColor = UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).cgColor
         outerContainer.layer.shadowOpacity = 0.3
@@ -81,7 +133,7 @@ extension HomeViewController {
 
         // Initial placeholders
         tagsStack.addArrangedSubview(makePillTag(text: "MEDIUM"))
-        tagsStack.addArrangedSubview(makePillTag(text: "RH ONLY"))
+        tagsStack.addArrangedSubview(makePillTag(text: "RIGHT_ONLY"))
 
         // Dynamic Title
         let titleLabel = UILabel()
@@ -98,29 +150,11 @@ extension HomeViewController {
         detailsStack.axis = .horizontal
         detailsStack.distribution = .equalCentering
         detailsStack.translatesAutoresizingMaskIntoConstraints = false
+        self.topCardDetailsStack = detailsStack
         
-        func makeDetailItem(icon: String, text: String) -> UIView {
-            let stack = UIStackView()
-            stack.axis = .horizontal; stack.spacing = 6
-            let img = UIImageView(image: UIImage(systemName: icon))
-            img.tintColor = .white.withAlphaComponent(0.6)
-            img.contentMode = .scaleAspectFit
-            img.widthAnchor.constraint(equalToConstant: 14).isActive = true
-            img.heightAnchor.constraint(equalToConstant: 14).isActive = true
-            
-            let lbl = UILabel()
-            lbl.text = text
-            lbl.font = .systemFont(ofSize: 13, weight: .medium)
-            lbl.textColor = .white.withAlphaComponent(0.9)
-            
-            stack.addArrangedSubview(img)
-            stack.addArrangedSubview(lbl)
-            return stack
-        }
-
-        detailsStack.addArrangedSubview(makeDetailItem(icon: "gauge.with.needle", text: "Intermediate"))
-        detailsStack.addArrangedSubview(makeDetailItem(icon: "music.note.list", text: "Traditional"))
-        detailsStack.addArrangedSubview(makeDetailItem(icon: "metronome", text: "72 BPM"))
+        detailsStack.addArrangedSubview(self.makeDetailItem(icon: "gauge.with.needle", text: "Intermediate"))
+        detailsStack.addArrangedSubview(self.makeDetailItem(icon: "person.fill", text: "Traditional"))
+        detailsStack.addArrangedSubview(self.makeDetailItem(icon: "metronome", text: "72 BPM"))
 
         let startBtn = UIButton(type: .system)
         startBtn.setTitle("Start Practice", for: .normal)
@@ -159,7 +193,7 @@ extension HomeViewController {
             startBtn.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -24)
         ])
         
-        contentView.addArrangedSubview(outerContainer)
+        return outerContainer
     }
 
     // MARK: - Helpers

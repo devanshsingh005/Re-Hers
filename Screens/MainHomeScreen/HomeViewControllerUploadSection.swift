@@ -8,7 +8,7 @@ import UIKit
 extension HomeViewController {
 
     @discardableResult
-    func addUploadSection() -> UIView {
+    func addUploadSectionView() -> UIView {
         let wrapper = UIView()
         wrapper.clipsToBounds = false
         wrapper.translatesAutoresizingMaskIntoConstraints = false
@@ -88,21 +88,11 @@ extension HomeViewController {
         let tap = UITapGestureRecognizer(target: self, action: #selector(openUploadScreenFromHome))
         container.addGestureRecognizer(tap); container.isUserInteractionEnabled = true
 
-        contentView.addArrangedSubview(wrapper)
-
         return wrapper
     }
 
     @objc private func openUploadScreenFromHome() {
-        guard let container = contentView.arrangedSubviews.first(where: { $0.subviews.contains(where: { ($0.gestureRecognizers?.count ?? 0) > 0 }) })?.subviews.first else {
-            // fallback if structure differs
-            self.executeUploadTransition()
-            return
-        }
-        
-        NavigationBarHelper.animateButtonPress(container) { [weak self] in
-            self?.executeUploadTransition()
-        }
+        executeUploadTransition()
     }
 
     private func executeUploadTransition() {

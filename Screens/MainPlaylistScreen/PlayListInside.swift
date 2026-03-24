@@ -34,9 +34,6 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     // MARK: - Tracks (fetched from Supabase)
     private var trackList: [PlaylistTrack] = []
     
-    // MARK: - UI Elements
-    private let navBar = TopNavBar.make(title: "")
-    
     // Header View Components (will be placed in tableView.tableHeaderView)
     private let headerContainerView = UIView()
     private let albumArtBackgroundContainer = UIView()
@@ -86,21 +83,30 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         return btn
     }()
     
-    // MARK: - View Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         
         // Background color #F8F8F4
         view.backgroundColor = ComponentColors.App.screenBackground
-        navigationController?.navigationBar.isHidden = true
+        
+        title = passedTitle ?? "Playlist"
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationBar.tintColor = .white
+        let textAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.titleTextAttributes = textAttributes
         
         setupTableView()
-        setupNavBar()
         setupHeader()
         setupActivityIndicator()
         applyPassedData()
         setupFloatingButton()
         fetchTracks()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
     
     // MARK: - Apply Passed Playlist Data
@@ -126,7 +132,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         view.addSubview(tracksTableView)
         
         NSLayoutConstraint.activate([
-            tracksTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60),
+            tracksTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tracksTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tracksTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tracksTableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -141,38 +147,6 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         ])
     }
 
-    // MARK: - Navbar
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        
-        navBar.isBackButtonVisible = true
-        navBar.isChordIconVisible = true
-        navBar.isProfileVisible = true
-        navBar.isStreakVisible = false
-        navBar.isWelcomeTextHidden = true
-        
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
-        
-        navBar.chordAction = { [weak self] in
-            let vc = ChordRecognitionViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
-        }
-        navBar.profileAction = { [weak self] in
-            guard let self = self else { return }
-            let vc = UserProfileViewController()
-            self.navigationController?.pushViewController(vc, animated: true)
-        }
-        
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
-        ])
-    }
-    
     // MARK: - Header Setup
     private func setupHeader() {
         headerContainerView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 350)

@@ -51,10 +51,9 @@ extension HomeViewController {
         navBackgroundView.layer.borderWidth = 0.5
     }
 
-    func setupCustomLargeHeader() {
+    func setupCustomLargeHeader() -> UIView {
         let headerContainer = UIView()
         headerContainer.translatesAutoresizingMaskIntoConstraints = false
-        contentView.insertArrangedSubview(headerContainer, at: 0)
         
         let labelStack = UIStackView()
         labelStack.axis = .vertical
@@ -66,7 +65,7 @@ extension HomeViewController {
         titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
         titleLabel.textColor = ComponentColors.NavBar.title
         
-        largeSubtitleLabel.text = "Welcome back, User"
+        largeSubtitleLabel.text = "Welcome back, admin"
         largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
         largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
         
@@ -80,24 +79,27 @@ extension HomeViewController {
         largeProfileButton.clipsToBounds = true
         largeProfileButton.layer.borderWidth    = 1.0
         largeProfileButton.layer.borderColor    = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
-        
-        // Default placeholder
+        largeProfileButton.imageView?.contentMode = .scaleAspectFill
         largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
         largeProfileButton.tintColor = .secondaryLabel
-        largeProfileButton.imageView?.contentMode = .scaleAspectFill
         largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
         largeProfileButton.addTarget(self, action: #selector(handleProfileTap), for: .touchUpInside)
         headerContainer.addSubview(largeProfileButton)
         
+        NavigationBarHelper.loadProfileImage(into: largeProfileButton)
+        
         NSLayoutConstraint.activate([
             headerContainer.heightAnchor.constraint(equalToConstant: 80),
+            
             labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 20),
             labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            
             largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
             largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
             largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
             largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
         ])
+        return headerContainer
     }
 
     func syncNavBarAlpha() {
@@ -186,18 +188,23 @@ extension HomeViewController {
     }
 
     func setupScrollView() {
-        view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.alwaysBounceVertical = true
         scrollView.showsVerticalScrollIndicator = false
         scrollView.contentInsetAdjustmentBehavior = .never
-        scrollView.clipsToBounds = false
+        view.addSubview(scrollView)
 
-        scrollView.addSubview(contentView)
-        contentView.axis      = .vertical
-        contentView.spacing   = 12
-        contentView.alignment = .fill
         contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentView)
+
+        let headerContainer = setupCustomLargeHeader()
+        contentView.addSubview(headerContainer)
+
+        mainStackView.axis      = .vertical
+        mainStackView.spacing   = 12
+        mainStackView.alignment = .fill
+        mainStackView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(mainStackView)
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -206,11 +213,18 @@ extension HomeViewController {
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 96),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20),
-            
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+            headerContainer.topAnchor.constraint(equalTo: contentView.topAnchor),
+            headerContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            headerContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
+            mainStackView.topAnchor.constraint(equalTo: headerContainer.bottomAnchor, constant: 8),
+            mainStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            mainStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            mainStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20)
         ])
     }
 
@@ -225,7 +239,7 @@ extension HomeViewController {
         guard let action else { return titleLabel }
 
         let seeAll = UIButton(type: .system)
-        seeAll.setTitle("See all", for: .normal)
+        seeAll.setTitle("See more", for: .normal)
         seeAll.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
         seeAll.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
         seeAll.translatesAutoresizingMaskIntoConstraints = false
@@ -235,9 +249,9 @@ extension HomeViewController {
         row.translatesAutoresizingMaskIntoConstraints = false
         row.addSubview(titleLabel); row.addSubview(seeAll)
         NSLayoutConstraint.activate([
-            titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-            seeAll.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -20),
+            seeAll.trailingAnchor.constraint(equalTo: row.trailingAnchor),
             seeAll.centerYAnchor.constraint(equalTo: row.centerYAnchor),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: seeAll.leadingAnchor, constant: -8),
             row.heightAnchor.constraint(equalToConstant: 30),
@@ -246,7 +260,10 @@ extension HomeViewController {
     }
 
     @objc func openPianoPage() {
-        navigationController?.pushViewController(PianoAnimationkeyboardViewController(), animated: true)
+        guard let song = self.topSong else { return }
+        let previewVC = DiscoverSongPreviewViewController()
+        previewVC.song = song
+        navigationController?.pushViewController(previewVC, animated: true)
     }
 
     @objc func playAlongTapped() {

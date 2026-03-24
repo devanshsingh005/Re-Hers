@@ -138,7 +138,7 @@ extension HomeViewController {
         ])
 
         dailyGoalContainer = container
-        contentView.addArrangedSubview(container)
+        mainStackView.addArrangedSubview(container)
 
         updateDailyGoalUI()
 

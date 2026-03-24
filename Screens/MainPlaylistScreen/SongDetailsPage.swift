@@ -30,7 +30,6 @@ class PlaylistSongDetailViewController: UIViewController {
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     // MARK: - UI
-    private let navBar           = TopNavBar.make(title: "")
     private let scrollView       = UIScrollView()
     private let contentView      = UIView()
     private let albumArt         = UIImageView()
@@ -48,31 +47,22 @@ class PlaylistSongDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.SongDetailScreen.background
-        navigationController?.navigationBar.isHidden = true
-        setupNavBar()
+        
+        title = passedSongTitle ?? "Song Detail"
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationBar.tintColor = .white
+        let textAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.titleTextAttributes = textAttributes
+        
         setupScrollView()
         buildUI()
         loadSheetData()
     }
-
-    // MARK: - NavBar
-    private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isBackButtonVisible = true
-        navBar.isChordIconVisible  = true
-        navBar.isProfileVisible    = true
-        navBar.isStreakVisible     = false
-        navBar.isWelcomeTextHidden = true
-        navBar.setTitle("")
-        navBar.backAction    = { [weak self] in self?.navigationController?.popViewController(animated: true) }
-        navBar.chordAction   = { [weak self] in self?.navigationController?.pushViewController(ChordRecognitionViewController(), animated: true) }
-        navBar.profileAction = { [weak self] in self?.navigationController?.pushViewController(UserProfileViewController(), animated: true) }
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-        ])
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
     // MARK: - Scroll View
@@ -82,7 +72,7 @@ class PlaylistSongDetailViewController: UIViewController {
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
