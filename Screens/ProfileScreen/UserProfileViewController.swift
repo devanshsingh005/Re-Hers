@@ -687,7 +687,9 @@ final class UserProfileViewController: UIViewController {
                 _ = try await SupabaseManager.shared.client
                     .from("user_onboarding")
                     .update(["practice_mins": minutes])
-                    .eq("id", value: user.id.uuidString).execute()
+                    .eq("id", value: user.id.uuidString)
+                    .select()
+                    .execute()
                 
                 await MainActor.run {
                     self.goalBadgeLabel.text = "Goal: \(minutes)m"
@@ -709,7 +711,9 @@ final class UserProfileViewController: UIViewController {
             do {
                 _ = try await SupabaseManager.shared.client
                     .from("profiles").update(updates)
-                    .eq("id", value: user.id.uuidString).execute()
+                    .eq("id", value: user.id.uuidString)
+                    .select()
+                    .execute()
                 await MainActor.run {
                     nameLabel.text = fullName.isEmpty ? "No Name" : fullName
                     usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
@@ -791,7 +795,9 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                 let publicURL = "https://\(projectRef).supabase.co/storage/v1/object/public/useprofile/\(fileName)"
                 _ = try await client.from("profiles")
                     .update(["avatar_url": publicURL])
-                    .eq("id", value: user.id.uuidString).execute()
+                    .eq("id", value: user.id.uuidString)
+                    .select()
+                    .execute()
                 self.currentProfile = Profile(
                     id: self.currentProfile?.id ?? user.id,
                     full_name: self.currentProfile?.full_name,
@@ -805,6 +811,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     showAlert(title: "Success", message: "Photo updated!")
                 }
             } catch {
+                print("Profile upload error: \(error)")
                 await MainActor.run { showAlert(title: "Upload Error", message: error.localizedDescription) }
             }
         }
