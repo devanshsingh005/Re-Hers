@@ -222,6 +222,32 @@ public final class NavigationBarHelper {
         }
     }
     
+    public static func loadProfileImage(into target: UIView) {
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            
+            do {
+                let profile: NavbarProfile = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .select()
+                    .eq("id", value: user.id.uuidString)
+                    .single()
+                    .execute()
+                    .value
+                
+                if let urlString = profile.avatar_url, !urlString.isEmpty {
+                    if let imageView = target as? UIImageView {
+                        await fetchImage(from: urlString, into: imageView)
+                    } else if let button = target as? UIButton {
+                        await fetchImage(from: urlString, intoButton: button)
+                    }
+                }
+            } catch {
+                // Ignore error, keep default image
+            }
+        }
+    }
+    
     private static func loadProfileImage(into imageView: UIImageView) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
@@ -242,6 +268,35 @@ public final class NavigationBarHelper {
                 // Ignore error, keep default image
             }
         }
+    }
+    
+    private static func fetchImage(from urlString: String, intoButton button: UIButton) async {
+        if urlString.starts(with: "icon_") {
+            await MainActor.run {
+                if let img = UIImage(named: urlString) {
+                    button.setImage(img, for: .normal)
+                    button.tintColor = .clear
+                }
+            }
+            return
+        }
+        
+        var finalURLString = urlString
+        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
+            finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
+        }
+        
+        guard let url = URL(string: finalURLString) else { return }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+            if let img = UIImage(data: data) {
+                await MainActor.run {
+                    button.setImage(img, for: .normal)
+                    button.tintColor = .clear
+                }
+            }
+        } catch {}
     }
     
     private static func fetchImage(from urlString: String, into imageView: UIImageView) async {
