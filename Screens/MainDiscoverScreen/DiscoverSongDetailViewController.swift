@@ -88,11 +88,27 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Apply Passed Data
 
     private func applyPassedData() {
-        let img = passedImage ?? UIImage(named: "trackimage_1")
+        let defaultImg = UIImage(named: "trackimage_1")
+        let img = passedImage ?? defaultImg
         albumArtBackgroundView.image = img
         albumArtCardView.image       = img
         songTitleLabel.text = song?.title ?? "Unknown Song"
         artistLabel.text    = song?.composer ?? "Unknown Artist"
+        
+        if passedImage == nil, let coverUrl = song?.coverImageUrl, !coverUrl.isEmpty {
+            if coverUrl.hasPrefix("http") {
+                ImageLoader.shared.loadImage(from: coverUrl) { [weak self] loadedImg in
+                    if let loadedImg = loadedImg {
+                        self?.albumArtBackgroundView.image = loadedImg
+                        self?.albumArtCardView.image = loadedImg
+                    }
+                }
+            } else {
+                let localImg = UIImage(named: coverUrl) ?? defaultImg
+                albumArtBackgroundView.image = localImg
+                albumArtCardView.image = localImg
+            }
+        }
     }
 
     // MARK: - NavBar

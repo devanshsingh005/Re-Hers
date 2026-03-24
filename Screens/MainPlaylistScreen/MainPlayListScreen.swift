@@ -399,21 +399,10 @@ extension PlaylistViewController: UICollectionViewDelegate,
         } else {
             let playlist = loadedPlaylists[indexPath.item]
             let vc = PlaylistDetailViewController()
-            vc.playlistId   = playlist.id
-            vc.passedTitle  = playlist.title
-            vc.passedArtist = playlist.tags
-
-            if let imageData = playlist.imageData {
-                vc.passedImage = UIImage(data: imageData)
-            } else if let imageUrl = playlist.imageUrl {
-                ImageLoader.shared.loadImage(from: imageUrl) { image in
-                    DispatchQueue.main.async {
-                        vc.passedImage = image ?? albumPlaceholder(for: playlist.id)
-                    }
-                }
-            } else {
-                vc.passedImage = albumPlaceholder(for: playlist.id)
-            }
+            vc.playlistId    = playlist.id
+            vc.passedTitle   = playlist.title
+            vc.passedArtist  = playlist.tags
+            vc.passedCoverUrl = playlist.imageUrl   // pass URL — banner loads it directly
             navigationController?.pushViewController(vc, animated: true)
         }
     }
@@ -635,17 +624,22 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
         titleLabel.text    = playlist.title
         subtitleLabel.text = "\(playlist.trackCount) Tracks · \(playlist.tags)"
 
+        let placeholder = albumPlaceholder(for: playlist.id)
+        playlistImageView.image = placeholder
+
         if let imageData = playlist.imageData {
-            playlistImageView.image = UIImage(data: imageData)
-        } else if let imageUrl = playlist.imageUrl {
-            playlistImageView.image = albumPlaceholder(for: playlist.id)
-            ImageLoader.shared.loadImage(from: imageUrl) { [weak self] image in
-                DispatchQueue.main.async {
-                    self?.playlistImageView.image = image ?? albumPlaceholder(for: playlist.id)
+            playlistImageView.image = UIImage(data: imageData) ?? placeholder
+        } else if let imageUrl = playlist.imageUrl, !imageUrl.isEmpty {
+            if imageUrl.hasPrefix("http") {
+                ImageLoader.shared.loadImage(from: imageUrl) { [weak self] image in
+                    DispatchQueue.main.async {
+                        self?.playlistImageView.image = image ?? placeholder
+                    }
                 }
+            } else {
+                // Local asset name stored in DB (e.g. "trackimage_3")
+                playlistImageView.image = UIImage(named: imageUrl) ?? placeholder
             }
-        } else {
-            playlistImageView.image = albumPlaceholder(for: playlist.id)
         }
     }
 

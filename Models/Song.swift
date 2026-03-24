@@ -23,6 +23,7 @@ struct Song: Codable, Identifiable {
     let isActive: Bool
     let sortOrder: Int
     let sheetUrl: String?
+    let coverImageUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, composer, level, tempo, hands, initials
@@ -33,6 +34,7 @@ struct Song: Codable, Identifiable {
         case isActive         = "is_active"
         case sortOrder        = "sort_order"
         case sheetUrl         = "sheet_url"
+        case coverImageUrl    = "cover_image_url"
     }
 }
 

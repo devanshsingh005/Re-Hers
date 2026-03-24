@@ -114,7 +114,19 @@ final class AllRecentsViewController: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
 
         let randomImg = "trackimage_\(Int.random(in: 1...16))"
-        let imageView = UIImageView(image: UIImage(named: randomImg) ?? UIImage(named: "trackimage_1"))
+        let placeholder = UIImage(named: randomImg) ?? UIImage(named: "trackimage_1")
+        let imageView = UIImageView(image: placeholder)
+        
+        if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+            if coverUrl.hasPrefix("http") {
+                ImageLoader.shared.loadImage(from: coverUrl) { [weak imageView] img in
+                    if let img = img { imageView?.image = img }
+                }
+            } else {
+                imageView.image = UIImage(named: coverUrl) ?? placeholder
+            }
+        }
+        
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 12

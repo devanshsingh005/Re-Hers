@@ -70,6 +70,7 @@ public enum ComponentColors {
 
     public enum HomeScreen {
         public static let background:        UIColor = SemanticColors.Background.screen
+        public static let cardBackground:     UIColor = SemanticColors.Background.card
 
         // Top action buttons (Scan / Upload)
         public static let actionButtonFill:          UIColor = SemanticColors.Background.primaryButton

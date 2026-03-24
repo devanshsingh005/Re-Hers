@@ -164,7 +164,7 @@ extension HomeViewController {
         startBtn.layer.cornerRadius = 20
         startBtn.translatesAutoresizingMaskIntoConstraints = false
         
-        startBtn.addAction(UIAction { [weak self] _ in 
+        startBtn.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
             NavigationBarHelper.animateButtonPress(startBtn) {
                 self.openPianoPage()

@@ -783,8 +783,18 @@ final class SongCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(with song: Song) {
-        // Pick a random track image; fall back to a plain coloured view if assets missing
-        artImageView.image = SongCell.trackImages.randomElement()
+        let placeholder = SongCell.trackImages.randomElement()
+        artImageView.image = placeholder
+        
+        if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+            if coverUrl.hasPrefix("http") {
+                ImageLoader.shared.loadImage(from: coverUrl) { [weak self] img in
+                    if let img = img { self?.artImageView.image = img }
+                }
+            } else {
+                artImageView.image = UIImage(named: coverUrl) ?? placeholder
+            }
+        }
 
         titleLabel.text    = song.title
         composerLabel.text = song.composer

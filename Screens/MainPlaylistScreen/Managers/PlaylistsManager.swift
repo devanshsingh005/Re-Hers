@@ -413,28 +413,23 @@ public final class PlaylistsManager {
     public func createPlaylist(name: String, image: UIImage?) async throws -> UUID {
         let session = try await SupabaseManager.shared.client.auth.session
         let userId = session.user.id
-        
-        var coverImageUrl: String? = nil
-        
-        // Use provided image or fallback to a default app asset
-        let finalImage: UIImage
-        if let userImg = image {
-            finalImage = userImg
-        } else {
-            let defaultNames = (1...16).map { "trackimage_\($0)" }
-            let randomName = defaultNames.randomElement()!
-            finalImage = UIImage(named: randomName) ?? UIImage(named: "trackimage_1")!
-        }
-        
-        do {
-            coverImageUrl = try await uploadImageToStorage(image: finalImage, userId: userId)
-        } catch {
-            print("⚠️ Image upload failed, falling back to local storage: \(error)")
-            if let localFile = saveImageToDocuments(image: finalImage) {
-                coverImageUrl = localFile
+
+        var coverImageUrl: String?
+
+        if let userImage = image {
+            // User picked a real image — try uploading it to Supabase Storage
+            do {
+                coverImageUrl = try await uploadImageToStorage(image: userImage, userId: userId)
+            } catch {
+                print("⚠️ Image upload failed, saving to local documents: \(error)")
+                coverImageUrl = saveImageToDocuments(image: userImage)
             }
+        } else {
+            // No image provided — store a stable local asset name (same approach as songs)
+            let assetIndex = Int.random(in: 1...16)
+            coverImageUrl = "trackimage_\(assetIndex)"
         }
-        
+
         let newPlaylist = DBPlaylist(
             id: UUID(),
             userId: userId,
@@ -445,7 +440,7 @@ public final class PlaylistsManager {
             createdAt: Date(),
             updatedAt: Date()
         )
-        
+
         let inserted: DBPlaylist = try await SupabaseManager.shared.client
             .from("playlists")
             .insert(newPlaylist)
@@ -453,9 +448,8 @@ public final class PlaylistsManager {
             .single()
             .execute()
             .value
-        
+
         print("✅ Created playlist with ID: \(inserted.id)")
-        
         return inserted.id
     }
     
