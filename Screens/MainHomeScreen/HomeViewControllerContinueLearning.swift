@@ -9,7 +9,7 @@ extension HomeViewController {
 
     func addPlaylistSection() {
         contentView.addArrangedSubview(makeSectionHeader("Your Playlist", action: {}))
-        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
+        contentView.setCustomSpacing(8, after: contentView.arrangedSubviews.last!)
 
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
@@ -33,13 +33,15 @@ extension HomeViewController {
 
     func createPlaylistCard(playlist: Playlist, imageName: String) -> UIView {
         let size: CGFloat = 136
-        let wrapper = UIView()
+        let wrapper = UIButton(type: .custom)
         wrapper.translatesAutoresizingMaskIntoConstraints = false
 
         let imageView = UIImageView(image: UIImage(named: imageName))
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 16
+        imageView.layer.borderWidth = 1.0
+        imageView.layer.borderColor = ComponentColors.SongCard.border.cgColor
         imageView.translatesAutoresizingMaskIntoConstraints = false
 
         if let url = playlist.coverImageURL {
@@ -83,19 +85,29 @@ extension HomeViewController {
             tracksLabel.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
             tracksLabel.bottomAnchor.constraint(lessThanOrEqualTo: wrapper.bottomAnchor)
         ])
+        
+        wrapper.addAction(UIAction { _ in
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            NavigationBarHelper.animateButtonPress(wrapper) {
+                // Future: Navigate to playlist
+            }
+        }, for: .touchUpInside)
+        
         return wrapper
     }
 
     func addRecentsSection() {
         contentView.addArrangedSubview(makeSectionHeader("Recents", action: { [weak self] in
+            guard let self = self else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             let vc = AllRecentsViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
+            self.navigationController?.pushViewController(vc, animated: true)
         }))
-        contentView.setCustomSpacing(12, after: contentView.arrangedSubviews.last!)
+        contentView.setCustomSpacing(8, after: contentView.arrangedSubviews.last!)
         
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 12
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         self.recentsStackView = stack
         contentView.addArrangedSubview(stack)
@@ -104,26 +116,24 @@ extension HomeViewController {
         let placeholder = UILabel()
         placeholder.text = "Play a song to see your recents here!"
         placeholder.font = .systemFont(ofSize: 14, weight: .medium)
-        placeholder.textColor = .gray
+        placeholder.textColor = ComponentColors.SongCard.metadataText
         placeholder.textAlignment = .center
         placeholder.tag = 999
         stack.addArrangedSubview(placeholder)
 
-        // Bottom spacer to ensure scrolling above tab bar doesn't cut off recents block
+        // Bottom spacer
         let bottomSpacer = UIView()
         bottomSpacer.heightAnchor.constraint(equalToConstant: 40).isActive = true
         contentView.addArrangedSubview(bottomSpacer)
     }
 
     func createRecentRow(song: Song, timeAgo: String, imageName: String) -> UIView {
-        let cardBgColor = UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : .white }
-        let card = UIView()
+        let cardBgColor = ComponentColors.SongCard.background
+        let card = UIButton(type: .custom)
         card.backgroundColor = cardBgColor
         card.layer.cornerRadius = 16
-        card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.05
-        card.layer.shadowRadius = 8
-        card.layer.shadowOffset = CGSize(width: 0, height: 2)
+        card.layer.borderWidth = 1.0
+        card.layer.borderColor = ComponentColors.SongCard.border.cgColor
         card.translatesAutoresizingMaskIntoConstraints = false
         
         let imageView = UIImageView(image: UIImage(named: imageName) ?? UIImage(named: "trackimage_1"))
@@ -144,11 +154,12 @@ extension HomeViewController {
         
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         textStack.axis = .vertical; textStack.spacing = 2
+        textStack.isUserInteractionEnabled = false
         textStack.translatesAutoresizingMaskIntoConstraints = false
         
-        let playBtn = UIButton(type: .system)
+        let playBtn = UIImageView()
         let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
-        playBtn.setImage(UIImage(systemName: "play.circle.fill", withConfiguration: config), for: .normal)
+        playBtn.image = UIImage(systemName: "play.circle.fill", withConfiguration: config)
         playBtn.tintColor = ComponentColors.HomeScreen.actionButtonFill
         playBtn.translatesAutoresizingMaskIntoConstraints = false
         
@@ -173,6 +184,13 @@ extension HomeViewController {
             playBtn.widthAnchor.constraint(equalToConstant: 32),
             playBtn.heightAnchor.constraint(equalToConstant: 32)
         ])
+        
+        card.addAction(UIAction { _ in
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            NavigationBarHelper.animateButtonPress(card) {
+                // Future: Play song
+            }
+        }, for: .touchUpInside)
         
         return card
     }

@@ -4,10 +4,19 @@
 //
 
 import UIKit
+import Supabase
 
-class HomeViewController: UIViewController {
+class HomeViewController: UIViewController, UIScrollViewDelegate {
 
-    let navBar      = TopNavBar.make(title: "Home")
+    // MARK: - Native Nav Bar Architecture
+    let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    let navShadowLayer = UIView()
+    let largeSubtitleLabel = UILabel()
+    var inlineSubtitleLabel: UILabel?
+    
+    // Header specific elements
+    let largeProfileButton = UIButton(type: .custom)
+
     let scrollView  = UIScrollView()
     let contentView = UIStackView()
     var fixedFooter: UIView!
@@ -19,17 +28,22 @@ class HomeViewController: UIViewController {
     var recentsStackView:      UIStackView?
     var topCardTitleLabel:     UILabel?
     var topCardTagLabel:       UILabel?
+    var topCardTagsStack:      UIStackView?
     var topCardImageView:      UIImageView?
 
     private var practiceTimer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        scrollView.delegate = self
         setupUI()
         startPracticeTimer()
         fetchPlaylists()
         fetchTopSong()
         fetchRecents()
+        fetchProfileData()
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: NSNotification.Name("TopNavBarProfileDidUpdate"), object: nil)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -47,17 +61,33 @@ class HomeViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
         stopPracticeTimer()
     }
+    
+    @objc private func handleProfileUpdate() {
+        fetchProfileData()
+    }
 
     private func setupUI() {
         // Background and navigation bar — tokens handle light/dark automatically
         view.backgroundColor = ComponentColors.HomeScreen.background
-        navigationController?.navigationBar.isHidden = true
+        
+        // Ensure nav bar title is clear
+        navigationController?.navigationBar.largeTitleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
+        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
+        
         setupNavBar()
+        syncNavBarAlpha()
         setupScrollView()
+        setupNavBackground()
+        setupCustomLargeHeader()
+        
         addTopPracticeCard()
         addUploadSection()
         addPlaylistSection()
         addRecentsSection()
+    }
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        syncNavBarAlpha()
     }
 
     private func startPracticeTimer() {
@@ -94,10 +124,18 @@ class HomeViewController: UIViewController {
                 if let song = songs.first {
                     await MainActor.run {
                         self.topCardTitleLabel?.text = song.title
-                        let tempoStr = song.tempo.uppercased()
-                        let handStr = song.hands == "right_only" ? "RH ONLY" : song.hands == "left_only" ? "LH ONLY" : "BOTH HANDS"
-                        self.topCardTagLabel?.text = "\(tempoStr) | \(handStr)"
-                        self.topCardImageView?.image = UIImage(named: "trackimage_\(Int.random(in: 1...16))")
+                        
+                        // Update tags
+                        if let stack = self.topCardTagsStack {
+                            stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+                            
+                            let tags = [song.tempo.uppercased(), song.hands.uppercased()]
+                            for text in tags {
+                                let tag = self.makePillTag(text: text)
+                                stack.addArrangedSubview(tag)
+                            }
+                        }
+                        // The original topCardTagLabel and topCardImageView lines are removed.
                         self.topCardTitleLabel?.superview?.layoutIfNeeded()
                     }
                 }
