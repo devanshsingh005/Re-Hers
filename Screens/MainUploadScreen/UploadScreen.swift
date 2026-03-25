@@ -12,6 +12,8 @@ internal import PostgREST
 import PDFKit
 import Vision
 import VisionKit
+import CryptoKit
+import Security
 
 class UploadScreen: UIViewController {
 
@@ -42,7 +44,6 @@ class UploadScreen: UIViewController {
 
     // MARK: - Supabase
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
-    private let storageBaseURL = "https://djqgmowfjxsnjdffdohw.supabase.co/storage/v1/object/public"
 
     // MARK: - UI
     private let scrollView  = UIScrollView()
@@ -222,11 +223,8 @@ class UploadScreen: UIViewController {
             }
             return
         }
-        var finalURL = urlString
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            finalURL = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        guard let url = URL(string: finalURL) else { return }
+        guard let finalURL = await NavigationBarHelper.signedProfileURLString(from: urlString),
+              let url = URL(string: finalURL) else { return }
         do {
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 30))
             if let img = UIImage(data: data) {
@@ -615,14 +613,12 @@ class UploadScreen: UIViewController {
                 return
             }
 
-            // Pass output_url directly — UploadPageNextViewController uses it to
-            // immediately fetch the JSON and drive the animation, skipping the DB lookup.
             let outputURL = jsonDict?["output_url"] as? String
 
             let vc        = UploadPageNextViewController()
             vc.jobId      = jobId
             vc.resultURL  = outputURL
-            print("[RowTap] jobId=\(jobId.uuidString)  resultURL=\(outputURL ?? "nil")")
+            print("[RowTap] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
             self.navigationController?.pushViewController(vc, animated: true)
         }, for: .touchUpInside)
 
@@ -735,13 +731,13 @@ class UploadScreen: UIViewController {
 
     // MARK: - Auth Helpers
     private func currentUserId() async -> String? {
-        do    { return try await supabase.auth.session.user.id.uuidString }
-        catch { print("[Auth] userId error: \(error)"); return nil }
+        do    { return try await SupabaseManager.shared.currentUserId() }
+        catch { print("[Auth] user ID retrieval failed"); return nil }
     }
 
     private func authToken() async -> String? {
-        do    { return try await supabase.auth.session.accessToken }
-        catch { print("[Auth] token error: \(error)"); return nil }
+        do    { return try await SupabaseManager.shared.accessToken() }
+        catch { print("[Auth] auth retrieval failed"); return nil }
     }
 
     // MARK: - Upload Pipeline
@@ -758,20 +754,16 @@ class UploadScreen: UIViewController {
 
         // ── Step 1: Railway API ───────────────────────────────────────────────────
         // Railway uploads the PDF to Supabase Storage with its service key and
-        // returns job_id + user_id. We do NOT re-upload from iOS (would 403 on RLS).
+        // returns the job ID. We do NOT re-upload from iOS (would 403 on RLS).
         let api = try await callConversionAPI(imageData: imageData,
                                               fileName: fileName, fileType: fileType, token: token)
-        print("[Upload] API keys: \(api.keys.sorted())")
 
-        guard let jobIdStr  = api["job_id"]  as? String, let jobId  = UUID(uuidString: jobIdStr),
-              let apiUidStr = api["user_id"] as? String, let _ = UUID(uuidString: apiUidStr)
-        else { throw UploadError.badAPIResponse }
+        guard let jobIdStr = api["job_id"] as? String,
+              let jobId = UUID(uuidString: jobIdStr) else { throw UploadError.badAPIResponse }
 
-        let pdfPath   = "\(apiUidStr.lowercased())/\(jobIdStr.lowercased())/input.pdf"
-        let outputURL = (api["output_url"] as? String)
-            ?? "\(storageBaseURL)/sheet_data/\(apiUidStr.lowercased())/\(jobIdStr.lowercased())/output.json"
-        print("[Upload] pdfPath=\(pdfPath)")
-        print("[Upload] outputURL=\(outputURL)")
+        let apiUidStr = uidStr.lowercased()
+        let pdfPath   = "\(apiUidStr)/\(jobIdStr.lowercased())/input.pdf"
+        let outputURL = "\(ReHersAPI.baseURLString)/sheets/\(jobIdStr.lowercased())"
 
         // ── Step 3: Build json_data (protect canonical keys from API overwrite) ───
         // Generate a unique timestamp-based filename for this upload.
@@ -825,7 +817,9 @@ class UploadScreen: UIViewController {
     // MARK: - Conversion API
     private func callConversionAPI(imageData: Data, fileName: String,
                                    fileType: String, token: String) async throws -> [String: Any] {
-        let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
+        guard let url = ReHersAPI.url(path: "/convert") else {
+            throw UploadError.noResponse
+        }
         let boundary = UUID().uuidString
         var req      = URLRequest(url: url)
         req.httpMethod  = "POST"
@@ -842,7 +836,7 @@ class UploadScreen: UIViewController {
         body.append("\r\n--\(boundary)--\r\n")
         req.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await ReHersPinnedSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw UploadError.noResponse }
         guard (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? ""
@@ -923,7 +917,7 @@ class UploadScreen: UIViewController {
             switch self {
             case .invalidUser:    return "Could not retrieve your user ID."
             case .missingToken:   return "Could not retrieve authentication token."
-            case .badAPIResponse: return "Missing job_id or user_id in API response."
+            case .badAPIResponse: return "Missing job_id in API response."
             case .noResponse:     return "No response received from the server."
             case .apiError(let code, let msg): return "Server error \(code): \(msg)"
             }
@@ -1016,6 +1010,109 @@ class UploadScreen: UIViewController {
             }
         }
     }
+}
+
+enum ReHersAPI {
+    static var baseURLString: String {
+        guard let rawBaseURL = Bundle.main.object(forInfoDictionaryKey: "BACKEND_API_URL") as? String else {
+            fatalError("BACKEND_API_URL not set in build configuration")
+        }
+
+        let baseURL = rawBaseURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+
+        guard !baseURL.isEmpty else {
+            fatalError("BACKEND_API_URL not set in build configuration")
+        }
+
+        return baseURL
+    }
+
+    static func url(path: String) -> URL? {
+        URL(string: "\(baseURLString)\(path)")
+    }
+}
+
+final class ReHersPinnedSessionDelegate: NSObject, URLSessionDelegate {
+    private let expectedHost = URL(string: ReHersAPI.baseURLString)?.host ?? ""
+    private let pinnedPublicKeyHash = "HHrSlgBFDK8S5rQlffqsyZ/rHPP7lqg6OR8l/+k3OIo="
+
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        guard challenge.protectionSpace.host == expectedHost,
+              let trust = challenge.protectionSpace.serverTrust,
+              SecTrustEvaluateWithError(trust, nil),
+              let certificate = SecTrustGetCertificateAtIndex(trust, 0),
+              let hash = spkiHash(for: certificate) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        guard hash == pinnedPublicKeyHash else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    private func spkiHash(for certificate: SecCertificate) -> String? {
+        guard let key = SecCertificateCopyKey(certificate),
+              let keyData = SecKeyCopyExternalRepresentation(key, nil) as Data?,
+              let attributes = SecKeyCopyAttributes(key) as? [String: Any],
+              let keyType = attributes[kSecAttrKeyType as String] as? String else {
+            return nil
+        }
+
+        let algorithmIdentifier: Data
+        if keyType == (kSecAttrKeyTypeRSA as String) {
+            algorithmIdentifier = Data([
+                0x30, 0x0d,
+                0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
+                0x05, 0x00
+            ])
+        } else {
+            return nil
+        }
+
+        let subjectPublicKey = derEncoded(tag: 0x03, body: Data([0x00]) + keyData)
+        let spki = derEncoded(tag: 0x30, body: algorithmIdentifier + subjectPublicKey)
+        return Data(SHA256.hash(data: spki)).base64EncodedString()
+    }
+
+    private func derEncoded(tag: UInt8, body: Data) -> Data {
+        var data = Data([tag])
+        data.append(derLength(body.count))
+        data.append(body)
+        return data
+    }
+
+    private func derLength(_ length: Int) -> Data {
+        if length < 0x80 {
+            return Data([UInt8(length)])
+        }
+
+        var value = length
+        var bytes: [UInt8] = []
+        while value > 0 {
+            bytes.insert(UInt8(value & 0xff), at: 0)
+            value >>= 8
+        }
+
+        return Data([0x80 | UInt8(bytes.count)] + bytes)
+    }
+}
+
+enum ReHersPinnedSession {
+    static let shared: URLSession = {
+        let config = URLSessionConfiguration.default
+        return URLSession(configuration: config, delegate: ReHersPinnedSessionDelegate(), delegateQueue: nil)
+    }()
 }
 
 // MARK: - VNDocumentCameraViewControllerDelegate

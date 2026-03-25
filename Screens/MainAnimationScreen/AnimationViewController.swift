@@ -59,6 +59,9 @@ final class AnimationViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        if #available(iOS 13.0, *) {
+            overrideUserInterfaceStyle = .light
+        }
         self.edgesForExtendedLayout = .all
         view.backgroundColor = UIColor.systemBackground
         buildLayout()

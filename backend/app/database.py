@@ -1,5 +1,5 @@
 """Database operations for sheet_files and jobs tables."""
-from datetime import datetime
+import datetime
 from supabase import create_client, Client
 from typing import Optional, List, Dict, Any
 from uuid import UUID
@@ -55,7 +55,7 @@ class DatabaseClient:
         label_warning: Optional[str] = None
     ) -> Dict[str, Any]:
         """Update job status (only if owned by user)."""
-        update_data = {"status": status, "updated_at": datetime.utcnow().isoformat()}
+        update_data = {"status": status, "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
         
         if result_url:
             update_data["result_url"] = result_url
@@ -81,7 +81,9 @@ class DatabaseClient:
         offset: int = 0
     ) -> List[Dict[str, Any]]:
         """Get all jobs for a user with pagination."""
-        response = self.client.table("jobs").select("*").eq(
+        response = self.client.table("jobs").select(
+            "id, user_id, status, created_at, pdf_path, result_url, label_status, label_warning"
+        ).eq(
             "user_id", user_id
         ).order("created_at", desc=True).range(offset, offset + limit).execute()
         
@@ -186,7 +188,7 @@ class DatabaseClient:
         """Update sheet_file status (with user validation)."""
         response = self.client.table("sheet_files").update({
             "status": status,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }).eq("id", file_id).eq("user_id", user_id).execute()
         
         if response.data:
@@ -226,7 +228,7 @@ class DatabaseClient:
         """Mark sheet_file as orphaned (for cleanup tracking)."""
         response = self.client.table("sheet_files").update({
             "status": "orphaned",
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }).eq("id", file_id).execute()
         
         if response.data:

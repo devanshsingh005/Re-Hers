@@ -38,5 +38,11 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Re-Hers needs the microphone to detect the notes you sing or play.</string>
+	<key>SUPABASE_KEY</key>
+	<string>$(SUPABASE_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>BACKEND_API_URL</key>
+	<string>$(BACKEND_API_URL)</string>
 </dict>
 </plist>

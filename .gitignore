@@ -22,3 +22,7 @@ Packages/
 # App-specific
 *.log
 temp/
+*.xcconfig
+.env
+!.env.example
+Re-Hearse_v1/Secrets.xcconfig

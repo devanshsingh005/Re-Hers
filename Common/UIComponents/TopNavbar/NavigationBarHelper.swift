@@ -150,7 +150,7 @@ public final class NavigationBarHelper {
             // Clean Native Styling (No backgrounds, no shadows)
             config.baseForegroundColor = .label // Adaptive black/white
             
-            config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 12)
+            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 10)
             
             self.configuration = config
             
@@ -281,12 +281,8 @@ public final class NavigationBarHelper {
             return
         }
         
-        var finalURLString = urlString
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        
-        guard let url = URL(string: finalURLString) else { return }
+        guard let signedURLString = await signedProfileURLString(from: urlString),
+              let url = URL(string: signedURLString) else { return }
         
         do {
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
@@ -310,12 +306,8 @@ public final class NavigationBarHelper {
             return
         }
         
-        var finalURLString = urlString
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        
-        guard let url = URL(string: finalURLString) else { return }
+        guard let signedURLString = await signedProfileURLString(from: urlString),
+              let url = URL(string: signedURLString) else { return }
         
         do {
             let request = URLRequest(url: url, timeoutInterval: 30)
@@ -329,6 +321,25 @@ public final class NavigationBarHelper {
         } catch {}
     }
     
+    static func signedProfileURLString(from storedValue: String) async -> String? {
+        let marker = "/object/useprofile/"
+        let profilePath: String
+
+        if let range = storedValue.range(of: marker) {
+            profilePath = String(storedValue[range.upperBound...])
+        } else if URL(string: storedValue)?.scheme != nil {
+            return storedValue
+        } else {
+            profilePath = storedValue
+        }
+
+        guard !profilePath.isEmpty else { return nil }
+        return try? await SupabaseManager.shared.client.storage
+            .from("useprofile")
+            .createSignedURL(path: profilePath, expiresIn: 3600)
+            .absoluteString
+    }
+
     // MARK: - Global TopNavBar Helpers
     
     /// Creates the standard inline title stack with a main title and subtitle for root tabs.

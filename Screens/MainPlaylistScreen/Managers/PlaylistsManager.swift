@@ -4,6 +4,12 @@ import Supabase
 import Auth
 internal import PostgREST
 
+public enum PlaylistError: Error {
+    case invalidData
+    case uploadFailed
+    case missingDefaultArtwork
+}
+
 public final class PlaylistsManager {
     public static let shared = PlaylistsManager()
     
@@ -46,16 +52,41 @@ public final class PlaylistsManager {
                 )
             }
             
-            let playlist = PlaylistData(
+            // Sign the URL or load local data
+            var displayImageUrl = dbPlaylist.coverImageUrl
+            var displayImageData: Data? = nil
+            
+            if let path = displayImageUrl, !path.contains("://") {
+                if path.hasPrefix("doc_") {
+                    // Local document storage fallback
+                    let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                        .first!.appendingPathComponent(path)
+                    displayImageData = try? Data(contentsOf: url)
+                } else {
+                    // Remote Supabase storage
+                    do {
+                        if let signedUrl = try? await SupabaseManager.shared.client.storage
+                            .from("PlayListCover")
+                            .createSignedURL(path: path, expiresIn: 60 * 60 * 24 * 7) { // 7 days
+                            displayImageUrl = signedUrl.absoluteString
+                        }
+                    } catch {
+                        print("❌ Failed to sign URL for path \(path):", error)
+                    }
+                }
+            }
+            
+            let data = PlaylistData(
                 id: dbPlaylist.id,
                 title: dbPlaylist.name,
                 tags: dbPlaylist.description ?? "",
-                imageUrl: dbPlaylist.coverImageUrl,
+                imageUrl: displayImageUrl,
+                imageData: displayImageData,
                 tracks: tracks,
                 createdAt: dbPlaylist.createdAt,
                 isPublic: dbPlaylist.isPublic
             )
-            remotePlaylists.append(playlist)
+            remotePlaylists.append(data)
         }
         
         return remotePlaylists
@@ -427,9 +458,9 @@ public final class PlaylistsManager {
         }
         
         do {
-            coverImageUrl = try await uploadImageToStorage(image: finalImage, userId: userId)
+            coverImageUrl = try await uploadImageToStorage(image: finalImage)
         } catch {
-            print("⚠️ Image upload failed, falling back to local storage: \(error)")
+            print("⚠️ Image upload failed, falling back to local cache")
             if let localFile = saveImageToDocuments(image: finalImage) {
                 coverImageUrl = localFile
             }
@@ -461,10 +492,9 @@ public final class PlaylistsManager {
     
     // MARK: - Image Upload
     
-    private func uploadImageToStorage(image: UIImage, userId: UUID) async throws -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            throw NSError(domain: "ImageConversionError", code: -1,
-                         userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+    private func uploadImageToStorage(image: UIImage) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw PlaylistError.invalidData
         }
         
         let fileName = "\(UUID().uuidString).jpg"
@@ -481,9 +511,9 @@ public final class PlaylistsManager {
             try await client.upload(fileName, data: imageData, options: options)
         }
         
-        let publicUrl = try client.getPublicURL(path: fileName)
-            
-        return publicUrl.absoluteString
+        // Return the fileName (path) instead of a signed URL.
+        // This ensures we store the persistent path in the database.
+        return fileName
     }
     
     private func saveImageToDocuments(image: UIImage) -> String? {
@@ -492,7 +522,7 @@ public final class PlaylistsManager {
         let url = FileManager.default.urls(for: .documentDirectory,
                                            in: .userDomainMask).first!.appendingPathComponent(filename)
         do {
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
             return filename
         } catch {
             print("❌ Failed to save image to documents:", error)

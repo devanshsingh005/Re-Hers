@@ -25,8 +25,6 @@ class PlaylistSongDetailViewController: UIViewController {
     private var cachedJobId: UUID?
 
     // MARK: - Supabase
-    private let projectID = "djqgmowfjxsnjdffdohw"
-    private var publicBase: String { "https://\(projectID).supabase.co/storage/v1/object/public" }
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     // MARK: - UI
@@ -286,34 +284,78 @@ class PlaylistSongDetailViewController: UIViewController {
     }
 
     private func fetchOutputJSON(jobId: UUID, pdfPath: String) async {
-        let userId = pdfPath.components(separatedBy: "/").first ?? ""
-        guard let url = URL(string: "\(publicBase)/sheet_data/\(userId)/\(jobId.uuidString.lowercased())/output.json"),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        await MainActor.run { self.sheetMusicJSON = parsed }
+        _ = pdfPath
+        guard let token = try? await SupabaseManager.shared.accessToken(),
+              let url = ReHersAPI.url(path: "/sheets/\(jobId.uuidString)") else { return }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        do {
+            let (data, response) = try await ReHersPinnedSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return 
+            }
+            
+            guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  isValidScoreJSON(parsed) else {
+                return
+            }
+            
+            await MainActor.run { self.sheetMusicJSON = parsed }
+        } catch {
+            // Silently fail as in existing logic
+        }
+    }
+
+    private func isValidScoreJSON(_ json: [String: Any]) -> Bool {
+        // Look for common score-partwise keys or a measure key
+        if json["score-partwise"] != nil { return true }
+        if json["measure"] != nil { return true }
+        
+        // Deep search helper for any "measure" key
+        func findMeasure(in dict: [String: Any]) -> Bool {
+            if dict["measure"] != nil { return true }
+            for value in dict.values {
+                if let subDict = value as? [String: Any], findMeasure(in: subDict) {
+                    return true
+                } else if let array = value as? [[String: Any]] {
+                    for item in array {
+                        if findMeasure(in: item) { return true }
+                    }
+                }
+            }
+            return false
+        }
+        return findMeasure(in: json)
     }
 
     private func fetchLabeledPDF(resultUrl: String?, jobId: UUID?) async {
         guard let jId = jobId ?? cachedJobId else { await MainActor.run { showError() }; return }
-        let urlStr: String
-        if let rel = resultUrl, !rel.isEmpty {
-            urlStr = rel.hasPrefix("http") ? rel : "\(publicBase)/\(rel)"
-        } else {
-            let userId = (cachedPDFPath ?? "").components(separatedBy: "/").first ?? ""
-            urlStr = "\(publicBase)/sheet_data/\(userId)/\(jId.uuidString.lowercased())/labeled.pdf"
-        }
+        let urlStr = URL(string: resultUrl ?? "")?.scheme != nil
+            ? resultUrl!
+            : "\(ReHersAPI.baseURLString)/sheets/\(jId.uuidString)/pdf"
         await fetchAndCache(urlString: urlStr, isOriginal: false)
     }
 
     private func fetchOriginalPDF() async {
         guard let path = cachedPDFPath else { await MainActor.run { showError() }; return }
-        await fetchAndCache(urlString: "\(publicBase)/pdf_uploads/\(path)", isOriginal: true)
+        if let url = try? await supabase.storage.from("pdf_uploads").createSignedURL(path: path, expiresIn: 3600) {
+            await fetchAndCache(urlString: url.absoluteString, isOriginal: true)
+        } else {
+            await MainActor.run { self.showError() }
+        }
     }
 
     private func fetchAndCache(urlString: String, isOriginal: Bool) async {
-        var req = URLRequest(url: URL(string: urlString)!)
+        guard let url = URL(string: urlString) else { return }
+        var req = URLRequest(url: url)
         req.timeoutInterval = 15
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        if urlString.hasPrefix(ReHersAPI.baseURLString),
+           let token = try? await SupabaseManager.shared.accessToken() {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let session = urlString.hasPrefix(ReHersAPI.baseURLString) ? ReHersPinnedSession.shared : URLSession.shared
+        guard let (data, resp) = try? await session.data(for: req),
               (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
               let doc = PDFDocument(data: data), doc.pageCount > 0 else {
             await MainActor.run { self.showError() }; return

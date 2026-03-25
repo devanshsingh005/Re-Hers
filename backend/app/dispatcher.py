@@ -42,6 +42,10 @@ storage_manager = StorageManager(SUPABASE_URL, SUPABASE_KEY, db_client)
 _DONE_STATUSES = {"completed", "completed_with_warning", "failed"}
 
 
+def _log_safe_error(exc: Exception) -> str:
+    return type(exc).__name__
+
+
 # ---------------------------------------------------------------------------
 # PDF normalisation helper
 # ---------------------------------------------------------------------------
@@ -315,17 +319,17 @@ async def async_process_job(job_data: dict) -> None:
         # --- Mark as processing ---
         logger.info(f"[2/7] Marking job {job_id} as processing...")
         await db_client.update_job_status(job_id, user_id, "processing")
-        logger.info(f"[2/7] Processing job {job_id} for user {user_id} (pdf_path={pdf_path})")
+        logger.info("[2/7] Processing job %s for user %s", job_id, user_id)
 
         # =========================================================================
         # STEP 1: Download PDF from Supabase Storage
         # =========================================================================
-        logger.info(f"[3/7] Downloading PDF from {pdf_path}")
+        logger.info("[3/7] Downloading PDF for job %s", job_id)
         try:
             pdf_content = storage_manager.client.storage.from_("pdf_uploads").download(pdf_path)
             logger.info(f"[3/7] PDF downloaded: {len(pdf_content)} bytes")
         except Exception as e:
-            logger.error(f"[3/7] FAILED to download PDF: {e}")
+            logger.error("[3/7] FAILED to download PDF: %s", _log_safe_error(e))
             raise
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -336,14 +340,14 @@ async def async_process_job(job_data: dict) -> None:
         # STEP 2: Call Audiveris API → get JSON
         # =========================================================================
         logger.info(f"[4/7] Calling Audiveris API for job {job_id}...")
-        logger.info(f"[4/7] PDF file exists at {tmp_pdf_path}: {os.path.exists(tmp_pdf_path)}")
-        logger.info(f"[4/7] PDF file size: {os.path.getsize(tmp_pdf_path) if os.path.exists(tmp_pdf_path) else 'N/A'} bytes")
+        logger.info("[4/7] Temporary PDF prepared for job %s", job_id)
+        logger.info("[4/7] PDF file size: %s bytes", os.path.getsize(tmp_pdf_path) if os.path.exists(tmp_pdf_path) else "N/A")
         try:
             json_output = run_audiveris(tmp_pdf_path)
             logger.info(f"[4/7] Audiveris call succeeded! Output type: {type(json_output).__name__}")
-            logger.info(f"[4/7] Output sample: {str(json_output)[:200]}")
+            logger.info("[4/7] Audiveris output received")
         except Exception as e:
-            logger.error(f"[4/7] FAILED to call Audiveris: {type(e).__name__}: {e}", exc_info=True)
+            logger.error("[4/7] FAILED to call Audiveris: %s", _log_safe_error(e))
             raise
 
         if isinstance(json_output, str):
@@ -358,7 +362,7 @@ async def async_process_job(job_data: dict) -> None:
         # indentation is irrelevant to any client.
         json_bytes = json.dumps(json_output).encode("utf-8")
 
-        logger.info(f"[5/7] Uploading JSON ({len(json_bytes)} bytes) \u2192 {output_json_path}")
+        logger.info("[5/7] Uploading JSON (%s bytes) for job %s", len(json_bytes), job_id)
         try:
             upload_response = storage_manager.client.storage.from_("sheet_data").upload(
                 output_json_path,
@@ -367,7 +371,7 @@ async def async_process_job(job_data: dict) -> None:
             )
             logger.info(f"[5/7] JSON upload completed.")
         except Exception as e:
-            logger.error(f"[5/7] FAILED to upload JSON: {type(e).__name__}: {e}", exc_info=True)
+            logger.error("[5/7] FAILED to upload JSON: %s", _log_safe_error(e))
             raise
 
         json_file_id = str(uuid4())
@@ -407,10 +411,10 @@ async def async_process_job(job_data: dict) -> None:
             debug=False,
         )
         logger.info(f"[6/7] label_notes completed: label_success={label_success}")
-        logger.info(f"[6/7] Checking labeled PDF: tmp_labeled_pdf_path={tmp_labeled_pdf_path}")
-        logger.info(f"[6/7] Labeled PDF exists: {os.path.exists(tmp_labeled_pdf_path)}")
+        logger.info("[6/7] Checking labeled PDF for job %s", job_id)
+        logger.info("[6/7] Labeled PDF exists: %s", os.path.exists(tmp_labeled_pdf_path))
         if os.path.exists(tmp_labeled_pdf_path):
-            logger.info(f"[6/7] Labeled PDF size: {os.path.getsize(tmp_labeled_pdf_path)} bytes")
+            logger.info("[6/7] Labeled PDF size: %s bytes", os.path.getsize(tmp_labeled_pdf_path))
 
         # Clean up normalised temp file if a new one was created
         if normalised_pdf_path != tmp_pdf_path and os.path.exists(normalised_pdf_path):
@@ -437,16 +441,14 @@ async def async_process_job(job_data: dict) -> None:
                 )
 
                 label_status = "success"
-                # Construct full public URL for labeled PDF (in pdf_uploads bucket)
-                supabase_url = SUPABASE_URL.rstrip('/')
-                labeled_pdf_url = f"{supabase_url}/storage/v1/object/public/pdf_uploads/{pdf_result['storage_path']}"
-                logger.info(f"Labeled PDF saved: {pdf_result['storage_path']}")
-                logger.info(f"Labeled PDF public URL: {labeled_pdf_url}")
+                labeled_pdf_url = pdf_result["storage_path"]
+                logger.info("Labeled PDF saved for job %s", job_id)
+                logger.info("Labeled PDF reference stored for job %s", job_id)
 
             except Exception as e:
-                logger.warning(f"Failed to save labeled PDF for {job_id}: {e}")
+                logger.warning("Failed to save labeled PDF for %s: %s", job_id, _log_safe_error(e))
                 label_status = "failed"
-                label_warning = f"Note labeling failed: {str(e)}"
+                label_warning = "Note labeling failed"
         else:
             logger.warning(f"label_notes processing failed for job {job_id}")
             label_status = "failed"
@@ -460,11 +462,9 @@ async def async_process_job(job_data: dict) -> None:
         if labeled_pdf_url:
             result_url = labeled_pdf_url
         else:
-            # Construct full Supabase URL for output.json
-            supabase_url = SUPABASE_URL.rstrip('/')
-            result_url = f"{supabase_url}/storage/v1/object/public/sheet_data/{output_json_path}"
+            result_url = output_json_path
 
-        logger.info(f"[7/7] Final result_url: {result_url}")
+        logger.info("[7/7] Final result ready for job %s", job_id)
         await db_client.update_job_status(
             job_id,
             user_id,
@@ -479,8 +479,8 @@ async def async_process_job(job_data: dict) -> None:
         )
 
     except Exception as e:
-        error_message = str(e)
-        logger.error(f"EXCEPTION in process_job {job_id}: {error_message}", exc_info=True)
+        error_message = _log_safe_error(e)
+        logger.error("EXCEPTION in process_job %s: %s", job_id, error_message)
         try:
             jobs_response = (
                 db_client.client
@@ -502,7 +502,7 @@ async def async_process_job(job_data: dict) -> None:
         except Exception as db_error:
             logger.error(f"Failed to write failed status for job {job_id}: {db_error}")
 
-        logger.error(f"Job {job_id} failed with error: {error_message}", exc_info=True)
+        logger.error("Job %s failed with error type: %s", job_id, _log_safe_error(e))
 
     finally:
         for tmp_path in [tmp_pdf_path, tmp_json_path, tmp_labeled_pdf_path]:
@@ -510,5 +510,4 @@ async def async_process_job(job_data: dict) -> None:
                 try:
                     os.unlink(tmp_path)
                 except Exception as e:
-                    logger.warning(f"Failed to cleanup temp file {tmp_path}: {e}")
-
+                    logger.warning("Failed to cleanup temp file for job %s: %s", job_id, _log_safe_error(e))

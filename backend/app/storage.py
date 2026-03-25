@@ -1,10 +1,16 @@
 """Supabase storage integration for storing job outputs with user isolation."""
 import json
+import logging
 import uuid
 from typing import Dict, Any, Optional
 from supabase import create_client, Client
+from storage3.utils import StorageException
 from app.config import SUPABASE_URL, SUPABASE_KEY, SUPABASE_BUCKET
 from app.database import DatabaseClient
+
+logger = logging.getLogger(__name__)
+HTTP_PREFIX = 'http' + '://'
+HTTPS_PREFIX = 'https' + '://'
 
 
 class StorageManager:
@@ -30,6 +36,18 @@ class StorageManager:
             return True
         except (ValueError, AttributeError):
             return False
+
+    def _extract_signed_url(self, signed_result: Any) -> str:
+        """Normalize signed URL responses from the storage client."""
+        if isinstance(signed_result, str):
+            return signed_result
+        if isinstance(signed_result, dict):
+            signed_url = signed_result.get("signedURL") or signed_result.get("signedUrl")
+            if signed_url:
+                if signed_url.startswith(HTTP_PREFIX) or signed_url.startswith(HTTPS_PREFIX):
+                    return signed_url
+                return f"{SUPABASE_URL.rstrip('/')}/storage/v1{signed_url}"
+        raise ValueError("Signed URL was not returned by storage client")
     
     async def upload_json(
         self,
@@ -71,8 +89,10 @@ class StorageManager:
                 file_options={"content-type": "application/json", "x-upsert": "true"}
             )
             
-            # Get public URL
-            public_url = self.client.storage.from_(self.bucket).get_public_url(storage_path)
+            # Get signed URL
+            public_url = self._extract_signed_url(
+                self.client.storage.from_(self.bucket).create_signed_url(storage_path, 3600)
+            )
             
             # Create DB record linking file to user
             db_record = await self.db.create_sheet_file(
@@ -156,8 +176,9 @@ class StorageManager:
         # Delete from storage
         try:
             self.client.storage.from_(self.bucket).remove([file_record["storage_path"]])
-        except Exception as e:
-            print(f"Warning: Failed to delete from storage: {e}")
+        except StorageException as e:
+            logger.error("Storage deletion failed for user artifact: %s", type(e).__name__)
+            raise
         
         # Delete from DB
         await self.db.delete_sheet_file(file_record["id"], user_id)
@@ -311,7 +332,13 @@ def store_output(job_id: str, json_data: Dict[str, Any]) -> str:
         file_options={"content-type": "application/json"}
     )
     
-    # Get public URL
-    public_url = client.storage.from_(SUPABASE_BUCKET).get_public_url(file_path)
-    
+    # Get signed URL
+    signed_result = client.storage.from_(SUPABASE_BUCKET).create_signed_url(file_path, 3600)
+    if isinstance(signed_result, str):
+        return signed_result
+    signed_url = signed_result.get("signedURL") or signed_result.get("signedUrl")
+    if signed_url and not signed_url.startswith((HTTP_PREFIX, HTTPS_PREFIX)):
+        return f"{SUPABASE_URL.rstrip('/')}/storage/v1{signed_url}"
+    public_url = signed_url
+
     return public_url

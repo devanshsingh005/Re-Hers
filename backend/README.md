@@ -789,7 +789,7 @@ All endpoints are rate-limited via [`app/limiter.py`](app/limiter.py) using **sl
 
 - Keys are **user-scoped** when a valid Bearer token is present (`user:<uuid>`)
 - Falls back to **IP-based** key for unauthenticated requests
-- `swallow_errors=True` — limiter fails open if Redis is transiently unavailable
+- `swallow_errors` must stay disabled so Redis failures do not fail open
 - Returns `429 Too Many Requests` on breach
 
 ### CORS

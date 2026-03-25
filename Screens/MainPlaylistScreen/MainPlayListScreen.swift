@@ -353,8 +353,13 @@ class PlaylistViewController: UIViewController {
     }
 
     fileprivate func loadImage(identifier: String) -> UIImage? {
-        if identifier.contains("token=") || identifier.hasPrefix("https://") { return nil }
+        if identifier.contains("token=") || URL(string: identifier)?.scheme != nil { return nil }
         if let img = UIImage(named: identifier) { return img }
+        guard !identifier.contains("/"),
+              !identifier.contains(".."),
+              !identifier.contains("\\"),
+              identifier.count <= 128,
+              identifier.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.union(.init(charactersIn: "-_.")).contains($0) }) else { return nil }
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
                              .first!.appendingPathComponent(identifier)
         if let data = try? Data(contentsOf: url) { return UIImage(data: data) }

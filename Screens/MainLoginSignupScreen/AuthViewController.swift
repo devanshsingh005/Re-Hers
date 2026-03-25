@@ -255,7 +255,7 @@ private extension AuthViewController {
         
         // MARK: - Primary button
         
-        primaryButton.setTitle("signup", for: .normal)
+        primaryButton.setTitle("Sign Up", for: .normal)
         primaryButton.backgroundColor = ComponentColors.AuthScreen.ctaFill
         primaryButton.setTitleColor(ComponentColors.AuthScreen.ctaText, for: .normal)
         primaryButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
@@ -606,7 +606,7 @@ private extension AuthViewController {
         }
         
         screenTitleLabel.text = isLoginMode ? "Sign In" : "Sign Up"
-        primaryButton.setTitle(isLoginMode ? "Login" : "Sign Up", for: .normal)
+        primaryButton.setTitle(isLoginMode ? "NEXT" : "Sign Up", for: .normal)
         switchModeButton.setTitle(isLoginMode ? "Create a Account" : "Already have an account? Sign In", for: .normal)
         
         errorLabel.isHidden = true
@@ -687,7 +687,6 @@ extension AuthViewController {
                 await MainActor.run {
                     self.activityIndicator.stopAnimating()
                     self.primaryButton.isEnabled = true
-                    UserDefaults.standard.set(true, forKey: "isLoggedIn")
                     self.routeAfterLogin()
                 }
             } catch {
@@ -695,7 +694,6 @@ extension AuthViewController {
                     self.showError(error.localizedDescription)
                     self.activityIndicator.stopAnimating()
                     self.primaryButton.isEnabled = true
-                    UserDefaults.standard.set(false, forKey: "isLoggedIn") // Set to false on error
                 }
             }
         }
@@ -777,15 +775,13 @@ extension AuthViewController {
                                         .execute()
                                         .value
                                         
-                                    print("Google Auth Onboarding Check - Retrieved Genres: \(String(describing: row.genres))")
                                     shouldOnboard = row.genres == nil || row.genres!.isEmpty
                                 } catch {
-                                    print("Google Auth Onboarding Check - No record found: \(error.localizedDescription)")
+                                    print("Google Auth Onboarding Check - no record found")
                                     shouldOnboard = true // no record → show onboarding
                                 }
                                 
                                 await MainActor.run {
-                                    UserDefaults.standard.set(true, forKey: "isLoggedIn")
                                     if shouldOnboard {
                                         self.showOnboardingFlow()
                                     } else {
@@ -861,8 +857,6 @@ extension AuthViewController {
             ]
         )
         
-        print("SIGNUP RESULT:", result)
-        
         if result.session != nil {
             await MainActor.run {
                 self.routeAfterLogin()
@@ -908,11 +902,6 @@ extension AuthViewController {
                         .execute()
                         .value
                         
-                    print("Email Auth Onboarding Check - Retrieved Genres: \(String(describing: row.genres))")
-
-                    // Set isLoggedIn to true since we have a valid session and at least some record
-                    UserDefaults.standard.set(true, forKey: "isLoggedIn")
-
                     if let genres = row.genres, !genres.isEmpty {
                         // Returning user with completed onboarding → go to main app
                         showHomeScreen()
@@ -921,7 +910,7 @@ extension AuthViewController {
                         showOnboardingFlow()
                     }
                 } catch {
-                    print("Email Auth Onboarding Check - No record found: \(error.localizedDescription)")
+                    print("Email Auth Onboarding Check - no record found")
                     // No onboarding record found at all → show onboarding
                     showOnboardingFlow()
                 }
@@ -953,6 +942,5 @@ extension AuthViewController {
                           completion: nil)
     }
 }
-
 
 
