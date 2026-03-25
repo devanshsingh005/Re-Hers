@@ -70,7 +70,7 @@
 		84AFA4462EF82681004A8110 /* PlayAlongViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */; };
 		84B3F1AD2EC3375A00402CEE /* TopNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B3F1AC2EC3375A00402CEE /* TopNavBar.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
-		84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */; };
+		84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */; };
 		AA1BC2D42F8000010001ABCD /* UploadPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */; };
 		C7CF4171E017AB9C2DE571DB /* NavigationBarHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0110DC55172A44C69E9FCC1 /* NavigationBarHelper.swift */; };
 		DC2314E6DF97CBC2F4BC9CC1 /* NavigationBarHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BB8E31E84B2DD102387CA5 /* NavigationBarHelper.swift */; };
@@ -161,29 +161,21 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		23D103FC2F690FC500A6EBD2 /* LearningCurve */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = LearningCurve;
 			sourceTree = "<group>";
 		};
 		23FA2E8B2EE576800028C205 /* MainLoginSignupScreen */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = MainLoginSignupScreen;
 			sourceTree = "<group>";
 		};
 		23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = SupabaseBackend;
 			sourceTree = "<group>";
 		};
 		2BE584CC2F6D19520059620E /* DesignSystem */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = DesignSystem;
 			sourceTree = "<group>";
 		};
@@ -256,13 +248,13 @@
 			path = ProfileScreen;
 			sourceTree = "<group>";
 		};
-			2B7718E82F728FF200B4B869 /* Recovered References */ = {
-				isa = PBXGroup;
-				children = (
-					A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */,
-					A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */,
-					A1B2C3D42F90000100000001 /* Re-Hearse_v1/Secrets.xcconfig */,
-				);
+		2B7718E82F728FF200B4B869 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */,
+				A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */,
+				A1B2C3D42F90000100000001 /* Re-Hearse_v1/Secrets.xcconfig */,
+			);
 			name = "Recovered References";
 			sourceTree = "<group>";
 		};
@@ -339,7 +331,7 @@
 		842B08322EBA0465001AC579 = {
 			isa = PBXGroup;
 			children = (
-				84CC1BDC2F227D580008422A /* Wurlitzer210.sf2 */,
+				84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
 				84DBA8592EBA72C7006DF51E /* Screens */,
@@ -569,7 +561,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				84CC1BDD2F227D580008422A /* Wurlitzer210.sf2 in Resources */,
+				84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */,
 				84ADF6A12F5EAABA009F3D7D /* sheet_test.json in Resources */,
 				842B088B2EBA594A001AC579 /* .gitignore in Resources */,
 			);

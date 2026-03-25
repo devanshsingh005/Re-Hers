@@ -3,7 +3,7 @@ import os
 import uuid
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,9 +39,18 @@ async def lifespan(app: FastAPI):
             f"Redis is not available — cannot start server. "
             f"Ensure Redis is running. Detail: {exc}"
         ) from exc
-    asyncio.create_task(recovery_loop())
+
+    recovery_task = asyncio.create_task(recovery_loop())
     logger.info("Application started")
-    yield
+
+    try:
+        yield
+    finally:
+        logger.info("Shutting down application...")
+        recovery_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await recovery_task
+        logger.info("Recovery loop cancelled successfully")
 
 
 app = FastAPI(title="Audiveris PDF Conversion API with User Isolation", lifespan=lifespan)
@@ -97,7 +106,7 @@ def _sanitize_job_summary(job: dict) -> dict:
         "status": job["status"],
         "created_at": job["created_at"],
     }
-    if job["status"] in {"completed", "completed_with_warning"}:
+    if job.get("result_url") or job.get("label_status") == "success" or job["status"] in {"completed", "completed_with_warning"}:
         summary["result_url"] = _authenticated_result_route(job_id)
     if job.get("label_status") == "success":
         summary["pdf_url"] = _authenticated_pdf_route(job_id)
@@ -316,7 +325,7 @@ async def get_job_status(
             "user_id": user_id
         }
         
-        if job.get("result_url"):
+        if job.get("result_url") or job.get("label_status") == "success" or job["status"] in {"completed", "completed_with_warning"}:
             response["result_url"] = _authenticated_result_route(job_id)
         if job.get("label_status") == "success":
             response["pdf_url"] = _authenticated_pdf_route(job_id)

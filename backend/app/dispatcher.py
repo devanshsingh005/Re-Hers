@@ -347,7 +347,7 @@ async def async_process_job(job_data: dict) -> None:
             logger.info(f"[4/7] Audiveris call succeeded! Output type: {type(json_output).__name__}")
             logger.info("[4/7] Audiveris output received")
         except Exception as e:
-            logger.error("[4/7] FAILED to call Audiveris: %s", _log_safe_error(e), exc_info=True)
+            logger.error("[4/7] FAILED to call Audiveris: %s", _log_safe_error(e))
             raise
 
         if isinstance(json_output, str):
@@ -371,7 +371,7 @@ async def async_process_job(job_data: dict) -> None:
             )
             logger.info(f"[5/7] JSON upload completed.")
         except Exception as e:
-            logger.error("[5/7] FAILED to upload JSON: %s", _log_safe_error(e), exc_info=True)
+            logger.error("[5/7] FAILED to upload JSON: %s", _log_safe_error(e))
             raise
 
         json_file_id = str(uuid4())
@@ -479,8 +479,8 @@ async def async_process_job(job_data: dict) -> None:
         )
 
     except Exception as e:
-        error_message = str(e)
-        logger.error("EXCEPTION in process_job %s: %s", job_id, _log_safe_error(e), exc_info=True)
+        error_message = _log_safe_error(e)
+        logger.error("EXCEPTION in process_job %s: %s", job_id, error_message)
         try:
             jobs_response = (
                 db_client.client
@@ -502,7 +502,7 @@ async def async_process_job(job_data: dict) -> None:
         except Exception as db_error:
             logger.error(f"Failed to write failed status for job {job_id}: {db_error}")
 
-        logger.error("Job %s failed with error type: %s", job_id, _log_safe_error(e), exc_info=True)
+        logger.error("Job %s failed with error type: %s", job_id, _log_safe_error(e))
 
     finally:
         for tmp_path in [tmp_pdf_path, tmp_json_path, tmp_labeled_pdf_path]:

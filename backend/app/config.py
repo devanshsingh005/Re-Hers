@@ -37,15 +37,24 @@ settings = Settings()
 LOCAL_HTTP_SCHEME = 'http' + '://'
 
 
-def validate_audiveris_api_url(url: str | None) -> str:
+def validate_audiveris_api_url(api_url: str | None) -> str:
     """Validate the Audiveris backend URL."""
-    if url is None or not str(url).strip():
+    if api_url is None or not str(api_url).strip():
         raise ValueError("AUDIVERIS_API_URL must be set")
 
+    url: str = str(api_url)
     parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
     host = (parsed.hostname or "").lower()
-    if url.startswith(LOCAL_HTTP_SCHEME) and host not in {"localhost", "127.0.0.1"}:
-        raise ValueError("AUDIVERIS_API_URL must use HTTPS in non-local deployments")
+
+    if scheme not in {"http", "https"}:
+        raise ValueError(f"Invalid scheme '{scheme}' for AUDIVERIS_API_URL. Use 'http' or 'https'.")
+
+    if not host:
+        raise ValueError("AUDIVERIS_API_URL must have a valid hostname.")
+
+    if scheme == "http" and host not in {"localhost", "127.0.0.1"}:
+        raise ValueError("AUDIVERIS_API_URL must use HTTPS for remote hosts.")
 
     return url
 

@@ -289,9 +289,44 @@ class PlaylistSongDetailViewController: UIViewController {
               let url = ReHersAPI.url(path: "/sheets/\(jobId.uuidString)") else { return }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        guard let (data, _) = try? await ReHersPinnedSession.shared.data(for: request),
-              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        await MainActor.run { self.sheetMusicJSON = parsed }
+        
+        do {
+            let (data, response) = try await ReHersPinnedSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return 
+            }
+            
+            guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  isValidScoreJSON(parsed) else {
+                return
+            }
+            
+            await MainActor.run { self.sheetMusicJSON = parsed }
+        } catch {
+            // Silently fail as in existing logic
+        }
+    }
+
+    private func isValidScoreJSON(_ json: [String: Any]) -> Bool {
+        // Look for common score-partwise keys or a measure key
+        if json["score-partwise"] != nil { return true }
+        if json["measure"] != nil { return true }
+        
+        // Deep search helper for any "measure" key
+        func findMeasure(in dict: [String: Any]) -> Bool {
+            if dict["measure"] != nil { return true }
+            for value in dict.values {
+                if let subDict = value as? [String: Any], findMeasure(in: subDict) {
+                    return true
+                } else if let array = value as? [[String: Any]] {
+                    for item in array {
+                        if findMeasure(in: item) { return true }
+                    }
+                }
+            }
+            return false
+        }
+        return findMeasure(in: json)
     }
 
     private func fetchLabeledPDF(resultUrl: String?, jobId: UUID?) async {

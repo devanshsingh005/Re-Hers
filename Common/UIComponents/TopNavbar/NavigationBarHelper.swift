@@ -124,7 +124,7 @@ public final class NavigationBarHelper {
         stack.axis = .horizontal
         stack.alignment = .fill
         stack.distribution = .fill
-        stack.frame = CGRect(x: 0, y: 0, width: 36, height: 36)
+        stack.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         
         return UIBarButtonItem(customView: stack)
     }
@@ -162,7 +162,7 @@ public final class NavigationBarHelper {
         }
         
         override var intrinsicContentSize: CGSize {
-            return CGSize(width: 36, height: 36)
+            return CGSize(width: 44, height: 44)
         }
     }
 
@@ -170,8 +170,8 @@ public final class NavigationBarHelper {
         let btn = PremiumBackButton(type: .custom)
         btn.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            btn.widthAnchor.constraint(equalToConstant: 36),
-            btn.heightAnchor.constraint(equalToConstant: 36)
+            btn.widthAnchor.constraint(equalToConstant: 44),
+            btn.heightAnchor.constraint(equalToConstant: 44)
         ])
         return btn
     }
