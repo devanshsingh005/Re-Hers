@@ -58,9 +58,13 @@ extension HomeViewController {
         // No border — clean card look per user request
         imageView.translatesAutoresizingMaskIntoConstraints = false
 
-        if let url = playlist.coverImageURL {
-            ImageLoader.shared.loadImage(from: url) { [weak imageView] img in
-                if let img = img { imageView?.image = img }
+        if let url = playlist.coverImageURL, !url.isEmpty {
+            if url.hasPrefix("http") {
+                ImageLoader.shared.loadImage(from: url) { [weak imageView] img in
+                    if let img = img { imageView?.image = img }
+                }
+            } else {
+                imageView.image = UIImage(named: url) ?? imageView.image
             }
         }
 
@@ -102,10 +106,11 @@ extension HomeViewController {
                 guard let self = self else { return }
                 let vc = PlaylistDetailViewController()
                 vc.hidesBottomBarWhenPushed = true
-                vc.passedTitle  = playlist.name
-                vc.passedArtist = playlist.description ?? "Custom Playlist"
-                vc.playlistId   = playlist.id
-                if let url = playlist.coverImageURL {
+                vc.passedTitle   = playlist.name
+                vc.passedArtist  = playlist.description ?? "Custom Playlist"
+                vc.playlistId    = playlist.id
+                vc.passedCoverUrl = playlist.coverImageURL
+                if let url = playlist.coverImageURL, url.hasPrefix("http") {
                     ImageLoader.shared.loadImage(from: url) { [weak vc] img in vc?.passedImage = img }
                 }
                 self.navigationController?.pushViewController(vc, animated: true)
@@ -162,7 +167,19 @@ extension HomeViewController {
         // No border — clean look
         card.translatesAutoresizingMaskIntoConstraints = false
         
-        let imageView = UIImageView(image: UIImage(named: imageName) ?? UIImage(named: "trackimage_1"))
+        let placeholder = UIImage(named: imageName) ?? UIImage(named: "trackimage_1")
+        let imageView = UIImageView(image: placeholder)
+        
+        if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+            if coverUrl.hasPrefix("http") {
+                ImageLoader.shared.loadImage(from: coverUrl) { [weak imageView] img in
+                    if let img = img { imageView?.image = img }
+                }
+            } else {
+                imageView.image = UIImage(named: coverUrl) ?? placeholder
+            }
+        }
+
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 12

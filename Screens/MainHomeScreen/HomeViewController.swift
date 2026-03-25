@@ -146,41 +146,31 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     private func updateHeroCard(with song: Song) {
         self.topSong = song
         self.topCardTitleLabel?.text = song.title
-        
-        // Dynamic Theme Logic
-        let theme = PracticeCardTheme.theme(for: song.title)
-        
-        if let wrapper = view.viewWithTag(991) as? PracticeCardBackgroundView {
-            wrapper.updateColors(start: theme.start, end: theme.end)
-        }
-        if let shadowContainer = view.viewWithTag(992) {
-            UIView.animate(withDuration: 0.4) {
-                shadowContainer.layer.shadowColor = theme.shadow.cgColor
+
+        // ── Cover Image ─────────────────────────────────────────────
+        if let coverImageView = view.viewWithTag(9910) as? UIImageView {
+            let placeholder = UIImage(named: "trackimage_1")
+            coverImageView.image = placeholder
+            if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+                if coverUrl.hasPrefix("http") {
+                    ImageLoader.shared.loadImage(from: coverUrl) { [weak coverImageView] img in
+                        if let img = img { coverImageView?.image = img }
+                    }
+                } else {
+                    coverImageView.image = UIImage(named: coverUrl) ?? placeholder
+                }
             }
         }
-        
-        UIView.animate(withDuration: 0.4) {
-            self.view.backgroundColor = UIColor.adaptive(light: theme.bgLight, dark: theme.bgDark)
-        }
-        
-        // Update tags
+
+        // ── Tags ─────────────────────────────────────────────────────
         if let stack = self.topCardTagsStack {
             stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
             let tags = ["LEVEL \(song.level)", song.hands.uppercased()]
             for text in tags {
-                let tag = self.makePillTag(text: text)
-                stack.addArrangedSubview(tag)
+                stack.addArrangedSubview(makePillTag(text: text))
             }
         }
-        
-        // Update details
-        if let stack = self.topCardDetailsStack {
-            stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            stack.addArrangedSubview(makeDetailItem(icon: "gauge.with.needle", text: "Level \(song.level)"))
-            stack.addArrangedSubview(makeDetailItem(icon: "person.fill", text: song.composer))
-            stack.addArrangedSubview(makeDetailItem(icon: "metronome", text: song.tempo))
-        }
-        
+
         self.topCardTitleLabel?.superview?.layoutIfNeeded()
     }
 
