@@ -31,6 +31,8 @@ final class UploadPageNextViewController: UIViewController {
     private var refreshHeightConstraint:    NSLayoutConstraint?
     private var loadedPDFDocument: PDFDocument? // stored for full-screen preview
     private var pendingPDFPath:   String?       // raw pdf_path from DB, used after processing
+    private var pdfLoadTask:      Task<Void, Never>?
+    private var jsonFetchTask:    Task<Void, Never>?
 
     // MARK: - Scroll
     private let scrollView  = UIScrollView()
@@ -87,7 +89,7 @@ final class UploadPageNextViewController: UIViewController {
         view.backgroundColor = ComponentColors.App.screenBackground
         setupNativeNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
         showProcessingState()
-        print("[VDL] jobId=\(jobId?.uuidString ?? "nil")  resultURL=\(resultURL ?? "nil")")
+        print("[VDL] jobId=\(jobId?.uuidString.lowercased() ?? "nil")  hasResultURL=\(resultURL?.isEmpty == false)")
         loadFromJobId()
     }
 
@@ -108,9 +110,15 @@ final class UploadPageNextViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         pollingTimer?.invalidate(); pollingTimer = nil
+        pdfLoadTask?.cancel()
+        jsonFetchTask?.cancel()
     }
 
-    deinit { pollingTimer?.invalidate() }
+    deinit {
+        pollingTimer?.invalidate()
+        pdfLoadTask?.cancel()
+        jsonFetchTask?.cancel()
+    }
 
     // MARK: - Data Loading
 
@@ -147,19 +155,29 @@ final class UploadPageNextViewController: UIViewController {
                 return
             }
 
-            print("[Load] pdf_path=\(row.pdfPath)  db_result_url=\(row.resultUrl ?? "nil")")
-
             // Store path — PDF loads only after processing completes (labeled if ready, else input)
             self.pendingPDFPath = row.pdfPath
 
             // Determine effective result URL
             let _: String
             if let preSupplied = self.resultURL, !preSupplied.isEmpty {
-                print("[Load] ✅ Using pre-supplied resultURL: \(preSupplied)")
-                _ = preSupplied
+                if isLegacyPublicStorageURL(preSupplied) {
+                    let authenticatedURL = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
+                    print("[Load] Ignoring legacy public resultURL; using authenticated route: \(authenticatedURL)")
+                    _ = authenticatedURL
+                } else {
+                    print("[Load] Using pre-supplied authenticated resultURL")
+                    _ = preSupplied
+                }
             } else if let dbURL = row.resultUrl, !dbURL.isEmpty {
-                print("[Load] Using DB result_url: \(dbURL)")
-                _ = dbURL
+                if isLegacyPublicStorageURL(dbURL) {
+                    let authenticatedURL = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
+                    print("[Load] Ignoring legacy DB result_url; using authenticated route: \(authenticatedURL)")
+                    _ = authenticatedURL
+                } else {
+                    print("[Load] Using DB result_url")
+                    _ = dbURL
+                }
             } else {
                 let derived = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
                 print("[Load] No result_url — using derived: \(derived)")
@@ -175,11 +193,18 @@ final class UploadPageNextViewController: UIViewController {
         }
     }
 
-    /// Derives the output JSON URL from the known sheet_data/{userId}/{jobId}/output.json structure.
+    /// Derives the authenticated output JSON endpoint for the current job.
     private func deriveOutputURL(jobId: UUID, pdfPath: String) -> String {
-        let userId    = pdfPath.components(separatedBy: "/").first ?? jobId.uuidString
-        let projectID = "djqgmowfjxsnjdffdohw"
-        return "https://\(projectID).supabase.co/storage/v1/object/public/sheet_data/\(userId)/\(jobId.uuidString.lowercased())/output.json"
+        _ = pdfPath
+        return "\(ReHersAPI.baseURLString)/sheets/\(normalizedJobIDString(jobId))"
+    }
+
+    private func deriveLabeledPDFURL(jobId: UUID) -> String {
+        "\(ReHersAPI.baseURLString)/sheets/\(normalizedJobIDString(jobId))/pdf"
+    }
+
+    private func normalizedJobIDString(_ jobId: UUID) -> String {
+        jobId.uuidString.lowercased()
     }
 
     // MARK: - PDF Display
@@ -192,13 +217,15 @@ final class UploadPageNextViewController: UIViewController {
         sheetLoadingIndicator.startAnimating()
         pdfView.isHidden = true
 
-        Task {
+        pdfLoadTask?.cancel()
+        pdfLoadTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                var pdfReq = URLRequest(url: url)
-                pdfReq.timeoutInterval = 15
-                let (data, response) = try await URLSession.shared.data(for: pdfReq)
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                print("[PDF] HTTP \(code)  bytes=\(data.count)")
+                let (data, code) = try await self.fetchAuthenticatedData(
+                    from: url,
+                    logPrefix: "PDF",
+                    usePinnedSession: urlString.hasPrefix(ReHersAPI.baseURLString)
+                )
 
                 guard (200...299).contains(code) else {
                     let body = String(data: data, encoding: .utf8) ?? "<binary>"
@@ -308,15 +335,16 @@ final class UploadPageNextViewController: UIViewController {
                 await MainActor.run { self.updateProcessingStatus(message: "Job queued…") }
             }
         } catch {
-            print("[Poll] ⚠️ DB error: \(error.localizedDescription)")
+            print("[Poll] DB polling error")
+            stopPolling()
+            DispatchQueue.main.async { self.showErrorState() }
         }
     }
 
-    /// Called once the backend marks the job complete. By this point labeled.pdf
-    /// is guaranteed to be in sheet_data storage (same public bucket as output.json).
-    /// result_url from the DB is "sheet_data/{user_id}/{job_id}/labeled.pdf" —
-    /// we just prepend the Supabase public-storage base URL.
+    /// Called once the backend marks the job complete. The authenticated backend
+    /// owns access to both output.json and labeled.pdf for this job.
     private func handleJobCompleted(resultUrl: String?) async {
+        guard let currentJobId = jobId else { return }
         await MainActor.run {
             self.isProcessing           = false
             self.progressView.isHidden  = true
@@ -324,51 +352,53 @@ final class UploadPageNextViewController: UIViewController {
             self.refreshButton.isHidden = true
         }
 
-        let projectID = "djqgmowfjxsnjdffdohw"
-        let publicBase = "https://\(projectID).supabase.co/storage/v1/object/public"
-
-        // Load labeled PDF from sheet_data (public bucket — no auth needed)
-        if let relPath = resultUrl, !relPath.isEmpty {
-            // relPath is e.g. "sheet_data/{user_id}/{job_id}/labeled.pdf"
-            let pdfPublicURL = relPath.hasPrefix("http") ? relPath : "\(publicBase)/\(relPath)"
-            print("[PDF] ✅ Loading labeled PDF: \(pdfPublicURL)")
-            await MainActor.run { self.loadSheetPDF(from: pdfPublicURL) }
-        } else if let rawPath = pendingPDFPath {
-            // No result_url yet — rare fallback: show input PDF via signed URL
-            if let url = try? await SupabaseManager.shared.client.storage
-                    .from("pdf_uploads").createSignedURL(path: rawPath, expiresIn: 3600) {
-                print("[PDF] ⚠️ No result_url — falling back to input.pdf")
-                await MainActor.run { self.loadSheetPDF(from: url.absoluteString) }
-            }
+        let pdfURL = deriveLabeledPDFURL(jobId: currentJobId)
+        if let relPath = resultUrl, isLegacyPublicStorageURL(relPath) {
+            print("[PDF] Ignoring legacy public PDF path; using authenticated route")
+        } else {
+            print("[PDF] Using authenticated backend PDF route")
         }
+        print("[PDF] ✅ Loading labeled PDF")
+        await MainActor.run { self.loadSheetPDF(from: pdfURL) }
 
         // Download output.json and populate chord/key/time/tempo fields
-        if let jobId, let rawPath = pendingPDFPath {
-            let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: rawPath)
-            print("[JSON] 🔄 Fetching output.json: \(jsonURL)")
-            
-            Task {
-                do {
-                    let (data, response) = try await URLSession.shared.data(from: URL(string: jsonURL)!)
-                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    print("[JSON] HTTP \(code)  bytes=\(data.count)")
-                    
-                    guard (200...299).contains(code) else {
-                        print("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
-                        return
-                    }
-                    
-                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        print("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
-                        await parseAndDisplayJSON(json)
-                    } else {
-                        print("❌ [JSON] output.json is not a dictionary")
-                    }
-                } catch {
-                    print("❌ [JSON] Error fetching/parsing output.json: \(error)")
+        if let rawPath = pendingPDFPath {
+            await fetchOutputJSON(jobId: currentJobId, pdfPath: rawPath)
+        }
+    }
+
+    private func fetchOutputJSON(jobId: UUID, pdfPath: String) async {
+        let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: pdfPath)
+        print("[JSON] Fetching output.json from authenticated route")
+
+        jsonFetchTask?.cancel()
+        jsonFetchTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard let url = URL(string: jsonURL) else { return }
+                let (data, code) = try await self.fetchAuthenticatedData(
+                    from: url,
+                    logPrefix: "JSON",
+                    usePinnedSession: true
+                )
+
+                guard (200...299).contains(code) else {
+                    print("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
+                    return
                 }
+
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    print("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
+                    await parseAndDisplayJSON(json)
+                } else {
+                    print("❌ [JSON] output.json is not a dictionary")
+                }
+            } catch {
+                print("❌ [JSON] Error fetching/parsing output.json: \(error)")
             }
         }
+
+        await jsonFetchTask?.value
     }
 
     private func parseAndDisplayJSON(_ json: [String: Any]) async {
@@ -387,6 +417,66 @@ final class UploadPageNextViewController: UIViewController {
                 text: "", chords: chords, timeSignature: timeSig,
                 tempo: tempoStr, keySignature: keySig, jsonData: json))
         }
+    }
+
+    private func authToken() async -> String? {
+        try? await SupabaseManager.shared.accessToken()
+    }
+
+    private func refreshAuthToken() async -> String? {
+        try? await SupabaseManager.shared.accessToken(forceRefresh: true)
+    }
+
+    private func fetchAuthenticatedData(
+        from url: URL,
+        logPrefix: String,
+        usePinnedSession: Bool
+    ) async throws -> (Data, Int) {
+        let session = usePinnedSession ? ReHersPinnedSession.shared : URLSession.shared
+        var didRetryAfterRefresh = false
+
+        while true {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+
+            if usePinnedSession {
+                guard let token = await (didRetryAfterRefresh ? refreshAuthToken() : authToken()) else {
+                    print("❌ [\(logPrefix)] Missing auth credentials")
+                    return (Data(), 401)
+                }
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                print("[\(logPrefix)] Authorization header set: true")
+            }
+
+            let (data, response) = try await session.data(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            print("[\(logPrefix)] HTTP \(code)  bytes=\(data.count)")
+
+            if code == 401 && usePinnedSession && !didRetryAfterRefresh {
+                print("[\(logPrefix)] 401 received, refreshing session and retrying once")
+                didRetryAfterRefresh = true
+                continue
+            }
+
+            return (data, code)
+        }
+    }
+
+    private func isLegacyPublicStorageURL(_ value: String) -> Bool {
+        let storageMarker = ["/storage", "v1", "object", "public"].joined(separator: "/")
+        return value.contains(storageMarker)
+    }
+
+    private func stopPolling() {
+        pollingTimer?.invalidate()
+        pollingTimer = nil
+    }
+
+    private func showErrorState() {
+        statusLabel.text       = "Something went wrong. Tap Refresh to retry."
+        statusLabel.isHidden   = false
+        refreshButton.isHidden = false
+        progressView.isHidden  = true
     }
 
     /// Reads "staff" (or parts/clefs) from the JSON and returns a human-readable focus label.

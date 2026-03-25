@@ -23,7 +23,6 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     // MARK: - Private State
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
-    private var supabaseBase: String     { SupabaseManager.shared.supabaseBaseURL }
 
     private var loadedPDF: PDFDocument?
     private var uploadPopup: UploadQuizPopup?
@@ -264,12 +263,34 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     // MARK: - PDF URL Construction
 
-    private func buildPDFCandidates() -> [String] {
-        guard let title = song?.title, !title.isEmpty else { return [] }
-        let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title
-        return [
-            "\(supabaseBase)/storage/v1/object/public/Sheets/\(encoded).pdf"
-        ]
+    private func buildPDFCandidates() async -> [URL] {
+        guard let song else { return [] }
+
+        var candidatePaths: [String] = []
+
+        if let sheetURL = song.sheetUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !sheetURL.isEmpty {
+            candidatePaths.append(sheetURL)
+            if sheetURL.hasPrefix("Sheets/") {
+                candidatePaths.append(String(sheetURL.dropFirst("Sheets/".count)))
+            }
+        }
+
+        let titlePath = song.title.hasSuffix(".pdf") ? song.title : "\(song.title).pdf"
+        candidatePaths.append(titlePath)
+
+        var candidates: [URL] = []
+        var seenPaths = Set<String>()
+
+        for path in candidatePaths where seenPaths.insert(path).inserted {
+            if let signedURL = try? await supabase.storage
+                .from("Sheets")
+                .createSignedURL(path: path, expiresIn: 3600) {
+                candidates.append(signedURL)
+            }
+        }
+
+        return candidates
     }
 
     // MARK: - PDF Loading (preview only)
@@ -279,12 +300,14 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         pdfView.isHidden       = true
         pdfErrorLabel.isHidden = true
 
-        let candidates = buildPDFCandidates()
-        guard !candidates.isEmpty else { showPDFError(); return }
-
         Task {
-            for urlString in candidates {
-                guard let url = URL(string: urlString) else { continue }
+            let candidates = await buildPDFCandidates()
+            guard !candidates.isEmpty else {
+                await MainActor.run { self.showPDFError() }
+                return
+            }
+
+            for url in candidates {
                 if let (data, resp) = try? await URLSession.shared.data(from: url),
                    (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
                    let doc = PDFDocument(data: data), doc.pageCount > 0 {
@@ -362,15 +385,13 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     // MARK: - Step 1: Resolve PDF Data
 
     private func resolvePDFData() async throws -> Data {
-        let candidates = buildPDFCandidates()
+        let candidates = await buildPDFCandidates()
         guard !candidates.isEmpty else { throw ConvertError.noPDFSource }
 
-        for urlString in candidates {
-            guard let url = URL(string: urlString) else { continue }
+        for url in candidates {
             if let (data, resp) = try? await URLSession.shared.data(from: url),
                (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
                !data.isEmpty {
-                print("[Convert] PDF resolved: \(urlString)")
                 return data
             }
         }
@@ -391,14 +412,12 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
         let api = try await callConversionAPI(
             imageData: pdfData, fileName: fileName, fileType: "application/pdf", token: token)
-        print("[Convert] API keys: \(api.keys.sorted())")
 
-        guard let jobIdStr  = api["job_id"]  as? String, let jobId = UUID(uuidString: jobIdStr),
-              let apiUidStr = api["user_id"] as? String
-        else { throw ConvertError.badAPIResponse }
+        guard let jobIdStr = api["job_id"] as? String,
+              let jobId = UUID(uuidString: jobIdStr) else { throw ConvertError.badAPIResponse }
 
-        let outputURL = (api["output_url"] as? String)
-            ?? "\(supabaseBase)/storage/v1/object/public/sheet_data/\(apiUidStr.lowercased())/\(jobIdStr.lowercased())/output.json"
+        let apiUidStr = uidStr.lowercased()
+        let outputURL = "\(ReHersAPI.baseURLString)/sheets/\(jobIdStr.lowercased())"
 
         var jsonDict: [String: Any] = [
             "uploaded_at":       ISO8601DateFormatter().string(from: Date()),
@@ -452,7 +471,9 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private func callConversionAPI(imageData: Data, fileName: String,
                                    fileType: String, token: String) async throws -> [String: Any] {
-        let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
+        guard let url = ReHersAPI.url(path: "/convert") else {
+            throw ConvertError.noResponse
+        }
         let boundary = UUID().uuidString
         var req      = URLRequest(url: url)
         req.httpMethod          = "POST"
@@ -469,7 +490,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         body.appendStr("\r\n--\(boundary)--\r\n")
         req.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await ReHersPinnedSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw ConvertError.noResponse }
         guard (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? ""
@@ -484,13 +505,13 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     // MARK: - Auth Helpers (mirrors UploadScreen)
 
     private func currentUserId() async -> String? {
-        do    { return try await supabase.auth.session.user.id.uuidString }
-        catch { print("[Auth] \(error)"); return nil }
+        do    { return try await SupabaseManager.shared.currentUserId() }
+        catch { print("[Auth] authentication failed"); return nil }
     }
 
     private func authToken() async -> String? {
-        do    { return try await supabase.auth.session.accessToken }
-        catch { print("[Auth] \(error)"); return nil }
+        do    { return try await SupabaseManager.shared.accessToken() }
+        catch { print("[Auth] authentication failed"); return nil }
     }
 
     // MARK: - UI Helpers
@@ -529,7 +550,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
             case .pdfDownloadFailed:      return "Could not download the sheet music PDF."
             case .invalidUser:            return "Could not retrieve your user ID."
             case .missingToken:           return "Could not retrieve authentication token."
-            case .badAPIResponse:         return "Missing job_id or user_id in API response."
+            case .badAPIResponse:         return "Missing job_id in API response."
             case .noResponse:             return "No response received from the server."
             case .apiError(let c, let m): return "Server error \(c): \(m)"
             }

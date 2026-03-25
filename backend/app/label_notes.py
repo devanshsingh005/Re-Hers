@@ -18,6 +18,7 @@ Dependencies:
 import json
 import os
 import logging
+import re
 from typing import Optional
 
 try:
@@ -29,6 +30,10 @@ except ImportError:
     )
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_upstream(value: str, max_len: int = 200) -> str:
+    return re.sub(r'[^\x20-\x7E]', '', str(value))[:max_len]
 
 # ---------------------------------------------------------------------------
 # Pitch helpers
@@ -324,11 +329,11 @@ def process(pdf_path: str | None, json_path: str, output_path: str,
             # Audiveris likely returned an error
             logger.warning(f"Audiveris JSON missing 'score-partwise' key. Available keys: {list(data.keys())}")
             if "detail" in data:
-                logger.error(f"Audiveris error detail: {data.get('detail')}")
+                logger.error("Audiveris error detail: %s", _sanitize_upstream(data.get('detail', '')))
             if "stderr" in data:
-                logger.error(f"Audiveris stderr: {data.get('stderr')}")
+                logger.error("Audiveris stderr: %s", _sanitize_upstream(data.get('stderr', '')))
             if "stdout" in data:
-                logger.error(f"Audiveris stdout: {data.get('stdout')}")
+                logger.error("Audiveris stdout: %s", _sanitize_upstream(data.get('stdout', '')))
             return False
         
         score          = data["score-partwise"]
@@ -565,6 +570,7 @@ def process(pdf_path: str | None, json_path: str, output_path: str,
             # Collect: {staff_num: [(note_x, base_label_y, note_y, label_text), ...]}
             staff_labels: dict[int, list] = {}
             notes_found = 0
+            invalid_note_count = 0
 
             for note in notes_raw:
                 if "rest" in note or "pitch" not in note:
@@ -588,7 +594,12 @@ def process(pdf_path: str | None, json_path: str, output_path: str,
                     this_staff_top_y = system_top_y
 
                 # ---- Horizontal position
-                default_x_pt = float(note["@default-x"]) * t2pt_x
+                try:
+                    default_x_pt = float(note["@default-x"]) * t2pt_x
+                except (ValueError, TypeError) as e:
+                    logger.debug("Skipped malformed note metadata field: %s", type(e).__name__)
+                    invalid_note_count += 1
+                    continue
                 note_x = system_left_x + measure_start_x + default_x_pt - notehead_cx
 
                 # ---- Vertical position (note head — for debug anchor only)
@@ -604,6 +615,9 @@ def process(pdf_path: str | None, json_path: str, output_path: str,
 
                 if debug:
                     debug_note_anchor(page, note_x, note_y, debug_radius)
+
+            if invalid_note_count > 0:
+                logger.warning("Skipped %d malformed note(s) during processing", invalid_note_count)
 
             # ---- Resolve collisions and render labels
             min_label_gap = fontsize * 2.2  # minimum X gap between labels
@@ -660,6 +674,5 @@ def process(pdf_path: str | None, json_path: str, output_path: str,
     except Exception as e:
         logger.error(f"Failed to process label_notes: {e}", exc_info=True)
         return False
-
 
 

@@ -13,22 +13,52 @@ final class SupabaseManager {
 
     let client: SupabaseClient
 
-    /// Base URL for constructing storage and function URLs.
-    /// Not a secret — this is the project URL, not an API key.
-    let supabaseBaseURL: String
+    var supabaseURL: String {
+        Self.resolveSupabaseURL()
+    }
 
     private init() {
-        let urlString = "https://djqgmowfjxsnjdffdohw.supabase.co"
-        let key       = "sb_publishable__FkMcK1683czdRktkt7YsA_vYR4ZsOW"
+        let rawKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_KEY") as? String ?? ""
+        let key = rawKey
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
 
-        supabaseBaseURL = urlString
+        guard let resolvedSupabaseURL = URL(string: Self.resolveSupabaseURL()) else {
+            fatalError("SUPABASE_URL is not a valid URL — check build configuration")
+        }
 
         client = SupabaseClient(
-            supabaseURL: URL(string: urlString)!,
+            supabaseURL: resolvedSupabaseURL,
             supabaseKey: key,
             options: SupabaseClientOptions(
                 auth: .init(emitLocalSessionAsInitialSession: true)
             )
         )
+    }
+
+    func accessToken(forceRefresh: Bool = false) async throws -> String {
+        if forceRefresh {
+            return try await client.auth.refreshSession().accessToken
+        }
+        return try await client.auth.session.accessToken
+    }
+
+    func currentUserId() async throws -> String {
+        try await client.auth.session.user.id.uuidString
+    }
+
+    func startAutoRefresh() {
+        client.auth.startAutoRefresh()
+    }
+
+    func stopAutoRefresh() {
+        client.auth.stopAutoRefresh()
+    }
+
+    private static func resolveSupabaseURL() -> String {
+        let rawURLString = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String ?? ""
+        return rawURLString
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
     }
 }

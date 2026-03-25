@@ -297,15 +297,8 @@ public final class TopNavBar: UIView {
             return
         }
 
-        var finalURLString = urlString
-        
-        // Fix the URL if it's missing /public/
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            // Replace /object/useprofile/ with /object/public/useprofile/
-            finalURLString = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        
-        guard let url = URL(string: finalURLString) else {
+        guard let finalURLString = await NavigationBarHelper.signedProfileURLString(from: urlString),
+              let url = URL(string: finalURLString) else {
             await MainActor.run {
                 self.profileImg.image = UIImage(systemName: "person.crop.circle")
                 self.profileImg.tintColor = .gray

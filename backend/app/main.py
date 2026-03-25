@@ -3,6 +3,7 @@ import os
 import uuid
 import asyncio
 import logging
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,13 +20,40 @@ from app.orphan_detector import OrphanDetector
 from app.config import (
     SUPABASE_URL, SUPABASE_KEY, ALLOWED_ORIGINS,
     RATE_LIMIT_UPLOAD, RATE_LIMIT_API, RATE_LIMIT_HEALTH, RATE_LIMIT_ADMIN,
-    MAX_CONCURRENT_JOBS_PER_USER,
+    MAX_CONCURRENT_JOBS_PER_USER, MAX_FILE_SIZE,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Audiveris PDF Conversion API with User Isolation")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Verify Redis before serving traffic, then start the recovery task."""
+    logger.info("Starting application...")
+    try:
+        redis_conn.ping()
+        logger.info("Redis connection verified")
+    except Exception as exc:
+        raise RuntimeError(
+            f"Redis is not available — cannot start server. "
+            f"Ensure Redis is running. Detail: {exc}"
+        ) from exc
+
+    recovery_task = asyncio.create_task(recovery_loop())
+    logger.info("Application started")
+
+    try:
+        yield
+    finally:
+        logger.info("Shutting down application...")
+        recovery_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await recovery_task
+        logger.info("Recovery loop cancelled successfully")
+
+
+app = FastAPI(title="Audiveris PDF Conversion API with User Isolation", lifespan=lifespan)
 
 # CORS — explicit trusted origins only.
 # "*" is invalid with allow_credentials=True (browsers reject it) and
@@ -55,21 +83,57 @@ JOBS_DIR = "jobs"
 os.makedirs(JOBS_DIR, exist_ok=True)
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Verify Redis is reachable before accepting traffic, then start recovery loop."""
-    logger.info("Starting application...")
-    try:
-        redis_conn.ping()
-        logger.info("Redis connection verified")
-    except Exception as exc:
-        raise RuntimeError(
-            f"Redis is not available — cannot start server. "
-            f"Ensure Redis is running. Detail: {exc}"
-        ) from exc
-    asyncio.create_task(recovery_loop())
-    logger.info("Application started")
+def _authenticated_result_route(job_id: str) -> str:
+    return f"/sheets/{job_id}"
 
+
+def _authenticated_pdf_route(job_id: str) -> str:
+    return f"/sheets/{job_id}/pdf"
+
+
+def _generic_processing_error() -> str:
+    return "Processing failed. Please try again or contact support."
+
+
+def _generic_processing_warning() -> str:
+    return "Processing completed with warnings."
+
+
+def _sanitize_job_summary(job: dict) -> dict:
+    job_id = job["id"]
+    summary = {
+        "id": job_id,
+        "status": job["status"],
+        "created_at": job["created_at"],
+    }
+    if job.get("result_url") or job.get("label_status") == "success" or job["status"] in {"completed", "completed_with_warning"}:
+        summary["result_url"] = _authenticated_result_route(job_id)
+    if job.get("label_status") == "success":
+        summary["pdf_url"] = _authenticated_pdf_route(job_id)
+    if job.get("error_message"):
+        summary["error"] = _generic_processing_error()
+    if job.get("label_warning"):
+        summary["warning"] = _generic_processing_warning()
+    return summary
+
+
+def _validate_upload_bytes(file_content: bytes, content_type: str) -> None:
+    if not file_content:
+        raise HTTPException(status_code=422, detail="Uploaded file is empty")
+
+    if content_type == "application/pdf":
+        if not file_content.startswith(b"%PDF"):
+            raise HTTPException(status_code=422, detail="File content does not match declared type")
+        if len(file_content) < 32 or b"%%EOF" not in file_content[-1024:]:
+            raise HTTPException(status_code=422, detail="Uploaded PDF is truncated or invalid")
+        return
+
+    if content_type in {"image/jpeg", "image/jpg"}:
+        if not file_content.startswith(b"\xff\xd8\xff") or not file_content.endswith(b"\xff\xd9"):
+            raise HTTPException(status_code=422, detail="File content does not match declared type")
+        if len(file_content) < 16:
+            raise HTTPException(status_code=422, detail="Uploaded JPEG is truncated or invalid")
+        return
 
 async def recover_stuck_jobs() -> None:
     """Requeue any job that is 'processing' in the DB but absent from RQ StartedJobRegistry.
@@ -152,15 +216,15 @@ async def convert_pdf(
                 status_code=400,
                 detail="File must be a PDF or JPEG image"
             )
-        
+
+        magic_bytes = await file.read(8)
+        file_content = magic_bytes + await file.read()
+        _validate_upload_bytes(file_content, file.content_type)
+
         # Generate unique job ID
         job_id = str(uuid.uuid4())
         
-        # Read file content
-        file_content = await file.read()
-        
         # Validate file size (max 100MB)
-        MAX_FILE_SIZE = 100 * 1024 * 1024
         if len(file_content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
@@ -208,8 +272,8 @@ async def convert_pdf(
                     job_id, user_id, "failed",
                     error_message="Rejected: queue at capacity at submission time",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to update job status to failed: %s", type(e).__name__)
             raise HTTPException(status_code=503, detail=str(exc))
         logger.warning(f"[CONVERT] enqueue_job returned: {enqueue_result}")
         
@@ -261,11 +325,14 @@ async def get_job_status(
             "user_id": user_id
         }
         
-        if job.get("result_url"):
-            response["result_url"] = job["result_url"]
+        if job.get("result_url") or job.get("label_status") == "success" or job["status"] in {"completed", "completed_with_warning"}:
+            response["result_url"] = _authenticated_result_route(job_id)
+        if job.get("label_status") == "success":
+            response["pdf_url"] = _authenticated_pdf_route(job_id)
         
         if job.get("error_message"):
-            response["error"] = job["error_message"]
+            logger.error("Job %s failed; internal error recorded", job_id)
+            response["error"] = _generic_processing_error()
         
         return response
     
@@ -329,9 +396,10 @@ async def list_user_jobs(
     
     try:
         jobs = await db_client.get_user_jobs(user_id, limit, offset)
+        sanitized_jobs = [_sanitize_job_summary(job) for job in jobs]
         return {
-            "jobs": jobs,
-            "total": len(jobs),
+            "jobs": sanitized_jobs,
+            "total": len(sanitized_jobs),
             "user_id": user_id
         }
     except Exception as e:
@@ -382,7 +450,8 @@ async def detect_orphans(
         report = await orphan_detector.detect_orphans()
         return report
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Admin endpoint error: %s", type(e).__name__, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/admin/orphans/cleanup")
@@ -401,7 +470,8 @@ async def cleanup_orphans(
         result = await orphan_detector.cleanup_orphans(dry_run)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Admin endpoint error: %s", type(e).__name__, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/sheets/{job_id}/pdf")
@@ -480,10 +550,10 @@ async def get_job_status_details(
         
         # Include error/warning messages if present
         if job.get("error_message"):
-            response["error"] = job["error_message"]
+            response["error"] = _generic_processing_error()
         
         if job.get("label_warning"):
-            response["warning"] = job["label_warning"]
+            response["warning"] = _generic_processing_warning()
         
         if job.get("label_status"):
             response["label_status"] = job["label_status"]

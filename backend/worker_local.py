@@ -1,4 +1,9 @@
-"""RQ worker process with Azure VM lifecycle management for Audiveris."""
+"""RQ worker process — local development mode.
+
+Identical to worker.py except Azure VM lifecycle calls are stubbed out.
+No Azure credentials are required. The Audiveris API must already be
+reachable at AUDIVERIS_API_URL before jobs are submitted.
+"""
 import logging
 import os
 import sys
@@ -6,9 +11,7 @@ import time
 
 import redis
 import requests
-from azure.identity import ClientSecretCredential
-from azure.mgmt.compute import ComputeManagementClient
-from rq import Queue, Worker
+from rq import Queue, SimpleWorker as Worker
 
 import app.audiveris_client as audiveris_client
 import app.dispatcher as dispatcher
@@ -34,58 +37,29 @@ queue = Queue(QUEUE_NAME, connection=redis_conn)
 http_session = requests.Session()
 http_session.verify = True
 
-_credential = None
-_compute_client = None
 _ORIGINAL_RUN_AUDIVERIS = audiveris_client.run_audiveris
 
 
-def _required_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
-
-
-def _get_credential() -> ClientSecretCredential:
-    global _credential
-    if _credential is None:
-        _credential = ClientSecretCredential(
-            tenant_id=_required_env("AZURE_TENANT_ID"),
-            client_id=_required_env("AZURE_CLIENT_ID"),
-            client_secret=_required_env("AZURE_CLIENT_SECRET"),
-        )
-    return _credential
-
-
-def _get_compute_client() -> ComputeManagementClient:
-    global _compute_client
-    if _compute_client is None:
-        _compute_client = ComputeManagementClient(
-            credential=_get_credential(),
-            subscription_id=_required_env("AZURE_SUBSCRIPTION_ID"),
-        )
-    return _compute_client
-
-
-def _vm_resource_group() -> str:
-    return _required_env("AZURE_RESOURCE_GROUP")
-
-
-def _vm_name() -> str:
-    return _required_env("AUDIVERIS_VM_NAME")
-
+# ── Azure stubs (local dev: VM is always assumed running) ─────────────────────
 
 def _get_vm_power_state() -> str:
-    instance_view = _get_compute_client().virtual_machines.instance_view(
-        _vm_resource_group(),
-        _vm_name(),
-    )
-    for status in instance_view.statuses:
-        code = getattr(status, "code", "")
-        if code.startswith("PowerState/"):
-            return code.split("/", 1)[1]
-    return "unknown"
+    """Local dev stub — assume the VM (local Audiveris process) is always running."""
+    logger.debug("LOCAL MODE: _get_vm_power_state() → 'running'")
+    return "running"
 
+
+def start_vm_if_needed() -> str:
+    """Local dev stub — nothing to start; return 'running'."""
+    logger.info("LOCAL MODE: start_vm_if_needed() → no-op, returning 'running'")
+    return "running"
+
+
+def stop_vm_if_idle() -> None:
+    """Local dev stub — nothing to stop."""
+    logger.debug("LOCAL MODE: stop_vm_if_idle() → no-op")
+
+
+# ── Shared helpers (identical to worker.py) ───────────────────────────────────
 
 def get_queue_length() -> int:
     """Return the number of pending RQ jobs in Redis."""
@@ -141,29 +115,22 @@ def is_audiveris_reachable() -> bool:
         return False
 
 
-def start_vm_if_needed() -> str:
-    """Start the Audiveris VM when it is not already running."""
-    power_state = _get_vm_power_state()
-    logger.info("Audiveris VM power state: %s", power_state)
-    if power_state in {"deallocated", "stopped"}:
-        logger.info("Starting Audiveris VM %s", _vm_name())
-        poller = _get_compute_client().virtual_machines.begin_start(
-            _vm_resource_group(),
-            _vm_name(),
-        )
-        poller.result()
-        return "starting"
-    return power_state
-
-
 def ensure_audiveris_ready() -> None:
-    """Make sure the Audiveris VM is reachable before processing a job."""
+    """Make sure the Audiveris API is reachable.
+
+    In local dev mode we never start an Azure VM — instead we poll until
+    the locally-running Audiveris process responds, then give up after
+    VM_READY_TIMEOUT_SECONDS.
+    """
     if is_audiveris_reachable():
         return
 
-    power_state = start_vm_if_needed()
-    if power_state not in {"running", "starting", "deallocated", "stopped"}:
-        raise RuntimeError(f"Unexpected Audiveris VM power state: {power_state}")
+    logger.warning(
+        "Audiveris not reachable at %s — waiting up to %ss "
+        "(LOCAL MODE: will NOT start an Azure VM)",
+        AUDIVERIS_API_URL,
+        VM_READY_TIMEOUT_SECONDS,
+    )
 
     deadline = time.monotonic() + VM_READY_TIMEOUT_SECONDS
     delay = 10
@@ -175,45 +142,10 @@ def ensure_audiveris_ready() -> None:
         time.sleep(delay)
         delay = min(delay * 2, 60)
 
-    raise TimeoutError("Timed out waiting for Audiveris readiness")
-
-
-def stop_vm_if_idle() -> None:
-    """Deallocate the Audiveris VM when the queue and worker pool are idle."""
-    if get_queue_length() != 0 or get_active_jobs() != 0:
-        logger.info(
-            "Skipping Audiveris VM stop; queue_length=%s active_jobs=%s",
-            get_queue_length(),
-            get_active_jobs(),
-        )
-        return
-
-    logger.info("Audiveris appears idle; waiting %ss before deallocating VM", VM_IDLE_SECONDS)
-    time.sleep(VM_IDLE_SECONDS)
-
-    lock = acquire_vm_lock(timeout=VM_LOCK_TIMEOUT)
-    try:
-        if get_queue_length() != 0 or get_active_jobs() != 0:
-            logger.info(
-                "Aborting Audiveris VM stop; queue_length=%s active_jobs=%s",
-                get_queue_length(),
-                get_active_jobs(),
-            )
-            return
-
-        power_state = _get_vm_power_state()
-        if power_state != "running":
-            logger.info("Skipping Audiveris VM deallocation; power_state=%s", power_state)
-            return
-
-        logger.info("Deallocating Audiveris VM %s", _vm_name())
-        poller = _get_compute_client().virtual_machines.begin_deallocate(
-            _vm_resource_group(),
-            _vm_name(),
-        )
-        poller.result()
-    finally:
-        release_vm_lock(lock)
+    raise TimeoutError(
+        f"Timed out waiting for Audiveris readiness at {AUDIVERIS_API_URL}. "
+        "Please ensure the Audiveris service is running locally on port 8080."
+    )
 
 
 def claim_audiveris_port():
@@ -262,8 +194,15 @@ audiveris_client.run_audiveris = _retrying_run_audiveris
 dispatcher.run_audiveris = _retrying_run_audiveris
 
 
+# ── Worker (identical to worker.py) ──────────────────────────────────────────
+
 class ManagedAudiverisWorker(Worker):
-    """RQ worker that manages Audiveris VM readiness around each job."""
+    """RQ worker that manages Audiveris readiness around each job.
+
+    In local dev mode the Azure VM stubs mean no cloud calls are made;
+    everything else (port claiming, retry logic, active job counters) is
+    identical to production.
+    """
 
     def perform_job(self, job, queue):  # type: ignore[override]
         active_incremented = False
@@ -317,15 +256,20 @@ class ManagedAudiverisWorker(Worker):
 if __name__ == "__main__":
     try:
         validate_audiveris_api_url(AUDIVERIS_API_URL)
-        _required_env("AZURE_TENANT_ID")
-        _required_env("AZURE_CLIENT_ID")
-        _required_env("AZURE_CLIENT_SECRET")
-        _required_env("AZURE_SUBSCRIPTION_ID")
-        _required_env("AZURE_RESOURCE_GROUP")
-        _required_env("AUDIVERIS_VM_NAME")
-    except (RuntimeError, ValueError) as exc:
+    except ValueError as exc:
         logger.error("Worker configuration error: %s", exc)
         sys.exit(1)
-    logger.info("Starting RQ worker on queue '%s' (Redis: %s)", QUEUE_NAME, settings.REDIS_URL)
-    worker = ManagedAudiverisWorker([queue], connection=redis_conn, default_worker_ttl=420)
-    worker.work()
+
+    logger.info(
+        "Starting LOCAL RQ worker on queue '%s' (Redis: %s) — Azure VM management DISABLED",
+        QUEUE_NAME,
+        settings.REDIS_URL,
+    )
+    worker = ManagedAudiverisWorker(
+        [queue],
+        connection=redis_conn,
+        default_worker_ttl=420
+    )
+    # Disable forking for local development on macOS to avoid fork-safety segfaults (signal 11).
+    # This also makes debugging easier as logs from the job will appear in this same process.
+    worker.work(with_scheduler=True)

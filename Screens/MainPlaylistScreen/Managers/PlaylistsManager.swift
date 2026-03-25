@@ -4,6 +4,12 @@ import Supabase
 import Auth
 internal import PostgREST
 
+public enum PlaylistError: Error {
+    case invalidData
+    case uploadFailed
+    case missingDefaultArtwork
+}
+
 public final class PlaylistsManager {
     public static let shared = PlaylistsManager()
     
@@ -46,16 +52,41 @@ public final class PlaylistsManager {
                 )
             }
             
-            let playlist = PlaylistData(
+            // Sign the URL or load local data
+            var displayImageUrl = dbPlaylist.coverImageUrl
+            var displayImageData: Data? = nil
+            
+            if let path = displayImageUrl, !path.contains("://") {
+                if path.hasPrefix("doc_") {
+                    // Local document storage fallback
+                    let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                        .first!.appendingPathComponent(path)
+                    displayImageData = try? Data(contentsOf: url)
+                } else {
+                    // Remote Supabase storage
+                    do {
+                        if let signedUrl = try? await SupabaseManager.shared.client.storage
+                            .from("PlayListCover")
+                            .createSignedURL(path: path, expiresIn: 60 * 60 * 24 * 7) { // 7 days
+                            displayImageUrl = signedUrl.absoluteString
+                        }
+                    } catch {
+                        print("❌ Failed to sign URL for path \(path):", error)
+                    }
+                }
+            }
+            
+            let data = PlaylistData(
                 id: dbPlaylist.id,
                 title: dbPlaylist.name,
                 tags: dbPlaylist.description ?? "",
-                imageUrl: dbPlaylist.coverImageUrl,
+                imageUrl: displayImageUrl,
+                imageData: displayImageData,
                 tracks: tracks,
                 createdAt: dbPlaylist.createdAt,
                 isPublic: dbPlaylist.isPublic
             )
-            remotePlaylists.append(playlist)
+            remotePlaylists.append(data)
         }
         
         return remotePlaylists
@@ -414,15 +445,28 @@ public final class PlaylistsManager {
         let session = try await SupabaseManager.shared.client.auth.session
         let userId = session.user.id
 
-        var coverImageUrl: String?
+        
+        var coverImageUrl: String? = nil
+        
+        // Use provided image or fallback to a default app asset
+        let finalImage: UIImage
+        if let userImg = image {
+            finalImage = userImg
+        } else {
+            let defaultNames = (1...16).map { "trackimage_\($0)" }
+            let randomName = defaultNames.randomElement()!
+            finalImage = UIImage(named: randomName) ?? UIImage(named: "trackimage_1")!
+        }
+        
+        do {
+            coverImageUrl = try await uploadImageToStorage(image: finalImage)
+        } catch {
+            print("⚠️ Image upload failed, falling back to local cache")
+            if let localFile = saveImageToDocuments(image: finalImage) {
+                coverImageUrl = localFile
 
-        if let userImage = image {
-            // User picked a real image — try uploading it to Supabase Storage
-            do {
-                coverImageUrl = try await uploadImageToStorage(image: userImage, userId: userId)
-            } catch {
-                print("⚠️ Image upload failed, saving to local documents: \(error)")
-                coverImageUrl = saveImageToDocuments(image: userImage)
+     
+
             }
         } else {
             // No image provided — store a stable local asset name (same approach as songs)
@@ -455,10 +499,9 @@ public final class PlaylistsManager {
     
     // MARK: - Image Upload
     
-    private func uploadImageToStorage(image: UIImage, userId: UUID) async throws -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            throw NSError(domain: "ImageConversionError", code: -1,
-                         userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+    private func uploadImageToStorage(image: UIImage) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw PlaylistError.invalidData
         }
         
         let fileName = "\(UUID().uuidString).jpg"
@@ -475,9 +518,9 @@ public final class PlaylistsManager {
             try await client.upload(fileName, data: imageData, options: options)
         }
         
-        let publicUrl = try client.getPublicURL(path: fileName)
-            
-        return publicUrl.absoluteString
+        // Return the fileName (path) instead of a signed URL.
+        // This ensures we store the persistent path in the database.
+        return fileName
     }
     
     private func saveImageToDocuments(image: UIImage) -> String? {
@@ -486,7 +529,7 @@ public final class PlaylistsManager {
         let url = FileManager.default.urls(for: .documentDirectory,
                                            in: .userDomainMask).first!.appendingPathComponent(filename)
         do {
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
             return filename
         } catch {
             print("❌ Failed to save image to documents:", error)

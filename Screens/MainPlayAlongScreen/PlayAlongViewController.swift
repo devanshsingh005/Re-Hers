@@ -43,6 +43,9 @@ final class PlayAlongViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        if #available(iOS 13.0, *) {
+            overrideUserInterfaceStyle = .light
+        }
         self.edgesForExtendedLayout = .all
         setupUI()
         wireCallbacks()

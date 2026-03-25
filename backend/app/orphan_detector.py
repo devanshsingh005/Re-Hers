@@ -1,7 +1,11 @@
 """Orphan detection and cleanup for sheet_files."""
+import logging
 from app.database import DatabaseClient
 from app.storage import StorageManager
 from typing import Dict, List, Any
+from storage3.utils import StorageException
+
+logger = logging.getLogger(__name__)
 
 
 class OrphanDetector:
@@ -50,8 +54,10 @@ class OrphanDetector:
                     self.storage.client.storage.from_(
                         self.storage.bucket
                     ).download(storage_path)
-                except Exception:
-                    # File doesn't exist in storage
+                except Exception as e:
+                    if not isinstance(e, StorageException) or "not found" not in str(e).lower():
+                        logger.error("Storage check error: %s", type(e).__name__)
+                        continue
                     orphaned_db_records.append({
                         "file_id": db_file["id"],
                         "user_id": db_file["user_id"],
@@ -68,8 +74,9 @@ class OrphanDetector:
             }
         
         except Exception as e:
+            logger.error("Orphan detection failed: %s", type(e).__name__)
             return {
-                "error": str(e),
+                "error": "Orphan detection failed",
                 "is_healthy": False
             }
     
@@ -104,7 +111,7 @@ class OrphanDetector:
                         ).remove([storage_path])
                         actions["deleted_storage_files"].append(storage_path)
                     except Exception as e:
-                        print(f"Failed to delete storage file {storage_path}: {e}")
+                        logger.error("Storage deletion error during orphan cleanup: %s", type(e).__name__)
                 
                 # Delete or mark orphaned DB records (missing storage files)
                 for db_record in report["orphaned_db_records"]:
@@ -116,10 +123,11 @@ class OrphanDetector:
                             "reason": "Storage file missing"
                         })
                     except Exception as e:
-                        print(f"Failed to mark file as orphaned: {e}")
+                        logger.error("Failed to update orphan status in database: %s", type(e).__name__)
         
         except Exception as e:
-            return {"error": str(e), "dry_run": dry_run}
+            logger.error("Orphan cleanup failed: %s", type(e).__name__)
+            return {"error": "Orphan cleanup failed", "dry_run": dry_run}
         
         return {
             "dry_run": dry_run,
@@ -132,7 +140,7 @@ class OrphanDetector:
         report = await self.detect_orphans()
         
         if "error" in report:
-            return {"status": "error", "message": report["error"]}
+            return {"status": "error", "message": "Orphan detection failed"}
         
         orphaned_storage_count = len(report["orphaned_storage_files"])
         orphaned_db_count = len(report["orphaned_db_records"])

@@ -1,6 +1,7 @@
 """Configuration module for loading environment variables."""
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Load .env from sibling directory (backend/)
@@ -8,11 +9,12 @@ env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=str(env_path))
 
 # Audiveris API configuration
-AUDIVERIS_API_URL = os.getenv("AUDIVERIS_API_URL", "http://localhost:8080")
+AUDIVERIS_API_URL = os.getenv("AUDIVERIS_API_URL")
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 
 # Storage bucket names
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "sheet_data")
@@ -32,6 +34,32 @@ class Settings:
 
 
 settings = Settings()
+LOCAL_HTTP_SCHEME = 'http' + '://'
+
+
+def validate_audiveris_api_url(api_url: str | None) -> str:
+    """Validate the Audiveris backend URL."""
+    if api_url is None or not str(api_url).strip():
+        raise ValueError("AUDIVERIS_API_URL must be set")
+
+    url: str = str(api_url)
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").lower()
+
+    if scheme not in {"http", "https"}:
+        raise ValueError(f"Invalid scheme '{scheme}' for AUDIVERIS_API_URL. Use 'http' or 'https'.")
+
+    if not host:
+        raise ValueError("AUDIVERIS_API_URL must have a valid hostname.")
+
+    if scheme == "http" and host not in {"localhost", "127.0.0.1"}:
+        raise ValueError("AUDIVERIS_API_URL must use HTTPS for remote hosts.")
+
+    return url
+
+
+AUDIVERIS_API_URL = validate_audiveris_api_url(AUDIVERIS_API_URL)
 
 # ---------------------------------------------------------------------------
 # Security Configuration
@@ -50,7 +78,10 @@ RATE_LIMIT_ADMIN:  str = os.getenv("RATE_LIMIT_ADMIN",  "20/minute")
 # Comma-separated list; leading/trailing whitespace is stripped.
 _raw_origins = os.getenv(
     "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:8081,http://localhost:8000",
+    ",".join(
+        f"{LOCAL_HTTP_SCHEME}{host}"
+        for host in ("localhost:3000", "localhost:8081", "localhost:8000")
+    ),
 )
 ALLOWED_ORIGINS: list = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 

@@ -634,13 +634,9 @@ final class DiscoverViewController: UIViewController {
             return
         }
         
-        var finalURL = urlString
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            finalURL = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        
-        guard URL(string: finalURL) != nil else { return }
-        
+        guard let finalURL = await NavigationBarHelper.signedProfileURLString(from: urlString),
+              URL(string: finalURL) != nil else { return }
+
         ImageLoader.shared.loadImage(from: finalURL) { [weak self] img in
             guard let self = self, let img = img else { return }
             DispatchQueue.main.async {
@@ -838,4 +834,3 @@ final class SongCell: UITableViewCell {
         return l
     }
 }
-

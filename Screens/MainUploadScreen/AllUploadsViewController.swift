@@ -232,7 +232,7 @@ class AllUploadsViewController: UIViewController {
             let vc        = UploadPageNextViewController()
             vc.jobId      = jobId
             vc.resultURL  = outputURL
-            print("[AllUploads] jobId=\(jobId.uuidString)  resultURL=\(outputURL ?? "nil")")
+            print("[AllUploads] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
             self.navigationController?.pushViewController(vc, animated: true)
         }, for: .touchUpInside)
 
