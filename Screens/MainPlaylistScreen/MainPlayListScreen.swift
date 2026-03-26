@@ -73,6 +73,7 @@ class PlaylistViewController: UIViewController {
 
     private let isPad = UIDevice.current.userInterfaceIdiom == .pad
     private var selectedIndexPaths: Set<IndexPath> = []
+    var shouldOpenAddPlaylistOnAppear = false
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -88,6 +89,14 @@ class PlaylistViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
         fetchPlaylists()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if shouldOpenAddPlaylistOnAppear {
+            shouldOpenAddPlaylistOnAppear = false
+            didTapAdd()
+        }
     }
 
     override func viewWillTransition(to size: CGSize,
@@ -228,7 +237,7 @@ class PlaylistViewController: UIViewController {
     }
 
     // MARK: - Button Actions
-    @objc private func didTapAdd() {
+    @objc func didTapAdd() {
         guard !isSelectionMode else {
             confirmDeletion()
             return

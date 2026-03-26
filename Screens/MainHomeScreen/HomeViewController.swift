@@ -196,6 +196,12 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     private func populatePlaylists(_ playlists: [Playlist]) {
         guard let stack = playlistStackView else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+
+        if playlists.isEmpty {
+            stack.addArrangedSubview(createEmptyPlaylistCard())
+            return
+        }
+
         let images = ["trackimage_1", "trackimage_2", "trackimage_3"]
         for (i, p) in playlists.enumerated() {
             stack.addArrangedSubview(createPlaylistCard(playlist: p, imageName: images[i % images.count]))
@@ -220,13 +226,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         
         if recents.isEmpty {
-            let placeholder = UILabel()
-            placeholder.text = "Play a song to see your recents here!"
-            placeholder.font = .systemFont(ofSize: 14, weight: .medium)
-            placeholder.textColor = ComponentColors.SongCard.metadataText
-            placeholder.textAlignment = .center
-            placeholder.tag = 999
-            stack.addArrangedSubview(placeholder)
+            stack.addArrangedSubview(createEmptyRecentsView())
             return
         }
         

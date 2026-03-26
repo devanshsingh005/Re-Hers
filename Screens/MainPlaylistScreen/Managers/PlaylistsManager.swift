@@ -461,11 +461,16 @@ public final class PlaylistsManager {
                 do {
                     coverImageUrl = try await uploadImageToStorage(image: finalImage)
                 } catch {
+
                     print("⚠️ Image upload failed, falling back to local caches")
+
+                    print("⚠️ Image upload failed, falling back to local cache")
+
                     if let localFile = saveImageToDocuments(image: finalImage) {
                         coverImageUrl = localFile
                     }
                 }
+
         let newPlaylist = DBPlaylist(
             id: UUID(),
             userId: userId,
