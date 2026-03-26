@@ -450,30 +450,22 @@ public final class PlaylistsManager {
         
         // Use provided image or fallback to a default app asset
         let finalImage: UIImage
-        if let userImg = image {
-            finalImage = userImg
-        } else {
-            let defaultNames = (1...16).map { "trackimage_\($0)" }
-            let randomName = defaultNames.randomElement()!
-            finalImage = UIImage(named: randomName) ?? UIImage(named: "trackimage_1")!
-        }
-        
-        do {
-            coverImageUrl = try await uploadImageToStorage(image: finalImage)
-        } catch {
-            print("⚠️ Image upload failed, falling back to local cache")
-            if let localFile = saveImageToDocuments(image: finalImage) {
-                coverImageUrl = localFile
-
-     
-
-            }
-        } else {
-            // No image provided — store a stable local asset name (same approach as songs)
-            let assetIndex = Int.random(in: 1...16)
-            coverImageUrl = "trackimage_\(assetIndex)"
-        }
-
+                if let userImg = image {
+                    finalImage = userImg
+                } else {
+                    let defaultNames = (1...16).map { "trackimage_\($0)" }
+                    let randomName = defaultNames.randomElement()!
+                    finalImage = UIImage(named: randomName) ?? UIImage(named: "trackimage_1")!
+                }
+                
+                do {
+                    coverImageUrl = try await uploadImageToStorage(image: finalImage)
+                } catch {
+                    print("⚠️ Image upload failed, falling back to local caches")
+                    if let localFile = saveImageToDocuments(image: finalImage) {
+                        coverImageUrl = localFile
+                    }
+                }
         let newPlaylist = DBPlaylist(
             id: UUID(),
             userId: userId,
