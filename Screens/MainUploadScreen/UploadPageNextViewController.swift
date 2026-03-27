@@ -273,7 +273,7 @@ final class UploadPageNextViewController: UIViewController {
 
     // MARK: - Job Status Polling
 
-    private static let maxPollAttempts = 24   // 24 × 5 s = 2 min max
+    private static let maxPollAttempts = 60   // 60 × 5 s = 5 min max
     private var pollAttempts = 0
 
     /// Polls the jobs table every 5 s. Proceeds only when the backend sets
