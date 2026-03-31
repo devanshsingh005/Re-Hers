@@ -337,7 +337,6 @@ class LessonMapViewController: UIViewController {
 
     // Header progress refs
     private var headerProgressLabel:     UILabel?
-    private var headerProgressFill:      UIView?
     private var headerProgressFillWidth: NSLayoutConstraint?
 
     // Nav Background / Large Header state
@@ -345,7 +344,6 @@ class LessonMapViewController: UIViewController {
     private let navShadowLayer = UIView()
     private let largeProfileButton = UIButton(type: .custom)
     private let largeSubtitleLabel = UILabel()
-    private var inlineSubtitleLabel: UILabel?
 
     private var progress: Float {
         let completed = chapters.filter { $0.status == .completed }.count
@@ -380,9 +378,8 @@ class LessonMapViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationItem.largeTitleDisplayMode = .never
 
-        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Practice", subtitle: "Interactive lessons")
+        let (headerStack, _) = NavigationBarHelper.createInlineTitleView(title: "Practice", subtitle: "Interactive lessons")
         headerStack.alpha = 0
-        self.inlineSubtitleLabel = subTitle
         navigationItem.titleView = headerStack
 
         navigationItem.rightBarButtonItems = nil
@@ -462,7 +459,7 @@ class LessonMapViewController: UIViewController {
                     .value
 
                 guard let profile = profiles.first else { return }
-                let currentChapter = profile.current_chapter
+                let profileChapter = profile.current_chapter
 
                 // 3. Fetch stars for completed chapters from lesson_events
                 let events: [LessonEventStars] = try await db
@@ -480,6 +477,8 @@ class LessonMapViewController: UIViewController {
                     let s   = event.stars ?? 1
                     starsMap[idx] = max(starsMap[idx] ?? 0, s)
                 }
+                let recoveredChapter = (events.map(\.chapter_index).max() ?? 0) + 1
+                let currentChapter = max(profileChapter, recoveredChapter)
 
                 // 4. Apply progress on main thread and refresh UI
                 await MainActor.run {
@@ -598,8 +597,6 @@ class LessonMapViewController: UIViewController {
         progressFill.backgroundColor  = ComponentColors.HomeScreen.actionButtonFill
         progressFill.layer.cornerRadius = 4
         progressBG.addSubview(progressFill)
-        headerProgressFill = progressFill
-
         contentView.addSubview(progressLabel)
         contentView.addSubview(progressBG)
 
@@ -792,43 +789,6 @@ class LessonMapViewController: UIViewController {
         popupCard = nil
     }
 
-    // MARK: - Unlock Banner
-
-    private func showUnlockBanner(lessonTitle: String) {
-        let banner = UnlockBannerView(lessonTitle: lessonTitle)
-        banner.translatesAutoresizingMaskIntoConstraints = false
-        banner.alpha = 0
-        banner.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
-        view.addSubview(banner)
-        NSLayoutConstraint.activate([
-            banner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            banner.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            banner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
-            banner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
-        ])
-        let dimOverlay = UIView(frame: view.bounds)
-        dimOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        dimOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        dimOverlay.alpha = 0
-        view.insertSubview(dimOverlay, belowSubview: banner)
-        UIView.animate(withDuration: 0.45, delay: 0,
-                       usingSpringWithDamping: 0.65, initialSpringVelocity: 0.5) {
-            banner.alpha = 1; banner.transform = .identity; dimOverlay.alpha = 1
-        }
-        banner.onContinue = {
-            UIView.animate(withDuration: 0.25, animations: {
-                banner.alpha = 0
-                banner.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-                dimOverlay.alpha = 0
-            }) { _ in
-                banner.removeFromSuperview(); dimOverlay.removeFromSuperview()
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-            guard banner.superview != nil else { return }
-            banner.onContinue?()
-        }
-    }
 }
 
 // MARK: - UIScrollViewDelegate
@@ -850,138 +810,6 @@ extension LessonMapViewController: UIScrollViewDelegate {
         
         // Fixed: only largeProfileButton scrolls away, no small one in navbar
     }
-}
-
-// MARK: - Unlock Banner View
-
-class UnlockBannerView: UIView {
-
-    var onContinue: (() -> Void)?
-
-    init(lessonTitle: String) {
-        super.init(frame: .zero); setupView(lessonTitle: lessonTitle)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    private func setupView(lessonTitle: String) {
-        backgroundColor          = .white
-        layer.cornerRadius       = 28
-        layer.shadowColor        = UIColor.black.cgColor
-        layer.shadowOpacity      = 0.18
-        layer.shadowRadius       = 24
-        layer.shadowOffset       = CGSize(width: 0, height: 8)
-
-        let accentBar = UIView()
-        accentBar.translatesAutoresizingMaskIntoConstraints = false
-        accentBar.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill
-        accentBar.layer.cornerRadius = 4
-        addSubview(accentBar)
-
-        let iconCircle = UIView()
-        iconCircle.translatesAutoresizingMaskIntoConstraints = false
-        iconCircle.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
-        iconCircle.layer.cornerRadius = 38
-        addSubview(iconCircle)
-
-        let iconLabel = UILabel()
-        iconLabel.translatesAutoresizingMaskIntoConstraints = false
-        iconLabel.text = "🔓"; iconLabel.font = .systemFont(ofSize: 40)
-        iconLabel.textAlignment = .center
-        iconCircle.addSubview(iconLabel)
-
-        let starsStack = UIStackView()
-        starsStack.translatesAutoresizingMaskIntoConstraints = false
-        starsStack.axis = .horizontal; starsStack.spacing = 4; starsStack.alignment = .center
-        for _ in 0..<3 {
-            let s = UILabel(); s.text = "⭐"; s.font = .systemFont(ofSize: 22)
-            starsStack.addArrangedSubview(s)
-        }
-        addSubview(starsStack)
-
-        let titleLabel = UILabel()
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text          = "Lesson Unlocked!"
-        titleLabel.font          = .systemFont(ofSize: 22, weight: .bold)
-        titleLabel.textColor     = ComponentColors.LearningCurve.popupTitle
-        titleLabel.textAlignment = .center
-        addSubview(titleLabel)
-
-        let pillView = UIView()
-        pillView.translatesAutoresizingMaskIntoConstraints = false
-        pillView.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.1)
-        pillView.layer.cornerRadius = 16
-        addSubview(pillView)
-
-        let pillLabel = UILabel()
-        pillLabel.translatesAutoresizingMaskIntoConstraints = false
-        pillLabel.text          = "🎵  \(lessonTitle)"
-        pillLabel.font          = .systemFont(ofSize: 15, weight: .semibold)
-        pillLabel.textColor     = ComponentColors.HomeScreen.actionButtonFill
-        pillLabel.textAlignment = .center
-        pillView.addSubview(pillLabel)
-
-        let subtitleLabel = UILabel()
-        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        subtitleLabel.text          = "Great work! Your next lesson is ready to explore."
-        subtitleLabel.font          = .systemFont(ofSize: 15)
-        subtitleLabel.textColor     = ComponentColors.LearningCurve.popupSubtitle
-        subtitleLabel.textAlignment = .center
-        subtitleLabel.numberOfLines = 0
-        addSubview(subtitleLabel)
-
-        let continueBtn = UIButton(type: .system)
-        continueBtn.translatesAutoresizingMaskIntoConstraints = false
-        continueBtn.setTitle("Continue  🎉", for: .normal)
-        continueBtn.titleLabel?.font    = .systemFont(ofSize: 17, weight: .bold)
-        continueBtn.setTitleColor(.white, for: .normal)
-        continueBtn.backgroundColor     = ComponentColors.HomeScreen.actionButtonFill
-        continueBtn.layer.cornerRadius  = 26
-        continueBtn.layer.shadowColor   = ComponentColors.HomeScreen.actionButtonFill.cgColor
-        continueBtn.layer.shadowOpacity = 0.35
-        continueBtn.layer.shadowRadius  = 12
-        continueBtn.layer.shadowOffset  = CGSize(width: 0, height: 5)
-        continueBtn.addTarget(self, action: #selector(didTapContinue), for: .touchUpInside)
-        addSubview(continueBtn)
-
-        NSLayoutConstraint.activate([
-            accentBar.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            accentBar.centerXAnchor.constraint(equalTo: centerXAnchor),
-            accentBar.widthAnchor.constraint(equalToConstant: 48),
-            accentBar.heightAnchor.constraint(equalToConstant: 5),
-
-            iconCircle.topAnchor.constraint(equalTo: accentBar.bottomAnchor, constant: 20),
-            iconCircle.centerXAnchor.constraint(equalTo: centerXAnchor),
-            iconCircle.widthAnchor.constraint(equalToConstant: 76),
-            iconCircle.heightAnchor.constraint(equalToConstant: 76),
-            iconLabel.centerXAnchor.constraint(equalTo: iconCircle.centerXAnchor),
-            iconLabel.centerYAnchor.constraint(equalTo: iconCircle.centerYAnchor),
-
-            starsStack.topAnchor.constraint(equalTo: iconCircle.bottomAnchor, constant: 14),
-            starsStack.centerXAnchor.constraint(equalTo: centerXAnchor),
-
-            titleLabel.topAnchor.constraint(equalTo: starsStack.bottomAnchor, constant: 10),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
-
-            pillView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 14),
-            pillView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            pillLabel.topAnchor.constraint(equalTo: pillView.topAnchor, constant: 10),
-            pillLabel.bottomAnchor.constraint(equalTo: pillView.bottomAnchor, constant: -10),
-            pillLabel.leadingAnchor.constraint(equalTo: pillView.leadingAnchor, constant: 18),
-            pillLabel.trailingAnchor.constraint(equalTo: pillView.trailingAnchor, constant: -18),
-
-            subtitleLabel.topAnchor.constraint(equalTo: pillView.bottomAnchor, constant: 12),
-            subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-
-            continueBtn.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
-            continueBtn.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            continueBtn.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-            continueBtn.heightAnchor.constraint(equalToConstant: 52),
-            continueBtn.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -28),
-        ])
-    }
-    @objc private func didTapContinue() { onContinue?() }
 }
 
 // MARK: - Path Canvas
@@ -1075,4 +903,3 @@ class PathCanvasView: UIView {
         return CGPoint(x: x, y: y)
     }
 }
-

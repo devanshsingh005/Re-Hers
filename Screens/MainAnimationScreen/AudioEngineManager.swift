@@ -50,6 +50,7 @@ final class AudioEngineManager {
     private var useFallback = false
 
     private var activeNotes: Set<UInt8> = []
+    private var samplerChannelsByNote: [UInt8: UInt8] = [:]
     private(set) var isStarted = false
     private var currentInstrument: InstrumentType = .grandPiano
 
@@ -168,8 +169,9 @@ final class AudioEngineManager {
             playTone(midi: midi, velocity: velocity)
         } else {
             guard sfLoaded else { return }
+            let channel = allocateSamplerChannel(for: midi)
             let vel = UInt8(clamping: Int(velocity) + Int.random(in: -5...5))
-            sampler.startNote(midi, withVelocity: vel, onChannel: 0)
+            sampler.startNote(midi, withVelocity: vel, onChannel: channel)
         }
         activeNotes.insert(midi)
     }
@@ -181,7 +183,8 @@ final class AudioEngineManager {
         if useFallback {
             stopTone(midi: midi)
         } else {
-            sampler.stopNote(midi, onChannel: 0)
+            let channel = samplerChannelsByNote.removeValue(forKey: midi) ?? 0
+            sampler.stopNote(midi, onChannel: channel)
         }
     }
 
@@ -246,6 +249,14 @@ final class AudioEngineManager {
 
     private func midiToHz(_ midi: UInt8) -> Double {
         return 440.0 * pow(2.0, (Double(midi) - 69.0) / 12.0)
+    }
+
+    private func allocateSamplerChannel(for midi: UInt8) -> UInt8 {
+        let melodicChannels = (0...15).map(UInt8.init).filter { $0 != 9 }
+        let usedChannels = Set(samplerChannelsByNote.values)
+        let channel = melodicChannels.first(where: { !usedChannels.contains($0) }) ?? 0
+        samplerChannelsByNote[midi] = channel
+        return channel
     }
 
     // MARK: - Note Name → MIDI

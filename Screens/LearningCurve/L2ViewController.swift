@@ -9,9 +9,9 @@ class MusicStaffView: UIView {
 
     private let noteName: String
     private let playbackNotes: [String]
-    private var noteLayer: CALayer?
+    private var noteLayers: [CALayer] = []
     private weak var tapToPlayContainer: UIView?
-    private var pendingNoteOffWorkItem: DispatchWorkItem?
+    private var pendingPlaybackWorkItems: [DispatchWorkItem] = []
 
     init(noteName: String, playbackNotes: [String] = []) {
         self.noteName = noteName
@@ -40,6 +40,7 @@ class MusicStaffView: UIView {
         let staffRight: CGFloat = bounds.width - 24
         let lineSpacing: CGFloat = 14
         let numLines = 5
+        noteLayers.removeAll()
 
         for i in 0..<numLines {
             let y = staffTop + CGFloat(i) * lineSpacing
@@ -59,31 +60,65 @@ class MusicStaffView: UIView {
         layer.addSublayer(clefLayer)
 
         let centerY = staffTop + CGFloat(numLines - 1) / 2 * lineSpacing
-        let noteOffset = noteYOffset(for: noteName)
-        let noteY = centerY + noteOffset
-        let noteX = bounds.width / 2 + 20
+        let chordSymbols = displayedChordSymbols()
+        let noteCount = chordSymbols.count
+        let startX = max(staffLeft + 88, bounds.width * 0.42)
+        let endX = min(staffRight - 28, bounds.width - 46)
+        let xPositions: [CGFloat]
 
-        if noteName == "C" {
-            let ledger = CALayer()
-            ledger.frame = CGRect(x: noteX - 18, y: noteY + 6, width: 38, height: 1.5)
-            ledger.backgroundColor = ComponentColors.QuizScreen.staffLines.withAlphaComponent(0.32).cgColor
-            layer.addSublayer(ledger)
+        if noteCount <= 1 {
+            xPositions = [bounds.width / 2 + 20]
+        } else {
+            let span = endX - startX
+            let step = span / CGFloat(max(1, noteCount - 1))
+            xPositions = (0..<noteCount).map { startX + CGFloat($0) * step }
         }
 
-        let stem = CALayer()
-        stem.frame = CGRect(x: noteX + 8, y: noteY - 28, width: 2, height: 32)
-        stem.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
-        layer.addSublayer(stem)
+        for (index, symbol) in chordSymbols.enumerated() {
+            let root = rootNote(for: symbol)
+            let noteOffset = noteYOffset(for: root)
+            let noteY = centerY + noteOffset
+            let noteX = xPositions[index]
 
-        let noteHead = CALayer()
-        noteHead.bounds = CGRect(x: 0, y: 0, width: 22, height: 15)
-        noteHead.position = CGPoint(x: noteX, y: noteY + 6)
-        noteHead.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
-        noteHead.cornerRadius = 7
-        noteHead.transform = CATransform3DMakeRotation(-0.25, 0, 0, 1)
-        layer.addSublayer(noteHead)
-        self.noteLayer = noteHead
+            if root == "C" {
+                let ledger = CALayer()
+                ledger.frame = CGRect(x: noteX - 18, y: noteY + 6, width: 38, height: 1.5)
+                ledger.backgroundColor = ComponentColors.QuizScreen.staffLines.withAlphaComponent(0.32).cgColor
+                layer.addSublayer(ledger)
+            }
+
+            let stem = CALayer()
+            stem.frame = CGRect(x: noteX + 8, y: noteY - 28, width: 2, height: 32)
+            stem.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
+            layer.addSublayer(stem)
+
+            let noteHead = CALayer()
+            noteHead.bounds = CGRect(x: 0, y: 0, width: 22, height: 15)
+            noteHead.position = CGPoint(x: noteX, y: noteY + 6)
+            noteHead.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
+            noteHead.cornerRadius = 7
+            noteHead.transform = CATransform3DMakeRotation(-0.25, 0, 0, 1)
+            layer.addSublayer(noteHead)
+            noteLayers.append(noteHead)
+        }
+
         startPulse()
+    }
+
+    private func displayedChordSymbols() -> [String] {
+        let symbols = playbackNotes.isEmpty ? [noteName] : playbackNotes
+        return symbols.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func rootNote(for symbol: String) -> String {
+        let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return noteName }
+        var root = String(first).uppercased()
+        let remainder = trimmed.dropFirst()
+        if let accidental = remainder.first, accidental == "#" || accidental == "b" {
+            root.append(accidental)
+        }
+        return root
     }
 
     private func noteYOffset(for note: String) -> CGFloat {
@@ -100,13 +135,17 @@ class MusicStaffView: UIView {
     }
 
     private func startPulse() {
-        guard let noteLayer = noteLayer else { return }
-        let pulse = CABasicAnimation(keyPath: "transform.scale")
-        pulse.fromValue = 1.0; pulse.toValue = 1.12
-        pulse.duration = 0.65; pulse.autoreverses = true
-        pulse.repeatCount = .infinity
-        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        noteLayer.add(pulse, forKey: "pulse")
+        guard !noteLayers.isEmpty else { return }
+        for noteLayer in noteLayers {
+            let pulse = CABasicAnimation(keyPath: "transform.scale")
+            pulse.fromValue = 1.0
+            pulse.toValue = 1.12
+            pulse.duration = 0.65
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            noteLayer.add(pulse, forKey: "pulse")
+        }
     }
 
     private func addTapToPlay() {
@@ -141,13 +180,16 @@ class MusicStaffView: UIView {
     }
 
     @objc private func handleTap() {
-        guard let noteLayer = noteLayer else { return }
+        guard !noteLayers.isEmpty else { return }
         animateTapToPlay()
-        noteLayer.removeAllAnimations()
-        let bounce = CAKeyframeAnimation(keyPath: "transform.scale")
-        bounce.values = [1.0, 1.3, 0.9, 1.1, 1.0]
-        bounce.duration = 0.5; bounce.calculationMode = .cubic
-        noteLayer.add(bounce, forKey: "bounce")
+        for noteLayer in noteLayers {
+            noteLayer.removeAllAnimations()
+            let bounce = CAKeyframeAnimation(keyPath: "transform.scale")
+            bounce.values = [1.0, 1.3, 0.9, 1.1, 1.0]
+            bounce.duration = 0.5
+            bounce.calculationMode = .cubic
+            noteLayer.add(bounce, forKey: "bounce")
+        }
         playSelectedNote()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.startPulse() }
     }
@@ -167,22 +209,25 @@ class MusicStaffView: UIView {
     }
 
     private func playSelectedNote() {
-        pendingNoteOffWorkItem?.cancel()
+        pendingPlaybackWorkItems.forEach { $0.cancel() }
+        pendingPlaybackWorkItems.removeAll()
+        AudioEngineManager.shared.stopAllNotes()
         AudioEngineManager.shared.startEngine()
-        let notesToPlay = playbackNotes.isEmpty ? [noteName] : playbackNotes
-        let midiNotes = notesToPlay.compactMap { AudioEngineManager.shared.midiNumber(from: playableNoteName(for: $0)) }
+        let midiNotes = displayedChordSymbols()
+            .map(rootNote(for:))
+            .compactMap { AudioEngineManager.shared.midiNumber(from: playableNoteName(for: $0)) }
+
         guard !midiNotes.isEmpty else { return }
 
+        let chordVelocity = UInt8(max(92, 118 - (max(1, midiNotes.count) - 1) * 5))
         for midi in midiNotes {
-            AudioEngineManager.shared.startNote(midi: midi)
+            AudioEngineManager.shared.startNote(midi: midi, velocity: chordVelocity)
         }
 
         let stopWorkItem = DispatchWorkItem {
-            for midi in midiNotes {
-                AudioEngineManager.shared.stopNote(midi: midi)
-            }
+            AudioEngineManager.shared.stopAllNotes()
         }
-        pendingNoteOffWorkItem = stopWorkItem
+        pendingPlaybackWorkItems.append(stopWorkItem)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: stopWorkItem)
     }
 
@@ -192,6 +237,7 @@ class MusicStaffView: UIView {
         }
         return "\(note)4"
     }
+
 }
 
 // MARK: - Variant Chip Button
@@ -199,6 +245,7 @@ class MusicStaffView: UIView {
 class VariantChipButton: UIButton {
 
     private(set) var isDone: Bool = false
+    private weak var noteLabel: UILabel?
 
     init(label: String, isSelected: Bool) {
         super.init(frame: .zero)
@@ -222,6 +269,7 @@ class VariantChipButton: UIButton {
         noteLabel.text = label
         noteLabel.font = .systemFont(ofSize: 18, weight: .bold)
         noteLabel.textColor = isSelected ? ComponentColors.PrimaryButton.text : ComponentColors.LessonScreen.labelSecondary
+        self.noteLabel = noteLabel
 
         stack.addArrangedSubview(noteLabel)
         addSubview(stack)
@@ -234,6 +282,10 @@ class VariantChipButton: UIButton {
             widthAnchor.constraint(greaterThanOrEqualToConstant: 70),
             heightAnchor.constraint(equalToConstant: 70),
         ])
+    }
+
+    func updateLabel(_ label: String) {
+        noteLabel?.text = label
     }
 
     /// Marks this chip done with an animated green tick badge
@@ -320,6 +372,7 @@ class LessonDetailViewController: UIViewController {
     private var staffView: MusicStaffView!
     private var noteNameLabel: UILabel!
     private var englishLabel: UILabel!
+    private var englishPrefixLabel: UILabel!
     private var variantsScrollView: UIScrollView!
     private var chipsStack: UIStackView!
     private var tryBtn: UIButton!
@@ -327,6 +380,9 @@ class LessonDetailViewController: UIViewController {
     private var progressPercentLabel: UILabel!
     private var progressRowLabel: UILabel!
     private var dotsStack: UIStackView!
+    private var earTrainingOptionButtons: [UIButton] = []
+    private var earTrainingTargets: [String] = []
+    private var earTrainingAttempts: [Int: Int] = [:]
     private let noteMapping: [String: String] = [
         "Do": "C", "Re": "D", "Mi": "E", "Fa": "F", "Sol": "G", "La": "A", "Ti": "B",
         "Treble": "G", "Bass": "F", "Alto": "C", "Tenor": "C", "Soprano": "G", "Mezzo": "G", "Violin": "G",
@@ -340,10 +396,12 @@ class LessonDetailViewController: UIViewController {
     private let contentView = UIView()
     private let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
     private let navShadowLayer = UIView()
-    private let largeProfileButton = UIButton(type: .custom)
-    private let largeSubtitleLabel = UILabel()
-    private var inlineSubtitleLabel: UILabel?
 
+    private var isEarTrainingLesson: Bool {
+        chapterIndex == 10
+    }
+
+    private let earTrainingNotePool = ["A", "B", "C", "D", "E", "F", "G"]
     init(lesson: MusicLesson, chapterIndex: Int) {
         self.lesson = lesson
         self.chapterIndex = chapterIndex
@@ -361,7 +419,7 @@ class LessonDetailViewController: UIViewController {
         syncNavBarAlpha()
         setupScrollView()
         setupNavBackground()
-        setupCustomLargeHeader()
+        initializeEarTrainingTargetsIfNeeded()
         setupUI()
         loadCompletedVariantsFromSupabase()
         
@@ -378,7 +436,7 @@ class LessonDetailViewController: UIViewController {
 
         let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Lesson", subtitle: lesson.title)
         headerStack.alpha = 0
-        self.inlineSubtitleLabel = subTitle
+        _ = subTitle
         navigationItem.titleView = headerStack
 
         let backBtn = NavigationBarHelper.createCustomBackButton(
@@ -387,14 +445,6 @@ class LessonDetailViewController: UIViewController {
         navigationItem.leftBarButtonItem = backBtn
         
         navigationItem.rightBarButtonItems = nil
-    }
-    
-    @objc private func didTapProfile() {
-        push(UserProfileViewController())
-    }
-    
-    private func push(_ vc: UIViewController) {
-        navigationController?.pushViewController(vc, animated: true)
     }
 
     private func setupNavBackground() {
@@ -460,59 +510,22 @@ class LessonDetailViewController: UIViewController {
         ])
     }
 
-    private func setupCustomLargeHeader() {
-        let headerContainer = UIView()
-        headerContainer.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(headerContainer)
-        
-        let labelStack = UIStackView()
-        labelStack.axis = .vertical
-        labelStack.spacing = -2
-        labelStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        let titleLabel = UILabel()
-        titleLabel.text = "Lesson"
-        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
-        titleLabel.textColor = ComponentColors.NavBar.title
-        
-        largeSubtitleLabel.text = lesson.title
-        largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
-        largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
-        
-        labelStack.addArrangedSubview(titleLabel)
-        labelStack.addArrangedSubview(largeSubtitleLabel)
-        headerContainer.addSubview(labelStack)
-        
-        largeProfileButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
-        largeProfileButton.layer.cornerRadius = 20
-        largeProfileButton.layer.masksToBounds = true
-        largeProfileButton.clipsToBounds = true
-        largeProfileButton.layer.borderWidth = 1.0
-        largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
-        largeProfileButton.imageView?.contentMode = .scaleAspectFill
-        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-        largeProfileButton.tintColor = .secondaryLabel
-        largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
-        largeProfileButton.addTarget(self, action: #selector(didTapProfile), for: .touchUpInside)
-        headerContainer.addSubview(largeProfileButton)
-        
-        NSLayoutConstraint.activate([
-            headerContainer.topAnchor.constraint(equalTo: contentView.topAnchor),
-            headerContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            headerContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            headerContainer.heightAnchor.constraint(equalToConstant: 80),
-            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 20),
-            labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
-            
-            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
-            largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
-            largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
-            largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
-        ])
-        
-        NavigationBarHelper.loadProfileImage(into: largeProfileButton)
+    private func initializeEarTrainingTargetsIfNeeded() {
+        guard isEarTrainingLesson, earTrainingTargets.isEmpty else { return }
+        earTrainingTargets = (0..<lesson.variants.count).map { index in
+            earTrainingNotePool[index % earTrainingNotePool.count]
+        }
     }
 
+    private func currentEarTrainingTarget() -> String {
+        guard selectedVariantIndex < earTrainingTargets.count else { return earTrainingNotePool.first ?? "C" }
+        return earTrainingTargets[selectedVariantIndex]
+    }
+
+    private func earTrainingChipLabel(for index: Int) -> String {
+        guard index < earTrainingTargets.count else { return "Round \(index + 1)" }
+        return variantsDone.contains(index) ? earTrainingTargets[index] : "Round \(index + 1)"
+    }
 
     private func getNoteLetter(from variant: String) -> String {
         if let n = noteMapping[variant] { return n }
@@ -528,7 +541,10 @@ class LessonDetailViewController: UIViewController {
     }
 
     private func chordNames(for variant: String) -> String? {
-        lesson.progressions.first(where: { $0.numerals == variant })?.chords
+        if let mapped = chordNamesFromRomanProgression(variant) {
+            return mapped
+        }
+        return lesson.progressions.first(where: { $0.numerals == variant })?.chords
     }
 
     private func playbackNotes(for variant: String) -> [String] {
@@ -537,6 +553,62 @@ class LessonDetailViewController: UIViewController {
             .split(separator: "–")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private func displayTitle(for variant: String) -> String {
+        chordNames(for: variant) ?? variant
+    }
+
+    private func chordNamesFromRomanProgression(_ progression: String) -> String? {
+        guard let scale = majorScaleChords(for: lesson.noteEnglish) else { return nil }
+        let numerals = progression
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "–")
+            .split(separator: "–")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        guard !numerals.isEmpty else { return nil }
+
+        let chords = numerals.compactMap { numeral -> String? in
+            let cleaned = numeral.replacingOccurrences(of: "°", with: "")
+            switch cleaned {
+            case "I", "i": return scale[0]
+            case "II", "ii": return scale[1]
+            case "III", "iii": return scale[2]
+            case "IV", "iv": return scale[3]
+            case "V", "v": return scale[4]
+            case "VI", "vi": return scale[5]
+            case "VII", "vii": return scale[6]
+            default: return nil
+            }
+        }
+
+        guard chords.count == numerals.count else { return nil }
+        return chords.joined(separator: "–")
+    }
+
+    private func majorScaleChords(for keyName: String) -> [String]? {
+        let tonic = keyName
+            .split(separator: " ")
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let majorFamilies: [String: [String]] = [
+            "C": ["C", "Dm", "Em", "F", "G", "Am", "Bdim"],
+            "G": ["G", "Am", "Bm", "C", "D", "Em", "F#dim"],
+            "D": ["D", "Em", "F#m", "G", "A", "Bm", "C#dim"],
+            "A": ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"],
+            "E": ["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"],
+            "F": ["F", "Gm", "Am", "Bb", "C", "Dm", "Edim"],
+            "Bb": ["Bb", "Cm", "Dm", "Eb", "F", "Gm", "Adim"],
+            "Eb": ["Eb", "Fm", "Gm", "Ab", "Bb", "Cm", "Ddim"],
+            "Ab": ["Ab", "Bbm", "Cm", "Db", "Eb", "Fm", "Gdim"],
+            "B": ["B", "C#m", "D#m", "E", "F#", "G#m", "A#dim"]
+        ]
+
+        guard let tonic else { return nil }
+        return majorFamilies[tonic]
     }
 
     private func lessonCardBorderWidth() -> CGFloat {
@@ -564,7 +636,7 @@ class LessonDetailViewController: UIViewController {
 
         let lessonNameLabel = UILabel()
         lessonNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        lessonNameLabel.text = "Lesson 1: \(lesson.title)"
+        lessonNameLabel.text = "Lesson \(chapterIndex): \(lesson.title)"
         lessonNameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         lessonNameLabel.textColor = ComponentColors.LessonScreen.labelPrimary
 
@@ -616,40 +688,61 @@ class LessonDetailViewController: UIViewController {
         staffView.translatesAutoresizingMaskIntoConstraints = false
         staffView.backgroundColor = .clear; staffView.layer.shadowOpacity = 0
         staffCardView.addSubview(staffView)
+        if isEarTrainingLesson {
+            let earCard = makeEarTrainingCard()
+            earCard.translatesAutoresizingMaskIntoConstraints = false
+            staffCardView.addSubview(earCard)
+            NSLayoutConstraint.activate([
+                earCard.topAnchor.constraint(equalTo: staffCardView.topAnchor),
+                earCard.leadingAnchor.constraint(equalTo: staffCardView.leadingAnchor),
+                earCard.trailingAnchor.constraint(equalTo: staffCardView.trailingAnchor),
+                earCard.bottomAnchor.constraint(equalTo: staffCardView.bottomAnchor),
+            ])
+            staffView.isHidden = true
+        }
 
         // ── Note name ──
         noteNameLabel = UILabel()
         noteNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        noteNameLabel.text = lesson.variants[0]
-        noteNameLabel.font = .systemFont(ofSize: 42, weight: .heavy)
+        noteNameLabel.text = isEarTrainingLesson ? nil : displayTitle(for: lesson.variants[0])
+        noteNameLabel.font = isEarTrainingLesson
+            ? .systemFont(ofSize: 24, weight: .semibold)
+            : .systemFont(ofSize: 42, weight: .heavy)
         noteNameLabel.textColor = ComponentColors.LessonScreen.labelPrimary; noteNameLabel.textAlignment = .center
         noteNameLabel.adjustsFontSizeToFitWidth = true
         noteNameLabel.minimumScaleFactor = 0.5
         noteNameLabel.numberOfLines = 2
         noteNameLabel.lineBreakMode = .byWordWrapping
-        noteNameLabel.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
-        noteNameLabel.layer.shadowRadius = 10; noteNameLabel.layer.shadowOpacity = 0.3
-        noteNameLabel.layer.shadowOffset = CGSize(width: 0, height: 4)
+        noteNameLabel.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(isEarTrainingLesson ? 0.12 : 0.3).cgColor
+        noteNameLabel.layer.shadowRadius = isEarTrainingLesson ? 4 : 10
+        noteNameLabel.layer.shadowOpacity = isEarTrainingLesson ? 0.12 : 0.3
+        noteNameLabel.layer.shadowOffset = CGSize(width: 0, height: isEarTrainingLesson ? 2 : 4)
+        noteNameLabel.isHidden = isEarTrainingLesson
 
         // ── English note row ──
         let engRow = UIView()
         engRow.translatesAutoresizingMaskIntoConstraints = false
-        let engPrefix = UILabel()
-        engPrefix.translatesAutoresizingMaskIntoConstraints = false
-        engPrefix.text = "English Note: "
-        engPrefix.font = .systemFont(ofSize: 14, weight: .medium); engPrefix.textColor = ComponentColors.LessonScreen.labelSecondary
-        engRow.addSubview(engPrefix)
+        englishPrefixLabel = UILabel()
+        englishPrefixLabel.translatesAutoresizingMaskIntoConstraints = false
+        englishPrefixLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        englishPrefixLabel.textColor = ComponentColors.LessonScreen.labelSecondary
+        engRow.addSubview(englishPrefixLabel)
         englishLabel = UILabel()
         englishLabel.translatesAutoresizingMaskIntoConstraints = false
         updateEnglishLabel(with: lesson.variants[0])
         engRow.addSubview(englishLabel)
+        engRow.isHidden = isEarTrainingLesson
 
         // ── Variants section ──
         let variantsHeaderLabel = UILabel()
         variantsHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
-        variantsHeaderLabel.text = "Tap a variant chip, then practice with the mic ↓"
+        variantsHeaderLabel.text = isEarTrainingLesson ? "Identify the note you heard" : "Tap a variant chip, then practice with the mic ↓"
         variantsHeaderLabel.font = .systemFont(ofSize: 12, weight: .medium)
         variantsHeaderLabel.textColor = ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
+
+        let optionsGrid = makeEarTrainingOptionsGrid()
+        optionsGrid.translatesAutoresizingMaskIntoConstraints = false
+        optionsGrid.isHidden = !isEarTrainingLesson
 
         variantsScrollView = UIScrollView()
         variantsScrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -662,7 +755,8 @@ class LessonDetailViewController: UIViewController {
         variantsScrollView.addSubview(chipsStack)
 
         for (i, variant) in lesson.variants.enumerated() {
-            let chip = VariantChipButton(label: chordNames(for: variant) ?? variant, isSelected: i == 0)
+            let chipLabel = isEarTrainingLesson ? earTrainingChipLabel(for: i) : (chordNames(for: variant) ?? variant)
+            let chip = VariantChipButton(label: chipLabel, isSelected: i == 0)
             chip.tag = i
             chip.addTarget(self, action: #selector(selectVariant(_:)), for: .touchUpInside)
             chipsStack.addArrangedSubview(chip)
@@ -682,6 +776,7 @@ class LessonDetailViewController: UIViewController {
         tryBtn.layer.shadowOpacity = 0.35; tryBtn.layer.shadowRadius = 12
         tryBtn.layer.shadowOffset = CGSize(width: 0, height: 6)
         tryBtn.addTarget(self, action: #selector(didTapTryYourself), for: .touchUpInside)
+        tryBtn.isHidden = isEarTrainingLesson
 
         // ── Concept card (description + family overview) ──
         let conceptCard = makeInfoCard()
@@ -825,7 +920,7 @@ class LessonDetailViewController: UIViewController {
 
         [progressRowLabel, progressBGView,
          lessonNameLabel, progressPercentLabel, dotsRow, staffCardView, noteNameLabel,
-         engRow, variantsHeaderLabel, variantsScrollView, tryBtn].forEach { contentView.addSubview($0) }
+         engRow, variantsHeaderLabel, optionsGrid, variantsScrollView, tryBtn].forEach { contentView.addSubview($0) }
         infoCards.forEach { contentView.addSubview($0) }
 
         // Progress fill width — starts at 0
@@ -833,10 +928,14 @@ class LessonDetailViewController: UIViewController {
         progressFillConstraint.isActive = true
 
         NSLayoutConstraint.activate([
-            progressRowLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 96),
+            lessonNameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 34),
+            lessonNameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            lessonNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: progressBGView.leadingAnchor, constant: -24),
+
+            progressRowLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 38),
             progressRowLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            progressBGView.topAnchor.constraint(equalTo: progressRowLabel.bottomAnchor, constant: 5),
+            progressBGView.topAnchor.constraint(equalTo: progressRowLabel.bottomAnchor, constant: 8),
             progressBGView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             progressBGView.widthAnchor.constraint(equalToConstant: 130),
             progressBGView.heightAnchor.constraint(equalToConstant: 7),
@@ -845,13 +944,12 @@ class LessonDetailViewController: UIViewController {
             progressFill.topAnchor.constraint(equalTo: progressBGView.topAnchor),
             progressFill.bottomAnchor.constraint(equalTo: progressBGView.bottomAnchor),
 
-            lessonNameLabel.topAnchor.constraint(equalTo: progressBGView.bottomAnchor, constant: 10),
-            lessonNameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            progressPercentLabel.centerYAnchor.constraint(equalTo: lessonNameLabel.centerYAnchor),
+            progressPercentLabel.topAnchor.constraint(equalTo: progressBGView.bottomAnchor, constant: 10),
             progressPercentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            dotsRow.topAnchor.constraint(equalTo: lessonNameLabel.bottomAnchor, constant: 8),
+            dotsRow.topAnchor.constraint(equalTo: progressPercentLabel.bottomAnchor, constant: 18),
             dotsRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            lessonNameLabel.bottomAnchor.constraint(lessThanOrEqualTo: dotsRow.topAnchor, constant: -12),
 
             staffCardView.topAnchor.constraint(equalTo: dotsRow.bottomAnchor, constant: 14),
             staffCardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
@@ -862,23 +960,27 @@ class LessonDetailViewController: UIViewController {
             staffView.trailingAnchor.constraint(equalTo: staffCardView.trailingAnchor),
             staffView.bottomAnchor.constraint(equalTo: staffCardView.bottomAnchor),
 
-            noteNameLabel.topAnchor.constraint(equalTo: staffCardView.bottomAnchor, constant: 8),
+            noteNameLabel.topAnchor.constraint(equalTo: staffCardView.bottomAnchor, constant: isEarTrainingLesson ? 0 : 8),
             noteNameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            engRow.topAnchor.constraint(equalTo: noteNameLabel.bottomAnchor, constant: 4),
+            engRow.topAnchor.constraint(equalTo: noteNameLabel.bottomAnchor, constant: isEarTrainingLesson ? 0 : 4),
             engRow.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            engPrefix.leadingAnchor.constraint(equalTo: engRow.leadingAnchor),
-            engPrefix.centerYAnchor.constraint(equalTo: engRow.centerYAnchor),
-            engPrefix.topAnchor.constraint(equalTo: engRow.topAnchor),
-            engPrefix.bottomAnchor.constraint(equalTo: engRow.bottomAnchor),
-            englishLabel.leadingAnchor.constraint(equalTo: engPrefix.trailingAnchor),
+            englishPrefixLabel.leadingAnchor.constraint(equalTo: engRow.leadingAnchor),
+            englishPrefixLabel.centerYAnchor.constraint(equalTo: engRow.centerYAnchor),
+            englishPrefixLabel.topAnchor.constraint(equalTo: engRow.topAnchor),
+            englishPrefixLabel.bottomAnchor.constraint(equalTo: engRow.bottomAnchor),
+            englishLabel.leadingAnchor.constraint(equalTo: englishPrefixLabel.trailingAnchor),
             englishLabel.centerYAnchor.constraint(equalTo: engRow.centerYAnchor),
             englishLabel.trailingAnchor.constraint(equalTo: engRow.trailingAnchor),
 
-            variantsHeaderLabel.topAnchor.constraint(equalTo: engRow.bottomAnchor, constant: 18),
+            variantsHeaderLabel.topAnchor.constraint(equalTo: isEarTrainingLesson ? staffCardView.bottomAnchor : engRow.bottomAnchor, constant: isEarTrainingLesson ? 18 : 18),
             variantsHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
 
-            variantsScrollView.topAnchor.constraint(equalTo: variantsHeaderLabel.bottomAnchor, constant: 10),
+            optionsGrid.topAnchor.constraint(equalTo: variantsHeaderLabel.bottomAnchor, constant: 12),
+            optionsGrid.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            optionsGrid.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+
+            variantsScrollView.topAnchor.constraint(equalTo: isEarTrainingLesson ? optionsGrid.bottomAnchor : variantsHeaderLabel.bottomAnchor, constant: isEarTrainingLesson ? 18 : 10),
             variantsScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             variantsScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             variantsScrollView.heightAnchor.constraint(equalToConstant: 90),
@@ -897,11 +999,12 @@ class LessonDetailViewController: UIViewController {
         ])
 
         var previousCard: UIView?
+        let bottomAnchorView: UIView = isEarTrainingLesson ? variantsScrollView : tryBtn
         for card in infoCards {
             NSLayoutConstraint.activate([
                 card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
                 card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-                card.topAnchor.constraint(equalTo: (previousCard ?? tryBtn).bottomAnchor, constant: previousCard == nil ? 28 : 14),
+                card.topAnchor.constraint(equalTo: (previousCard ?? bottomAnchorView).bottomAnchor, constant: previousCard == nil ? 28 : 14),
             ])
             previousCard = card
         }
@@ -909,7 +1012,7 @@ class LessonDetailViewController: UIViewController {
         if let lastCard = previousCard {
             lastCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
         } else {
-            tryBtn.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
+            bottomAnchorView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
         }
         
         chipsStack.widthAnchor.constraint(equalToConstant: CGFloat(lesson.variants.count) * 82).isActive = true
@@ -946,6 +1049,121 @@ class LessonDetailViewController: UIViewController {
         row.addArrangedSubview(img)
         row.addArrangedSubview(lbl)
         return row
+    }
+
+    private func makeEarTrainingCard() -> UIView {
+        let card = UIView()
+        card.backgroundColor = ComponentColors.LessonScreen.cardFill
+        card.layer.cornerRadius = 24
+        card.layer.borderWidth = lessonCardBorderWidth()
+        card.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
+
+        let playButton = UIButton(type: .system)
+        playButton.translatesAutoresizingMaskIntoConstraints = false
+        playButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        playButton.tintColor = .white
+        playButton.layer.cornerRadius = 48
+        let config = UIImage.SymbolConfiguration(pointSize: 30, weight: .bold)
+        playButton.setImage(UIImage(systemName: "play.fill", withConfiguration: config), for: .normal)
+        playButton.addTarget(self, action: #selector(didTapEarTrainingPlay), for: .touchUpInside)
+        let helperLabel = UILabel()
+        helperLabel.translatesAutoresizingMaskIntoConstraints = false
+        helperLabel.text = "Tap play to hear the note"
+        helperLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        helperLabel.textColor = ComponentColors.LessonScreen.labelSecondary
+        helperLabel.textAlignment = .center
+
+        card.addSubview(playButton)
+        card.addSubview(helperLabel)
+
+        NSLayoutConstraint.activate([
+            playButton.centerXAnchor.constraint(equalTo: card.centerXAnchor),
+            playButton.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: -14),
+            playButton.widthAnchor.constraint(equalToConstant: 96),
+            playButton.heightAnchor.constraint(equalToConstant: 96),
+
+            helperLabel.topAnchor.constraint(equalTo: playButton.bottomAnchor, constant: 18),
+            helperLabel.centerXAnchor.constraint(equalTo: card.centerXAnchor),
+            helperLabel.leadingAnchor.constraint(greaterThanOrEqualTo: card.leadingAnchor, constant: 20),
+            helperLabel.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -20),
+        ])
+
+        return card
+    }
+
+    private func makeEarTrainingOptionsGrid() -> UIStackView {
+        let rows = UIStackView()
+        rows.axis = .vertical
+        rows.spacing = 12
+        rows.alignment = .fill
+        rows.distribution = .fillEqually
+
+        let topRow = UIStackView()
+        topRow.axis = .horizontal
+        topRow.spacing = 12
+        topRow.distribution = .fillEqually
+
+        let bottomRow = UIStackView()
+        bottomRow.axis = .horizontal
+        bottomRow.spacing = 12
+        bottomRow.distribution = .fillEqually
+
+        for index in 0..<4 {
+            let button = UIButton(type: .system)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.titleLabel?.font = .systemFont(ofSize: 24, weight: .bold)
+            button.layer.cornerRadius = 18
+            button.layer.borderWidth = 1
+            button.addTarget(self, action: #selector(didTapEarTrainingOption(_:)), for: .touchUpInside)
+            button.heightAnchor.constraint(equalToConstant: 72).isActive = true
+            styleEarTrainingOption(button, state: .idle)
+            earTrainingOptionButtons.append(button)
+            if index < 2 {
+                topRow.addArrangedSubview(button)
+            } else {
+                bottomRow.addArrangedSubview(button)
+            }
+        }
+
+        rows.addArrangedSubview(topRow)
+        rows.addArrangedSubview(bottomRow)
+        refreshEarTrainingOptions()
+        return rows
+    }
+
+    private enum EarTrainingOptionState {
+        case idle
+        case correct
+        case incorrect
+    }
+
+    private func styleEarTrainingOption(_ button: UIButton, state: EarTrainingOptionState) {
+        switch state {
+        case .idle:
+            button.backgroundColor = ComponentColors.LessonScreen.cardFill
+            button.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
+            button.setTitleColor(ComponentColors.LessonScreen.labelPrimary, for: .normal)
+        case .correct:
+            button.backgroundColor = ComponentColors.LessonScreen.correctAnswer.withAlphaComponent(0.18)
+            button.layer.borderColor = ComponentColors.LessonScreen.correctAnswer.cgColor
+            button.setTitleColor(ComponentColors.LessonScreen.correctAnswer, for: .normal)
+        case .incorrect:
+            button.backgroundColor = ComponentColors.LessonScreen.incorrectAnswer.withAlphaComponent(0.12)
+            button.layer.borderColor = ComponentColors.LessonScreen.incorrectAnswer.cgColor
+            button.setTitleColor(ComponentColors.LessonScreen.incorrectAnswer, for: .normal)
+        }
+    }
+
+    private func refreshEarTrainingOptions() {
+        guard isEarTrainingLesson, earTrainingOptionButtons.count == 4 else { return }
+        let target = currentEarTrainingTarget()
+        let distractors = earTrainingNotePool.filter { $0 != target }.shuffled().prefix(3)
+        let options = Array(([target] + distractors).shuffled())
+
+        for (button, title) in zip(earTrainingOptionButtons, options) {
+            button.setTitle(title, for: .normal)
+            styleEarTrainingOption(button, state: .idle)
+        }
     }
 
     private func summarizedLessonDescription(from text: String) -> String {
@@ -1140,6 +1358,9 @@ class LessonDetailViewController: UIViewController {
             let pts = attempts == 1 ? 3 : attempts == 2 ? 2 : 1
             scorePoints += pts
             variantsDone.insert(variantIndex)
+            if isEarTrainingLesson {
+                chipButtons[variantIndex].updateLabel(earTrainingChipLabel(for: variantIndex))
+            }
 
             // Mark chip done
             chipButtons[variantIndex].markDone()
@@ -1295,7 +1516,7 @@ class LessonDetailViewController: UIViewController {
         let variant = lesson.variants[idx]
 
         // Rebuild staff
-        if let card = staffView.superview {
+        if !isEarTrainingLesson, let card = staffView.superview {
             staffView.removeFromSuperview()
             staffView = MusicStaffView(
                 noteName: getNoteLetter(from: variant),
@@ -1312,11 +1533,16 @@ class LessonDetailViewController: UIViewController {
             ])
         }
 
-        UIView.transition(with: noteNameLabel, duration: 0.25, options: .transitionCrossDissolve) {
-            self.noteNameLabel.text = variant
+        if !isEarTrainingLesson {
+            UIView.transition(with: noteNameLabel, duration: 0.25, options: .transitionCrossDissolve) {
+                self.noteNameLabel.text = self.displayTitle(for: variant)
+            }
+            UIView.transition(with: englishLabel, duration: 0.25, options: .transitionCrossDissolve) {
+                self.updateEnglishLabel(with: variant)
+            }
         }
-        UIView.transition(with: englishLabel, duration: 0.25, options: .transitionCrossDissolve) {
-            self.updateEnglishLabel(with: variant)
+        if isEarTrainingLesson {
+            refreshEarTrainingOptions()
         }
 
         for (i, btn) in chipButtons.enumerated() {
@@ -1345,15 +1571,27 @@ class LessonDetailViewController: UIViewController {
     }
 
     private func updateEnglishLabel(with variant: String) {
-        var name = lesson.noteEnglish
-        if let m = noteMapping[variant] { name = m }
-        else if ["C","D","E","F","G","A","B"].contains(variant) { name = variant }
+        let name: String
+        if chordNames(for: variant) != nil {
+            englishPrefixLabel?.text = "Key: "
+            name = lesson.noteEnglish
+        } else if let mappedName = noteMapping[variant] {
+            englishPrefixLabel?.text = "English Note: "
+            name = mappedName
+        } else if ["C","D","E","F","G","A","B"].contains(variant) {
+            englishPrefixLabel?.text = "English Note: "
+            name = variant
+        } else {
+            englishPrefixLabel?.text = "English Note: "
+            name = lesson.noteEnglish
+        }
         englishLabel.text = name
         englishLabel.font = .systemFont(ofSize: 14, weight: .bold)
         englishLabel.textColor = ComponentColors.LessonScreen.labelPrimary
     }
 
     @objc private func didTapTryYourself() {
+        guard !isEarTrainingLesson else { return }
         let variantIdx = selectedVariantIndex
         let variant = lesson.variants[variantIdx]
 
@@ -1372,6 +1610,49 @@ class LessonDetailViewController: UIViewController {
 
         present(sheet, animated: true)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    @objc private func didTapEarTrainingPlay() {
+        guard isEarTrainingLesson else { return }
+        let target = currentEarTrainingTarget()
+        guard let midi = AudioEngineManager.shared.midiNumber(from: "\(target)4") else { return }
+
+        AudioEngineManager.shared.startEngine()
+        AudioEngineManager.shared.stopAllNotes()
+        AudioEngineManager.shared.startNote(midi: midi, velocity: 112)
+
+        let stopWorkItem = DispatchWorkItem {
+            AudioEngineManager.shared.stopAllNotes()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: stopWorkItem)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    @objc private func didTapEarTrainingOption(_ sender: UIButton) {
+        guard isEarTrainingLesson, let chosen = sender.title(for: .normal) else { return }
+
+        let variantIdx = selectedVariantIndex
+        let target = currentEarTrainingTarget()
+        let attempts = (earTrainingAttempts[variantIdx] ?? 0) + 1
+        earTrainingAttempts[variantIdx] = attempts
+
+        let isCorrect = chosen == target
+        for button in earTrainingOptionButtons {
+            guard let title = button.title(for: .normal) else { continue }
+            if title == target {
+                styleEarTrainingOption(button, state: .correct)
+            } else if button == sender && !isCorrect {
+                styleEarTrainingOption(button, state: .incorrect)
+            } else {
+                styleEarTrainingOption(button, state: .idle)
+            }
+        }
+
+        if isCorrect {
+            recordVariantPracticed(variantIndex: variantIdx, attempts: attempts)
+        } else {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        }
     }
     
     // MARK: - Supabase Parts Synchronization
@@ -1400,6 +1681,9 @@ class LessonDetailViewController: UIViewController {
                         let idx = event.part_index
                         guard idx >= 0 && idx < self.lesson.variants.count else { continue }
                         self.variantsDone.insert(idx)
+                        if self.isEarTrainingLesson {
+                            self.chipButtons[idx].updateLabel(self.earTrainingChipLabel(for: idx))
+                        }
                         self.chipButtons[idx].markDone()
                         self.dotsStack.arrangedSubviews[idx].backgroundColor = .systemGreen
                     }
@@ -1771,31 +2055,28 @@ class TryYourselfViewController: UIViewController {
         micButton = UIButton(type: .system)
         micButton.translatesAutoresizingMaskIntoConstraints = false
         micButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        micButton.layer.cornerRadius = 32
+        micButton.layer.cornerRadius = 42
         micButton.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         micButton.layer.shadowOpacity = 0.4; micButton.layer.shadowRadius = 20
         micButton.layer.shadowOffset = CGSize(width: 0, height: 8)
-        micButton.setImage(nil, for: .normal)
-        micButton.setTitle("Capture Audio", for: .normal)
-        micButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
-        micButton.setTitleColor(.white, for: .normal)
-        micButton.contentHorizontalAlignment = .center
-        micButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
+        micButton.tintColor = .white
         micButton.addTarget(self, action: #selector(toggleListening), for: .touchUpInside)
         ringContainer.addSubview(micButton)
         NSLayoutConstraint.activate([
             micButton.centerXAnchor.constraint(equalTo: ringContainer.centerXAnchor),
             micButton.centerYAnchor.constraint(equalTo: ringContainer.centerYAnchor),
-            micButton.widthAnchor.constraint(equalToConstant: 196),
-            micButton.heightAnchor.constraint(equalToConstant: 64),
+            micButton.widthAnchor.constraint(equalToConstant: 84),
+            micButton.heightAnchor.constraint(equalToConstant: 84),
         ])
 
         let grad = CAGradientLayer()
         grad.colors = [ComponentColors.HomeScreen.actionButtonFill.cgColor, UIColor.orange.cgColor]
         grad.startPoint = CGPoint(x: 0, y: 0); grad.endPoint = CGPoint(x: 1, y: 1)
-        grad.frame = CGRect(x: 0, y: 0, width: 196, height: 64); grad.cornerRadius = 32
+        grad.frame = CGRect(x: 0, y: 0, width: 84, height: 84); grad.cornerRadius = 42
         micButton.layer.insertSublayer(grad, at: 0)
-        micButton.bringSubviewToFront(micButton.titleLabel ?? UIView())
+        micButton.bringSubviewToFront(micButton.imageView ?? UIView())
 
         statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -1894,8 +2175,8 @@ class TryYourselfViewController: UIViewController {
             attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
             UIView.transition(with: attemptCounterLabel, duration: 0.2, options: .transitionCrossDissolve, animations: nil)
 
-            micButton.setImage(nil, for: .normal)
-            micButton.setTitle("Capturing...", for: .normal)
+            let activeMicConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+            micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: activeMicConfig), for: .normal)
             statusLabel.text = "Capturing audio... play the target note clearly."
             statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
             instructionLabel.text = "Avoid background noise. Hold the correct note steady for a moment."
@@ -1917,8 +2198,8 @@ class TryYourselfViewController: UIViewController {
         correctStreak = 0
         stableRootFrameCount = 0
         lastDetectedRoot = nil
-        micButton.setImage(nil, for: .normal)
-        micButton.setTitle("Capture Audio", for: .normal)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Good. Tap capture audio again to retry, or tap Done ✓"
         statusLabel.textColor = .systemGray
         instructionLabel.text = "Tap capture audio, then play a clean single note."
@@ -1961,9 +2242,8 @@ class TryYourselfViewController: UIViewController {
             self.micButton.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
         }
 
-        // Update icon to checkmark
-        micButton.setImage(nil, for: .normal)
-        micButton.setTitle("Captured", for: .normal)
+        let successConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: successConfig), for: .normal)
 
         statusLabel.text = "🎉 Nailed it! Tap Done ✓"
         statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer

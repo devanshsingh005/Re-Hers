@@ -72,6 +72,12 @@ public struct ProfileFetchResponse: Codable, Sendable {
     public let total_study_seconds: Int
 }
 
+private struct ExistingProfileProgress: Codable, Sendable {
+    let current_chapter: Int?
+    let current_part: Int?
+    let total_study_seconds: Int?
+}
+
 // MARK: - Manager
 
 final class SupabaseProgressManager: Sendable {
@@ -109,20 +115,24 @@ final class SupabaseProgressManager: Sendable {
                 .insert(event)
                 .execute()
             
-            // Fetch current total_study_seconds safely to avoid omitting it
-            let response: [ProfileFetchResponse] = try await db.from("profiles")
-                .select("total_study_seconds")
-                .eq("id", value: userID.uuidString)
-                .limit(1)
-                .execute()
-                .value
-            
-            let currentTotal = response.first?.total_study_seconds ?? 0
+            let existingProgress = try await fetchExistingProgress(for: userID)
+            let currentChapter = existingProgress?.current_chapter ?? 1
+            let currentPart = existingProgress?.current_part ?? 0
+            let currentTotal = existingProgress?.total_study_seconds ?? 0
+            let mergedChapter = max(currentChapter, chapterIndex)
+            let mergedPart: Int
+            if mergedChapter > chapterIndex {
+                mergedPart = currentPart
+            } else if mergedChapter > currentChapter {
+                mergedPart = partIndex
+            } else {
+                mergedPart = max(currentPart, partIndex)
+            }
             
             let profileUpdate = ProfileProgressModel(
                 id: userID.uuidString,
-                current_chapter: chapterIndex,
-                current_part: partIndex,
+                current_chapter: mergedChapter,
+                current_part: mergedPart,
                 last_active_at: iso8601Now(),
                 total_study_seconds: currentTotal
             )
@@ -167,20 +177,18 @@ final class SupabaseProgressManager: Sendable {
                 .insert(event)
                 .execute()
             
-            // Calculate new total_study_seconds without hitting any undefined RPC
-            let response: [ProfileFetchResponse] = try await db.from("profiles")
-                .select("total_study_seconds")
-                .eq("id", value: userID.uuidString)
-                .limit(1)
-                .execute()
-                .value
-            
-            let currentTotal = response.first?.total_study_seconds ?? 0
+            let existingProgress = try await fetchExistingProgress(for: userID)
+            let currentChapter = existingProgress?.current_chapter ?? 1
+            let currentPart = existingProgress?.current_part ?? 0
+            let currentTotal = existingProgress?.total_study_seconds ?? 0
+            let completedChapter = chapterIndex + 1
+            let mergedChapter = max(currentChapter, completedChapter)
+            let mergedPart = mergedChapter == completedChapter ? 0 : currentPart
             
             let profileUpdate = ProfileProgressModel(
                 id: userID.uuidString,
-                current_chapter: chapterIndex + 1,
-                current_part: 0,
+                current_chapter: mergedChapter,
+                current_part: mergedPart,
                 last_active_at: iso8601Now(),
                 total_study_seconds: currentTotal + durationSeconds
             )
@@ -204,6 +212,17 @@ final class SupabaseProgressManager: Sendable {
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: Date())
     }
+
+    private static func fetchExistingProgress(for userID: UUID) async throws -> ExistingProfileProgress? {
+        let response: [ExistingProfileProgress] = try await db
+            .from("profiles")
+            .select("current_chapter, current_part, total_study_seconds")
+            .eq("id", value: userID.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return response.first
+    }
     
     // MARK: - Auth helper
     
@@ -216,4 +235,3 @@ final class SupabaseProgressManager: Sendable {
         }
     }
 }
-
