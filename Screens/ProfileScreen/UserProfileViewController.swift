@@ -108,7 +108,6 @@ final class UserProfileViewController: UIViewController {
             activeImagePicker?.delegate = nil
             activeImagePicker = nil
             NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
-            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
         }
     }
 
