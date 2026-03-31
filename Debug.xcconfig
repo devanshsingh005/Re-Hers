@@ -1,4 +1,0 @@
-SLASH = /
-SUPABASE_URL = https:$(SLASH)$(SLASH)djqgmowfjxsnjdffdohw.supabase.co
-SUPABASE_KEY = sb_publishable__FkMcK1683czdRktkt7YsA_vYR4ZsOW
-BACKEND_API_URL = https:$(SLASH)$(SLASH)re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io

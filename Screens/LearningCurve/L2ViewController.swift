@@ -8,12 +8,14 @@ import Supabase
 class MusicStaffView: UIView {
 
     private let noteName: String
+    private let playbackNotes: [String]
     private var noteLayer: CALayer?
     private weak var tapToPlayContainer: UIView?
     private var pendingNoteOffWorkItem: DispatchWorkItem?
 
-    init(noteName: String) {
+    init(noteName: String, playbackNotes: [String] = []) {
         self.noteName = noteName
+        self.playbackNotes = playbackNotes
         super.init(frame: .zero)
         backgroundColor = ComponentColors.LessonScreen.cardFill
         layer.cornerRadius = 24
@@ -167,12 +169,18 @@ class MusicStaffView: UIView {
     private func playSelectedNote() {
         pendingNoteOffWorkItem?.cancel()
         AudioEngineManager.shared.startEngine()
-        guard let midi = AudioEngineManager.shared.midiNumber(from: playableNoteName(for: noteName)) else { return }
+        let notesToPlay = playbackNotes.isEmpty ? [noteName] : playbackNotes
+        let midiNotes = notesToPlay.compactMap { AudioEngineManager.shared.midiNumber(from: playableNoteName(for: $0)) }
+        guard !midiNotes.isEmpty else { return }
 
-        AudioEngineManager.shared.startNote(midi: midi)
+        for midi in midiNotes {
+            AudioEngineManager.shared.startNote(midi: midi)
+        }
 
         let stopWorkItem = DispatchWorkItem {
-            AudioEngineManager.shared.stopNote(midi: midi)
+            for midi in midiNotes {
+                AudioEngineManager.shared.stopNote(midi: midi)
+            }
         }
         pendingNoteOffWorkItem = stopWorkItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: stopWorkItem)
@@ -192,13 +200,13 @@ class VariantChipButton: UIButton {
 
     private(set) var isDone: Bool = false
 
-    init(label: String, sublabel: String, isSelected: Bool) {
+    init(label: String, isSelected: Bool) {
         super.init(frame: .zero)
-        setupChip(label: label, sublabel: sublabel, isSelected: isSelected)
+        setupChip(label: label, isSelected: isSelected)
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    private func setupChip(label: String, sublabel: String, isSelected: Bool) {
+    private func setupChip(label: String, isSelected: Bool) {
         backgroundColor = isSelected ? ComponentColors.HomeScreen.actionButtonFill : UIColor.systemGray6
         layer.cornerRadius = 20
         layer.shadowColor = isSelected ? ComponentColors.HomeScreen.actionButtonFill.cgColor : UIColor.clear.cgColor
@@ -215,13 +223,7 @@ class VariantChipButton: UIButton {
         noteLabel.font = .systemFont(ofSize: 18, weight: .bold)
         noteLabel.textColor = isSelected ? ComponentColors.PrimaryButton.text : ComponentColors.LessonScreen.labelSecondary
 
-        let subLabel = UILabel()
-        subLabel.text = sublabel
-        subLabel.font = .systemFont(ofSize: 9, weight: .medium)
-        subLabel.textColor = isSelected ? ComponentColors.PrimaryButton.text.withAlphaComponent(0.88) : ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
-
         stack.addArrangedSubview(noteLabel)
-        stack.addArrangedSubview(subLabel)
         addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -514,8 +516,27 @@ class LessonDetailViewController: UIViewController {
 
     private func getNoteLetter(from variant: String) -> String {
         if let n = noteMapping[variant] { return n }
+        if let progressionRoot = chordNames(for: variant)?
+            .split(separator: "–")
+            .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first {
+            let first = String(progressionRoot.prefix(1))
+            if ["C","D","E","F","G","A","B"].contains(first) { return first }
+        }
         let first = String(variant.prefix(1))
         return ["C","D","E","F","G","A","B"].contains(first) ? first : String(lesson.noteName.prefix(1))
+    }
+
+    private func chordNames(for variant: String) -> String? {
+        lesson.progressions.first(where: { $0.numerals == variant })?.chords
+    }
+
+    private func playbackNotes(for variant: String) -> [String] {
+        guard let chordNames = chordNames(for: variant) else { return [] }
+        return chordNames
+            .split(separator: "–")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private func lessonCardBorderWidth() -> CGFloat {
@@ -588,7 +609,10 @@ class LessonDetailViewController: UIViewController {
         staffCardView.layer.shadowRadius = 16
         staffCardView.layer.shadowOffset = CGSize(width: 0, height: 6)
 
-        staffView = MusicStaffView(noteName: getNoteLetter(from: lesson.variants[0]))
+        staffView = MusicStaffView(
+            noteName: getNoteLetter(from: lesson.variants[0]),
+            playbackNotes: playbackNotes(for: lesson.variants[0])
+        )
         staffView.translatesAutoresizingMaskIntoConstraints = false
         staffView.backgroundColor = .clear; staffView.layer.shadowOpacity = 0
         staffCardView.addSubview(staffView)
@@ -638,8 +662,7 @@ class LessonDetailViewController: UIViewController {
         variantsScrollView.addSubview(chipsStack)
 
         for (i, variant) in lesson.variants.enumerated() {
-            let sub = i == 0 ? lesson.noteEnglish : variant
-            let chip = VariantChipButton(label: variant, sublabel: sub, isSelected: i == 0)
+            let chip = VariantChipButton(label: chordNames(for: variant) ?? variant, isSelected: i == 0)
             chip.tag = i
             chip.addTarget(self, action: #selector(selectVariant(_:)), for: .touchUpInside)
             chipsStack.addArrangedSubview(chip)
@@ -702,7 +725,7 @@ class LessonDetailViewController: UIViewController {
         // ── Chord details card ──
         var infoCards: [UIView] = [conceptCard]
 
-        if !lesson.chordDetails.isEmpty {
+        if !lesson.chordDetails.isEmpty && chapterIndex != 9 {
             let chordsCard = makeInfoCard()
             let chordsHeader = makeCardHeader("Chord details", icon: "music.note.list")
             chordsCard.addSubview(chordsHeader)
@@ -1274,7 +1297,10 @@ class LessonDetailViewController: UIViewController {
         // Rebuild staff
         if let card = staffView.superview {
             staffView.removeFromSuperview()
-            staffView = MusicStaffView(noteName: getNoteLetter(from: variant))
+            staffView = MusicStaffView(
+                noteName: getNoteLetter(from: variant),
+                playbackNotes: playbackNotes(for: variant)
+            )
             staffView.translatesAutoresizingMaskIntoConstraints = false
             staffView.backgroundColor = .clear; staffView.layer.shadowOpacity = 0
             card.addSubview(staffView)
