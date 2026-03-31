@@ -249,6 +249,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
     private func applyData() {
         songTitleLabel.text = song?.title ?? "Song name"
+        setButtonLoading(false)
     }
 
     // MARK: - Remote Asset Helpers
@@ -367,6 +368,21 @@ final class DiscoverSongPreviewViewController: UIViewController {
         }
     }
 
+    // MARK: - UI Helpers
+
+    private func setButtonLoading(_ loading: Bool) {
+        getConvertedButton.isEnabled = !loading
+        var cfg = getConvertedButton.configuration ?? UIButton.Configuration.filled()
+        let convertedPDFURL = song?.labeledPdfPath ?? song?.sheetUrl
+        let baseTitle = (convertedPDFURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? "Open Converted"
+            : "Converted Missing"
+        var t = AttributedString(loading ? "Opening…" : baseTitle)
+        t.font = .systemFont(ofSize: 18, weight: .bold)
+        cfg.attributedTitle = t
+        cfg.showsActivityIndicator = loading
+        getConvertedButton.configuration = cfg
+    }
 
     private func cancelPendingTasks() {
         pdfLoadTask?.cancel()

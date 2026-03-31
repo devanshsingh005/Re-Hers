@@ -18,8 +18,6 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Private State
     private var originalPDFDocument: PDFDocument?
     private var labeledPDFDocument: PDFDocument?
-    private var recentPlayTask: Task<Void, Never>?
-    private var sheetLoadTask: Task<Void, Never>?
     private var sheetMusicJSON: [String: Any]? {
         didSet { updateActionButtonState() }
     }
@@ -38,6 +36,7 @@ class DiscoverSongDetailViewController: UIViewController {
     private let buttonStack     = UIStackView()
 
     private let sheetContainer      = UIView()
+    private let previewButton       = UIButton(type: .system)
     private let pdfView             = PDFView()
     private let pdfLoadingIndicator = UIActivityIndicatorView(style: .medium)
     private let pdfErrorLabel       = UILabel()
@@ -186,7 +185,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func setupContent() {
         songTitleLabel.textAlignment = .center
-        songTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        songTitleLabel.font = .systemFont(ofSize: 34, weight: .bold)
         songTitleLabel.textColor = ComponentColors.SongDetailScreen.songTitle
         songTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(songTitleLabel)
@@ -236,6 +235,22 @@ class DiscoverSongDetailViewController: UIViewController {
         sheetContainer.clipsToBounds = true
         contentView.addSubview(sheetContainer)
 
+        var previewConfig = UIButton.Configuration.filled()
+        previewConfig.title = "Preview"
+        previewConfig.baseForegroundColor = .white
+        previewConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        previewConfig.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
+        previewConfig.cornerStyle = .fixed
+        previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var output = incoming
+            output.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+            return output
+        }
+        previewButton.configuration = previewConfig
+        previewButton.layer.cornerRadius = 16
+        previewButton.clipsToBounds = true
+        previewButton.translatesAutoresizingMaskIntoConstraints = false
+        sheetContainer.addSubview(previewButton)
         pdfView.layer.cornerRadius  = 12
         pdfView.clipsToBounds       = true
         pdfView.autoScales          = true
@@ -268,7 +283,7 @@ class DiscoverSongDetailViewController: UIViewController {
         contentView.addSubview(bottomSpacer)
     }
 
-    // MARK: - Constraints
+        // MARK: - Constraints
 
     private func setupConstraints() {
         NSLayoutConstraint.activate([
@@ -296,11 +311,15 @@ class DiscoverSongDetailViewController: UIViewController {
             buttonStack.widthAnchor.constraint(equalToConstant: 320),
             buttonStack.heightAnchor.constraint(equalToConstant: 46),
 
-            pdfView.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 2),
-            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 2),
-            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -2),
-            pdfView.heightAnchor.constraint(equalToConstant: 520),
-            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -2),
+            previewButton.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 14),
+            previewButton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+            previewButton.heightAnchor.constraint(equalToConstant: 32),
+
+            pdfView.topAnchor.constraint(equalTo: previewButton.bottomAnchor, constant: 12),
+            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 10),
+            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -10),
+            pdfView.heightAnchor.constraint(equalToConstant: 480),
+            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -10),
 
             pdfLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             pdfLoadingIndicator.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
@@ -323,6 +342,7 @@ class DiscoverSongDetailViewController: UIViewController {
     private func setupActions() {
         playAlongButton.addTarget(self, action: #selector(openPlayAlongVC),       for: .touchUpInside)
         animationButton.addTarget(self, action: #selector(didTapAnimation),       for: .touchUpInside)
+        previewButton.addTarget(self, action: #selector(didTapPDFView), for: .touchUpInside)
     }
 
     private func updateActionButtonState() {
@@ -443,19 +463,6 @@ class DiscoverSongDetailViewController: UIViewController {
             return ReHersAPI.url(path: "/" + trimmed)
         }
     }
-
-    private func fetchRemoteData(from rawValue: String) async throws -> Data {
-        guard let url = resolvedURL(from: rawValue) else {
-            throw AssetError.invalidURL
-        }
-
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-
-        let isBackendURL = rawValue.hasPrefix("/") || url.absoluteString.hasPrefix(ReHersAPI.baseURLString)
-        if isBackendURL, let token = try? await SupabaseManager.shared.accessToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
 
         let session: URLSession = isBackendURL ? ReHersPinnedSession.shared : URLSession.shared
         let (data, response) = try await session.data(for: request)
