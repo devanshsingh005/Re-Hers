@@ -14,11 +14,15 @@ import AuthenticationServices
 
 
 final class AuthViewController: UIViewController {
+    private enum DefaultsKey {
+        static let hasSeenAppIntroCard = "hasSeenAppIntroCard"
+    }
     
     // MARK: - Constants
     private let primaryOrangeColor = ComponentColors.HomeScreen.actionButtonFill
     
     // MARK: - Constraint Storage
+    private var loginFieldConstraints: [NSLayoutConstraint] = []
     private var signupConstraints: [NSLayoutConstraint] = []
     private var primaryButtonLoginConstraint: NSLayoutConstraint?
     private var primaryButtonSignupConstraint: NSLayoutConstraint?
@@ -58,6 +62,9 @@ final class AuthViewController: UIViewController {
     private let fullNameTextField = UITextField()
     private let usernameTextField = UITextField()
     private let confirmPasswordTextField = UITextField()
+    private let legalAgreementButton = UIButton(type: .system)
+    private let legalAgreementTextView = UITextView()
+    private var hasAcceptedSignupLegal = false
     
     private let forgotPasswordButton = UIButton(type: .system)
     
@@ -109,7 +116,7 @@ final class AuthViewController: UIViewController {
         super.viewDidAppear(animated)
         
         // Only show the intro card once per fresh install
-        if !UserDefaults.standard.bool(forKey: "hasSeenAppIntroCard") {
+        if !UserDefaults.standard.bool(forKey: DefaultsKey.hasSeenAppIntroCard) {
             showRehearsalInfoCard()
         }
     }
@@ -120,7 +127,7 @@ final class AuthViewController: UIViewController {
             set: { isVisible in
                 if !isVisible {
                     self.presentedViewController?.dismiss(animated: false, completion: {
-                        UserDefaults.standard.set(true, forKey: "hasSeenAppIntroCard")
+                        UserDefaults.standard.set(true, forKey: DefaultsKey.hasSeenAppIntroCard)
                     })
                 }
             }
@@ -154,7 +161,7 @@ private extension AuthViewController {
         
         // MARK: - Email / password labels
         
-        emailTitleLabel.text = "Email"
+        emailTitleLabel.text = "Email address"
         emailTitleLabel.font = UIFont.systemFont(ofSize: 13, weight: .medium)
         emailTitleLabel.textColor = .label
         
@@ -163,20 +170,36 @@ private extension AuthViewController {
         passwordTitleLabel.textColor = .label
         
         // SIGN UP LABELS
-        fullNameTitleLabel.text = "Full Name"
-        fullNameTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        fullNameTitleLabel.textColor = .label
-        fullNameTitleLabel.text = "FULL NAME"
+        fullNameTitleLabel.text = "Full name"
         fullNameTitleLabel.textColor = ComponentColors.AuthScreen.inputText
         fullNameTitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
         
-        usernameTitleLabel.text = "USERNAME"
+        usernameTitleLabel.text = "Username"
         usernameTitleLabel.textColor = ComponentColors.AuthScreen.inputText
         usernameTitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
         
-        confirmPasswordTitleLabel.text = "CONFIRM PASSWORD"
+        confirmPasswordTitleLabel.text = "Confirm password"
         confirmPasswordTitleLabel.textColor = ComponentColors.AuthScreen.inputText
         confirmPasswordTitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+
+        legalAgreementButton.setImage(UIImage(systemName: "square"), for: .normal)
+        legalAgreementButton.tintColor = ComponentColors.AuthScreen.bodyText
+        legalAgreementButton.contentVerticalAlignment = .top
+        legalAgreementButton.addTarget(self, action: #selector(toggleLegalAgreement), for: .touchUpInside)
+        legalAgreementButton.translatesAutoresizingMaskIntoConstraints = false
+
+        legalAgreementTextView.backgroundColor = .clear
+        legalAgreementTextView.isEditable = false
+        legalAgreementTextView.isScrollEnabled = false
+        legalAgreementTextView.textContainerInset = .zero
+        legalAgreementTextView.textContainer.lineFragmentPadding = 0
+        legalAgreementTextView.delegate = self
+        legalAgreementTextView.linkTextAttributes = [
+            .foregroundColor: ComponentColors.AuthScreen.linkText,
+            .font: UIFont.systemFont(ofSize: 13, weight: .regular)
+        ]
+        legalAgreementTextView.attributedText = legalAgreementAttributedText()
+        legalAgreementTextView.translatesAutoresizingMaskIntoConstraints = false
         
         // Container style (rounded rectangle like screenshot)
         [emailContainerView,
@@ -362,6 +385,8 @@ private extension AuthViewController {
          usernameContainerView,
          confirmPasswordTitleLabel,
          confirmPasswordContainerView,
+         legalAgreementButton,
+         legalAgreementTextView,
          forgotPasswordButton,
          primaryButton,
          leftSeparatorLine,
@@ -380,7 +405,7 @@ private extension AuthViewController {
         
         // Store signup field constraints for toggling
         signupConstraints = [
-            fullNameTitleLabel.topAnchor.constraint(equalTo: passwordContainerView.bottomAnchor, constant: 16),
+            fullNameTitleLabel.topAnchor.constraint(equalTo: screenTitleLabel.bottomAnchor, constant: 32),
             fullNameTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
             fullNameTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
             
@@ -394,7 +419,21 @@ private extension AuthViewController {
             fullNameTextField.topAnchor.constraint(equalTo: fullNameContainerView.topAnchor),
             fullNameTextField.bottomAnchor.constraint(equalTo: fullNameContainerView.bottomAnchor),
             
-            usernameTitleLabel.topAnchor.constraint(equalTo: fullNameContainerView.bottomAnchor, constant: 16),
+            emailTitleLabel.topAnchor.constraint(equalTo: fullNameContainerView.bottomAnchor, constant: 16),
+            emailTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
+            emailTitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
+
+            emailContainerView.topAnchor.constraint(equalTo: emailTitleLabel.bottomAnchor, constant: 8),
+            emailContainerView.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            emailContainerView.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            emailContainerView.heightAnchor.constraint(equalToConstant: 44),
+
+            emailTextField.leadingAnchor.constraint(equalTo: emailContainerView.leadingAnchor, constant: 12),
+            emailTextField.trailingAnchor.constraint(equalTo: emailContainerView.trailingAnchor, constant: -12),
+            emailTextField.topAnchor.constraint(equalTo: emailContainerView.topAnchor),
+            emailTextField.bottomAnchor.constraint(equalTo: emailContainerView.bottomAnchor),
+
+            usernameTitleLabel.topAnchor.constraint(equalTo: emailContainerView.bottomAnchor, constant: 16),
             usernameTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
             usernameTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
             
@@ -408,7 +447,26 @@ private extension AuthViewController {
             usernameTextField.topAnchor.constraint(equalTo: usernameContainerView.topAnchor),
             usernameTextField.bottomAnchor.constraint(equalTo: usernameContainerView.bottomAnchor),
             
-            confirmPasswordTitleLabel.topAnchor.constraint(equalTo: usernameContainerView.bottomAnchor, constant: 16),
+            passwordTitleLabel.topAnchor.constraint(equalTo: usernameContainerView.bottomAnchor, constant: 16),
+            passwordTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            passwordTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+
+            passwordContainerView.topAnchor.constraint(equalTo: passwordTitleLabel.bottomAnchor, constant: 8),
+            passwordContainerView.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            passwordContainerView.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
+            passwordContainerView.heightAnchor.constraint(equalToConstant: 44),
+
+            passwordTextField.leadingAnchor.constraint(equalTo: passwordContainerView.leadingAnchor, constant: 12),
+            passwordTextField.trailingAnchor.constraint(equalTo: passwordToggleButton.leadingAnchor, constant: -8),
+            passwordTextField.topAnchor.constraint(equalTo: passwordContainerView.topAnchor),
+            passwordTextField.bottomAnchor.constraint(equalTo: passwordContainerView.bottomAnchor),
+
+            passwordToggleButton.centerYAnchor.constraint(equalTo: passwordContainerView.centerYAnchor),
+            passwordToggleButton.trailingAnchor.constraint(equalTo: passwordContainerView.trailingAnchor, constant: -12),
+            passwordToggleButton.widthAnchor.constraint(equalToConstant: 24),
+            passwordToggleButton.heightAnchor.constraint(equalToConstant: 24),
+
+            confirmPasswordTitleLabel.topAnchor.constraint(equalTo: passwordContainerView.bottomAnchor, constant: 16),
             confirmPasswordTitleLabel.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
             confirmPasswordTitleLabel.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
             
@@ -421,6 +479,15 @@ private extension AuthViewController {
             confirmPasswordTextField.trailingAnchor.constraint(equalTo: confirmPasswordContainerView.trailingAnchor, constant: -12),
             confirmPasswordTextField.topAnchor.constraint(equalTo: confirmPasswordContainerView.topAnchor),
             confirmPasswordTextField.bottomAnchor.constraint(equalTo: confirmPasswordContainerView.bottomAnchor),
+
+            legalAgreementButton.topAnchor.constraint(equalTo: confirmPasswordContainerView.bottomAnchor, constant: 16),
+            legalAgreementButton.leadingAnchor.constraint(equalTo: emailTitleLabel.leadingAnchor),
+            legalAgreementButton.widthAnchor.constraint(equalToConstant: 24),
+            legalAgreementButton.heightAnchor.constraint(equalToConstant: 24),
+
+            legalAgreementTextView.topAnchor.constraint(equalTo: legalAgreementButton.topAnchor, constant: -1),
+            legalAgreementTextView.leadingAnchor.constraint(equalTo: legalAgreementButton.trailingAnchor, constant: 8),
+            legalAgreementTextView.trailingAnchor.constraint(equalTo: emailTitleLabel.trailingAnchor),
         ]
         
         // Container constraints
@@ -431,7 +498,9 @@ private extension AuthViewController {
             
             screenTitleLabel.topAnchor.constraint(equalTo: appTitleLabel.bottomAnchor, constant: 16),
             screenTitleLabel.centerXAnchor.constraint(equalTo: appTitleLabel.centerXAnchor),
-            
+        ])
+
+        loginFieldConstraints = [
             emailTitleLabel.topAnchor.constraint(equalTo: screenTitleLabel.bottomAnchor, constant: 32),
             emailTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
             emailTitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
@@ -469,11 +538,12 @@ private extension AuthViewController {
             forgotPasswordButton.topAnchor.constraint(equalTo: passwordContainerView.bottomAnchor, constant: 12),
             forgotPasswordButton.trailingAnchor.constraint(equalTo: passwordContainerView.trailingAnchor),
             forgotPasswordButton.leadingAnchor.constraint(greaterThanOrEqualTo: passwordContainerView.leadingAnchor),
-        ])
+        ]
+        NSLayoutConstraint.activate(loginFieldConstraints)
         
         // Primary button constraints (will be toggled between login/signup mode)
         primaryButtonLoginConstraint = primaryButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 16)
-        primaryButtonSignupConstraint = primaryButton.topAnchor.constraint(equalTo: confirmPasswordContainerView.bottomAnchor, constant: 24)
+        primaryButtonSignupConstraint = primaryButton.topAnchor.constraint(equalTo: legalAgreementTextView.bottomAnchor, constant: 24)
         
         // ScrollView and ContentView constraints
         NSLayoutConstraint.activate([
@@ -529,8 +599,39 @@ private extension AuthViewController {
     func configureContainerView(_ v: UIView) {
         v.backgroundColor = ComponentColors.AuthScreen.inputFill
         v.layer.cornerRadius = 12
-        v.layer.borderWidth = 1
-        v.layer.borderColor = ComponentColors.AuthScreen.inputBorder.cgColor
+        if traitCollection.userInterfaceStyle == .light {
+            v.layer.borderWidth = 0
+            v.layer.borderColor = UIColor.clear.cgColor
+        } else {
+            v.layer.borderWidth = 1
+            v.layer.borderColor = ComponentColors.AuthScreen.inputBorder.cgColor
+        }
+    }
+
+    func legalAgreementAttributedText() -> NSAttributedString {
+        let baseAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 13, weight: .regular),
+            .foregroundColor: ComponentColors.AuthScreen.bodyText
+        ]
+
+        let attributed = NSMutableAttributedString(
+            string: "* I agree to the Terms of Service and Privacy Policy",
+            attributes: baseAttributes
+        )
+
+        if let starRange = attributed.string.range(of: "*") {
+            attributed.addAttribute(.foregroundColor, value: ComponentColors.AuthScreen.inputErrorText, range: NSRange(starRange, in: attributed.string))
+        }
+
+        if let termsRange = attributed.string.range(of: "Terms of Service") {
+            attributed.addAttribute(.link, value: "rehearse://legal/terms", range: NSRange(termsRange, in: attributed.string))
+        }
+
+        if let privacyRange = attributed.string.range(of: "Privacy Policy") {
+            attributed.addAttribute(.link, value: "rehearse://legal/privacy", range: NSRange(privacyRange, in: attributed.string))
+        }
+
+        return attributed
     }
     
     func configureTextField(_ tf: UITextField,
@@ -586,20 +687,28 @@ private extension AuthViewController {
         
         fullNameTitleLabel.isHidden = !showSignupFields
         fullNameContainerView.isHidden = !showSignupFields
+        emailTitleLabel.isHidden = false
+        emailContainerView.isHidden = false
         usernameTitleLabel.isHidden = !showSignupFields
         usernameContainerView.isHidden = !showSignupFields
+        passwordTitleLabel.isHidden = false
+        passwordContainerView.isHidden = false
         confirmPasswordTitleLabel.isHidden = !showSignupFields
         confirmPasswordContainerView.isHidden = !showSignupFields
+        legalAgreementButton.isHidden = !showSignupFields
+        legalAgreementTextView.isHidden = !showSignupFields
         
         // Toggle forgot password visibility
         forgotPasswordButton.isHidden = !isLoginMode
         
         // Toggle primary button constraint
         if showSignupFields {
+            NSLayoutConstraint.deactivate(loginFieldConstraints)
             primaryButtonLoginConstraint?.isActive = false
             primaryButtonSignupConstraint?.isActive = true
             NSLayoutConstraint.activate(signupConstraints)
         } else {
+            NSLayoutConstraint.activate(loginFieldConstraints)
             primaryButtonLoginConstraint?.isActive = true
             primaryButtonSignupConstraint?.isActive = false
             NSLayoutConstraint.deactivate(signupConstraints)
@@ -617,6 +726,31 @@ private extension AuthViewController {
 
 // MARK: - Actions
 extension AuthViewController {
+    
+    @objc func toggleLegalAgreement() {
+        hasAcceptedSignupLegal.toggle()
+        let imageName = hasAcceptedSignupLegal ? "checkmark.square.fill" : "square"
+        legalAgreementButton.setImage(UIImage(systemName: imageName), for: .normal)
+        legalAgreementButton.tintColor = hasAcceptedSignupLegal ? ComponentColors.AuthScreen.linkText : ComponentColors.AuthScreen.bodyText
+    }
+    
+    @objc func openTermsOfService() {
+        presentLegalScreen(initialTab: .terms)
+    }
+    
+    @objc func openPrivacyPolicy() {
+        presentLegalScreen(initialTab: .privacy)
+    }
+    
+    private func presentLegalScreen(initialTab: LegalTab) {
+        let legalVC = UIHostingController(rootView: LegalScreenView(initialTab: initialTab))
+        legalVC.modalPresentationStyle = .pageSheet
+        if let sheet = legalVC.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(legalVC, animated: true)
+    }
     
     @objc func togglePasswordVisibility() {
         passwordTextField.isSecureTextEntry.toggle()
@@ -670,6 +804,11 @@ extension AuthViewController {
             
             guard let confirm = confirmPasswordTextField.text, confirm == password else {
                 showError("Passwords do not match.")
+                return
+            }
+            
+            guard hasAcceptedSignupLegal else {
+                showError("Please accept the Terms of Service and Privacy Policy to sign up.")
                 return
             }
         }
@@ -810,6 +949,22 @@ extension AuthViewController {
     }
 }
 
+extension AuthViewController: UITextViewDelegate {
+    func textView(_ textView: UITextView, shouldInteractWith url: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
+        if url.absoluteString == "rehearse://legal/terms" {
+            presentLegalScreen(initialTab: .terms)
+            return false
+        }
+
+        if url.absoluteString == "rehearse://legal/privacy" {
+            presentLegalScreen(initialTab: .privacy)
+            return false
+        }
+
+        return true
+    }
+}
+
 // MARK: - ASWebAuthenticationPresentationContextProviding
 extension AuthViewController: ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -942,5 +1097,3 @@ extension AuthViewController {
                           completion: nil)
     }
 }
-
-

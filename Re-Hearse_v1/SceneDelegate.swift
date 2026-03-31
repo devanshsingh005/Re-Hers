@@ -32,6 +32,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// Decides where to go after the splash screen finishes
     private func performInitialRouting() {
+        performAuthRouting()
+    }
+
+    private func performAuthRouting() {
         Task {
             let client = SupabaseManager.shared.client
             let session = try? await client.auth.session

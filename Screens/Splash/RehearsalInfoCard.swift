@@ -5,7 +5,7 @@ struct RehearsalInfoCard: View {
     @State private var appear = false
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             // Dimmed background
             Color.black.opacity(0.45)
                 .ignoresSafeArea()
@@ -14,20 +14,25 @@ struct RehearsalInfoCard: View {
             // Card
             ZStack(alignment: .topTrailing) {
                 VStack(spacing: 0) {
+                    // Drag Handle
+                    Capsule()
+                        .fill(Color(uiColor: SemanticColors.Text.tertiary).opacity(0.3))
+                        .frame(width: 36, height: 5)
+                        .padding(.top, 12)
 
                     // Header
                     VStack(spacing: 4) {
                         Text("Welcome to")
                             .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.primary)
+                            .foregroundColor(Color(uiColor: SemanticColors.Text.primary))
 
                         Text("Rehearse")
                             .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.orange)
+                            .foregroundColor(Color(uiColor: BrandColors.brand))
 
                         Text("Learn piano faster with interactive tools\nand guided practice.")
                             .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(uiColor: SemanticColors.Text.secondary))
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
                             .padding(.top, 10)
@@ -76,7 +81,7 @@ struct RehearsalInfoCard: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(Color.orange)
+                            .background(Color(uiColor: SemanticColors.Background.primaryButton))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .padding(.horizontal, 24)
@@ -85,31 +90,47 @@ struct RehearsalInfoCard: View {
                 }
                 .background(
                     ZStack {
-                        // User requested Color #F8F8F4
-                        Color(red: 0.9725, green: 0.9725, blue: 0.9569).opacity(0.94)
-                        // Glassy blur effect
-                        BlurView(style: .systemThinMaterialLight).opacity(0.4)
+                        // Adaptive background color from Design System
+                        Color(uiColor: SemanticColors.Background.modal).opacity(0.85)
+                        // Glassy blur effect (adaptive material)
+                        BlurView(style: .systemThinMaterial).opacity(0.7)
                     }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 30, x: 0, y: 10)
+                .shadow(
+                    color: Color(uiColor: SemanticColors.Shadow.level3),
+                    radius: 30, x: 0, y: 10
+                )
 
                 // Close button
                 Button(action: dismiss) {
                     ZStack {
                         Circle()
-                            .fill(Color(uiColor: .secondarySystemBackground))
+                            .fill(Color(uiColor: SemanticColors.Background.secondaryButton))
                             .frame(width: 30, height: 30)
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.orange)
+                            .foregroundColor(Color(uiColor: BrandColors.brand))
                     }
                 }
                 .padding(14)
             }
-            .padding(.horizontal, 20)
-            .scaleEffect(appear ? 1 : 0.94)
-            .opacity(appear ? 1 : 0)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+            .offset(y: appear ? 0 : 800)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if value.translation.height > -20 {
+                            // Only allow dragging down
+                        }
+                    }
+                    .onEnded { value in
+                        if value.translation.height > 80 {
+                            dismiss()
+                        }
+                    }
+            )
         }
         .onAppear {
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
@@ -138,20 +159,20 @@ struct FeatureRow: View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.orange.opacity(0.15))
+                    .fill(Color(uiColor: BrandColors.brand).opacity(0.15))
                     .frame(width: 42, height: 42)
                 Image(systemName: icon)
                     .font(.system(size: 19, weight: .medium))
-                    .foregroundColor(.orange)
+                    .foregroundColor(Color(uiColor: BrandColors.brand))
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(Color(uiColor: SemanticColors.Text.primary))
                 Text(description)
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(uiColor: SemanticColors.Text.secondary))
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }

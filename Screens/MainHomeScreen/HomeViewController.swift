@@ -9,7 +9,7 @@ import Supabase
 class HomeViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Native Nav Bar Architecture
-    let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    let navBackgroundView = UIVisualEffectView(effect: nil)
     let navShadowLayer = UIView()
     let largeSubtitleLabel = UILabel()
     var inlineSubtitleLabel: UILabel?
@@ -61,6 +61,13 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopPracticeTimer()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        updateNavBackgroundAppearance()
     }
 
     deinit {

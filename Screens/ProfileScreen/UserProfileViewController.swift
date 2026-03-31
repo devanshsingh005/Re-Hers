@@ -5,6 +5,7 @@
 import UIKit
 import Supabase
 import Auth
+import SwiftUI
 internal import PostgREST
 
 struct Profile: Decodable {
@@ -134,6 +135,7 @@ final class UserProfileViewController: UIViewController {
         buildHeaderSection()
         buildStatsSection()
         buildPracticeProgressSection()
+        buildLegalSection()
         buildSignOutSection()
     }
 
@@ -426,6 +428,81 @@ final class UserProfileViewController: UIViewController {
         ])
     }
 
+    private func buildLegalSection() {
+        let card = UIView()
+        card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
+        card.layer.cornerRadius = 20
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.06
+        card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        card.layer.shadowRadius = 16
+        card.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(card)
+
+        let sectionTitle = UILabel()
+        sectionTitle.text = "Legal"
+        sectionTitle.font = .systemFont(ofSize: 20, weight: .bold)
+        sectionTitle.textColor = ComponentColors.ProfileScreen.userName
+        sectionTitle.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(sectionTitle)
+
+        let termsButton = makeLegalRowButton(title: "Terms of Service", action: #selector(openTermsOfService))
+        let privacyButton = makeLegalRowButton(title: "Privacy Policy", action: #selector(openPrivacyPolicy))
+
+        let divider = UIView()
+        divider.backgroundColor = ComponentColors.ProfileScreen.statCardBorder
+        divider.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = UIStackView(arrangedSubviews: [termsButton, divider, privacyButton])
+        stack.axis = .vertical
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let previousView = contentView.subviews.last(where: { $0 != card })!
+
+        NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: 20),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+
+            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+
+            stack.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: 10),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+
+            termsButton.heightAnchor.constraint(equalToConstant: 50),
+            privacyButton.heightAnchor.constraint(equalToConstant: 50),
+            divider.heightAnchor.constraint(equalToConstant: 0.5)
+        ])
+    }
+
+    private func makeLegalRowButton(title: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(ComponentColors.ProfileScreen.userName, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        button.contentHorizontalAlignment = .left
+        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: action, for: .touchUpInside)
+
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+        chevron.tintColor = ComponentColors.ProfileScreen.statLabel
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(chevron)
+
+        NSLayoutConstraint.activate([
+            chevron.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -20)
+        ])
+
+        return button
+    }
+
     // MARK: - Load Data
     private func loadData() {
         Task {
@@ -596,6 +673,21 @@ final class UserProfileViewController: UIViewController {
                 }
             }
         }
+    }
+
+    @objc private func openTermsOfService() {
+        presentLegalScreen(preselectPrivacy: false)
+    }
+
+    @objc private func openPrivacyPolicy() {
+        presentLegalScreen(preselectPrivacy: true)
+    }
+
+    private func presentLegalScreen(preselectPrivacy: Bool) {
+        let initialTab: LegalTab = preselectPrivacy ? .privacy : .terms
+        let legalVC = UIHostingController(rootView: LegalScreenView(initialTab: initialTab))
+        legalVC.modalPresentationStyle = .fullScreen
+        present(legalVC, animated: true)
     }
 
     // MARK: - Edit Profile

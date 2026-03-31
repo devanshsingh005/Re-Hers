@@ -8,6 +8,18 @@ import Supabase
 
 extension HomeViewController {
 
+    func updateNavBackgroundAppearance() {
+        let blurStyle: UIBlurEffect.Style = traitCollection.userInterfaceStyle == .dark
+            ? .systemThinMaterialDark
+            : .systemThinMaterialLight
+
+        navBackgroundView.effect = UIBlurEffect(style: blurStyle)
+        navBackgroundView.backgroundColor = ComponentColors.NavBar.background.withAlphaComponent(traitCollection.userInterfaceStyle == .dark ? 0.18 : 0.72)
+        navShadowLayer.backgroundColor = ComponentColors.NavBar.separator
+        navBackgroundView.layer.borderColor = ComponentColors.NavBar.separator.cgColor
+        navBackgroundView.layer.borderWidth = 0.5
+    }
+
     func setupNavBar() {
         navigationItem.title = "" 
         navigationController?.navigationBar.prefersLargeTitles = false
@@ -21,12 +33,12 @@ extension HomeViewController {
     }
 
     func setupNavBackground() {
+        updateNavBackgroundAppearance()
         navBackgroundView.alpha = 0
         navBackgroundView.isUserInteractionEnabled = false
         navBackgroundView.contentView.isUserInteractionEnabled = false
         view.addSubview(navBackgroundView)
         
-        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
         navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
         navBackgroundView.contentView.addSubview(navShadowLayer)
         
@@ -47,8 +59,6 @@ extension HomeViewController {
             navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
         ])
         
-        navBackgroundView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
-        navBackgroundView.layer.borderWidth = 0.5
     }
 
     func setupCustomLargeHeader() -> UIView {

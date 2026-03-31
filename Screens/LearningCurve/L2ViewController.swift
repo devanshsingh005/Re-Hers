@@ -9,11 +9,13 @@ class MusicStaffView: UIView {
 
     private let noteName: String
     private var noteLayer: CALayer?
+    private weak var tapToPlayContainer: UIView?
+    private var pendingNoteOffWorkItem: DispatchWorkItem?
 
     init(noteName: String) {
         self.noteName = noteName
         super.init(frame: .zero)
-        backgroundColor = .white
+        backgroundColor = ComponentColors.LessonScreen.cardFill
         layer.cornerRadius = 24
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.08
@@ -41,7 +43,7 @@ class MusicStaffView: UIView {
             let y = staffTop + CGFloat(i) * lineSpacing
             let line = CALayer()
             line.frame = CGRect(x: staffLeft, y: y, width: staffRight - staffLeft, height: 1)
-            line.backgroundColor = UIColor.systemGray4.cgColor
+            line.backgroundColor = ComponentColors.QuizScreen.staffLines.withAlphaComponent(0.22).cgColor
             layer.addSublayer(line)
         }
 
@@ -49,7 +51,7 @@ class MusicStaffView: UIView {
         clefLayer.string = "𝄞"
         clefLayer.font = CTFontCreateWithName("TimesNewRomanPS-BoldMT" as CFString, 72, nil)
         clefLayer.fontSize = 72
-        clefLayer.foregroundColor = UIColor.systemGray3.cgColor
+        clefLayer.foregroundColor = ComponentColors.QuizScreen.clefSymbol.withAlphaComponent(0.32).cgColor
         clefLayer.frame = CGRect(x: staffLeft + 2, y: staffTop - 32, width: 60, height: 85)
         clefLayer.contentsScale = UITraitCollection.current.displayScale
         layer.addSublayer(clefLayer)
@@ -62,7 +64,7 @@ class MusicStaffView: UIView {
         if noteName == "C" {
             let ledger = CALayer()
             ledger.frame = CGRect(x: noteX - 18, y: noteY + 6, width: 38, height: 1.5)
-            ledger.backgroundColor = UIColor.systemGray3.cgColor
+            ledger.backgroundColor = ComponentColors.QuizScreen.staffLines.withAlphaComponent(0.32).cgColor
             layer.addSublayer(ledger)
         }
 
@@ -106,19 +108,24 @@ class MusicStaffView: UIView {
     }
 
     private func addTapToPlay() {
+        tapToPlayContainer?.removeFromSuperview()
+
         let tapLabel = UILabel()
         tapLabel.text = "TAP TO PLAY"
         tapLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        tapLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
+        tapLabel.textColor = ComponentColors.LessonScreen.labelPrimary
         tapLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let border = UIView()
         border.translatesAutoresizingMaskIntoConstraints = false
+        border.backgroundColor = ComponentColors.LessonScreen.cardFill
         border.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         border.layer.borderWidth = 1.2
         border.layer.cornerRadius = 11
+        border.isUserInteractionEnabled = true
         border.addSubview(tapLabel)
         addSubview(border)
+        tapToPlayContainer = border
 
         NSLayoutConstraint.activate([
             tapLabel.topAnchor.constraint(equalTo: border.topAnchor, constant: 5),
@@ -128,17 +135,54 @@ class MusicStaffView: UIView {
             border.topAnchor.constraint(equalTo: topAnchor, constant: 14),
             border.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
         ])
-        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
+        border.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
     }
 
     @objc private func handleTap() {
         guard let noteLayer = noteLayer else { return }
+        animateTapToPlay()
         noteLayer.removeAllAnimations()
         let bounce = CAKeyframeAnimation(keyPath: "transform.scale")
         bounce.values = [1.0, 1.3, 0.9, 1.1, 1.0]
         bounce.duration = 0.5; bounce.calculationMode = .cubic
         noteLayer.add(bounce, forKey: "bounce")
+        playSelectedNote()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.startPulse() }
+    }
+
+    private func animateTapToPlay() {
+        guard let tapToPlayContainer else { return }
+        UIView.animate(withDuration: 0.08, animations: {
+            tapToPlayContainer.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
+        }) { _ in
+            UIView.animate(withDuration: 0.22,
+                           delay: 0,
+                           usingSpringWithDamping: 0.55,
+                           initialSpringVelocity: 4) {
+                tapToPlayContainer.transform = .identity
+            }
+        }
+    }
+
+    private func playSelectedNote() {
+        pendingNoteOffWorkItem?.cancel()
+        AudioEngineManager.shared.startEngine()
+        guard let midi = AudioEngineManager.shared.midiNumber(from: playableNoteName(for: noteName)) else { return }
+
+        AudioEngineManager.shared.startNote(midi: midi)
+
+        let stopWorkItem = DispatchWorkItem {
+            AudioEngineManager.shared.stopNote(midi: midi)
+        }
+        pendingNoteOffWorkItem = stopWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: stopWorkItem)
+    }
+
+    private func playableNoteName(for note: String) -> String {
+        if note.rangeOfCharacter(from: .decimalDigits) != nil {
+            return note
+        }
+        return "\(note)4"
     }
 }
 
@@ -169,12 +213,12 @@ class VariantChipButton: UIButton {
         let noteLabel = UILabel()
         noteLabel.text = label
         noteLabel.font = .systemFont(ofSize: 18, weight: .bold)
-        noteLabel.textColor = isSelected ? .white : .systemGray
+        noteLabel.textColor = isSelected ? ComponentColors.PrimaryButton.text : ComponentColors.LessonScreen.labelSecondary
 
         let subLabel = UILabel()
         subLabel.text = sublabel
         subLabel.font = .systemFont(ofSize: 9, weight: .medium)
-        subLabel.textColor = isSelected ? UIColor.white.withAlphaComponent(0.9) : .systemGray3
+        subLabel.textColor = isSelected ? ComponentColors.PrimaryButton.text.withAlphaComponent(0.88) : ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
 
         stack.addArrangedSubview(noteLabel)
         stack.addArrangedSubview(subLabel)
@@ -226,7 +270,9 @@ class VariantChipButton: UIButton {
         if let stack = subviews.first(where: { $0 is UIStackView }) as? UIStackView {
             for sub in stack.arrangedSubviews {
                 if let lbl = sub as? UILabel {
-                    lbl.textColor = (lbl.font.pointSize > 12 ? .systemGray : .systemGray3)
+                    lbl.textColor = (lbl.font.pointSize > 12
+                                     ? ComponentColors.LessonScreen.labelSecondary
+                                     : ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7))
                 }
             }
         }
@@ -306,6 +352,7 @@ class LessonDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.HomeScreen.background
+        AudioEngineManager.shared.startEngine()
         scrollView.delegate = self
         setupNavBar()
         navigationItem.titleView?.alpha = 0
@@ -471,6 +518,10 @@ class LessonDetailViewController: UIViewController {
         return ["C","D","E","F","G","A","B"].contains(first) ? first : String(lesson.noteName.prefix(1))
     }
 
+    private func lessonCardBorderWidth() -> CGFloat {
+        traitCollection.userInterfaceStyle == .light ? 0 : 1.0
+    }
+
     // MARK: - UI Setup
 
     private func setupUI() {
@@ -494,20 +545,20 @@ class LessonDetailViewController: UIViewController {
         lessonNameLabel.translatesAutoresizingMaskIntoConstraints = false
         lessonNameLabel.text = "Lesson 1: \(lesson.title)"
         lessonNameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        lessonNameLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
+        lessonNameLabel.textColor = ComponentColors.LessonScreen.labelPrimary
 
         progressPercentLabel = UILabel()
         progressPercentLabel.translatesAutoresizingMaskIntoConstraints = false
         progressPercentLabel.text = "0% complete"
         progressPercentLabel.font = .systemFont(ofSize: 13)
-        progressPercentLabel.textColor = .systemGray
+        progressPercentLabel.textColor = ComponentColors.LessonScreen.labelSecondary
 
         // ── Variant dots row (one dot per variant, turns green when done) ──
         let dotsLabel = UILabel()
         dotsLabel.translatesAutoresizingMaskIntoConstraints = false
         dotsLabel.text = "Variants:"
         dotsLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        dotsLabel.textColor = .systemGray
+        dotsLabel.textColor = ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
 
         dotsStack = UIStackView()
         dotsStack.translatesAutoresizingMaskIntoConstraints = false
@@ -530,7 +581,7 @@ class LessonDetailViewController: UIViewController {
         // ── Staff card ──
         let staffCardView = UIView()
         staffCardView.translatesAutoresizingMaskIntoConstraints = false
-        staffCardView.backgroundColor = .white
+        staffCardView.backgroundColor = ComponentColors.LessonScreen.cardFill
         staffCardView.layer.cornerRadius = 24
         staffCardView.layer.shadowColor = UIColor.black.cgColor
         staffCardView.layer.shadowOpacity = 0.08
@@ -546,8 +597,12 @@ class LessonDetailViewController: UIViewController {
         noteNameLabel = UILabel()
         noteNameLabel.translatesAutoresizingMaskIntoConstraints = false
         noteNameLabel.text = lesson.variants[0]
-        noteNameLabel.font = .systemFont(ofSize: 80, weight: .heavy)
-        noteNameLabel.textColor = ComponentColors.HomeScreen.actionButtonFill; noteNameLabel.textAlignment = .center
+        noteNameLabel.font = .systemFont(ofSize: 42, weight: .heavy)
+        noteNameLabel.textColor = ComponentColors.LessonScreen.labelPrimary; noteNameLabel.textAlignment = .center
+        noteNameLabel.adjustsFontSizeToFitWidth = true
+        noteNameLabel.minimumScaleFactor = 0.5
+        noteNameLabel.numberOfLines = 2
+        noteNameLabel.lineBreakMode = .byWordWrapping
         noteNameLabel.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
         noteNameLabel.layer.shadowRadius = 10; noteNameLabel.layer.shadowOpacity = 0.3
         noteNameLabel.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -558,7 +613,7 @@ class LessonDetailViewController: UIViewController {
         let engPrefix = UILabel()
         engPrefix.translatesAutoresizingMaskIntoConstraints = false
         engPrefix.text = "English Note: "
-        engPrefix.font = .systemFont(ofSize: 14, weight: .medium); engPrefix.textColor = .systemGray
+        engPrefix.font = .systemFont(ofSize: 14, weight: .medium); engPrefix.textColor = ComponentColors.LessonScreen.labelSecondary
         engRow.addSubview(engPrefix)
         englishLabel = UILabel()
         englishLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -570,7 +625,7 @@ class LessonDetailViewController: UIViewController {
         variantsHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         variantsHeaderLabel.text = "Tap a variant chip, then practice with the mic ↓"
         variantsHeaderLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        variantsHeaderLabel.textColor = .systemGray
+        variantsHeaderLabel.textColor = ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
 
         variantsScrollView = UIScrollView()
         variantsScrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -610,9 +665,9 @@ class LessonDetailViewController: UIViewController {
         let conceptHeader = makeCardHeader("About this lesson", icon: "text.book.closed")
         let descLabel = UILabel()
         descLabel.translatesAutoresizingMaskIntoConstraints = false
-        descLabel.text = lesson.description
+        descLabel.text = summarizedLessonDescription(from: lesson.description)
         descLabel.font = .systemFont(ofSize: 14)
-        descLabel.textColor = ComponentColors.SongCard.titleText
+        descLabel.textColor = .label
         descLabel.numberOfLines = 0
         descLabel.lineBreakMode = .byWordWrapping
         conceptCard.addSubview(conceptHeader)
@@ -630,7 +685,7 @@ class LessonDetailViewController: UIViewController {
             overviewLabel.translatesAutoresizingMaskIntoConstraints = false
             overviewLabel.text = lesson.familyOverview
             overviewLabel.font = .systemFont(ofSize: 13)
-            overviewLabel.textColor = ComponentColors.SongCard.metadataText
+            overviewLabel.textColor = .secondaryLabel
             overviewLabel.numberOfLines = 0
             conceptCard.addSubview(overviewLabel)
             conceptConstraints += [
@@ -645,100 +700,110 @@ class LessonDetailViewController: UIViewController {
         NSLayoutConstraint.activate(conceptConstraints)
 
         // ── Chord details card ──
-        let chordsCard = makeInfoCard()
-        let chordsHeader = makeCardHeader("Chord details", icon: "music.note.list")
-        chordsCard.addSubview(chordsHeader)
-        var lastAnchor = chordsHeader.bottomAnchor
-        var chordConstraints: [NSLayoutConstraint] = [
-            chordsHeader.topAnchor.constraint(equalTo: chordsCard.topAnchor, constant: 14),
-            chordsHeader.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: 14),
-            chordsHeader.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: -14),
-        ]
-        for (i, detail) in lesson.chordDetails.enumerated() {
-            let row = makeChordRow(detail: detail, index: i)
-            chordsCard.addSubview(row)
-            chordConstraints += [
-                row.topAnchor.constraint(equalTo: lastAnchor, constant: i == 0 ? 10 : 2),
-                row.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: 10),
-                row.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: -10),
+        var infoCards: [UIView] = [conceptCard]
+
+        if !lesson.chordDetails.isEmpty {
+            let chordsCard = makeInfoCard()
+            let chordsHeader = makeCardHeader("Chord details", icon: "music.note.list")
+            chordsCard.addSubview(chordsHeader)
+            var lastAnchor = chordsHeader.bottomAnchor
+            var chordConstraints: [NSLayoutConstraint] = [
+                chordsHeader.topAnchor.constraint(equalTo: chordsCard.topAnchor, constant: 14),
+                chordsHeader.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: 14),
+                chordsHeader.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: -14),
             ]
-            lastAnchor = row.bottomAnchor
+            for (i, detail) in lesson.chordDetails.enumerated() {
+                let row = makeChordRow(detail: detail, index: i)
+                chordsCard.addSubview(row)
+                chordConstraints += [
+                    row.topAnchor.constraint(equalTo: lastAnchor, constant: i == 0 ? 10 : 2),
+                    row.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: 10),
+                    row.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: -10),
+                ]
+                lastAnchor = row.bottomAnchor
+            }
+            chordConstraints.append(lastAnchor.constraint(equalTo: chordsCard.bottomAnchor, constant: -14))
+            NSLayoutConstraint.activate(chordConstraints)
+            infoCards.append(chordsCard)
         }
-        chordConstraints.append(lastAnchor.constraint(equalTo: chordsCard.bottomAnchor, constant: -14))
-        NSLayoutConstraint.activate(chordConstraints)
 
-        // ── Progressions card ──
-        let progsCard = makeInfoCard()
-        let progsHeader = makeCardHeader("Common progressions", icon: "arrow.triangle.2.circlepath")
-        progsCard.addSubview(progsHeader)
-        var lastProgAnchor = progsHeader.bottomAnchor
-        var progConstraints: [NSLayoutConstraint] = [
-            progsHeader.topAnchor.constraint(equalTo: progsCard.topAnchor, constant: 14),
-            progsHeader.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: 14),
-            progsHeader.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: -14),
-        ]
-        for (i, prog) in lesson.progressions.enumerated() {
-            let row = makeProgressionRow(prog: prog, index: i)
-            progsCard.addSubview(row)
-            progConstraints += [
-                row.topAnchor.constraint(equalTo: lastProgAnchor, constant: i == 0 ? 10 : 6),
-                row.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: 10),
-                row.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: -10),
+        if !lesson.progressions.isEmpty {
+            let progsCard = makeInfoCard()
+            let progsHeader = makeCardHeader("Common progressions", icon: "arrow.triangle.2.circlepath")
+            progsCard.addSubview(progsHeader)
+            var lastProgAnchor = progsHeader.bottomAnchor
+            var progConstraints: [NSLayoutConstraint] = [
+                progsHeader.topAnchor.constraint(equalTo: progsCard.topAnchor, constant: 14),
+                progsHeader.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: 14),
+                progsHeader.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: -14),
             ]
-            lastProgAnchor = row.bottomAnchor
+            for (i, prog) in lesson.progressions.enumerated() {
+                let row = makeProgressionRow(prog: prog, index: i)
+                progsCard.addSubview(row)
+                progConstraints += [
+                    row.topAnchor.constraint(equalTo: lastProgAnchor, constant: i == 0 ? 10 : 6),
+                    row.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: 10),
+                    row.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: -10),
+                ]
+                lastProgAnchor = row.bottomAnchor
+            }
+            progConstraints.append(lastProgAnchor.constraint(equalTo: progsCard.bottomAnchor, constant: -14))
+            NSLayoutConstraint.activate(progConstraints)
+            infoCards.append(progsCard)
         }
-        progConstraints.append(lastProgAnchor.constraint(equalTo: progsCard.bottomAnchor, constant: -14))
-        NSLayoutConstraint.activate(progConstraints)
 
-        // ── Listening guide card ──
-        let listenCard = makeInfoCard()
-        let listenHeader = makeCardHeader("Listening guide", icon: "ear")
-        let listenLabel = UILabel()
-        listenLabel.translatesAutoresizingMaskIntoConstraints = false
-        listenLabel.text = lesson.listeningGuide.isEmpty ? "Listen carefully to each chord and notice the mood it creates." : lesson.listeningGuide
-        listenLabel.font = .systemFont(ofSize: 14)
-        listenLabel.textColor = ComponentColors.SongCard.titleText
-        listenLabel.numberOfLines = 0
-        listenCard.addSubview(listenHeader)
-        listenCard.addSubview(listenLabel)
-        NSLayoutConstraint.activate([
-            listenHeader.topAnchor.constraint(equalTo: listenCard.topAnchor, constant: 14),
-            listenHeader.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: 14),
-            listenHeader.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: -14),
-            listenLabel.topAnchor.constraint(equalTo: listenHeader.bottomAnchor, constant: 8),
-            listenLabel.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: 14),
-            listenLabel.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: -14),
-            listenLabel.bottomAnchor.constraint(equalTo: listenCard.bottomAnchor, constant: -14),
-        ])
+        if !lesson.listeningGuide.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let listenCard = makeInfoCard()
+            let listenHeader = makeCardHeader("Listening guide", icon: "ear")
+            let listenLabel = UILabel()
+            listenLabel.translatesAutoresizingMaskIntoConstraints = false
+            listenLabel.text = lesson.listeningGuide
+            listenLabel.font = .systemFont(ofSize: 14)
+            listenLabel.textColor = .label
+            listenLabel.numberOfLines = 0
+            listenCard.addSubview(listenHeader)
+            listenCard.addSubview(listenLabel)
+            NSLayoutConstraint.activate([
+                listenHeader.topAnchor.constraint(equalTo: listenCard.topAnchor, constant: 14),
+                listenHeader.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: 14),
+                listenHeader.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: -14),
+                listenLabel.topAnchor.constraint(equalTo: listenHeader.bottomAnchor, constant: 8),
+                listenLabel.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: 14),
+                listenLabel.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: -14),
+                listenLabel.bottomAnchor.constraint(equalTo: listenCard.bottomAnchor, constant: -14),
+            ])
+            infoCards.append(listenCard)
+        }
 
-        // ── Practice tasks card ──
-        let tasksCard = makeInfoCard()
-        let tasksHeader = makeCardHeader("Practice tasks", icon: "checkmark.circle")
-        tasksCard.addSubview(tasksHeader)
-        var lastTaskAnchor = tasksHeader.bottomAnchor
-        var taskConstraints: [NSLayoutConstraint] = [
-            tasksHeader.topAnchor.constraint(equalTo: tasksCard.topAnchor, constant: 14),
-            tasksHeader.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: 14),
-            tasksHeader.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: -14),
-        ]
-        for (i, task) in lesson.practiceTasks.enumerated() {
-            let taskRow = makeTaskRow(number: i + 1, text: task)
-            tasksCard.addSubview(taskRow)
-            taskConstraints += [
-                taskRow.topAnchor.constraint(equalTo: lastTaskAnchor, constant: i == 0 ? 10 : 6),
-                taskRow.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: 10),
-                taskRow.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: -10),
+        if !lesson.practiceTasks.isEmpty {
+            let tasksCard = makeInfoCard()
+            let tasksHeader = makeCardHeader("Practice tasks", icon: "checkmark.circle")
+            tasksCard.addSubview(tasksHeader)
+            var lastTaskAnchor = tasksHeader.bottomAnchor
+            var taskConstraints: [NSLayoutConstraint] = [
+                tasksHeader.topAnchor.constraint(equalTo: tasksCard.topAnchor, constant: 14),
+                tasksHeader.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: 14),
+                tasksHeader.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: -14),
             ]
-            lastTaskAnchor = taskRow.bottomAnchor
+            for (i, task) in lesson.practiceTasks.enumerated() {
+                let taskRow = makeTaskRow(number: i + 1, text: task)
+                tasksCard.addSubview(taskRow)
+                taskConstraints += [
+                    taskRow.topAnchor.constraint(equalTo: lastTaskAnchor, constant: i == 0 ? 10 : 6),
+                    taskRow.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: 10),
+                    taskRow.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: -10),
+                ]
+                lastTaskAnchor = taskRow.bottomAnchor
+            }
+            taskConstraints.append(lastTaskAnchor.constraint(equalTo: tasksCard.bottomAnchor, constant: -14))
+            NSLayoutConstraint.activate(taskConstraints)
+            infoCards.append(tasksCard)
         }
-        taskConstraints.append(lastTaskAnchor.constraint(equalTo: tasksCard.bottomAnchor, constant: -14))
-        NSLayoutConstraint.activate(taskConstraints)
 
-        // ── Add all to contentView ──
         [progressRowLabel, progressBGView,
          lessonNameLabel, progressPercentLabel, dotsRow, staffCardView, noteNameLabel,
-         engRow, variantsHeaderLabel, variantsScrollView, tryBtn,
-         conceptCard, chordsCard, progsCard, listenCard, tasksCard].forEach { contentView.addSubview($0) }
+         engRow, variantsHeaderLabel, variantsScrollView, tryBtn].forEach { contentView.addSubview($0) }
+        infoCards.forEach { contentView.addSubview($0) }
 
         // Progress fill width — starts at 0
         progressFillConstraint = progressFill.widthAnchor.constraint(equalToConstant: 0)
@@ -806,27 +871,23 @@ class LessonDetailViewController: UIViewController {
             tryBtn.heightAnchor.constraint(equalToConstant: 52),
 
             // ── Rich content cards below Try Yourself ──
-            conceptCard.topAnchor.constraint(equalTo: tryBtn.bottomAnchor, constant: 28),
-            conceptCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            conceptCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-
-            chordsCard.topAnchor.constraint(equalTo: conceptCard.bottomAnchor, constant: 14),
-            chordsCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            chordsCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-
-            progsCard.topAnchor.constraint(equalTo: chordsCard.bottomAnchor, constant: 14),
-            progsCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            progsCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-
-            listenCard.topAnchor.constraint(equalTo: progsCard.bottomAnchor, constant: 14),
-            listenCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            listenCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-
-            tasksCard.topAnchor.constraint(equalTo: listenCard.bottomAnchor, constant: 14),
-            tasksCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            tasksCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            tasksCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36),
         ])
+
+        var previousCard: UIView?
+        for card in infoCards {
+            NSLayoutConstraint.activate([
+                card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+                card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+                card.topAnchor.constraint(equalTo: (previousCard ?? tryBtn).bottomAnchor, constant: previousCard == nil ? 28 : 14),
+            ])
+            previousCard = card
+        }
+
+        if let lastCard = previousCard {
+            lastCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
+        } else {
+            tryBtn.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
+        }
         
         chipsStack.widthAnchor.constraint(equalToConstant: CGFloat(lesson.variants.count) * 82).isActive = true
     }
@@ -838,6 +899,8 @@ class LessonDetailViewController: UIViewController {
         v.translatesAutoresizingMaskIntoConstraints = false
         v.backgroundColor = ComponentColors.SongCard.background
         v.layer.cornerRadius = 18
+        v.layer.borderWidth = lessonCardBorderWidth()
+        v.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
         v.layer.masksToBounds = true
         return v
     }
@@ -855,20 +918,46 @@ class LessonDetailViewController: UIViewController {
 
         let lbl = UILabel()
         lbl.text = title; lbl.font = .systemFont(ofSize: 13, weight: .bold)
-        lbl.textColor = ComponentColors.HomeScreen.actionButtonFill
+        lbl.textColor = ComponentColors.LessonScreen.labelPrimary
 
         row.addArrangedSubview(img)
         row.addArrangedSubview(lbl)
         return row
     }
 
+    private func summarizedLessonDescription(from text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = trimmedText.split(whereSeparator: \.isWhitespace)
+        let sentences = trimmedText
+            .split(whereSeparator: { [".", "!", "?"].contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard sentences.count > 3 || words.count > 60 else {
+            return trimmedText
+        }
+
+        let summarySentenceCount = min(sentences.count, 3)
+        let summary = sentences.prefix(summarySentenceCount).joined(separator: ". ")
+        let summaryWords = summary.split(whereSeparator: \.isWhitespace)
+
+        if summaryWords.count <= 60 {
+            return summary.hasSuffix(".") ? summary : summary + "."
+        }
+
+        let fallbackSummary = sentences.prefix(min(sentences.count, 2)).joined(separator: ". ")
+        return fallbackSummary.hasSuffix(".") ? fallbackSummary : fallbackSummary + "."
+    }
+
     private func makeChordRow(detail: ChordDetail, index: Int) -> UIView {
         let bg = UIView()
         bg.translatesAutoresizingMaskIntoConstraints = false
         bg.backgroundColor = index % 2 == 0
-            ? UIColor.white.withAlphaComponent(0.60)
-            : UIColor.white.withAlphaComponent(0.30)
+            ? ComponentColors.LessonScreen.background
+            : ComponentColors.LessonScreen.cardFill
         bg.layer.cornerRadius = 12
+        bg.layer.borderWidth = lessonCardBorderWidth()
+        bg.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
         // Name pill
         let namePill = UIView()
@@ -882,7 +971,7 @@ class LessonDetailViewController: UIViewController {
         nameL.translatesAutoresizingMaskIntoConstraints = false
         nameL.text = detail.name
         nameL.font = .systemFont(ofSize: 11, weight: .bold)
-        nameL.textColor = .white
+        nameL.textColor = ComponentColors.PrimaryButton.text
         nameL.numberOfLines = 1
         namePill.addSubview(nameL)
 
@@ -891,14 +980,14 @@ class LessonDetailViewController: UIViewController {
         notesL.translatesAutoresizingMaskIntoConstraints = false
         notesL.text = detail.notes.joined(separator: " – ")
         notesL.font = .systemFont(ofSize: 12, weight: .semibold)
-        notesL.textColor = ComponentColors.SongCard.titleText
+        notesL.textColor = ComponentColors.LessonScreen.labelPrimary
 
         // Emotion label
         let emotionL = UILabel()
         emotionL.translatesAutoresizingMaskIntoConstraints = false
         emotionL.text = detail.emotion
         emotionL.font = .systemFont(ofSize: 11)
-        emotionL.textColor = ComponentColors.SongCard.metadataText
+        emotionL.textColor = ComponentColors.LessonScreen.labelSecondary
         emotionL.numberOfLines = 2
 
         bg.addSubview(namePill); bg.addSubview(nameL); bg.addSubview(notesL); bg.addSubview(emotionL)
@@ -927,27 +1016,29 @@ class LessonDetailViewController: UIViewController {
         let bg = UIView()
         bg.translatesAutoresizingMaskIntoConstraints = false
         bg.backgroundColor = index % 2 == 0
-            ? UIColor.white.withAlphaComponent(0.60)
-            : UIColor.white.withAlphaComponent(0.30)
+            ? ComponentColors.LessonScreen.background
+            : ComponentColors.LessonScreen.cardFill
         bg.layer.cornerRadius = 12
+        bg.layer.borderWidth = lessonCardBorderWidth()
+        bg.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
         let numeralL = UILabel()
         numeralL.translatesAutoresizingMaskIntoConstraints = false
         numeralL.text = prog.numerals
         numeralL.font = .systemFont(ofSize: 11, weight: .bold)
-        numeralL.textColor = ComponentColors.HomeScreen.actionButtonFill
+        numeralL.textColor = ComponentColors.LessonScreen.brandAccent
 
         let chordsL = UILabel()
         chordsL.translatesAutoresizingMaskIntoConstraints = false
         chordsL.text = prog.chords
         chordsL.font = .systemFont(ofSize: 13, weight: .semibold)
-        chordsL.textColor = ComponentColors.SongCard.titleText
+        chordsL.textColor = ComponentColors.LessonScreen.labelPrimary
 
         let feelL = UILabel()
         feelL.translatesAutoresizingMaskIntoConstraints = false
         feelL.text = prog.feel
         feelL.font = .systemFont(ofSize: 11)
-        feelL.textColor = ComponentColors.SongCard.metadataText
+        feelL.textColor = ComponentColors.LessonScreen.labelSecondary
         feelL.numberOfLines = 2
 
         bg.addSubview(numeralL); bg.addSubview(chordsL); bg.addSubview(feelL)
@@ -971,8 +1062,12 @@ class LessonDetailViewController: UIViewController {
     private func makeTaskRow(number: Int, text: String) -> UIView {
         let bg = UIView()
         bg.translatesAutoresizingMaskIntoConstraints = false
-        bg.backgroundColor = UIColor.white.withAlphaComponent(number % 2 == 0 ? 0.30 : 0.60)
+        bg.backgroundColor = number % 2 == 0
+            ? ComponentColors.LessonScreen.cardFill
+            : ComponentColors.LessonScreen.background
         bg.layer.cornerRadius = 12
+        bg.layer.borderWidth = lessonCardBorderWidth()
+        bg.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
         let numCircle = UIView()
         numCircle.translatesAutoresizingMaskIntoConstraints = false
@@ -990,7 +1085,7 @@ class LessonDetailViewController: UIViewController {
         taskL.translatesAutoresizingMaskIntoConstraints = false
         taskL.text = text
         taskL.font = .systemFont(ofSize: 13)
-        taskL.textColor = ComponentColors.SongCard.titleText
+        taskL.textColor = ComponentColors.LessonScreen.labelPrimary
         taskL.numberOfLines = 0
 
         bg.addSubview(numCircle); bg.addSubview(numL); bg.addSubview(taskL)
@@ -1209,8 +1304,12 @@ class LessonDetailViewController: UIViewController {
                     for sub in stack.arrangedSubviews {
                         if let lbl = sub as? UILabel {
                             lbl.textColor = useOrange
-                                ? (lbl.font.pointSize > 12 ? .white : UIColor.white.withAlphaComponent(0.9))
-                                : (lbl.font.pointSize > 12 ? .systemGray : .systemGray3)
+                                ? (lbl.font.pointSize > 12
+                                   ? ComponentColors.PrimaryButton.text
+                                   : ComponentColors.PrimaryButton.text.withAlphaComponent(0.88))
+                                : (lbl.font.pointSize > 12
+                                   ? ComponentColors.LessonScreen.labelSecondary
+                                   : ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7))
                         }
                     }
                 }
@@ -1225,7 +1324,7 @@ class LessonDetailViewController: UIViewController {
         else if ["C","D","E","F","G","A","B"].contains(variant) { name = variant }
         englishLabel.text = name
         englishLabel.font = .systemFont(ofSize: 14, weight: .bold)
-        englishLabel.textColor = .label
+        englishLabel.textColor = ComponentColors.LessonScreen.labelPrimary
     }
 
     @objc private func didTapTryYourself() {
@@ -1470,6 +1569,11 @@ class TryYourselfViewController: UIViewController {
     private var attemptCount: Int = 0
     private var attemptCounterLabel: UILabel!
     private var doneButton: UIButton!
+    private var instructionLabel: UILabel!
+    private var lastDetectedRoot: String?
+    private var stableRootFrameCount = 0
+    private let minimumDetectionAmplitude: CGFloat = 0.3
+    private let minimumMatchFrequency: Float = 70
 
     // Real pitch detection
     private let pitchDetector = PitchDetector()
@@ -1482,14 +1586,13 @@ class TryYourselfViewController: UIViewController {
     var onSessionCompleted: ((Int) -> Void)?
 
     // Note name mapping — maps display names to target root notes.
-    // Quality-only names (Major, Minor, etc.) map to nil → accept ANY detected note.
-    private static let noteMapping: [String: String?] = [
+    private static let noteMapping: [String: String] = [
         "Do": "C", "Re": "D", "Mi": "E", "Fa": "F", "Sol": "G", "La": "A", "Ti": "B",
         "Treble": "G", "Bass": "F", "Alto": "C", "Tenor": "C", "Soprano": "G", "Mezzo": "G", "Violin": "G",
-        // Chord quality names — any note accepted ↓
-        "Minor": nil, "Major": nil, "Sharp": nil, "Dim": nil, "Aug": nil, "Flat": nil,
-        "Diminished": nil, "Augmented": nil, "7th": nil,
-        "I–IV–V": nil, "I–V–vi–IV": nil, "ii–V–I": nil, "vi–IV–I–V": nil, "I–vi–IV–V": nil,
+        // Chord quality / progression lessons still require a stable captured pitch.
+        "Minor": "C", "Major": "C", "Sharp": "C#", "Dim": "C", "Aug": "C", "Flat": "Cb",
+        "Diminished": "C", "Augmented": "C", "7th": "C",
+        "I–IV–V": "C", "I–V–vi–IV": "C", "ii–V–I": "D", "vi–IV–I–V": "A", "I–vi–IV–V": "C",
         // Specific root notes
         "C": "C", "D": "D", "E": "E", "F": "F", "G": "G", "A": "A", "B": "B",
         "Cm": "C", "Dm": "D", "Em": "E", "Fm": "F", "Gm": "G", "Am": "A", "Bm": "B",
@@ -1498,9 +1601,6 @@ class TryYourselfViewController: UIViewController {
 
     /// Tracks whether we need an exact octave match
     private let exactOctave: Int?   // nil = any octave
-    /// If true, any detected note with sufficient amplitude is accepted (chord-quality mode)
-    private let qualityOnly: Bool
-
     init(noteName: String) {
         self.noteName = noteName
 
@@ -1508,39 +1608,27 @@ class TryYourselfViewController: UIViewController {
         // Could be: "F", "C5", "Major", "Do", "C Family", "Dm", etc.
         //
         // 1. Try the explicit mapping table first
-        //    - nil value → quality-only mode (Major/Minor/etc.)
         //    - String value → specific root note target
         // 2. If it ends with a digit, honour that as the required octave
         // 3. Otherwise accept any octave
         // ────────────────────────────────────────────────────────────
 
         if let lookup = TryYourselfViewController.noteMapping[noteName] {
-            if let rootNote = lookup {
-                // Specific root note (C, G, Do→C, etc.)
-                self.targetNote = rootNote
-                self.exactOctave = nil
-                self.qualityOnly = false
-            } else {
-                // Quality-only: Major, Minor, Dim, Aug, etc. — accept any note
-                self.targetNote = ""
-                self.exactOctave = nil
-                self.qualityOnly = true
-            }
+            self.targetNote = lookup
+            self.exactOctave = nil
         } else {
             // Raw string — check if it ends with a digit (e.g. "C5")
             let stripped = noteName.prefix(while: { !$0.isNumber })
             let root = String(stripped).uppercased()
 
             if let digitStr = noteName.last, digitStr.isNumber,
-               let octave = Int(String(digitStr)) {
+                let octave = Int(String(digitStr)) {
                 self.targetNote = root
                 self.exactOctave = octave
-                self.qualityOnly = false
             } else {
                 let letter = root.isEmpty ? String(noteName.prefix(1)).uppercased() : String(root.prefix(1))
                 self.targetNote = letter
                 self.exactOctave = nil
-                self.qualityOnly = false
             }
         }
 
@@ -1572,7 +1660,7 @@ class TryYourselfViewController: UIViewController {
         let closeButton = UIButton(type: .system)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        closeButton.tintColor = .systemGray3
+        closeButton.tintColor = ComponentColors.LessonScreen.labelPrimary
         closeButton.addTarget(self, action: #selector(didTapClose), for: .touchUpInside)
 
         // Note pill showing what note to sing — auto-sizes to fit the text
@@ -1586,7 +1674,8 @@ class TryYourselfViewController: UIViewController {
         noteLabel.font = .systemFont(ofSize: 28, weight: .bold)
         noteLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         noteLabel.textAlignment = .center
-        noteLabel.adjustsFontSizeToFitWidth = false
+        noteLabel.adjustsFontSizeToFitWidth = true
+        noteLabel.minimumScaleFactor = 0.5
         notePill.addSubview(noteLabel)
         NSLayoutConstraint.activate([
             noteLabel.centerXAnchor.constraint(equalTo: notePill.centerXAnchor),
@@ -1598,9 +1687,7 @@ class TryYourselfViewController: UIViewController {
         // Target hint
         let targetHintLabel = UILabel()
         targetHintLabel.translatesAutoresizingMaskIntoConstraints = false
-        targetHintLabel.text = qualityOnly
-            ? "Play any \(noteName) chord!"
-            : "Target: \(targetNote)  (any octave)"
+        targetHintLabel.text = "Target: \(targetNote)  (clear captured pitch)"
         targetHintLabel.font = .systemFont(ofSize: 12, weight: .medium)
         targetHintLabel.textColor = .systemGray2
         targetHintLabel.textAlignment = .center
@@ -1611,6 +1698,14 @@ class TryYourselfViewController: UIViewController {
         subLabel.font = .systemFont(ofSize: 15)
         subLabel.textColor = .systemGray; subLabel.textAlignment = .center
         subLabel.numberOfLines = 0
+
+        instructionLabel = UILabel()
+        instructionLabel.translatesAutoresizingMaskIntoConstraints = false
+        instructionLabel.text = "Tap capture audio, then play a clean single note."
+        instructionLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        instructionLabel.textColor = ComponentColors.LessonScreen.labelSecondary
+        instructionLabel.textAlignment = .center
+        instructionLabel.numberOfLines = 0
 
         // Real-time detected note badge
         detectedNoteLabel = UILabel()
@@ -1650,31 +1745,35 @@ class TryYourselfViewController: UIViewController {
         micButton = UIButton(type: .system)
         micButton.translatesAutoresizingMaskIntoConstraints = false
         micButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        micButton.layer.cornerRadius = 50
+        micButton.layer.cornerRadius = 32
         micButton.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         micButton.layer.shadowOpacity = 0.4; micButton.layer.shadowRadius = 20
         micButton.layer.shadowOffset = CGSize(width: 0, height: 8)
-        let micCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
-        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micCfg), for: .normal)
-        micButton.tintColor = .white
+        micButton.setImage(nil, for: .normal)
+        micButton.setTitle("Capture Audio", for: .normal)
+        micButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        micButton.setTitleColor(.white, for: .normal)
+        micButton.contentHorizontalAlignment = .center
+        micButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
         micButton.addTarget(self, action: #selector(toggleListening), for: .touchUpInside)
         ringContainer.addSubview(micButton)
         NSLayoutConstraint.activate([
             micButton.centerXAnchor.constraint(equalTo: ringContainer.centerXAnchor),
             micButton.centerYAnchor.constraint(equalTo: ringContainer.centerYAnchor),
-            micButton.widthAnchor.constraint(equalToConstant: 100),
-            micButton.heightAnchor.constraint(equalToConstant: 100),
+            micButton.widthAnchor.constraint(equalToConstant: 196),
+            micButton.heightAnchor.constraint(equalToConstant: 64),
         ])
 
         let grad = CAGradientLayer()
         grad.colors = [ComponentColors.HomeScreen.actionButtonFill.cgColor, UIColor.orange.cgColor]
         grad.startPoint = CGPoint(x: 0, y: 0); grad.endPoint = CGPoint(x: 1, y: 1)
-        grad.frame = CGRect(x: 0, y: 0, width: 100, height: 100); grad.cornerRadius = 50
+        grad.frame = CGRect(x: 0, y: 0, width: 196, height: 64); grad.cornerRadius = 32
         micButton.layer.insertSublayer(grad, at: 0)
+        micButton.bringSubviewToFront(micButton.titleLabel ?? UIView())
 
         statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = "Tap the microphone to start"
+        statusLabel.text = "Tap capture audio to start"
         statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
         statusLabel.textColor = .systemGray; statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 2
@@ -1694,7 +1793,7 @@ class TryYourselfViewController: UIViewController {
         doneButton.alpha = 0
         doneButton.addTarget(self, action: #selector(didTapDone), for: .touchUpInside)
 
-        [titleLabel, closeButton, notePill, targetHintLabel, subLabel,
+        [titleLabel, closeButton, notePill, targetHintLabel, subLabel, instructionLabel,
          detectedNoteLabel, attemptCounterLabel,
          ringContainer, statusLabel, doneButton].forEach { view.addSubview($0) }
 
@@ -1704,12 +1803,13 @@ class TryYourselfViewController: UIViewController {
 
             closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
             closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            closeButton.widthAnchor.constraint(equalToConstant: 30),
-            closeButton.heightAnchor.constraint(equalToConstant: 30),
+            closeButton.widthAnchor.constraint(equalToConstant: 36),
+            closeButton.heightAnchor.constraint(equalToConstant: 36),
 
             notePill.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
             notePill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            notePill.widthAnchor.constraint(equalToConstant: 110),
+            notePill.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
+            notePill.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
             notePill.heightAnchor.constraint(equalToConstant: 50),
             noteLabel.centerXAnchor.constraint(equalTo: notePill.centerXAnchor),
             noteLabel.centerYAnchor.constraint(equalTo: notePill.centerYAnchor),
@@ -1721,7 +1821,11 @@ class TryYourselfViewController: UIViewController {
             subLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
             subLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
 
-            detectedNoteLabel.topAnchor.constraint(equalTo: subLabel.bottomAnchor, constant: 4),
+            instructionLabel.topAnchor.constraint(equalTo: subLabel.bottomAnchor, constant: 8),
+            instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+
+            detectedNoteLabel.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 4),
             detectedNoteLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             attemptCounterLabel.topAnchor.constraint(equalTo: detectedNoteLabel.bottomAnchor, constant: 4),
@@ -1758,17 +1862,20 @@ class TryYourselfViewController: UIViewController {
         if isListening {
             attemptCount += 1
             correctStreak = 0
+            stableRootFrameCount = 0
+            lastDetectedRoot = nil
             let starsHint = attemptCount == 1 ? "⭐⭐⭐" : attemptCount == 2 ? "⭐⭐" : "⭐"
             attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
             UIView.transition(with: attemptCounterLabel, duration: 0.2, options: .transitionCrossDissolve, animations: nil)
 
-            let waveCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
-            micButton.setImage(UIImage(systemName: "waveform", withConfiguration: waveCfg), for: .normal)
-            statusLabel.text = "Listening... 🎤 Sing the note!"
+            micButton.setImage(nil, for: .normal)
+            micButton.setTitle("Capturing...", for: .normal)
+            statusLabel.text = "Capturing audio... play the target note clearly."
             statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
+            instructionLabel.text = "Avoid background noise. Hold the correct note steady for a moment."
             UIView.animate(withDuration: 0.25) {
                 self.detectedNoteLabel.alpha = 1
-                self.micButton.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+                self.micButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
             }
             pitchDetector.startListening()
             startPulseAnimation()
@@ -1782,10 +1889,13 @@ class TryYourselfViewController: UIViewController {
         pitchDetector.stopListening()
         isListening = false
         correctStreak = 0
-        let micCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
-        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micCfg), for: .normal)
-        statusLabel.text = "Good! Tap mic again to retry, or tap Done ✓"
+        stableRootFrameCount = 0
+        lastDetectedRoot = nil
+        micButton.setImage(nil, for: .normal)
+        micButton.setTitle("Capture Audio", for: .normal)
+        statusLabel.text = "Good. Tap capture audio again to retry, or tap Done ✓"
         statusLabel.textColor = .systemGray
+        instructionLabel.text = "Tap capture audio, then play a clean single note."
         stopPulseAnimation()
         UIView.animate(withDuration: 0.3) { self.micButton.transform = .identity }
 
@@ -1822,15 +1932,16 @@ class TryYourselfViewController: UIViewController {
         // Flash mic button green
         UIView.animate(withDuration: 0.25) {
             self.micButton.backgroundColor = ComponentColors.LessonScreen.correctAnswer
-            self.micButton.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+            self.micButton.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
         }
 
         // Update icon to checkmark
-        let checkCfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .bold)
-        micButton.setImage(UIImage(systemName: "checkmark", withConfiguration: checkCfg), for: .normal)
+        micButton.setImage(nil, for: .normal)
+        micButton.setTitle("Captured", for: .normal)
 
         statusLabel.text = "🎉 Nailed it! Tap Done ✓"
         statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
+        instructionLabel.text = "Nice work. You matched the target note."
 
         // Animate rings green
         for (i, ring) in pulseViews.enumerated() {
@@ -1882,6 +1993,18 @@ class TryYourselfViewController: UIViewController {
 extension TryYourselfViewController: PitchDetectorDelegate {
     public func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
         guard isListening, !alreadyMarkedCorrect else { return }
+        guard amplitude >= minimumDetectionAmplitude else {
+            correctStreak = 0
+            stableRootFrameCount = 0
+            lastDetectedRoot = nil
+            return
+        }
+        guard frequency >= minimumMatchFrequency else {
+            correctStreak = 0
+            stableRootFrameCount = 0
+            lastDetectedRoot = nil
+            return
+        }
 
         // ── Parse detected note (e.g. "C4", "F#3") ──────────────────
         guard let rawNote = notes.first, rawNote != "—" else { return }
@@ -1902,19 +2025,21 @@ extension TryYourselfViewController: PitchDetectorDelegate {
         let rootMatch: Bool
         let octaveMatch: Bool
         
-        if qualityOnly {
-            rootMatch = true
-            octaveMatch = true
+        if detectedRoot == lastDetectedRoot {
+            stableRootFrameCount += 1
         } else {
-            rootMatch = detectedRoot.uppercased() == targetNote.uppercased()
-            if let required = exactOctave {
-                octaveMatch = detectedOctave == required
-            } else {
-                octaveMatch = true   // any octave is fine
-            }
+            lastDetectedRoot = detectedRoot
+            stableRootFrameCount = 1
+        }
+
+        rootMatch = detectedRoot.uppercased() == targetNote.uppercased()
+        if let required = exactOctave {
+            octaveMatch = detectedOctave == required
+        } else {
+            octaveMatch = true
         }
         
-        let isMatch = rootMatch && octaveMatch
+        let isMatch = rootMatch && octaveMatch && stableRootFrameCount >= 3
 
         // ── Colour the detected-note badge ───────────────────────────
         if isMatch {
@@ -1995,4 +2120,3 @@ extension LessonDetailViewController: UIScrollViewDelegate {
         // Fixed: only largeProfileButton scrolls away, no small one in navbar
     }
 }
-
