@@ -669,10 +669,10 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
         // Grab the art image from the visible cell (optional, for a smooth transition)
         let cell = tableView.cellForRow(at: indexPath) as? SongCell
      
-        let previewVC         = DiscoverSongPreviewViewController()
-        previewVC.song        = song
-        previewVC.songImage   = cell?.currentArtImage   // see note below
-        push(previewVC)
+        let detailVC        = DiscoverSongDetailViewController()
+        detailVC.song       = song
+        detailVC.passedImage = cell?.currentArtImage
+        push(detailVC)
     }
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

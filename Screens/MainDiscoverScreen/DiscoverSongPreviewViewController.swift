@@ -3,17 +3,13 @@
 //  Re-Hearse
 //
 //  Intermediate preview screen shown when a song is tapped in Discover.
-//  "Get Converted" reuses the EXACT same upload pipeline as UploadScreen
-//  (callConversionAPI → scans upsert → push UploadPageNextViewController).
+//  Uses the converted PDF/JSON already stored on the `songs` table.
 //
 
 import UIKit
 import PDFKit
-import Supabase
-import Auth
-internal import PostgREST
 
-final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopupDelegate {
+final class DiscoverSongPreviewViewController: UIViewController {
 
     // MARK: - Passed Data
 
@@ -32,7 +28,6 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     // MARK: - UI
 
-
     private lazy var scrollView: UIScrollView = {
         let sv = UIScrollView()
         sv.showsVerticalScrollIndicator = false
@@ -49,47 +44,46 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private lazy var cardView: UIView = {
         let v = UIView()
-        v.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
-        v.layer.cornerRadius  = 20
-        v.layer.shadowColor   = UIColor.black.cgColor
+        v.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
+        v.layer.cornerRadius = 20
+        v.layer.shadowColor = UIColor.black.cgColor
         v.layer.shadowOpacity = 0.08
-        v.layer.shadowRadius  = 12
-        v.layer.shadowOffset  = CGSize(width: 0, height: 4)
+        v.layer.shadowRadius = 12
+        v.layer.shadowOffset = CGSize(width: 0, height: 4)
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
 
     private lazy var songTitleLabel: UILabel = {
         let l = UILabel()
-        l.font          = .systemFont(ofSize: 20, weight: .bold)
+        l.font = .systemFont(ofSize: 20, weight: .bold)
         l.textAlignment = .center
-        l.textColor     = ComponentColors.SongDetailScreen.songTitle
+        l.textColor = ComponentColors.SongDetailScreen.songTitle
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private lazy var sheetCardView: UIView = {
         let v = UIView()
-        v.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicBackground
+        v.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
         v.layer.cornerRadius = 16
-        v.layer.borderWidth  = 0.5
-        v.layer.borderColor  = UIColor.separator.cgColor
-        v.clipsToBounds      = true
+        v.layer.borderWidth = 0.5
+        v.layer.borderColor = UIColor.separator.cgColor
+        v.clipsToBounds = true
         v.translatesAutoresizingMaskIntoConstraints = false
         let tap = UITapGestureRecognizer(target: self, action: #selector(sheetCardTapped))
         v.addGestureRecognizer(tap)
         return v
     }()
 
-    private lazy var previewImageView: UIImageView = {
-        let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFit
-        imageView.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
-        imageView.clipsToBounds = true
-        imageView.isHidden = true
-        imageView.isUserInteractionEnabled = false
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        return imageView
+    private lazy var pdfView: PDFView = {
+        let pv = PDFView()
+        pv.autoScales = true
+        pv.displayMode = .singlePage
+        pv.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
+        pv.isUserInteractionEnabled = false
+        pv.translatesAutoresizingMaskIntoConstraints = false
+        return pv
     }()
 
     private lazy var pdfSpinner: UIActivityIndicatorView = {
@@ -101,24 +95,25 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private lazy var pdfErrorLabel: UILabel = {
         let l = UILabel()
-        l.text          = "Sheet music unavailable"
-        l.font          = .systemFont(ofSize: 14)
-        l.textColor     = SemanticColors.Text.secondary
+        l.text = "Sheet music unavailable"
+        l.font = .systemFont(ofSize: 14)
+        l.textColor = SemanticColors.Text.secondary
         l.textAlignment = .center
         l.numberOfLines = 2
-        l.isHidden      = true
+        l.isHidden = true
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private lazy var getConvertedButton: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Get Converted", for: .normal)
-        btn.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
-        btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
-        btn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        btn.layer.cornerRadius = 16
-        btn.contentEdgeInsets = UIEdgeInsets(top: 14, left: 20, bottom: 14, right: 20)
+        var cfg = UIButton.Configuration.filled()
+        cfg.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        cfg.baseForegroundColor = ComponentColors.SongDetailScreen.primaryActionText
+        cfg.cornerStyle = .large
+        var title = AttributedString("Open Converted")
+        title.font = .systemFont(ofSize: 18, weight: .bold)
+        cfg.attributedTitle = title
+        let btn = UIButton(configuration: cfg)
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()
@@ -138,19 +133,18 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.DiscoverScreen.background
-        
+
         setupNavBar()
         setupLayout()
         applyData()
         loadPDF()
 
-        // Record this song as recently played
         if let songId = song?.id {
             recentPlayTask = Task { [weak self] in
                 do {
                     try await RecentPlayService.shared.recordPlay(songId: songId)
                 } catch {
-                    debugLog("[SongPreview] ❌ Failed to record play: \(error)")
+                    print("[SongPreview] Failed to record play: \(error)")
                 }
                 self?.recentPlayTask = nil
             }
@@ -188,13 +182,10 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         navigationController?.navigationBar.isHidden = false
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationItem.largeTitleDisplayMode = .never
-        
-        // Use custom circular back button in the nav bar for uniformity and to avoid overlapping issues
         navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
     }
 
     @objc private func backAction() {
-        // Find the button inside the custom view if possible, or just animate the view
         if let btn = navigationItem.leftBarButtonItem?.customView {
             NavigationBarHelper.animateButtonPress(btn) { [weak self] in
                 self?.navigationController?.popViewController(animated: true)
@@ -220,7 +211,6 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         contentView.addSubview(getConvertedButton)
 
         NSLayoutConstraint.activate([
-            // Scroll
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -232,28 +222,24 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
-            // Card
             cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
             cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            // Song title
             songTitleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
             songTitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
             songTitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
 
-            // Sheet music card directly below title
             sheetCardView.topAnchor.constraint(equalTo: songTitleLabel.bottomAnchor, constant: 14),
             sheetCardView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
             sheetCardView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -12),
             sheetCardView.heightAnchor.constraint(equalToConstant: 480),
             sheetCardView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
 
-            // PDF
-            previewImageView.topAnchor.constraint(equalTo: sheetCardView.topAnchor),
-            previewImageView.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor),
-            previewImageView.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor),
-            previewImageView.bottomAnchor.constraint(equalTo: sheetCardView.bottomAnchor),
+            pdfView.topAnchor.constraint(equalTo: sheetCardView.topAnchor),
+            pdfView.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: sheetCardView.bottomAnchor),
 
             pdfSpinner.centerXAnchor.constraint(equalTo: sheetCardView.centerXAnchor),
             pdfSpinner.centerYAnchor.constraint(equalTo: sheetCardView.centerYAnchor),
@@ -263,7 +249,6 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
             pdfErrorLabel.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor, constant: 16),
             pdfErrorLabel.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor, constant: -16),
 
-            // Get Converted button
             getConvertedButton.topAnchor.constraint(equalTo: cardView.bottomAnchor, constant: 24),
             getConvertedButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             getConvertedButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -272,9 +257,6 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         ])
 
         getConvertedButton.addTarget(self, action: #selector(getConvertedTapped), for: .touchUpInside)
-        
-        let tap = UITapGestureRecognizer(target: self, action: #selector(sheetCardTapped))
-        sheetCardView.addGestureRecognizer(tap)
         sheetCardView.isUserInteractionEnabled = true
     }
 
@@ -282,79 +264,73 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private func applyData() {
         songTitleLabel.text = song?.title ?? "Song name"
+        setButtonLoading(false)
     }
 
-    // MARK: - PDF URL Construction
+    // MARK: - Remote Asset Helpers
 
-    private func buildPDFCandidates() async -> [URL] {
-        guard let song else { return [] }
+    private func resolvedURL(from rawValue: String) -> URL? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
 
-        var candidatePaths: [String] = []
-
-        if let sheetURL = song.sheetUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !sheetURL.isEmpty {
-            candidatePaths.append(sheetURL)
-            if sheetURL.hasPrefix("Sheets/") {
-                candidatePaths.append(String(sheetURL.dropFirst("Sheets/".count)))
-            }
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return url
         }
 
-        let titlePath = song.title.hasSuffix(".pdf") ? song.title : "\(song.title).pdf"
-        candidatePaths.append(titlePath)
-
-        var candidates: [URL] = []
-        var seenPaths = Set<String>()
-
-        for path in candidatePaths where seenPaths.insert(path).inserted {
-            if let signedURL = try? await supabase.storage
-                .from("Sheets")
-                .createSignedURL(path: path, expiresIn: 3600) {
-                candidates.append(signedURL)
-            }
+        if trimmed.hasPrefix("/") {
+            return ReHersAPI.url(path: trimmed)
         }
 
-        return candidates
+        return nil
     }
 
-    // MARK: - PDF Loading (preview only)
+    private func fetchRemoteData(from rawValue: String) async throws -> Data {
+        guard let url = resolvedURL(from: rawValue) else {
+            throw AssetError.missingPDF
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+
+        let isBackendURL = rawValue.hasPrefix("/") || url.absoluteString.hasPrefix(ReHersAPI.baseURLString)
+        if isBackendURL, let token = try? await SupabaseManager.shared.accessToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let session: URLSession = isBackendURL ? ReHersPinnedSession.shared : URLSession.shared
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(statusCode) else {
+            throw AssetError.remoteFetchFailed(statusCode)
+        }
+        return data
+    }
+
+    // MARK: - PDF Loading
 
     private func loadPDF() {
         pdfLoadTask?.cancel()
         pdfSpinner.startAnimating()
-        previewImageView.image = nil
-        previewImageView.isHidden = true
+        pdfView.isHidden = true
         pdfErrorLabel.isHidden = true
 
-        pdfLoadTask = Task { [weak self] in
-            guard let self else { return }
-            let candidates = await buildPDFCandidates()
-            guard !Task.isCancelled else {
-                await MainActor.run { self.pdfLoadTask = nil }
-                return
-            }
-            guard !candidates.isEmpty else {
-                await MainActor.run {
-                    self.showPDFError()
-                    self.pdfLoadTask = nil
-                }
+        Task {
+            let sheetURL = song?.labeledPdfPath ?? song?.sheetUrl
+            guard let sheetURL, !sheetURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                await MainActor.run { self.showPDFError() }
                 return
             }
 
-            for url in candidates {
-                guard !Task.isCancelled else {
-                    await MainActor.run { self.pdfLoadTask = nil }
-                    return
+            do {
+                let data = try await fetchRemoteData(from: sheetURL)
+                if let doc = PDFDocument(data: data), doc.pageCount > 0 {
+                    await MainActor.run { self.renderPDF(doc) }
+                } else {
+                    await MainActor.run { self.showPDFError() }
                 }
-
-                if let (data, resp) = try? await URLSession.shared.data(from: url),
-                   (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
-                   let previewImage = Self.renderPDFPreviewImage(from: data) {
-                    await MainActor.run {
-                        self.renderPDF(data: data, previewImage: previewImage)
-                        self.pdfLoadTask = nil
-                    }
-                    return
-                }
+            } catch {
+                print("[DiscoverPreview] loadPDF error: \(error)")
+                await MainActor.run { self.showPDFError() }
             }
             await MainActor.run {
                 self.showPDFError()
@@ -363,17 +339,19 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         }
     }
 
-    private func renderPDF(data: Data, previewImage: UIImage) {
-        loadedPDFData = data
-        previewImageView.image = previewImage
-        previewImageView.isHidden = false
+    private func renderPDF(_ doc: PDFDocument) {
+        loadedPDF = doc
+        pdfView.document = doc
+        pdfView.isHidden = false
         pdfSpinner.stopAnimating()
+        if let p = doc.page(at: 0) {
+            pdfView.go(to: p)
+        }
     }
 
     private func showPDFError() {
         pdfSpinner.stopAnimating()
-        previewImageView.image = nil
-        previewImageView.isHidden = true
+        pdfView.isHidden = true
         pdfErrorLabel.isHidden = false
     }
 
@@ -381,10 +359,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     @objc private func sheetCardTapped() {
         NavigationBarHelper.animateButtonPress(sheetCardView) { [weak self] in
-            guard let self = self else { return }
-            guard let pdfData = self.loadedPDFData,
-                  let doc = autoreleasepool(invoking: { PDFDocument(data: pdfData) }),
-                  doc.pageCount > 0 else { return }
+            guard let self, let doc = self.loadedPDF else { return }
             let vc = MaximizeUploadPageViewController()
             vc.pdfData = pdfData
             vc.pdfDocument = doc
@@ -393,44 +368,12 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         }
     }
 
-    // MARK: - Get Converted (reuses UploadScreen pipeline 1:1)
-
     @objc private func getConvertedTapped() {
         NavigationBarHelper.animateButtonPress(getConvertedButton) { [weak self] in
-            guard let self = self else { return }
-            // Instantiate and present the popup
-            let popup = UploadQuizPopup()
-            popup.delegate = self
-            popup.modalPresentationStyle = .overFullScreen
-            popup.modalTransitionStyle = .crossDissolve
-            self.uploadPopup = popup
-            
-            self.present(popup, animated: true) { [weak self] in
-                self?.startDiscoveryUpload()
-            }
-        }
-    }
-
-    private func startDiscoveryUpload() {
-        pdfLoadTask?.cancel()
-        pdfLoadTask = nil
-        releasePDFResources()
-        discoveryUploadTask?.cancel()
-        discoveryUploadTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                uploadPopup?.updateProgress(0.1)
-                let pdfData = try await resolvePDFData()
-                uploadPopup?.updateProgress(0.3)
-                try await runUploadPipeline(pdfData: pdfData)
-            } catch {
-                await MainActor.run {
-                    self.uploadPopup?.dismiss(animated: true) {
-                        self.uploadPopup = nil
-                        self.presentErrorAlert(error.localizedDescription)
-                    }
-                    self.discoveryUploadTask = nil
-                }
+            guard let self, let song = self.song else { return }
+            let convertedPDFURL = song.labeledPdfPath ?? song.sheetUrl
+            guard convertedPDFURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                self.presentErrorAlert("This song does not have a converted sheet URL yet.")
                 return
             }
 
@@ -521,7 +464,10 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
             vc.onDataReady = { [weak self] in
                 self?.uploadPopup?.notifyUploadComplete()
             }
-            debugLog("[Convert] → UploadPageNextVC jobId=\(jobId.uuidString)")
+
+            let vc = DiscoverSongDetailViewController()
+            vc.song = song
+            vc.passedImage = self.songImage
             self.navigationController?.pushViewController(vc, animated: true)
         }
     }
@@ -579,8 +525,16 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private func setButtonLoading(_ loading: Bool) {
         getConvertedButton.isEnabled = !loading
-        getConvertedButton.setTitle(loading ? "Converting..." : "Get Converted", for: .normal)
-        getConvertedButton.alpha = loading ? 0.8 : 1.0
+        var cfg = getConvertedButton.configuration ?? UIButton.Configuration.filled()
+        let convertedPDFURL = song?.labeledPdfPath ?? song?.sheetUrl
+        let baseTitle = (convertedPDFURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? "Open Converted"
+            : "Converted Missing"
+        var t = AttributedString(loading ? "Opening…" : baseTitle)
+        t.font = .systemFont(ofSize: 18, weight: .bold)
+        cfg.attributedTitle = t
+        cfg.showsActivityIndicator = loading
+        getConvertedButton.configuration = cfg
     }
 
     private func cancelPendingTasks() {
@@ -648,102 +602,22 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     }
 
     private func presentErrorAlert(_ message: String) {
-        let a = UIAlertController(title: "Conversion Failed", message: message, preferredStyle: .alert)
+        let a = UIAlertController(title: "Converted Sheet Unavailable", message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
 
-    // MARK: - Error Types
+    private enum AssetError: LocalizedError {
+        case missingPDF
+        case remoteFetchFailed(Int)
 
-    enum ConvertError: LocalizedError {
-        case noPDFSource, pdfDownloadFailed
-        case invalidUser, missingToken, badAPIResponse, noResponse
-        case apiError(Int, String)
         var errorDescription: String? {
             switch self {
-            case .noPDFSource:            return "This song has no sheet music file attached."
-            case .pdfDownloadFailed:      return "Could not download the sheet music PDF."
-            case .invalidUser:            return "Could not retrieve your user ID."
-            case .missingToken:           return "Could not retrieve authentication token."
-            case .badAPIResponse:         return "Missing job_id in API response."
-            case .noResponse:             return "No response received from the server."
-            case .apiError(let c, let m): return "Server error \(c): \(m)"
+            case .missingPDF:
+                return "This song has no converted sheet URL attached."
+            case .remoteFetchFailed(let code):
+                return "Failed to fetch converted asset (HTTP \(code))."
             }
         }
-    }
-
-    // MARK: - Private Data Models
-
-    private struct ScanRecord: Codable, Identifiable {
-        let id: Int64; let userId: UUID; let jsonData: AnyCodable?
-        let processingId: String?; let status: String?
-        let originalFilename: String?; let fileType: String?
-        let processedAt: String?; let updatedAt: String?
-        enum CodingKeys: String, CodingKey {
-            case id; case userId = "user_id"; case jsonData = "json_data"
-            case processingId = "processing_id"; case status
-            case originalFilename = "original_filename"; case fileType = "file_type"
-            case processedAt = "processed_at"; case updatedAt = "updated_at"
-        }
-    }
-
-    private struct ScanInsert: Encodable {
-        let userId: UUID; let jsonData: AnyCodable; let processingId: String; let status: String
-        let originalFilename: String?; let fileType: String?; let processedAt: String?
-        enum CodingKeys: String, CodingKey {
-            case userId = "user_id"; case jsonData = "json_data"
-            case processingId = "processing_id"; case status
-            case originalFilename = "original_filename"; case fileType = "file_type"
-            case processedAt = "processed_at"
-        }
-    }
-
-    private struct ScanUpdate: Encodable {
-        let jsonData: AnyCodable; let status: String; let processedAt: String; let updatedAt: String
-        enum CodingKeys: String, CodingKey {
-            case jsonData = "json_data"; case status
-            case processedAt = "processed_at"; case updatedAt = "updated_at"
-        }
-    }
-
-    private struct AnyCodable: Codable {
-        let value: Any
-        init(_ value: Any) { self.value = value }
-        init(from decoder: Decoder) throws {
-            let c = try decoder.singleValueContainer()
-            if      let b = try? c.decode(Bool.self)                 { value = b }
-            else if let i = try? c.decode(Int.self)                  { value = i }
-            else if let d = try? c.decode(Double.self)               { value = d }
-            else if let s = try? c.decode(String.self)               { value = s }
-            else if let a = try? c.decode([AnyCodable].self)         { value = a.map { $0.value } }
-            else if let d = try? c.decode([String: AnyCodable].self) { value = d.mapValues { $0.value } }
-            else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
-        }
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.singleValueContainer()
-            switch value {
-            case let b as Bool:          try c.encode(b)
-            case let i as Int:           try c.encode(i)
-            case let d as Double:        try c.encode(d)
-            case let s as String:        try c.encode(s)
-            case let a as [Any]:         try c.encode(a.map { AnyCodable($0) })
-            case let d as [String: Any]: try c.encode(d.mapValues { AnyCodable($0) })
-            default: throw EncodingError.invalidValue(
-                value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
-            }
-        }
-    }
-
-    // MARK: - UploadQuizPopupDelegate
-    func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) {
-        uploadPopup = nil
-    }
-}
-
-// MARK: - Data Helper
-
-private extension Data {
-    mutating func appendStr(_ string: String) {
-        if let d = string.data(using: .utf8) { append(d) }
     }
 }

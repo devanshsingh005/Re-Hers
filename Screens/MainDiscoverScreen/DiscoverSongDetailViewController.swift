@@ -16,7 +16,8 @@ class DiscoverSongDetailViewController: UIViewController {
     var passedImage: UIImage?
 
     // MARK: - Private State
-    private var loadedPDFData: Data?
+    private var originalPDFDocument: PDFDocument?
+    private var labeledPDFDocument: PDFDocument?
     private var sheetMusicJSON: [String: Any]?
     private var recentPlayTask: Task<Void, Never>?
     private var sheetLoadTask: Task<Void, Never>?
@@ -33,14 +34,15 @@ class DiscoverSongDetailViewController: UIViewController {
     private let bookmarkButton  = UIButton(type: .system)
     private let songTitleLabel  = UILabel()
     private let artistLabel     = UILabel()
+    private let sheetToggle     = UISegmentedControl(items: ["Original", "Labeled"])
 
     private let playAlongButton = UIButton(type: .system)
     private let animationButton = UIButton(type: .system)
     private let buttonStack     = UIStackView()
 
     private let sheetContainer      = UIView()
-    private let pageLabel           = UILabel()
-    private let previewImageView    = UIImageView()
+    private let previewButton       = UIButton(type: .system)
+    private let pdfView             = PDFView()
     private let pdfLoadingIndicator = UIActivityIndicatorView(style: .medium)
     private let pdfErrorLabel       = UILabel()
 
@@ -58,7 +60,12 @@ class DiscoverSongDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.SongDetailScreen.background
-        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.isHidden = false
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis"),
+            primaryAction: nil,
+            menu: buildSongMenu()
+        )
 
         setupUI()
         setupScroll()
@@ -108,48 +115,39 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Apply Passed Data
 
     private func applyPassedData() {
-        let defaultImg = UIImage(named: "trackimage_1")
-        let img = passedImage ?? defaultImg
-        albumArtBackgroundView.image = img
-        albumArtCardView.image       = img
         songTitleLabel.text = song?.title ?? "Unknown Song"
         artistLabel.text    = song?.composer ?? "Unknown Artist"
-        
-        if passedImage == nil, let coverUrl = song?.coverImageUrl, !coverUrl.isEmpty {
-            if coverUrl.hasPrefix("http") {
-                ImageLoader.shared.loadImage(from: coverUrl) { [weak self] loadedImg in
-                    if let loadedImg = loadedImg {
-                        self?.albumArtBackgroundView.image = loadedImg
-                        self?.albumArtCardView.image = loadedImg
-                    }
-                }
-            } else {
-                let localImg = UIImage(named: coverUrl) ?? defaultImg
-                albumArtBackgroundView.image = localImg
-                albumArtCardView.image = localImg
-            }
-        }
     }
 
     // MARK: - NavBar
 
     private func setupUI() {
         view.backgroundColor = ComponentColors.SongDetailScreen.background
-        setupNavBar()
+        navigationController?.navigationBar.isHidden = false
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        title = ""
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
     }
 
-    private func setupNavBar() {
-        _ = NavigationBarHelper.configureInlineNavigationBar(
-            for: self,
-            title: song?.title ?? "Song",
-            subtitle: song?.composer ?? "Discover",
-            backAction: #selector(handleBack)
-        )
-        navigationItem.rightBarButtonItems = NavigationBarHelper.createNativeRightBarButtonItems(
-            target: self,
-            profileAction: #selector(handleProfile),
-            chordAction: #selector(handleChord)
-        )
+    private func buildSongMenu() -> UIMenu {
+        let addToPlaylist = UIAction(title: "Add To Playlist", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
+            self?.presentPlaylistPicker()
+        }
+        let saveForLater = UIAction(title: "Save For Later", image: UIImage(systemName: "bookmark")) { [weak self] _ in
+            self?.presentInfoAlert(title: "Saved", message: "This song was added to your saved list.")
+        }
+        return UIMenu(title: "", children: [addToPlaylist, saveForLater])
+    }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
 
     // MARK: - Scroll View
@@ -179,41 +177,8 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Content Setup
 
     private func setupContent() {
-        albumArtBackgroundContainer.layer.cornerRadius = 24
-        albumArtBackgroundContainer.clipsToBounds      = true
-        albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(albumArtBackgroundContainer)
-
-        albumArtBackgroundView.contentMode = .scaleAspectFill
-        albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
-        albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
-
-        // Dim overlay to make the foreground card pop
-        let dimOverlay = UIView()
-        dimOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.4)
-        dimOverlay.translatesAutoresizingMaskIntoConstraints = false
-        albumArtBackgroundContainer.addSubview(dimOverlay)
-
-        NSLayoutConstraint.activate([
-            dimOverlay.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
-            dimOverlay.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
-            dimOverlay.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
-            dimOverlay.trailingAnchor.constraint(equalTo: albumArtBackgroundContainer.trailingAnchor)
-        ])
-
-        albumArtCardView.layer.cornerRadius = 24
-        albumArtCardView.contentMode = .scaleAspectFill
-        albumArtCardView.clipsToBounds = true
-        albumArtCardView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(albumArtCardView)
-
-        bookmarkButton.setImage(UIImage(systemName: "bookmark"), for: .normal)
-        bookmarkButton.tintColor = ComponentColors.SongCard.chevronIcon
-        bookmarkButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(bookmarkButton)
-
         songTitleLabel.textAlignment = .center
-        songTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        songTitleLabel.font = .systemFont(ofSize: 34, weight: .bold)
         songTitleLabel.textColor = ComponentColors.SongDetailScreen.songTitle
         songTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(songTitleLabel)
@@ -223,6 +188,11 @@ class DiscoverSongDetailViewController: UIViewController {
         artistLabel.textColor = ComponentColors.SongDetailScreen.artistName
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
+
+        sheetToggle.selectedSegmentIndex = 1
+        sheetToggle.translatesAutoresizingMaskIntoConstraints = false
+        sheetToggle.addTarget(self, action: #selector(sheetToggleChanged), for: .valueChanged)
+        contentView.addSubview(sheetToggle)
 
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
@@ -249,24 +219,40 @@ class DiscoverSongDetailViewController: UIViewController {
         contentView.addSubview(buttonStack)
 
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
+        sheetContainer.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicCardFill
+        sheetContainer.layer.cornerRadius = 20
+        sheetContainer.clipsToBounds = true
         contentView.addSubview(sheetContainer)
 
-        pageLabel.font          = .systemFont(ofSize: 16, weight: .medium)
-        pageLabel.textAlignment = .center
-        pageLabel.text          = "Sheet Music"
-        pageLabel.translatesAutoresizingMaskIntoConstraints = false
-        sheetContainer.addSubview(pageLabel)
-        let previewTap = UITapGestureRecognizer(target: self, action: #selector(didTapPDFView))
-        sheetContainer.addGestureRecognizer(previewTap)
+        var previewConfig = UIButton.Configuration.filled()
+        previewConfig.title = "Preview"
+        previewConfig.baseForegroundColor = .white
+        previewConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        previewConfig.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
+        previewConfig.cornerStyle = .fixed
+        previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var output = incoming
+            output.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+            return output
+        }
+        previewButton.configuration = previewConfig
+        previewButton.layer.cornerRadius = 16
+        previewButton.clipsToBounds = true
+        previewButton.translatesAutoresizingMaskIntoConstraints = false
+        sheetContainer.addSubview(previewButton)
 
-        previewImageView.contentMode = .scaleAspectFit
-        previewImageView.clipsToBounds = true
-        previewImageView.layer.cornerRadius = 12
-        previewImageView.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
-        previewImageView.isHidden = true
-        previewImageView.isUserInteractionEnabled = false
-        previewImageView.translatesAutoresizingMaskIntoConstraints = false
-        sheetContainer.addSubview(previewImageView)
+        pdfView.layer.cornerRadius  = 12
+        pdfView.clipsToBounds       = true
+        pdfView.autoScales          = true
+        pdfView.displayMode         = .singlePageContinuous
+        pdfView.displayDirection    = .vertical
+        pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
+        pdfView.isHidden            = true
+        pdfView.isUserInteractionEnabled = true
+        pdfView.translatesAutoresizingMaskIntoConstraints = false
+        let pdfTap = UITapGestureRecognizer(target: self, action: #selector(didTapPDFView))
+        pdfView.addGestureRecognizer(pdfTap)
+        sheetContainer.addSubview(pdfView)
 
         pdfLoadingIndicator.color = ComponentColors.SongDetailScreen.primaryActionFill
         pdfLoadingIndicator.hidesWhenStopped = true
@@ -287,31 +273,11 @@ class DiscoverSongDetailViewController: UIViewController {
         contentView.addSubview(bottomSpacer)
     }
 
-    // MARK: - Constraints
+        // MARK: - Constraints
 
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            albumArtBackgroundContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: 180),
-
-            albumArtBackgroundView.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
-            albumArtBackgroundView.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
-            albumArtBackgroundView.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
-            albumArtBackgroundView.trailingAnchor.constraint(equalTo: albumArtBackgroundContainer.trailingAnchor),
-
-            albumArtCardView.centerXAnchor.constraint(equalTo: albumArtBackgroundContainer.centerXAnchor),
-            albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: -28),
-            albumArtCardView.widthAnchor.constraint(equalToConstant: 140),
-            albumArtCardView.heightAnchor.constraint(equalToConstant: 140),
-
-            bookmarkButton.leadingAnchor.constraint(equalTo: albumArtCardView.trailingAnchor, constant: 10),
-            bookmarkButton.centerYAnchor.constraint(equalTo: albumArtCardView.centerYAnchor, constant: 20),
-            bookmarkButton.widthAnchor.constraint(equalToConstant: 36),
-            bookmarkButton.heightAnchor.constraint(equalToConstant: 36),
-
-            songTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 18),
+            songTitleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
             songTitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             songTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             songTitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -321,24 +287,29 @@ class DiscoverSongDetailViewController: UIViewController {
             artistLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             artistLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            buttonStack.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 28),
-            buttonStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            buttonStack.widthAnchor.constraint(equalToConstant: 320),
-            buttonStack.heightAnchor.constraint(equalToConstant: 46),
+            sheetToggle.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 22),
+            sheetToggle.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            sheetToggle.widthAnchor.constraint(equalToConstant: 240),
 
-            sheetContainer.topAnchor.constraint(equalTo: buttonStack.bottomAnchor, constant: 32),
+            sheetContainer.topAnchor.constraint(equalTo: sheetToggle.bottomAnchor, constant: 20),
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             sheetContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 420),
 
-            pageLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 10),
-            pageLabel.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
+            buttonStack.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 24),
+            buttonStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            buttonStack.widthAnchor.constraint(equalToConstant: 320),
+            buttonStack.heightAnchor.constraint(equalToConstant: 46),
 
-            previewImageView.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
-            previewImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
-            previewImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
-            previewImageView.heightAnchor.constraint(equalToConstant: 380),
-            previewImageView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -10),
+            previewButton.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 14),
+            previewButton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+            previewButton.heightAnchor.constraint(equalToConstant: 32),
+
+            pdfView.topAnchor.constraint(equalTo: previewButton.bottomAnchor, constant: 12),
+            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 10),
+            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -10),
+            pdfView.heightAnchor.constraint(equalToConstant: 380),
+            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -10),
 
             pdfLoadingIndicator.centerXAnchor.constraint(equalTo: previewImageView.centerXAnchor),
             pdfLoadingIndicator.centerYAnchor.constraint(equalTo: previewImageView.centerYAnchor),
@@ -361,7 +332,27 @@ class DiscoverSongDetailViewController: UIViewController {
     private func setupActions() {
         playAlongButton.addTarget(self, action: #selector(openPlayAlongVC),       for: .touchUpInside)
         animationButton.addTarget(self, action: #selector(didTapAnimation),       for: .touchUpInside)
-        bookmarkButton.addTarget(self,  action: #selector(bookmarkTapped),        for: .touchUpInside)
+        previewButton.addTarget(self, action: #selector(didTapPDFView), for: .touchUpInside)
+    }
+
+    @objc private func sheetToggleChanged() {
+        if sheetToggle.selectedSegmentIndex == 0 {
+            if let doc = originalPDFDocument {
+                renderPDF(doc)
+            } else {
+                pdfView.isHidden = true
+                pdfLoadingIndicator.startAnimating()
+                pdfErrorLabel.isHidden = true
+            }
+        } else {
+            if let doc = labeledPDFDocument {
+                renderPDF(doc)
+            } else {
+                pdfView.isHidden = true
+                pdfLoadingIndicator.startAnimating()
+                pdfErrorLabel.isHidden = true
+            }
+        }
     }
 
     @objc private func openPlayAlongVC() {
@@ -370,7 +361,14 @@ class DiscoverSongDetailViewController: UIViewController {
         animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
+        guard let json = sheetMusicJSON,
+              let data = try? JSONSerialization.data(withJSONObject: json) else {
+            showAnimationError("No converted JSON data is available for this song yet.")
+            return
+        }
+
         let vc  = PlayAlongViewController()
+        vc.sheetMusicData = data
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
@@ -439,82 +437,129 @@ class DiscoverSongDetailViewController: UIViewController {
         previewImageView.isHidden = true
         pdfErrorLabel.isHidden = true
 
-        sheetLoadTask = Task { [weak self] in
-            guard let self else { return }
-            // 1. Fetch PDF (labeled or original)
-            let pdfPaths = [
-                ("sheet_data", "discover/\(sheetId.uuidString)/labeled.pdf"),
-                ("sheet_data", "discover/\(sheetId.uuidString).pdf"),
-                ("pdf_uploads", "\(sheetId.uuidString)/labeled.pdf"),
-                ("pdf_uploads", "\(sheetId.uuidString).pdf")
-            ]
+        Task {
+            async let originalTask: Void = self.loadOriginalPDF()
+            async let labeledTask: Void = self.loadConvertedPDF()
+            async let jsonTask: Void = self.loadConvertedJSON()
+            _ = await (originalTask, labeledTask, jsonTask)
+        }
+    }
 
-            var pdfFound = false
-            for (bucket, path) in pdfPaths {
-                guard !Task.isCancelled else {
-                    await MainActor.run { self.sheetLoadTask = nil }
-                    return
-                }
+    private func resolvedURL(from rawValue: String) -> URL? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
 
-                guard let url = try? await SupabaseManager.shared.client.storage
-                    .from(bucket)
-                    .createSignedURL(path: path, expiresIn: 3600) else { continue }
-                if let (data, resp) = try? await URLSession.shared.data(from: url),
-                   (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
-                   let previewImage = Self.renderPDFPreviewImage(from: data) {
-                    await MainActor.run {
-                        self.renderPDF(data: data, previewImage: previewImage)
-                        pdfFound = true
-                    }
-                    break
-                }
-            }
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return url
+        }
 
-            if !pdfFound {
-                await MainActor.run { self.showPDFError() }
-            }
+        if trimmed.hasPrefix("/") {
+            return ReHersAPI.url(path: trimmed)
+        }
 
-            // 2. Fetch output.json for Animation (run in parallel but sequentially for simplicity)
-            let jsonPaths = [
-                ("sheet_data", "discover/\(sheetId.uuidString)/output.json"),
-                ("pdf_uploads", "\(sheetId.uuidString)/output.json")
-            ]
+        return nil
+    }
 
-            for (bucket, path) in jsonPaths {
-                guard !Task.isCancelled else {
-                    await MainActor.run { self.sheetLoadTask = nil }
-                    return
-                }
+    private func fetchRemoteData(from rawValue: String) async throws -> Data {
+        guard let url = resolvedURL(from: rawValue) else {
+            throw AssetError.invalidURL
+        }
 
-                guard let url = try? await SupabaseManager.shared.client.storage
-                    .from(bucket)
-                    .createSignedURL(path: path, expiresIn: 3600) else { continue }
-                if let (data, resp) = try? await URLSession.shared.data(from: url),
-                   (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
-                   let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    debugLog("[DiscoverDetail][JSON] ✅ keys=\(parsed.keys.sorted())")
-                    await MainActor.run { self.sheetMusicJSON = parsed }
-                    break
-                }
-            }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
 
+        let isBackendURL = rawValue.hasPrefix("/") || url.absoluteString.hasPrefix(ReHersAPI.baseURLString)
+        if isBackendURL, let token = try? await SupabaseManager.shared.accessToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let session: URLSession = isBackendURL ? ReHersPinnedSession.shared : URLSession.shared
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(statusCode) else {
+            throw AssetError.remoteFetchFailed(statusCode)
+        }
+        return data
+    }
+
+    private func loadOriginalPDF() async {
+        let originalURL = song?.originalPdfPath
+        guard let originalURL, !originalURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        do {
+            let data = try await fetchRemoteData(from: originalURL)
+            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else { return }
             await MainActor.run {
-                self.sheetLoadTask = nil
+                self.originalPDFDocument = doc
+                if self.sheetToggle.selectedSegmentIndex == 0 {
+                    self.renderPDF(doc)
+                }
+            }
+        } catch {
+            print("[DiscoverDetail] Original PDF fetch error: \(error)")
+        }
+    }
+
+    private func loadConvertedPDF() async {
+        let sheetURL = song?.labeledPdfPath ?? song?.sheetUrl
+        guard let sheetURL, !sheetURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            await MainActor.run { self.showPDFError() }
+            return
+        }
+
+        do {
+            let data = try await fetchRemoteData(from: sheetURL)
+            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+                await MainActor.run { self.showPDFError() }
+                return
+            }
+            await MainActor.run {
+                self.labeledPDFDocument = doc
+                if self.sheetToggle.selectedSegmentIndex == 1 {
+                    self.renderPDF(doc)
+                }
+            }
+        } catch {
+            print("[DiscoverDetail] PDF fetch error: \(error)")
+            await MainActor.run {
+                if self.sheetToggle.selectedSegmentIndex == 1 {
+                    self.showPDFError()
+                }
             }
         }
     }
 
-    private func renderPDF(data: Data, previewImage: UIImage) {
-        loadedPDFData = data
-        previewImageView.image = previewImage
-        previewImageView.isHidden = false
+    private func loadConvertedJSON() async {
+        let jsonURL = song?.outputJsonPath ?? song?.jsonUrl
+        guard let jsonURL, !jsonURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        do {
+            let data = try await fetchRemoteData(from: jsonURL)
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return
+            }
+            await MainActor.run { self.sheetMusicJSON = parsed }
+        } catch {
+            print("[DiscoverDetail] JSON fetch error: \(error)")
+        }
+    }
+
+    private func renderPDF(_ doc: PDFDocument) {
+        pdfView.document  = doc
+        pdfView.isHidden  = false
+        pdfView.layoutIfNeeded()
+        if let p = doc.page(at: 0) { pdfView.go(to: p) }
         pdfLoadingIndicator.stopAnimating()
+        pdfErrorLabel.isHidden = true
     }
 
     @objc private func didTapPDFView() {
-        guard let pdfData = loadedPDFData,
-              let doc = autoreleasepool(invoking: { PDFDocument(data: pdfData) }),
-              doc.pageCount > 0 else { return }
+        let doc = sheetToggle.selectedSegmentIndex == 0 ? originalPDFDocument : labeledPDFDocument
+        guard let doc else { return }
         let vc = MaximizeUploadPageViewController()
         vc.pdfData = pdfData
         vc.pdfDocument = doc
@@ -529,59 +574,70 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfErrorLabel.isHidden = false
     }
 
-    private func cancelPendingTasks() {
-        recentPlayTask?.cancel()
-        recentPlayTask = nil
+    private enum AssetError: LocalizedError {
+        case invalidURL
+        case remoteFetchFailed(Int)
 
-        sheetLoadTask?.cancel()
-        sheetLoadTask = nil
-    }
-
-    private func releasePDFResources() {
-        pdfLoadingIndicator.stopAnimating()
-        previewImageView.image = nil
-        previewImageView.isHidden = true
-        loadedPDFData = nil
-        sheetMusicJSON = nil
-    }
-
-    private static func renderPDFPreviewImage(from data: Data, maxDimension: CGFloat = 1024) -> UIImage? {
-        autoreleasepool {
-            guard let provider = CGDataProvider(data: data as CFData),
-                  let document = CGPDFDocument(provider),
-                  let page = document.page(at: 1) else {
-                return nil
+        var errorDescription: String? {
+            switch self {
+            case .invalidURL:
+                return "The converted asset URL is invalid."
+            case .remoteFetchFailed(let code):
+                return "Failed to fetch converted asset (HTTP \(code))."
             }
-
-            let pageRect = page.getBoxRect(.mediaBox)
-            guard pageRect.width > 0, pageRect.height > 0 else { return nil }
-
-            let scale = min(maxDimension / max(pageRect.width, pageRect.height), 2.0)
-            let width = max(Int(pageRect.width * scale), 1)
-            let height = max(Int(pageRect.height * scale), 1)
-            let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
-
-            guard let context = CGContext(
-                data: nil,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: 0,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else {
-                return nil
-            }
-
-            context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
-            context.fill(targetRect)
-            context.saveGState()
-            context.concatenate(page.getDrawingTransform(.mediaBox, rect: targetRect, rotate: 0, preserveAspectRatio: true))
-            context.drawPDFPage(page)
-            context.restoreGState()
-
-            guard let cgImage = context.makeImage() else { return nil }
-            return UIImage(cgImage: cgImage)
         }
+    }
+
+    private func presentPlaylistPicker() {
+        Task {
+            do {
+                let playlists = try await PlaylistsManager.shared.fetchRemotePlaylists()
+                await MainActor.run {
+                    guard !playlists.isEmpty else {
+                        self.presentInfoAlert(title: "No Playlists", message: "Create a playlist first, then add this song from the menu.")
+                        return
+                    }
+
+                    let alert = UIAlertController(title: "Add To Playlist", message: "Choose a playlist for this song.", preferredStyle: .actionSheet)
+                    for playlist in playlists.prefix(8) {
+                        alert.addAction(UIAlertAction(title: playlist.title, style: .default) { _ in
+                            self.addCurrentSong(to: playlist.id)
+                        })
+                    }
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    self.present(alert, animated: true)
+                }
+            } catch {
+                await MainActor.run {
+                    self.presentInfoAlert(title: "Error", message: "Could not load playlists right now.")
+                }
+            }
+        }
+    }
+
+    private func addCurrentSong(to playlistId: UUID) {
+        guard let song else { return }
+        Task {
+            do {
+                _ = try await PlaylistsManager.shared.addTrackToPlaylist(
+                    playlistId: playlistId,
+                    title: song.title,
+                    artist: song.composer
+                )
+                await MainActor.run {
+                    self.presentInfoAlert(title: "Added", message: "\"\(song.title)\" was added to the playlist.")
+                }
+            } catch {
+                await MainActor.run {
+                    self.presentInfoAlert(title: "Error", message: "Could not add this song to the playlist.")
+                }
+            }
+        }
+    }
+
+    private func presentInfoAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
