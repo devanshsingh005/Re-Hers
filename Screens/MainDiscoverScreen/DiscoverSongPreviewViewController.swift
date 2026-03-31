@@ -24,8 +24,11 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
-    private var loadedPDF: PDFDocument?
+    private var loadedPDFData: Data?
     private var uploadPopup: UploadQuizPopup?
+    private var recentPlayTask: Task<Void, Never>?
+    private var pdfLoadTask: Task<Void, Never>?
+    private var discoveryUploadTask: Task<Void, Never>?
 
     // MARK: - UI
 
@@ -78,14 +81,15 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         return v
     }()
 
-    private lazy var pdfView: PDFView = {
-        let pv = PDFView()
-        pv.autoScales               = true
-        pv.displayMode              = .singlePage
-        pv.backgroundColor          = ComponentColors.SongDetailScreen.sheetMusicBackground
-        pv.isUserInteractionEnabled = false
-        pv.translatesAutoresizingMaskIntoConstraints = false
-        return pv
+    private lazy var previewImageView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFit
+        imageView.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
+        imageView.clipsToBounds = true
+        imageView.isHidden = true
+        imageView.isUserInteractionEnabled = false
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        return imageView
     }()
 
     private lazy var pdfSpinner: UIActivityIndicatorView = {
@@ -143,12 +147,13 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
         // Record this song as recently played
         if let songId = song?.id {
-            Task {
+            recentPlayTask = Task { [weak self] in
                 do {
                     try await RecentPlayService.shared.recordPlay(songId: songId)
                 } catch {
                     print("[SongPreview] ❌ Failed to record play: \(error)")
                 }
+                self?.recentPlayTask = nil
             }
         }
     }
@@ -156,6 +161,25 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
+
+        if loadedPDFData == nil, previewImageView.image == nil, pdfLoadTask == nil {
+            loadPDF()
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
+        if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
+            cancelPendingTasks()
+            releasePDFResources()
+        }
+    }
+
+    deinit {
+        cancelPendingTasks()
+        releasePDFResources()
     }
 
     // MARK: - NavBar
@@ -190,7 +214,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         contentView.addSubview(cardView)
         cardView.addSubview(songTitleLabel)
         cardView.addSubview(sheetCardView)
-        sheetCardView.addSubview(pdfView)
+        sheetCardView.addSubview(previewImageView)
         sheetCardView.addSubview(pdfSpinner)
         sheetCardView.addSubview(pdfErrorLabel)
 
@@ -227,10 +251,10 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
             sheetCardView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
 
             // PDF
-            pdfView.topAnchor.constraint(equalTo: sheetCardView.topAnchor),
-            pdfView.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor),
-            pdfView.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor),
-            pdfView.bottomAnchor.constraint(equalTo: sheetCardView.bottomAnchor),
+            previewImageView.topAnchor.constraint(equalTo: sheetCardView.topAnchor),
+            previewImageView.leadingAnchor.constraint(equalTo: sheetCardView.leadingAnchor),
+            previewImageView.trailingAnchor.constraint(equalTo: sheetCardView.trailingAnchor),
+            previewImageView.bottomAnchor.constraint(equalTo: sheetCardView.bottomAnchor),
 
             pdfSpinner.centerXAnchor.constraint(equalTo: sheetCardView.centerXAnchor),
             pdfSpinner.centerYAnchor.constraint(equalTo: sheetCardView.centerYAnchor),
@@ -296,40 +320,61 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     // MARK: - PDF Loading (preview only)
 
     private func loadPDF() {
+        pdfLoadTask?.cancel()
         pdfSpinner.startAnimating()
-        pdfView.isHidden       = true
+        previewImageView.image = nil
+        previewImageView.isHidden = true
         pdfErrorLabel.isHidden = true
 
-        Task {
+        pdfLoadTask = Task { [weak self] in
+            guard let self else { return }
             let candidates = await buildPDFCandidates()
+            guard !Task.isCancelled else {
+                await MainActor.run { self.pdfLoadTask = nil }
+                return
+            }
             guard !candidates.isEmpty else {
-                await MainActor.run { self.showPDFError() }
+                await MainActor.run {
+                    self.showPDFError()
+                    self.pdfLoadTask = nil
+                }
                 return
             }
 
             for url in candidates {
+                guard !Task.isCancelled else {
+                    await MainActor.run { self.pdfLoadTask = nil }
+                    return
+                }
+
                 if let (data, resp) = try? await URLSession.shared.data(from: url),
                    (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
-                   let doc = PDFDocument(data: data), doc.pageCount > 0 {
-                    await MainActor.run { self.renderPDF(doc) }
+                   let previewImage = Self.renderPDFPreviewImage(from: data) {
+                    await MainActor.run {
+                        self.renderPDF(data: data, previewImage: previewImage)
+                        self.pdfLoadTask = nil
+                    }
                     return
                 }
             }
-            await MainActor.run { self.showPDFError() }
+            await MainActor.run {
+                self.showPDFError()
+                self.pdfLoadTask = nil
+            }
         }
     }
 
-    private func renderPDF(_ doc: PDFDocument) {
-        loadedPDF        = doc
-        pdfView.document = doc
-        pdfView.isHidden = false
+    private func renderPDF(data: Data, previewImage: UIImage) {
+        loadedPDFData = data
+        previewImageView.image = previewImage
+        previewImageView.isHidden = false
         pdfSpinner.stopAnimating()
-        if let p = doc.page(at: 0) { pdfView.go(to: p) }
     }
 
     private func showPDFError() {
         pdfSpinner.stopAnimating()
-        pdfView.isHidden       = true
+        previewImageView.image = nil
+        previewImageView.isHidden = true
         pdfErrorLabel.isHidden = false
     }
 
@@ -338,8 +383,11 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     @objc private func sheetCardTapped() {
         NavigationBarHelper.animateButtonPress(sheetCardView) { [weak self] in
             guard let self = self else { return }
-            guard let doc = self.loadedPDF else { return }
+            guard let pdfData = self.loadedPDFData,
+                  let doc = autoreleasepool(invoking: { PDFDocument(data: pdfData) }),
+                  doc.pageCount > 0 else { return }
             let vc = MaximizeUploadPageViewController()
+            vc.pdfData = pdfData
             vc.pdfDocument = doc
             vc.modalPresentationStyle = .fullScreen
             self.present(vc, animated: true)
@@ -365,7 +413,12 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     }
 
     private func startDiscoveryUpload() {
-        Task {
+        pdfLoadTask?.cancel()
+        pdfLoadTask = nil
+        releasePDFResources()
+        discoveryUploadTask?.cancel()
+        discoveryUploadTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 uploadPopup?.updateProgress(0.1)
                 let pdfData = try await resolvePDFData()
@@ -377,7 +430,13 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
                         self.uploadPopup = nil
                         self.presentErrorAlert(error.localizedDescription)
                     }
+                    self.discoveryUploadTask = nil
                 }
+                return
+            }
+
+            await MainActor.run {
+                self.discoveryUploadTask = nil
             }
         }
     }
@@ -456,6 +515,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         uploadPopup?.updateProgress(0.9)
         
         await MainActor.run {
+            self.releasePDFResources()
             let vc       = UploadPageNextViewController()
             vc.jobId     = jobId
             vc.resultURL = outputURL
@@ -524,6 +584,64 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         cfg.attributedTitle        = t
         cfg.showsActivityIndicator = loading
         getConvertedButton.configuration = cfg
+    }
+
+    private func cancelPendingTasks() {
+        recentPlayTask?.cancel()
+        recentPlayTask = nil
+
+        pdfLoadTask?.cancel()
+        pdfLoadTask = nil
+
+        discoveryUploadTask?.cancel()
+        discoveryUploadTask = nil
+    }
+
+    private func releasePDFResources() {
+        pdfSpinner.stopAnimating()
+        previewImageView.image = nil
+        previewImageView.isHidden = true
+        loadedPDFData = nil
+    }
+
+    private static func renderPDFPreviewImage(from data: Data, maxDimension: CGFloat = 1024) -> UIImage? {
+        autoreleasepool {
+            guard let provider = CGDataProvider(data: data as CFData),
+                  let document = CGPDFDocument(provider),
+                  let page = document.page(at: 1) else {
+                return nil
+            }
+
+            let pageRect = page.getBoxRect(.mediaBox)
+            guard pageRect.width > 0, pageRect.height > 0 else { return nil }
+
+            let scale = min(maxDimension / max(pageRect.width, pageRect.height), 2.0)
+            let width = max(Int(pageRect.width * scale), 1)
+            let height = max(Int(pageRect.height * scale), 1)
+            let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
+
+            guard let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+                return nil
+            }
+
+            context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+            context.fill(targetRect)
+            context.saveGState()
+            context.concatenate(page.getDrawingTransform(.mediaBox, rect: targetRect, rotate: 0, preserveAspectRatio: true))
+            context.drawPDFPage(page)
+            context.restoreGState()
+
+            guard let cgImage = context.makeImage() else { return nil }
+            return UIImage(cgImage: cgImage)
+        }
     }
 
     private func generateFilename(for title: String?) -> String {

@@ -794,6 +794,7 @@ class AddPlaylistViewController: UIViewController,
 
     var onSave: ((_ name: String, _ image: UIImage?) -> Void)?
     private let isPad = UIDevice.current.userInterfaceIdiom == .pad
+    private weak var activeImagePicker: UIImagePickerController?
 
     private let dimView: UIView = {
         let v = UIView()
@@ -951,14 +952,25 @@ class AddPlaylistViewController: UIViewController,
     @objc private func pickImage() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         picker.delegate = self
+        activeImagePicker = picker
         if isPad {
             picker.modalPresentationStyle = .popover
             picker.popoverPresentationController?.sourceView = pickImageButton
             picker.popoverPresentationController?.sourceRect = pickImageButton.bounds
         }
         present(picker, animated: true)
+    }
+
+    private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {
+        activeImagePicker = nil
+        picker.delegate = nil
+        guard picker.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        picker.dismiss(animated: true, completion: completion)
     }
 
     @objc private func saveTapped() {
@@ -979,12 +991,14 @@ class AddPlaylistViewController: UIViewController,
 
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-        pickedImage = (info[.editedImage] ?? info[.originalImage]) as? UIImage
-        imageViewPreview.image = pickedImage
-        picker.dismiss(animated: true)
+        let selectedImage = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+        dismissImagePicker(picker) { [weak self] in
+            self?.pickedImage = selectedImage
+            self?.imageViewPreview.image = selectedImage
+        }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        picker.dismiss(animated: true)
+        dismissImagePicker(picker)
     }
 }

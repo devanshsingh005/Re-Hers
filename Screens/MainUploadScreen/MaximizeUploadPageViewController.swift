@@ -9,6 +9,7 @@ import PDFKit
 final class MaximizeUploadPageViewController: UIViewController {
 
     var pdfDocument: PDFDocument?
+    var pdfData: Data?
 
     private let pdfView   = PDFView()
     private lazy var customBackBtn = NavigationBarHelper.makeCircularBackButton()
@@ -21,6 +22,9 @@ final class MaximizeUploadPageViewController: UIViewController {
         view.backgroundColor = .black
 
         // PDF
+        if pdfDocument == nil, let pdfData {
+            pdfDocument = autoreleasepool(invoking: { PDFDocument(data: pdfData) })
+        }
         pdfView.document         = pdfDocument
         pdfView.autoScales       = true
         pdfView.displayMode      = .singlePageContinuous
@@ -114,6 +118,18 @@ final class MaximizeUploadPageViewController: UIViewController {
         if let first = pdfView.document?.page(at: 0) { pdfView.go(to: first) }
     }
 
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        if isBeingDismissed {
+            releasePDFResources()
+        }
+    }
+
+    deinit {
+        releasePDFResources()
+    }
+
     // MARK: - Actions
     @objc private func close() {
         NavigationBarHelper.animateButtonPress(closeBtn) { [weak self] in
@@ -143,5 +159,11 @@ final class MaximizeUploadPageViewController: UIViewController {
         v.backgroundColor = UIColor.white.withAlphaComponent(0.25)
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
+    }
+
+    private func releasePDFResources() {
+        pdfView.document = nil
+        pdfDocument = nil
+        pdfData = nil
     }
 }

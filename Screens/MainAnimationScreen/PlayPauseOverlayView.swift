@@ -22,6 +22,11 @@ final class PlayPauseOverlayView: UIView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    deinit {
+        hideTimer?.invalidate()
+        hideTimer = nil
+    }
+
     // MARK: - Setup
     private func setup() {
         backgroundColor       = .clear
@@ -67,6 +72,7 @@ final class PlayPauseOverlayView: UIView {
     /// Call this after toggling play state to flash the icon.
     func show(isPlaying: Bool) {
         hideTimer?.invalidate()
+        hideTimer = nil
 
         let name = isPlaying ? "pause.fill" : "play.fill"
         let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .bold)

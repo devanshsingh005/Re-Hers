@@ -5,13 +5,10 @@
 
 import UIKit
 import AVFoundation
-import Photos
+import PhotosUI
 import Supabase
 import Auth
 internal import PostgREST
-import PDFKit
-import Vision
-import VisionKit
 import CryptoKit
 import Security
 
@@ -41,6 +38,13 @@ class UploadScreen: UIViewController {
     private var currentFileType  = ""
     private var activeQuizPopup: UploadQuizPopup?
     private var recentUploadsStack: UIStackView?
+    private weak var activeDocumentPicker: UIDocumentPickerViewController?
+    private weak var activePhotoPicker: PHPickerViewController?
+    private weak var activeCameraController: UploadCameraCaptureViewController?
+    private var profileFetchTask: Task<Void, Never>?
+    private var recentUploadsTask: Task<Void, Never>?
+    private var renameTask: Task<Void, Never>?
+    private var uploadTask: Task<Void, Never>?
 
     // MARK: - Supabase
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
@@ -78,6 +82,13 @@ class UploadScreen: UIViewController {
         )
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        cancelPendingTasks()
+        clearUploadState()
+        releaseTransientPickers()
+    }
+
     @objc private func handleProfileUpdate() {
         fetchProfileData()
     }
@@ -85,6 +96,17 @@ class UploadScreen: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         loadRecentUploads()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        if isMovingFromParent || isBeingDismissed {
+            NotificationCenter.default.removeObserver(self)
+            cancelPendingTasks()
+            clearUploadState()
+            releaseTransientPickers()
+        }
     }
 
     func startUploadFlow() { presentDocumentScanner() }
@@ -166,30 +188,34 @@ class UploadScreen: UIViewController {
     }
 
     private func fetchProfileData() {
-        Task {
+        profileFetchTask?.cancel()
+        profileFetchTask = Task { [weak self] in
+            guard let self else { return }
             guard let user = SupabaseManager.shared.client.auth.currentUser else {
                 await MainActor.run {
-                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                    largeProfileButton.tintColor = .secondaryLabel
+                    self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    self.largeProfileButton.tintColor = .secondaryLabel
                 }
                 return
             }
             do {
                 let profile: Profile = try await SupabaseManager.shared.client
                     .from("profiles").select().eq("id", value: user.id).single().execute().value
+                if Task.isCancelled { return }
                 if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
-                    await loadAndSetProfileImage(from: avatarUrl)
+                    await self.loadAndSetProfileImage(from: avatarUrl)
                 } else {
                     await MainActor.run {
-                        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                        largeProfileButton.tintColor = .secondaryLabel
+                        self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                        self.largeProfileButton.tintColor = .secondaryLabel
                     }
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 print("Profile error: \(error)")
                 await MainActor.run {
-                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                    largeProfileButton.tintColor = .secondaryLabel
+                    self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    self.largeProfileButton.tintColor = .secondaryLabel
                 }
             }
         }
@@ -429,11 +455,15 @@ class UploadScreen: UIViewController {
 
     // MARK: - Load & Display Recent Uploads
     private func loadRecentUploads() {
-        Task {
+        recentUploadsTask?.cancel()
+        recentUploadsTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                let uploads = try await fetchRecentUploads()
+                let uploads = try await self.fetchRecentUploads()
+                guard !Task.isCancelled else { return }
                 await MainActor.run { self.displayRecentUploads(uploads) }
             } catch {
+                guard !Task.isCancelled else { return }
                 print("[Uploads] load error: \(error)")
                 await MainActor.run { self.displayRecentUploads([]) }
             }
@@ -635,7 +665,11 @@ class UploadScreen: UIViewController {
                   let name = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !name.isEmpty else { return }
             titleLabel?.text = name
-            Task { await self.renameScan(id: scanId, newTitle: name) }
+            self.renameTask?.cancel()
+            self.renameTask = Task { [weak self] in
+                guard let self else { return }
+                await self.renameScan(id: scanId, newTitle: name)
+            }
         })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(alert, animated: true)
@@ -785,6 +819,7 @@ class UploadScreen: UIViewController {
         // ── Navigate ──────────────────────────────────────────────────────────────
         await MainActor.run {
             self.loadRecentUploads()
+            self.clearUploadState()
             let vc       = UploadPageNextViewController()
             vc.jobId     = jobId
             vc.onDataReady = {
@@ -832,37 +867,74 @@ class UploadScreen: UIViewController {
 
     // MARK: - Document Scanner
     private func presentDocumentScanner() {
-        guard VNDocumentCameraViewController.isSupported else {
-            presentAlert(title: "Not Supported",
-                         message: "Document scanning is not available on this device.")
-            return
+        let sheet = UIAlertController(title: "Scan Sheet Music",
+                                      message: "Capture a page with the camera or pick one from your library.",
+                                      preferredStyle: .actionSheet)
+
+        if AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil {
+            sheet.addAction(UIAlertAction(title: "Camera", style: .default) { [weak self] _ in
+                self?.presentUploadCamera()
+            })
         }
-        let vc = VNDocumentCameraViewController()
-        vc.delegate = self
-        present(vc, animated: true)
+
+        sheet.addAction(UIAlertAction(title: "Photo Library", style: .default) { [weak self] _ in
+            self?.presentPhotoLibraryPicker()
+        })
+
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+            popover.permittedArrowDirections = []
+        }
+
+        present(sheet, animated: true)
     }
 
-    private func createPDFFromScan(_ scan: VNDocumentCameraScan) -> Data? {
+    private func presentUploadCamera() {
+        let cameraVC = UploadCameraCaptureViewController()
+        cameraVC.delegate = self
+        cameraVC.modalPresentationStyle = .fullScreen
+        activeCameraController = cameraVC
+        present(cameraVC, animated: true)
+    }
+
+    private func presentPhotoLibraryPicker() {
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        configuration.preferredAssetRepresentationMode = .current
+
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        activePhotoPicker = picker
+        present(picker, animated: true)
+    }
+
+    private func createPDF(from images: [UIImage]) -> Data? {
+        guard !images.isEmpty else { return nil }
         let pdf = NSMutableData()
         UIGraphicsBeginPDFContextToData(pdf, CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
-        for i in 0..<scan.pageCount {
-            UIGraphicsBeginPDFPageWithInfo(CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
-            let img  = scan.imageOfPage(at: i)
-            let s    = min(Constants.pdfPageSize.width  / img.size.width,
-                           Constants.pdfPageSize.height / img.size.height, 1.0)
-            let w    = img.size.width * s;  let h = img.size.height * s
-            img.draw(in: CGRect(x: (Constants.pdfPageSize.width  - w) / 2,
-                                y: (Constants.pdfPageSize.height - h) / 2,
-                                width: w, height: h))
-            let txt   = "\(i + 1)"
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.gray
-            ]
-            let sz = txt.size(withAttributes: attributes)
-            txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2,
-                                y: 10, width: sz.width, height: sz.height), withAttributes: attributes)
+        defer { UIGraphicsEndPDFContext() }
+        for (index, image) in images.enumerated() {
+            autoreleasepool {
+                UIGraphicsBeginPDFPageWithInfo(CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
+                let s    = min(Constants.pdfPageSize.width  / image.size.width,
+                               Constants.pdfPageSize.height / image.size.height, 1.0)
+                let w    = image.size.width * s;  let h = image.size.height * s
+                image.draw(in: CGRect(x: (Constants.pdfPageSize.width  - w) / 2,
+                                      y: (Constants.pdfPageSize.height - h) / 2,
+                                    width: w, height: h))
+                let txt   = "\(index + 1)"
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.gray
+                ]
+                let sz = txt.size(withAttributes: attributes)
+                txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2,
+                                    y: 10, width: sz.width, height: sz.height), withAttributes: attributes)
+            }
         }
-        UIGraphicsEndPDFContext()
         return pdf as Data
     }
 
@@ -885,8 +957,91 @@ class UploadScreen: UIViewController {
     }
 
     private func handleUploadError(_ error: Error, popup: UploadQuizPopup) {
+        clearUploadState()
+        activeQuizPopup = nil
         popup.dismiss(animated: true) { [weak self] in
             self?.presentAlert(title: "Upload Failed", message: error.localizedDescription)
+        }
+    }
+
+    private func clearUploadState() {
+        currentUploadData = nil
+        currentFileName = ""
+        currentFileType = ""
+    }
+
+    private func cancelPendingTasks() {
+        profileFetchTask?.cancel()
+        recentUploadsTask?.cancel()
+        renameTask?.cancel()
+        uploadTask?.cancel()
+    }
+
+    private func releaseTransientPickers() {
+        activeDocumentPicker?.delegate = nil
+        activePhotoPicker?.delegate = nil
+        activeCameraController?.delegate = nil
+        activeDocumentPicker = nil
+        activePhotoPicker = nil
+        activeCameraController = nil
+    }
+
+    private func dismissDocumentPicker(_ controller: UIDocumentPickerViewController,
+                                       completion: (() -> Void)? = nil) {
+        activeDocumentPicker = nil
+        controller.delegate = nil
+        guard controller.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        controller.dismiss(animated: true, completion: completion)
+    }
+
+    private func dismissPhotoPicker(_ picker: PHPickerViewController,
+                                    completion: (() -> Void)? = nil) {
+        activePhotoPicker = nil
+        picker.delegate = nil
+        guard picker.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        picker.dismiss(animated: true, completion: completion)
+    }
+
+    private func dismissUploadCamera(_ controller: UploadCameraCaptureViewController,
+                                     completion: (() -> Void)? = nil) {
+        activeCameraController = nil
+        controller.delegate = nil
+        guard controller.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        controller.dismiss(animated: true, completion: completion)
+    }
+
+    private func beginUpload(with image: UIImage) {
+        guard let pdfData = createPDF(from: [image]) else {
+            presentAlert(title: "Scan Failed", message: "Could not prepare the captured image for upload.")
+            return
+        }
+
+        currentUploadData = pdfData
+        currentFileName = generateTimestampFilename()
+        currentFileType = "application/pdf"
+
+        let popup = showQuizPopup()
+        uploadTask?.cancel()
+        uploadTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.saveUploadToDatabase(imageData: pdfData,
+                                                    fileName: self.currentFileName,
+                                                    fileType: self.currentFileType,
+                                                    popup: popup)
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run { self.handleUploadError(error, popup: popup) }
+            }
         }
     }
 
@@ -1096,36 +1251,185 @@ enum ReHersPinnedSession {
     }()
 }
 
-// MARK: - VNDocumentCameraViewControllerDelegate
-extension UploadScreen: VNDocumentCameraViewControllerDelegate {
-    func documentCameraViewController(_ controller: VNDocumentCameraViewController,
-                                       didFinishWith scan: VNDocumentCameraScan) {
-        controller.dismiss(animated: true)
-        Task {
-            guard let pdfData = self.createPDFFromScan(scan) else { return }
-            self.currentUploadData = pdfData
-            self.currentFileName   = generateTimestampFilename()
-            self.currentFileType   = "application/pdf"
-            let popup = await MainActor.run { self.showQuizPopup() }
-            do {
-                try await self.saveUploadToDatabase(imageData: pdfData,
-                                                     fileName: self.currentFileName,
-                                                     fileType: self.currentFileType,
-                                                     popup: popup)
-            } catch {
-                await MainActor.run { self.handleUploadError(error, popup: popup) }
+protocol UploadCameraCaptureViewControllerDelegate: AnyObject {
+    func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
+                                           didCapture image: UIImage)
+    func uploadCameraCaptureViewControllerDidCancel(_ controller: UploadCameraCaptureViewController)
+}
+
+final class UploadCameraCaptureViewController: UIViewController {
+    weak var delegate: UploadCameraCaptureViewControllerDelegate?
+
+    private let session = AVCaptureSession()
+    private let photoOutput = AVCapturePhotoOutput()
+    private let sessionQueue = DispatchQueue(label: "com.rehearse.upload.camera.session")
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var isSessionConfigured = false
+
+    private let shutterButton = UIButton(type: .system)
+    private let closeButton = UIButton(type: .system)
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        buildUI()
+        configureSession()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        startSessionIfNeeded()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopSession()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
+    }
+
+    deinit {
+        stopSession()
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+    }
+
+    private func buildUI() {
+        let preview = AVCaptureVideoPreviewLayer(session: session)
+        preview.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(preview)
+        previewLayer = preview
+
+        shutterButton.translatesAutoresizingMaskIntoConstraints = false
+        shutterButton.backgroundColor = .white
+        shutterButton.layer.cornerRadius = 36
+        shutterButton.layer.borderWidth = 6
+        shutterButton.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
+        shutterButton.addTarget(self, action: #selector(capturePhoto), for: .touchUpInside)
+        view.addSubview(shutterButton)
+
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        closeButton.tintColor = .white
+        closeButton.addTarget(self, action: #selector(cancelCapture), for: .touchUpInside)
+        view.addSubview(closeButton)
+
+        NSLayoutConstraint.activate([
+            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            shutterButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            shutterButton.widthAnchor.constraint(equalToConstant: 72),
+            shutterButton.heightAnchor.constraint(equalToConstant: 72),
+
+            closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeButton.widthAnchor.constraint(equalToConstant: 36),
+            closeButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+    }
+
+    private func configureSession() {
+        sessionQueue.async { [weak self] in
+            guard let self, !self.isSessionConfigured else { return }
+
+            self.session.beginConfiguration()
+            self.session.sessionPreset = .photo
+
+            defer {
+                self.session.commitConfiguration()
             }
+
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let input = try? AVCaptureDeviceInput(device: device),
+                  self.session.canAddInput(input),
+                  self.session.canAddOutput(self.photoOutput) else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.presentAlert(message: "Camera is unavailable on this device.")
+                }
+                return
+            }
+
+            self.session.addInput(input)
+            self.session.addOutput(self.photoOutput)
+            self.photoOutput.isHighResolutionCaptureEnabled = true
+            self.isSessionConfigured = true
         }
     }
 
-    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
-        controller.dismiss(animated: true)
+    private func startSessionIfNeeded() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.isSessionConfigured, !self.session.isRunning else { return }
+            self.session.startRunning()
+        }
+    }
+
+    private func stopSession() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            self.session.stopRunning()
+        }
+    }
+
+    @objc private func capturePhoto() {
+        let settings = AVCapturePhotoSettings()
+        settings.isHighResolutionPhotoEnabled = true
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    @objc private func cancelCapture() {
+        delegate?.uploadCameraCaptureViewControllerDidCancel(self)
+    }
+
+    private func presentAlert(message: String) {
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(title: "Camera Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.delegate?.uploadCameraCaptureViewControllerDidCancel(self)
+        })
+        present(alert, animated: true)
     }
 }
 
-// MARK: - UIDocumentPickerDelegate + UIImagePickerControllerDelegate
-extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerDelegate,
-                         UIDocumentPickerDelegate, UploadQuizPopupDelegate {
+extension UploadCameraCaptureViewController: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto,
+                     error: Error?) {
+        if let error {
+            DispatchQueue.main.async { [weak self] in
+                self?.presentAlert(message: error.localizedDescription)
+            }
+            return
+        }
+
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            autoreleasepool {
+                guard let data = photo.fileDataRepresentation(),
+                      let image = UIImage(data: data) else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.presentAlert(message: "Could not decode captured photo.")
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.delegate?.uploadCameraCaptureViewController(self, didCapture: image)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - UIDocumentPickerDelegate + Upload Delegates
+extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
+                        PHPickerViewControllerDelegate, UploadCameraCaptureViewControllerDelegate {
 
     func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) { activeQuizPopup = nil }
 
@@ -1134,38 +1438,84 @@ extension UploadScreen: UIImagePickerControllerDelegate, UINavigationControllerD
             forOpeningContentTypes: [.pdf, .data, .item], asCopy: true)
         picker.delegate             = self
         picker.allowsMultipleSelection = false
+        activeDocumentPicker = picker
         present(picker, animated: true)
     }
 
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let fileURL = urls.first else { return }
-        do {
-            let data = try Data(contentsOf: fileURL)
-            currentUploadData = data
-            currentFileName   = generateTimestampFilename()   // unique per upload
-            currentFileType   = "application/pdf"
-            let popup = showQuizPopup()
-            Task {
-                do {
-                    try await saveUploadToDatabase(imageData: data,
-                                                    fileName: currentFileName,
-                                                    fileType: currentFileType, popup: popup)
-                } catch {
-                    await MainActor.run { self.handleUploadError(error, popup: popup) }
+        dismissDocumentPicker(controller) { [weak self] in
+            guard let self else { return }
+            do {
+                let data = try Data(contentsOf: fileURL)
+                self.currentUploadData = data
+                self.currentFileName   = self.generateTimestampFilename()
+                self.currentFileType   = "application/pdf"
+                let popup = self.showQuizPopup()
+                self.uploadTask?.cancel()
+                self.uploadTask = Task { [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await self.saveUploadToDatabase(imageData: data,
+                                                            fileName: self.currentFileName,
+                                                            fileType: self.currentFileType,
+                                                            popup: popup)
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run { self.handleUploadError(error, popup: popup) }
+                    }
                 }
+            } catch {
+                self.presentAlert(title: "Error", message: "Failed to read file: \(error.localizedDescription)")
             }
-        } catch {
-            presentAlert(title: "Error", message: "Failed to read file: \(error.localizedDescription)")
         }
     }
 
-    func imagePickerController(_ picker: UIImagePickerController,
-                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-        picker.dismiss(animated: true)
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        dismissDocumentPicker(controller)
     }
 
-    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        picker.dismiss(animated: true)
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        dismissPhotoPicker(picker) { [weak self] in
+            guard let self else { return }
+            guard let result = results.first else { return }
+            guard result.itemProvider.canLoadObject(ofClass: UIImage.self) else {
+                self.presentAlert(title: "Import Failed", message: "The selected item is not a supported image.")
+                return
+            }
+
+            result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
+                guard let self else { return }
+                if let error {
+                    DispatchQueue.main.async {
+                        self.presentAlert(title: "Import Failed", message: error.localizedDescription)
+                    }
+                    return
+                }
+
+                guard let image = object as? UIImage else {
+                    DispatchQueue.main.async {
+                        self.presentAlert(title: "Import Failed", message: "Could not decode the selected image.")
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    self.beginUpload(with: image)
+                }
+            }
+        }
+    }
+
+    func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
+                                           didCapture image: UIImage) {
+        dismissUploadCamera(controller) { [weak self] in
+            self?.beginUpload(with: image)
+        }
+    }
+
+    func uploadCameraCaptureViewControllerDidCancel(_ controller: UploadCameraCaptureViewController) {
+        dismissUploadCamera(controller)
     }
     @objc private func seeMoreTapped() {
         let vc = AllUploadsViewController()

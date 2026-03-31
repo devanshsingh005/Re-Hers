@@ -150,6 +150,10 @@ class UploadQuizPopup: UIViewController {
         super.viewDidAppear(animated)
         animateIn()
     }
+
+    deinit {
+        autoCloseTimer?.invalidate()
+    }
     
     // MARK: - Public API
     /// Call when upload completes successfully
@@ -634,6 +638,7 @@ class UploadQuizPopup: UIViewController {
     
     private func dismissPopup() {
         autoCloseTimer?.invalidate()
+        autoCloseTimer = nil
         UIView.animate(withDuration: 0.25, animations: {
             self.cardView.alpha = 0
             self.cardView.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
@@ -942,4 +947,3 @@ class StaffDrawingView: UIView {
         }
     }
 }
-

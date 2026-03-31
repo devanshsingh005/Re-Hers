@@ -10,6 +10,7 @@ final class PianoAnimationkeyboardViewController: UIViewController {
     // MARK: - State
     private var pendingNoteOff: DispatchWorkItem?
     private var lastLeadNote: String?
+    private var hasAudioPlaybackSession = false
 
     // MARK: - Orientation
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
@@ -22,7 +23,32 @@ final class PianoAnimationkeyboardViewController: UIViewController {
         view.backgroundColor = .clear
         buildKeyboard()
         buildLabels()
-        AudioEngineManager.shared.startEngine()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        guard !hasAudioPlaybackSession else { return }
+        AudioEngineManager.shared.acquirePlaybackSession()
+        hasAudioPlaybackSession = true
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        releaseAudioPlaybackSession()
+    }
+
+    deinit {
+        pendingNoteOff?.cancel()
+        pendingNoteOff = nil
+        AudioEngineManager.shared.stopAllNotes()
+        releaseAudioPlaybackSession()
+    }
+
+    private func releaseAudioPlaybackSession() {
+        guard hasAudioPlaybackSession else { return }
+        AudioEngineManager.shared.stopAllNotes()
+        AudioEngineManager.shared.releasePlaybackSession()
+        hasAudioPlaybackSession = false
     }
 
     // MARK: - Keyboard

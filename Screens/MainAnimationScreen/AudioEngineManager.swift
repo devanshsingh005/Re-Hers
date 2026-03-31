@@ -40,10 +40,11 @@ final class AudioEngineManager {
     }
 
     // MARK: - Engine
-    private let engine   = AVAudioEngine()
-    private let sampler  = AVAudioUnitSampler()
-    private let reverb   = AVAudioUnitReverb()
+    private var engine: AVAudioEngine?
+    private var sampler: AVAudioUnitSampler?
+    private var reverb: AVAudioUnitReverb?
     private var sfLoaded = false
+    private var activePlaybackClients = 0
 
     // Fallback tone synth (used when no soundfont found)
     private var toneNodes: [UInt8: AVAudioPlayerNode] = [:]
@@ -56,14 +57,70 @@ final class AudioEngineManager {
 
     // MARK: - Init
     private init() {
+        setupNotifications()
+    }
+
+    private func ensureGraphInitialized() {
+        guard engine == nil else { return }
+
+        let engine = AVAudioEngine()
+        let sampler = AVAudioUnitSampler()
+        let reverb = AVAudioUnitReverb()
+
         engine.attach(sampler)
         engine.attach(reverb)
         reverb.loadFactoryPreset(.smallRoom)
         reverb.wetDryMix = 15
-        engine.connect(sampler, to: reverb,               format: nil)
-        engine.connect(reverb,  to: engine.mainMixerNode, format: nil)
+        engine.connect(sampler, to: reverb, format: nil)
+        engine.connect(reverb, to: engine.mainMixerNode, format: nil)
         engine.prepare()
-        setupNotifications()
+
+        self.engine = engine
+        self.sampler = sampler
+        self.reverb = reverb
+        self.sfLoaded = false
+        self.useFallback = false
+    }
+
+    private func teardownGraph() {
+        stopAllNotes()
+
+        guard let engine else {
+            toneNodes.removeAll()
+            sampler = nil
+            reverb = nil
+            sfLoaded = false
+            useFallback = false
+            samplerChannelsByNote.removeAll()
+            isStarted = false
+            return
+        }
+
+        for node in toneNodes.values {
+            node.stop()
+            if engine.attachedNodes.contains(where: { $0 === node }) {
+                engine.detach(node)
+            }
+        }
+        toneNodes.removeAll()
+
+        if let sampler, engine.attachedNodes.contains(where: { $0 === sampler }) {
+            engine.detach(sampler)
+        }
+        if let reverb, engine.attachedNodes.contains(where: { $0 === reverb }) {
+            engine.detach(reverb)
+        }
+
+        engine.stop()
+        engine.reset()
+
+        self.engine = nil
+        self.sampler = nil
+        self.reverb = nil
+        self.sfLoaded = false
+        self.useFallback = false
+        self.samplerChannelsByNote.removeAll()
+        self.isStarted = false
     }
 
     private func setupNotifications() {
@@ -77,20 +134,40 @@ final class AudioEngineManager {
         
         if type == .began {
             isStarted = false
-            engine.stop()
+            engine?.stop()
         } else if type == .ended {
             if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
                 let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-                if options.contains(.shouldResume) {
+                if options.contains(.shouldResume), activePlaybackClients > 0 {
                     startEngine()
                 }
             }
         }
     }
 
+    // MARK: - Ownership
+    func acquirePlaybackSession() {
+        activePlaybackClients += 1
+        startEngine()
+    }
+
+    func releasePlaybackSession() {
+        if activePlaybackClients > 0 {
+            activePlaybackClients -= 1
+        }
+
+        guard activePlaybackClients == 0 else { return }
+
+        stopAllNotes()
+        teardownGraph()
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+
     // MARK: - Start
     func startEngine() {
+        ensureGraphInitialized()
         guard !isStarted else { return }
+        guard let engine else { return }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers, .allowBluetoothHFP])
@@ -106,6 +183,7 @@ final class AudioEngineManager {
 
     // MARK: - Load SoundFont
     private func loadSoundFont(for instrument: InstrumentType) {
+        guard sampler != nil else { return }
         sfLoaded = false
         useFallback = false
 
@@ -139,6 +217,7 @@ final class AudioEngineManager {
     }
 
     private func tryLoad(url: URL, program: UInt8) -> Bool {
+        guard let sampler else { return false }
         do {
             try sampler.loadSoundBankInstrument(
                 at: url, program: program,
@@ -156,7 +235,9 @@ final class AudioEngineManager {
     func switchInstrument(to instrument: InstrumentType) {
         currentInstrument = instrument
         stopAllNotes()
-        loadSoundFont(for: instrument)
+        if engine != nil {
+            loadSoundFont(for: instrument)
+        }
     }
 
     // MARK: - Note On/Off
@@ -168,7 +249,7 @@ final class AudioEngineManager {
         if useFallback {
             playTone(midi: midi, velocity: velocity)
         } else {
-            guard sfLoaded else { return }
+            guard let sampler, sfLoaded else { return }
             let channel = allocateSamplerChannel(for: midi)
             let vel = UInt8(clamping: Int(velocity) + Int.random(in: -5...5))
             sampler.startNote(midi, withVelocity: vel, onChannel: channel)
@@ -183,6 +264,7 @@ final class AudioEngineManager {
         if useFallback {
             stopTone(midi: midi)
         } else {
+            guard let sampler else { return }
             let channel = samplerChannelsByNote.removeValue(forKey: midi) ?? 0
             sampler.stopNote(midi, onChannel: channel)
         }
@@ -199,6 +281,7 @@ final class AudioEngineManager {
     // Each MIDI note gets its own AVAudioPlayerNode playing a looping buffer.
 
     private func playTone(midi: UInt8, velocity: UInt8) {
+        guard let engine else { return }
         let freq = midiToHz(midi)
         guard let buffer = makeSineBuffer(freq: freq, duration: 2.0) else { return }
 
@@ -217,7 +300,9 @@ final class AudioEngineManager {
     private func stopTone(midi: UInt8) {
         guard let node = toneNodes.removeValue(forKey: midi) else { return }
         node.stop()
-        engine.detach(node)
+        if let engine, engine.attachedNodes.contains(where: { $0 === node }) {
+            engine.detach(node)
+        }
     }
 
     private func makeSineBuffer(freq: Double, duration: Double) -> AVAudioPCMBuffer? {

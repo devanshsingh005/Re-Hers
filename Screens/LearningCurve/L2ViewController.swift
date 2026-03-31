@@ -27,6 +27,11 @@ class MusicStaffView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    deinit {
+        pendingPlaybackWorkItems.forEach { $0.cancel() }
+        pendingPlaybackWorkItems.removeAll()
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         layer.sublayers?.forEach { $0.removeFromSuperlayer() }
@@ -212,11 +217,9 @@ class MusicStaffView: UIView {
         pendingPlaybackWorkItems.forEach { $0.cancel() }
         pendingPlaybackWorkItems.removeAll()
         AudioEngineManager.shared.stopAllNotes()
-        AudioEngineManager.shared.startEngine()
         let midiNotes = displayedChordSymbols()
             .map(rootNote(for:))
             .compactMap { AudioEngineManager.shared.midiNumber(from: playableNoteName(for: $0)) }
-
         guard !midiNotes.isEmpty else { return }
 
         let chordVelocity = UInt8(max(92, 118 - (max(1, midiNotes.count) - 1) * 5))
@@ -383,6 +386,7 @@ class LessonDetailViewController: UIViewController {
     private var earTrainingOptionButtons: [UIButton] = []
     private var earTrainingTargets: [String] = []
     private var earTrainingAttempts: [Int: Int] = [:]
+    private var hasAudioPlaybackSession = false
     private let noteMapping: [String: String] = [
         "Do": "C", "Re": "D", "Mi": "E", "Fa": "F", "Sol": "G", "La": "A", "Ti": "B",
         "Treble": "G", "Bass": "F", "Alto": "C", "Tenor": "C", "Soprano": "G", "Mezzo": "G", "Violin": "G",
@@ -412,7 +416,6 @@ class LessonDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.HomeScreen.background
-        AudioEngineManager.shared.startEngine()
         scrollView.delegate = self
         setupNavBar()
         navigationItem.titleView?.alpha = 0
@@ -456,14 +459,37 @@ class LessonDetailViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        acquireAudioPlaybackSessionIfNeeded()
         navigationItem.titleView?.alpha = 0
         syncNavBarAlpha()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        AudioEngineManager.shared.stopAllNotes()
+        releaseAudioPlaybackSession()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         syncNavBarAlpha()
         lessonStartedAt = Date()
+    }
+
+    deinit {
+        releaseAudioPlaybackSession()
+    }
+
+    private func acquireAudioPlaybackSessionIfNeeded() {
+        guard !hasAudioPlaybackSession else { return }
+        AudioEngineManager.shared.acquirePlaybackSession()
+        hasAudioPlaybackSession = true
+    }
+
+    private func releaseAudioPlaybackSession() {
+        guard hasAudioPlaybackSession else { return }
+        AudioEngineManager.shared.releasePlaybackSession()
+        hasAudioPlaybackSession = false
     }
 
     private func setupScrollView() {

@@ -16,8 +16,10 @@ class DiscoverSongDetailViewController: UIViewController {
     var passedImage: UIImage?
 
     // MARK: - Private State
-    private var loadedPDFDocument: PDFDocument?
+    private var loadedPDFData: Data?
     private var sheetMusicJSON: [String: Any]?
+    private var recentPlayTask: Task<Void, Never>?
+    private var sheetLoadTask: Task<Void, Never>?
 
     // MARK: - Scroll Container
     private let mainScrollView = UIScrollView()
@@ -38,7 +40,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private let sheetContainer      = UIView()
     private let pageLabel           = UILabel()
-    private let pdfView             = PDFView()
+    private let previewImageView    = UIImageView()
     private let pdfLoadingIndicator = UIActivityIndicatorView(style: .medium)
     private let pdfErrorLabel       = UILabel()
 
@@ -69,14 +71,38 @@ class DiscoverSongDetailViewController: UIViewController {
 
         // Record this song as recently played
         if let songId = song?.id {
-            Task {
+            recentPlayTask = Task { [weak self] in
                 do {
                     try await RecentPlayService.shared.recordPlay(songId: songId)
                 } catch {
                     print("[DiscoverDetail] ❌ Failed to record play: \(error)")
                 }
+                self?.recentPlayTask = nil
             }
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        if loadedPDFData == nil, previewImageView.image == nil, sheetLoadTask == nil {
+            loadSheetData()
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
+        if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
+            cancelPendingTasks()
+            releasePDFResources()
+        }
+    }
+
+    deinit {
+        cancelPendingTasks()
+        releasePDFResources()
     }
 
     // MARK: - Apply Passed Data
@@ -230,19 +256,17 @@ class DiscoverSongDetailViewController: UIViewController {
         pageLabel.text          = "Sheet Music"
         pageLabel.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.addSubview(pageLabel)
+        let previewTap = UITapGestureRecognizer(target: self, action: #selector(didTapPDFView))
+        sheetContainer.addGestureRecognizer(previewTap)
 
-        pdfView.layer.cornerRadius  = 12
-        pdfView.clipsToBounds       = true
-        pdfView.autoScales          = true
-        pdfView.displayMode         = .singlePageContinuous
-        pdfView.displayDirection    = .vertical
-        pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
-        pdfView.isHidden            = true
-        pdfView.isUserInteractionEnabled = true
-        pdfView.translatesAutoresizingMaskIntoConstraints = false
-        let pdfTap = UITapGestureRecognizer(target: self, action: #selector(didTapPDFView))
-        pdfView.addGestureRecognizer(pdfTap)
-        sheetContainer.addSubview(pdfView)
+        previewImageView.contentMode = .scaleAspectFit
+        previewImageView.clipsToBounds = true
+        previewImageView.layer.cornerRadius = 12
+        previewImageView.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
+        previewImageView.isHidden = true
+        previewImageView.isUserInteractionEnabled = false
+        previewImageView.translatesAutoresizingMaskIntoConstraints = false
+        sheetContainer.addSubview(previewImageView)
 
         pdfLoadingIndicator.color = ComponentColors.SongDetailScreen.primaryActionFill
         pdfLoadingIndicator.hidesWhenStopped = true
@@ -310,14 +334,14 @@ class DiscoverSongDetailViewController: UIViewController {
             pageLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 10),
             pageLabel.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
 
-            pdfView.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
-            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
-            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
-            pdfView.heightAnchor.constraint(equalToConstant: 380),
-            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -10),
+            previewImageView.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
+            previewImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
+            previewImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
+            previewImageView.heightAnchor.constraint(equalToConstant: 380),
+            previewImageView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -10),
 
-            pdfLoadingIndicator.centerXAnchor.constraint(equalTo: pdfView.centerXAnchor),
-            pdfLoadingIndicator.centerYAnchor.constraint(equalTo: pdfView.centerYAnchor),
+            pdfLoadingIndicator.centerXAnchor.constraint(equalTo: previewImageView.centerXAnchor),
+            pdfLoadingIndicator.centerYAnchor.constraint(equalTo: previewImageView.centerYAnchor),
 
             pdfErrorLabel.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             pdfErrorLabel.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
@@ -409,11 +433,14 @@ class DiscoverSongDetailViewController: UIViewController {
             return
         }
 
+        sheetLoadTask?.cancel()
         pdfLoadingIndicator.startAnimating()
-        pdfView.isHidden       = true
+        previewImageView.image = nil
+        previewImageView.isHidden = true
         pdfErrorLabel.isHidden = true
 
-        Task {
+        sheetLoadTask = Task { [weak self] in
+            guard let self else { return }
             // 1. Fetch PDF (labeled or original)
             let pdfPaths = [
                 ("sheet_data", "discover/\(sheetId.uuidString)/labeled.pdf"),
@@ -424,14 +451,19 @@ class DiscoverSongDetailViewController: UIViewController {
 
             var pdfFound = false
             for (bucket, path) in pdfPaths {
+                guard !Task.isCancelled else {
+                    await MainActor.run { self.sheetLoadTask = nil }
+                    return
+                }
+
                 guard let url = try? await SupabaseManager.shared.client.storage
                     .from(bucket)
                     .createSignedURL(path: path, expiresIn: 3600) else { continue }
                 if let (data, resp) = try? await URLSession.shared.data(from: url),
                    (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
-                   let doc = PDFDocument(data: data), doc.pageCount > 0 {
+                   let previewImage = Self.renderPDFPreviewImage(from: data) {
                     await MainActor.run {
-                        self.renderPDF(doc)
+                        self.renderPDF(data: data, previewImage: previewImage)
                         pdfFound = true
                     }
                     break
@@ -449,6 +481,11 @@ class DiscoverSongDetailViewController: UIViewController {
             ]
 
             for (bucket, path) in jsonPaths {
+                guard !Task.isCancelled else {
+                    await MainActor.run { self.sheetLoadTask = nil }
+                    return
+                }
+
                 guard let url = try? await SupabaseManager.shared.client.storage
                     .from(bucket)
                     .createSignedURL(path: path, expiresIn: 3600) else { continue }
@@ -460,21 +497,26 @@ class DiscoverSongDetailViewController: UIViewController {
                     break
                 }
             }
+
+            await MainActor.run {
+                self.sheetLoadTask = nil
+            }
         }
     }
 
-    private func renderPDF(_ doc: PDFDocument) {
-        loadedPDFDocument = doc
-        pdfView.document  = doc
-        pdfView.isHidden  = false
-        pdfView.layoutIfNeeded()
-        if let p = doc.page(at: 0) { pdfView.go(to: p) }
+    private func renderPDF(data: Data, previewImage: UIImage) {
+        loadedPDFData = data
+        previewImageView.image = previewImage
+        previewImageView.isHidden = false
         pdfLoadingIndicator.stopAnimating()
     }
 
     @objc private func didTapPDFView() {
-        guard let doc = loadedPDFDocument else { return }
+        guard let pdfData = loadedPDFData,
+              let doc = autoreleasepool(invoking: { PDFDocument(data: pdfData) }),
+              doc.pageCount > 0 else { return }
         let vc = MaximizeUploadPageViewController()
+        vc.pdfData = pdfData
         vc.pdfDocument = doc
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
@@ -482,7 +524,64 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func showPDFError() {
         pdfLoadingIndicator.stopAnimating()
-        pdfView.isHidden       = true
+        previewImageView.image = nil
+        previewImageView.isHidden = true
         pdfErrorLabel.isHidden = false
+    }
+
+    private func cancelPendingTasks() {
+        recentPlayTask?.cancel()
+        recentPlayTask = nil
+
+        sheetLoadTask?.cancel()
+        sheetLoadTask = nil
+    }
+
+    private func releasePDFResources() {
+        pdfLoadingIndicator.stopAnimating()
+        previewImageView.image = nil
+        previewImageView.isHidden = true
+        loadedPDFData = nil
+        sheetMusicJSON = nil
+    }
+
+    private static func renderPDFPreviewImage(from data: Data, maxDimension: CGFloat = 1024) -> UIImage? {
+        autoreleasepool {
+            guard let provider = CGDataProvider(data: data as CFData),
+                  let document = CGPDFDocument(provider),
+                  let page = document.page(at: 1) else {
+                return nil
+            }
+
+            let pageRect = page.getBoxRect(.mediaBox)
+            guard pageRect.width > 0, pageRect.height > 0 else { return nil }
+
+            let scale = min(maxDimension / max(pageRect.width, pageRect.height), 2.0)
+            let width = max(Int(pageRect.width * scale), 1)
+            let height = max(Int(pageRect.height * scale), 1)
+            let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
+
+            guard let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+                return nil
+            }
+
+            context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+            context.fill(targetRect)
+            context.saveGState()
+            context.concatenate(page.getDrawingTransform(.mediaBox, rect: targetRect, rotate: 0, preserveAspectRatio: true))
+            context.drawPDFPage(page)
+            context.restoreGState()
+
+            guard let cgImage = context.makeImage() else { return nil }
+            return UIImage(cgImage: cgImage)
+        }
     }
 }

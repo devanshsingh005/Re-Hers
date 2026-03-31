@@ -56,6 +56,14 @@ final class AnimationViewController: UIViewController {
         self.hidesBottomBarWhenPushed = true
     }
 
+    deinit {
+        teardownPlaybackResources(reset: true)
+        navBar.onBackTap = nil
+        navBar.onTempoChanged = nil
+        navBar.onMenuTap = nil
+        sheetCard.onSeekProgress = nil
+    }
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -101,7 +109,7 @@ final class AnimationViewController: UIViewController {
         super.viewWillDisappear(animated)
         tabBarController?.tabBar.isHidden = false
         navigationController?.setNavigationBarHidden(false, animated: false)
-        stopPlayback(reset: true)
+        teardownPlaybackResources(reset: true)
     }
 
     // MARK: - Fix 1: Force Landscape
@@ -302,6 +310,15 @@ final class AnimationViewController: UIViewController {
         overlay.setPlaying(false)
         setOverlay(visible: true, animated: true)
         overlayHideTimer?.invalidate(); overlayHideTimer = nil
+    }
+
+    private func teardownPlaybackResources(reset: Bool) {
+        stopPlayback(reset: reset)
+        displayLink?.invalidate()
+        displayLink = nil
+        overlayHideTimer?.invalidate()
+        overlayHideTimer = nil
+        pianoVC.resetKeyboard()
     }
 
     // MARK: - Fix 4: Seek (backward and forward)

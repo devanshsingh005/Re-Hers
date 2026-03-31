@@ -41,6 +41,7 @@ class WaveView: UIView {
 
     deinit {
         displayLink?.invalidate()
+        displayLink = nil
     }
 
     func setWaveColor(_ color: UIColor) {
@@ -85,4 +86,3 @@ class WaveView: UIView {
         path.stroke()
     }
 }
-

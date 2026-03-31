@@ -60,6 +60,7 @@ final class UserProfileViewController: UIViewController {
     // Data
     private var currentProfile: Profile?
     private var stats = ProfileStats()
+    private weak var activeImagePicker: UIImagePickerController?
 
     // MARK: - Init
     init() {
@@ -104,7 +105,10 @@ final class UserProfileViewController: UIViewController {
         super.viewWillDisappear(animated)
         // Post notification so Home nav bar can refresh profile image when user navigates back
         if isMovingFromParent {
+            activeImagePicker?.delegate = nil
+            activeImagePicker = nil
             NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
+            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
         }
     }
 
@@ -836,30 +840,44 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     private func openPhotoLibrary() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         picker.delegate = self
+        activeImagePicker = picker
         present(picker, animated: true)
     }
 
     private func openCamera() {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         picker.delegate = self
+        activeImagePicker = picker
         present(picker, animated: true)
+    }
+
+    private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {
+        activeImagePicker = nil
+        picker.delegate = nil
+        guard picker.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        picker.dismiss(animated: true, completion: completion)
     }
 
     func imagePickerController(_ picker: UIImagePickerController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-        picker.dismiss(animated: true)
-        guard let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage else { return }
-        profileImageView.image = image
-        profileImageView.contentMode = .scaleAspectFill
-        uploadAvatarImage(image)
+        let selectedImage = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+        dismissImagePicker(picker) { [weak self] in
+            guard let self, let image = selectedImage else { return }
+            self.profileImageView.image = image
+            self.profileImageView.contentMode = .scaleAspectFill
+            self.uploadAvatarImage(image)
+        }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        picker.dismiss(animated: true)
+        dismissImagePicker(picker)
     }
 
     func uploadAvatarImage(_ image: UIImage) {

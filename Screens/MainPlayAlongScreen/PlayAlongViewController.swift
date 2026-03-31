@@ -22,6 +22,7 @@ final class PlayAlongViewController: UIViewController {
     private let kPianoH: CGFloat = 136
     private let kNavH:   CGFloat = 54
     private var navBarTopConstraint: NSLayoutConstraint?
+    private var hasAudioPlaybackSession = false
 
     // MARK: - Initializer
     init() {
@@ -38,6 +39,7 @@ final class PlayAlongViewController: UIViewController {
         print("🧹 Cleaning up PlayAlong session")
         pitchDetector.stopListening()
         AudioEngineManager.shared.stopAllNotes()
+        releaseAudioPlaybackSession()
     }
 
     // MARK: - Lifecycle
@@ -57,7 +59,6 @@ final class PlayAlongViewController: UIViewController {
         pitchDetector.delegate = self
         
         pianoKeyboard.mode = .playAlong
-        AudioEngineManager.shared.startEngine()
         
         loadSheetData()
     }
@@ -76,6 +77,7 @@ final class PlayAlongViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = true
+        acquireAudioPlaybackSessionIfNeeded()
         pitchDetector.startListening()
         forceLandscape()
     }
@@ -83,8 +85,21 @@ final class PlayAlongViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         AudioEngineManager.shared.stopAllNotes()
+        releaseAudioPlaybackSession()
         pitchDetector.stopListening()
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = false
+    }
+
+    private func acquireAudioPlaybackSessionIfNeeded() {
+        guard !hasAudioPlaybackSession else { return }
+        AudioEngineManager.shared.acquirePlaybackSession()
+        hasAudioPlaybackSession = true
+    }
+
+    private func releaseAudioPlaybackSession() {
+        guard hasAudioPlaybackSession else { return }
+        AudioEngineManager.shared.releasePlaybackSession()
+        hasAudioPlaybackSession = false
     }
 
     // MARK: - Orientation
