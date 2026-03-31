@@ -11,7 +11,6 @@ internal import PostgREST
 class AllUploadsViewController: UIViewController {
 
     // MARK: - UI
-    private let navBar           = TopNavBar.make(title: "Recents")
     private let scrollView       = UIScrollView()
     private let contentStack     = UIStackView()
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
@@ -23,7 +22,7 @@ class AllUploadsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.App.screenBackground
-        navigationController?.navigationBar.isHidden = true
+        navigationController?.setNavigationBarHidden(false, animated: false)
         setupNavBar()
         setupScrollView()
         setupLoadingIndicator()
@@ -37,19 +36,16 @@ class AllUploadsViewController: UIViewController {
 
     // MARK: - NavBar
     private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        navBar.isBackButtonVisible = true
-        navBar.isStreakVisible     = false
-        navBar.isChordIconVisible  = false
-        navBar.isProfileVisible    = true
-        navBar.isWelcomeTextHidden = true
-        navBar.backAction = { [weak self] in self?.navigationController?.popViewController(animated: true) }
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+        _ = NavigationBarHelper.configureInlineNavigationBar(
+            for: self,
+            title: "Recents",
+            subtitle: "Recent uploads",
+            backAction: #selector(handleBack)
+        )
+        navigationItem.rightBarButtonItems = NavigationBarHelper.createNativeRightBarButtonItems(
+            target: self,
+            profileAction: #selector(handleProfile)
+        )
     }
 
     // MARK: - Scroll
@@ -63,7 +59,7 @@ class AllUploadsViewController: UIViewController {
         contentStack.spacing = 10
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 18),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -377,6 +373,14 @@ class AllUploadsViewController: UIViewController {
                 value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
             }
         }
+    }
+
+    @objc private func handleBack() {
+        navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func handleProfile() {
+        navigationController?.pushViewController(UserProfileViewController(), animated: true)
     }
 }
 

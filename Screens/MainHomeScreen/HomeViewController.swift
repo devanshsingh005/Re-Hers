@@ -48,14 +48,26 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         fetchRecents()
         fetchProfileData()
         
-        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: NSNotification.Name("TopNavBarProfileDidUpdate"), object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleProfileUpdate),
+            name: NavigationBarHelper.profileDidUpdateNotification,
+            object: nil
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        updateNavBackgroundAppearance()
+        syncNavBarAlpha()
         startPracticeTimer()
         fetchRecents()
         fetchTopSong()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        syncNavBarAlpha()
     }
 
     override func viewWillDisappear(_ animated: Bool) {

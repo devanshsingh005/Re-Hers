@@ -104,7 +104,7 @@ final class UserProfileViewController: UIViewController {
         super.viewWillDisappear(animated)
         // Post notification so Home nav bar can refresh profile image when user navigates back
         if isMovingFromParent {
-            NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+            NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
         }
     }
 
@@ -796,7 +796,7 @@ final class UserProfileViewController: UIViewController {
                 await MainActor.run {
                     nameLabel.text = fullName.isEmpty ? "No Name" : fullName
                     usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
-                    NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+                    NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
                 }
             } catch {
                 await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
@@ -886,7 +886,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     total_study_seconds: self.currentProfile?.total_study_seconds
                 )
                 await MainActor.run {
-                    NotificationCenter.default.post(name: TopNavBar.profileDidUpdateNotification, object: nil)
+                    NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
                     showAlert(title: "Success", message: "Photo updated!")
                 }
             } catch {

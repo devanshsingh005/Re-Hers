@@ -161,7 +161,12 @@ final class DiscoverViewController: UIViewController {
             }
         }
         
-        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: TopNavBar.profileDidUpdateNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleProfileUpdate),
+            name: NavigationBarHelper.profileDidUpdateNotification,
+            object: nil
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -200,44 +205,25 @@ final class DiscoverViewController: UIViewController {
     // MARK: NavBar
 
     private func setupNavBar() {
-        navigationController?.navigationBar.prefersLargeTitles = false
-        navigationItem.largeTitleDisplayMode = .never
-        
-        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Discover", subtitle: "Find new music")
-        headerStack.alpha = 0
-        self.inlineSubtitleLabel = subTitle
-        navigationItem.titleView = headerStack
+        inlineSubtitleLabel = NavigationBarHelper.configureInlineNavigationBar(
+            for: self,
+            title: "Discover",
+            subtitle: "Find new music"
+        )
         navigationItem.rightBarButtonItems = nil
     }
 
     private func setupNavBackground() {
-        navBackgroundView.alpha = 0
-        navBackgroundView.isUserInteractionEnabled = false
-        navBackgroundView.contentView.isUserInteractionEnabled = false
-        view.addSubview(navBackgroundView)
-        
-        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
-        navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
-        navBackgroundView.contentView.addSubview(navShadowLayer)
-        
-        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
-        let topPadding = window?.safeAreaInsets.top ?? 0
-        let navHeight: CGFloat = 44 + topPadding
-        
-        navBackgroundView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            navBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
-            navBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
-            
-            navShadowLayer.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
-            navShadowLayer.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
-            navShadowLayer.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
-            navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
-        ])
-        navBackgroundView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
-        navBackgroundView.layer.borderWidth = 0.5
+        NavigationBarHelper.updateNavigationBackgroundAppearance(
+            navBackgroundView,
+            shadowView: navShadowLayer,
+            traitCollection: traitCollection
+        )
+        NavigationBarHelper.installNavigationBackground(
+            navBackgroundView,
+            shadowView: navShadowLayer,
+            in: view
+        )
     }
 
     private func setupCustomLargeHeader() -> UIView {
@@ -647,12 +633,11 @@ final class DiscoverViewController: UIViewController {
     }
 
     private func syncNavBarAlpha() {
-        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
-        let alpha = NavigationBarHelper.calculateNavBarAlpha(offset: offset)
-        
-        navigationItem.titleView?.alpha = alpha
-        navigationItem.titleView?.isHidden = (alpha == 0)
-        navBackgroundView.alpha = alpha
+        NavigationBarHelper.syncNavigationBarAlpha(
+            scrollView: scrollView,
+            navigationItem: navigationItem,
+            navBackgroundView: navBackgroundView
+        )
     }
 }
 

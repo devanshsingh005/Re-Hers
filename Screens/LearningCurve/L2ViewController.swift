@@ -431,50 +431,27 @@ class LessonDetailViewController: UIViewController {
     }
     
     private func setupNavBar() {
-        navigationController?.navigationBar.prefersLargeTitles = false
-        navigationItem.largeTitleDisplayMode = .never
-
-        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Lesson", subtitle: lesson.title)
-        headerStack.alpha = 0
-        _ = subTitle
-        navigationItem.titleView = headerStack
-
-        let backBtn = NavigationBarHelper.createCustomBackButton(
-            target: self, action: #selector(didTapBack)
+        _ = NavigationBarHelper.configureInlineNavigationBar(
+            for: self,
+            title: "Lesson",
+            subtitle: lesson.title,
+            backAction: #selector(didTapBack)
         )
-        navigationItem.leftBarButtonItem = backBtn
         
         navigationItem.rightBarButtonItems = nil
     }
 
     private func setupNavBackground() {
-        navBackgroundView.alpha = 0
-        navBackgroundView.isUserInteractionEnabled = false
-        navBackgroundView.contentView.isUserInteractionEnabled = false
-        view.addSubview(navBackgroundView)
-        
-        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
-        navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
-        navBackgroundView.contentView.addSubview(navShadowLayer)
-        
-        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
-        let topPadding = window?.safeAreaInsets.top ?? 0
-        let navHeight: CGFloat = 44 + topPadding
-        
-        navBackgroundView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            navBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
-            navBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
-            
-            navShadowLayer.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
-            navShadowLayer.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
-            navShadowLayer.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
-            navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
-        ])
-        navBackgroundView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
-        navBackgroundView.layer.borderWidth = 0.5
+        NavigationBarHelper.updateNavigationBackgroundAppearance(
+            navBackgroundView,
+            shadowView: navShadowLayer,
+            traitCollection: traitCollection
+        )
+        NavigationBarHelper.installNavigationBackground(
+            navBackgroundView,
+            shadowView: navShadowLayer,
+            in: view
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -2416,12 +2393,11 @@ extension LessonDetailViewController: UIScrollViewDelegate {
     }
     
     private func syncNavBarAlpha() {
-        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
-        let alpha = NavigationBarHelper.calculateNavBarAlpha(offset: offset)
-        
-        navigationItem.titleView?.alpha = alpha
-        navigationItem.titleView?.isHidden = (alpha == 0)
-        navBackgroundView.alpha = alpha
+        NavigationBarHelper.syncNavigationBarAlpha(
+            scrollView: scrollView,
+            navigationItem: navigationItem,
+            navBackgroundView: navBackgroundView
+        )
         
         // Fixed: only largeProfileButton scrolls away, no small one in navbar
     }

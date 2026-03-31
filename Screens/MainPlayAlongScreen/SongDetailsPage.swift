@@ -18,8 +18,6 @@ class PlayAlongSongDetailViewController: UIViewController {
     private let contentView = UIView()
     
     // MARK: - UI Elements
-    private let navBar = TopNavBar.make(title: "")
-    
     private let albumArtBackgroundContainer = UIView()
     private let albumArtBackgroundView = UIImageView()
     private let albumArtCardView = UIImageView()
@@ -47,7 +45,7 @@ class PlayAlongSongDetailViewController: UIViewController {
         super.viewDidLoad()
         
         view.backgroundColor = ComponentColors.SongDetailScreen.background
-        navigationController?.navigationBar.isHidden = true
+        navigationController?.setNavigationBarHidden(false, animated: false)
         
         setupUI()
         setupScroll()
@@ -71,38 +69,21 @@ class PlayAlongSongDetailViewController: UIViewController {
     // MARK: - Navbar UI
     private func setupUI() {
         view.backgroundColor = ComponentColors.SongDetailScreen.background
-        navigationController?.navigationBar.isHidden = true
         setupNavBar()
     }
     
     private func setupNavBar() {
-        view.addSubview(navBar)
-        navBar.translatesAutoresizingMaskIntoConstraints = false
-        
-        navBar.isBackButtonVisible = true
-        navBar.isChordIconVisible = true
-        navBar.isProfileVisible = true
-        navBar.isStreakVisible = false
-        navBar.isWelcomeTextHidden = true
-        navBar.setTitle("")
-        
-        navBar.chordAction = { [weak self] in
-            let vc = ChordRecognitionViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
-        }
-        navBar.profileAction = { [weak self] in
-            let vc = UserProfileViewController()
-            self?.navigationController?.pushViewController(vc, animated: true)
-        }
-        navBar.backAction = { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
-        }
-        
-        NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10)
-        ])
+        _ = NavigationBarHelper.configureInlineNavigationBar(
+            for: self,
+            title: passedSongTitle ?? "Song",
+            subtitle: passedArtist ?? "Play Along",
+            backAction: #selector(handleBack)
+        )
+        navigationItem.rightBarButtonItems = NavigationBarHelper.createNativeRightBarButtonItems(
+            target: self,
+            profileAction: #selector(handleProfile),
+            chordAction: #selector(handleChord)
+        )
     }
     
     // MARK: - Scroll View Setup
@@ -115,7 +96,7 @@ class PlayAlongSongDetailViewController: UIViewController {
         mainScrollView.addSubview(contentView)
         
         NSLayoutConstraint.activate([
-            mainScrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor),
+            mainScrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             mainScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mainScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             mainScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -333,6 +314,17 @@ class PlayAlongSongDetailViewController: UIViewController {
         bookmarkButton.tintColor = bookmarked ? ComponentColors.SongCard.chevronIcon : .systemYellow
         bookmarkButton.setImage(UIImage(systemName: bookmarked ? "bookmark" : "bookmark.fill"), for: .normal)
     }
-}
 
+    @objc private func handleBack() {
+        navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func handleChord() {
+        navigationController?.pushViewController(ChordRecognitionViewController(), animated: true)
+    }
+
+    @objc private func handleProfile() {
+        navigationController?.pushViewController(UserProfileViewController(), animated: true)
+    }
+}
 

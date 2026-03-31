@@ -70,7 +70,12 @@ class UploadScreen: UIViewController {
         loadRecentUploads()
         fetchProfileData()
         
-        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileUpdate), name: TopNavBar.profileDidUpdateNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleProfileUpdate),
+            name: NavigationBarHelper.profileDidUpdateNotification,
+            object: nil
+        )
     }
 
     @objc private func handleProfileUpdate() {
@@ -86,49 +91,26 @@ class UploadScreen: UIViewController {
 
     // MARK: - NavBar
     private func setupNavBar() {
-        navigationItem.title = "" 
-        navigationController?.navigationBar.prefersLargeTitles = false
-        navigationItem.largeTitleDisplayMode = .never
-        
-        let (headerStack, subTitle) = NavigationBarHelper.createInlineTitleView(title: "Upload", subtitle: "Upload a new song")
-        self.inlineSubtitleLabel = subTitle
-        navigationItem.titleView = headerStack
+        inlineSubtitleLabel = NavigationBarHelper.configureInlineNavigationBar(
+            for: self,
+            title: "Upload",
+            subtitle: "Upload a new song"
+        )
         
         navigationItem.rightBarButtonItems = nil
     }
 
     private func setupNavBackground() {
-        navBackgroundView.alpha = 0
-        navBackgroundView.isUserInteractionEnabled = false // Allow touches through to header
-        navBackgroundView.contentView.isUserInteractionEnabled = false
-        view.addSubview(navBackgroundView)
-        
-        navShadowLayer.backgroundColor = UIColor.black.withAlphaComponent(0.15)
-        navShadowLayer.translatesAutoresizingMaskIntoConstraints = false
-        navBackgroundView.contentView.addSubview(navShadowLayer)
-        
-        let window = view.window?.windowScene?.keyWindow ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
-        let topPadding = window?.safeAreaInsets.top ?? 0
-        let navHeight: CGFloat = 44 + topPadding
-        
-        NSLayoutConstraint.activate([
-            navBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
-            navBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
-            
-            navShadowLayer.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
-            navShadowLayer.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
-            navShadowLayer.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
-            navShadowLayer.heightAnchor.constraint(equalToConstant: 0.33)
-        ])
-        
-        applyLiquidGlass(to: navBackgroundView)
-    }
-
-    private func applyLiquidGlass(to blurView: UIVisualEffectView) {
-        blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
-        blurView.layer.borderWidth = 0.5
+        NavigationBarHelper.updateNavigationBackgroundAppearance(
+            navBackgroundView,
+            shadowView: navShadowLayer,
+            traitCollection: traitCollection
+        )
+        NavigationBarHelper.installNavigationBackground(
+            navBackgroundView,
+            shadowView: navShadowLayer,
+            in: view
+        )
     }
 
     private func setupCustomLargeHeader() {
@@ -248,12 +230,11 @@ class UploadScreen: UIViewController {
     }
 
     private func syncNavBarAlpha() {
-        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
-        let alpha = NavigationBarHelper.calculateNavBarAlpha(offset: offset)
-        
-        navigationItem.titleView?.alpha = alpha
-        navigationItem.titleView?.isHidden = (alpha == 0)
-        navBackgroundView.alpha = alpha
+        NavigationBarHelper.syncNavigationBarAlpha(
+            scrollView: scrollView,
+            navigationItem: navigationItem,
+            navBackgroundView: navBackgroundView
+        )
     }
 
     @objc private func handleProfileTap() {

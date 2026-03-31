@@ -3,6 +3,7 @@ import Supabase
 import Auth
 
 public final class NavigationBarHelper {
+    public static let profileDidUpdateNotification = Notification.Name("NavigationBarProfileDidUpdate")
     
     // Minimal profile model
     private struct NavbarProfile: Decodable {
@@ -129,6 +130,41 @@ public final class NavigationBarHelper {
         return UIBarButtonItem(customView: stack)
     }
 
+    public static func createNativeBackButton(target: Any?, action: Selector) -> UIBarButtonItem {
+        let image = UIImage(systemName: "chevron.backward")
+        return UIBarButtonItem(image: image, style: .plain, target: target, action: action)
+    }
+
+    public static func createNativeRightBarButtonItems(
+        target: Any?,
+        profileAction: Selector? = nil,
+        chordAction: Selector? = nil
+    ) -> [UIBarButtonItem] {
+        var items: [UIBarButtonItem] = []
+
+        if let chordAction {
+            let chordItem = UIBarButtonItem(
+                image: UIImage(systemName: "opticaldisc"),
+                style: .plain,
+                target: target,
+                action: chordAction
+            )
+            items.append(chordItem)
+        }
+
+        if let profileAction {
+            let profileItem = UIBarButtonItem(
+                image: UIImage(systemName: "person.crop.circle"),
+                style: .plain,
+                target: target,
+                action: profileAction
+            )
+            items.append(profileItem)
+        }
+
+        return items
+    }
+
     /// A specialized button that maintains its circular shape and premium styling.
     private class PremiumBackButton: UIButton {
         override init(frame: CGRect) {
@@ -192,6 +228,122 @@ public final class NavigationBarHelper {
                 completion?()
             }
         }
+    }
+
+    public static func applyNativeNavigationBarAppearance(to navigationController: UINavigationController?) {
+        guard let navigationBar = navigationController?.navigationBar else { return }
+
+        let collapsedAppearance = UINavigationBarAppearance()
+        collapsedAppearance.configureWithTransparentBackground()
+        collapsedAppearance.backgroundEffect = nil
+        collapsedAppearance.backgroundColor = .clear
+        collapsedAppearance.shadowColor = .clear
+        collapsedAppearance.titleTextAttributes = [
+            .foregroundColor: ComponentColors.NavBar.title,
+            .font: UIFont.systemFont(ofSize: 17, weight: .semibold)
+        ]
+
+        let scrollEdgeAppearance = UINavigationBarAppearance()
+        scrollEdgeAppearance.configureWithTransparentBackground()
+        scrollEdgeAppearance.backgroundEffect = nil
+        scrollEdgeAppearance.backgroundColor = .clear
+        scrollEdgeAppearance.shadowColor = .clear
+        scrollEdgeAppearance.titleTextAttributes = collapsedAppearance.titleTextAttributes
+
+        navigationBar.standardAppearance = collapsedAppearance
+        navigationBar.compactAppearance = collapsedAppearance
+        navigationBar.scrollEdgeAppearance = scrollEdgeAppearance
+        navigationBar.tintColor = ComponentColors.NavBar.title
+        navigationBar.isTranslucent = true
+    }
+
+    public static func configureInlineNavigationBar(
+        for viewController: UIViewController,
+        title: String,
+        subtitle: String,
+        backAction: Selector? = nil
+    ) -> UILabel {
+        viewController.navigationItem.title = ""
+        viewController.navigationController?.navigationBar.prefersLargeTitles = false
+        viewController.navigationItem.largeTitleDisplayMode = .never
+
+        let (headerStack, subtitleLabel) = createInlineTitleView(title: title, subtitle: subtitle)
+        headerStack.alpha = 0
+        viewController.navigationItem.titleView = headerStack
+
+        if let backAction {
+            viewController.navigationItem.leftBarButtonItem = createNativeBackButton(
+                target: viewController,
+                action: backAction
+            )
+        } else {
+            viewController.navigationItem.leftBarButtonItem = nil
+        }
+
+        applyNativeNavigationBarAppearance(to: viewController.navigationController)
+        return subtitleLabel
+    }
+
+    public static func updateNavigationBackgroundAppearance(
+        _ navBackgroundView: UIVisualEffectView,
+        shadowView: UIView,
+        traitCollection: UITraitCollection
+    ) {
+        navBackgroundView.effect = nil
+        navBackgroundView.backgroundColor = ComponentColors.NavBar.background.withAlphaComponent(
+            traitCollection.userInterfaceStyle == .dark ? 0.18 : 0.22
+        )
+        navBackgroundView.layer.borderColor = UIColor.clear.cgColor
+        navBackgroundView.layer.borderWidth = 0
+        shadowView.backgroundColor = ComponentColors.NavBar.separator.withAlphaComponent(0.08)
+    }
+
+    public static func installNavigationBackground(
+        _ navBackgroundView: UIVisualEffectView,
+        shadowView: UIView,
+        in containerView: UIView
+    ) {
+        navBackgroundView.alpha = 0
+        navBackgroundView.isUserInteractionEnabled = false
+        navBackgroundView.contentView.isUserInteractionEnabled = false
+        navBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        shadowView.translatesAutoresizingMaskIntoConstraints = false
+
+        if navBackgroundView.superview == nil {
+            containerView.addSubview(navBackgroundView)
+        }
+        if shadowView.superview == nil {
+            navBackgroundView.contentView.addSubview(shadowView)
+        }
+
+        let window = containerView.window?.windowScene?.keyWindow
+            ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        let topPadding = window?.safeAreaInsets.top ?? 0
+        let navHeight: CGFloat = 44 + topPadding
+
+        NSLayoutConstraint.activate([
+            navBackgroundView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            navBackgroundView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            navBackgroundView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            navBackgroundView.heightAnchor.constraint(equalToConstant: navHeight),
+
+            shadowView.leadingAnchor.constraint(equalTo: navBackgroundView.leadingAnchor),
+            shadowView.trailingAnchor.constraint(equalTo: navBackgroundView.trailingAnchor),
+            shadowView.bottomAnchor.constraint(equalTo: navBackgroundView.bottomAnchor),
+            shadowView.heightAnchor.constraint(equalToConstant: 0.33)
+        ])
+    }
+
+    public static func syncNavigationBarAlpha(
+        scrollView: UIScrollView,
+        navigationItem: UINavigationItem,
+        navBackgroundView: UIVisualEffectView
+    ) {
+        let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        let alpha = calculateNavBarAlpha(offset: offset)
+        navigationItem.titleView?.alpha = alpha
+        navigationItem.titleView?.isHidden = (alpha == 0)
+        navBackgroundView.alpha = alpha * 0.45
     }
     
     public static func fetchWelcomeName(completion: @escaping (String) -> Void) {
