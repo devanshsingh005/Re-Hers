@@ -235,6 +235,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             self?.tempoMultiplier = tempo
         }
         }
+        }
     }
 
     // MARK: - Chord Loading
@@ -478,6 +479,10 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         let exactTick = currentTick + (nextTick - currentTick) * fraction
         
         sheetCard.updateToTick(exactTick)
+        
+        if totalDuration > 0 {
+            navBar.updateProgress(Float(elapsedTotal / totalDuration))
+        }
 
         // Safely determine global percentage across the whole song
         if totalDuration > 0 {
