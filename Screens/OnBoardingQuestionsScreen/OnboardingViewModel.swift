@@ -45,8 +45,36 @@ class OnboardingViewModel: ObservableObject {
         "Intermediate":      "intermediate",
         "Advanced":          "advanced"
     ]
+
+    private func generateRandomIcon() -> String {
+        "icon_\(Int.random(in: 1...9))"
+    }
+
+    @MainActor
+    private func completeGuestOnboarding(level: String, genres: [String], mins: Int) {
+        let randomIcon = generateRandomIcon()
+
+        GuestSessionManager.shared.saveGuestOnboardingData([
+            "level": level,
+            "genres": genres,
+            "practice_mins": mins,
+            "avatar_url": randomIcon
+        ])
+        UserDefaults.standard.set(true, forKey: GuestSessionManager.shared.kHasCompletedOnboarding)
+        navigateToHome()
+    }
     
     func skipOnboarding(userId: String? = nil) {
+        if GuestSessionManager.shared.isGuest() {
+            let level = selectedLevel ?? "skipped"
+            let genres = selectedGenres.isEmpty ? ["skipped"] : Array(selectedGenres)
+
+            Task { @MainActor in
+                completeGuestOnboarding(level: level, genres: genres, mins: 10)
+            }
+            return
+        }
+
         if let userId = userId {
             Task {
                 // Use actual selections even on skip if they exist
@@ -67,7 +95,7 @@ class OnboardingViewModel: ObservableObject {
     
     private func finalizeOnboarding(userId: String, level: String, genres: [String], mins: Int) async {
         let client = SupabaseManager.shared.client
-        let randomIcon = "icon_\(Int.random(in: 1...9))"
+        let randomIcon = generateRandomIcon()
         
         let dbLevel = OnboardingViewModel.levelDBMap[level] ?? level
         
@@ -118,6 +146,20 @@ class OnboardingViewModel: ObservableObject {
     }
 
     func saveToSupabase(userId: String, completion: @escaping (Bool) -> Void) {
+        if GuestSessionManager.shared.isGuest() {
+            let level = selectedLevel ?? "Absolute beginner"
+            let genres = Array(selectedGenres)
+
+            Task { @MainActor in
+                self.isSaving = true
+                self.errorMessage = nil
+                self.completeGuestOnboarding(level: level, genres: genres, mins: self.practiceMins)
+                self.isSaving = false
+                completion(true)
+            }
+            return
+        }
+
         isSaving = true
         errorMessage = nil
 

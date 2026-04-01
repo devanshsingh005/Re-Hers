@@ -127,12 +127,16 @@ struct OnboardingQuestion3View: View {
                 .disabled(viewModel.isSaving)
                 
                 Button("Skip") {
-                    Task {
-                        do {
-                            let session = try await SupabaseManager.shared.client.auth.session
-                            viewModel.skipOnboarding(userId: session.user.id.uuidString)
-                        } catch {
-                            viewModel.skipOnboarding() // Fallback to non-persistent if auth fails
+                    if GuestSessionManager.shared.isGuest() {
+                        viewModel.skipOnboarding()
+                    } else {
+                        Task {
+                            do {
+                                let session = try await SupabaseManager.shared.client.auth.session
+                                viewModel.skipOnboarding(userId: session.user.id.uuidString)
+                            } catch {
+                                viewModel.skipOnboarding() // Fallback to non-persistent if auth fails
+                            }
                         }
                     }
                 }
@@ -167,6 +171,16 @@ struct OnboardingQuestion3View: View {
 
     // MARK: - Save & navigate
     func submit() async {
+        if GuestSessionManager.shared.isGuest() {
+            await MainActor.run {
+                viewModel.practiceMins = currentMins
+                viewModel.saveToSupabase(userId: "") { _ in
+                    // Guest completion is handled inside the view model.
+                }
+            }
+            return
+        }
+
         let client = SupabaseManager.shared.client
         do {
             let session = try await client.auth.session

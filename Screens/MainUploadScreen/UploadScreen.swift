@@ -49,6 +49,8 @@ class UploadScreen: UIViewController {
     private var recentUploadsTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
+    private var hasQueuedGuestGatePresentation = false
+    private var isPresentingGuestGate = false
 
     // MARK: - Supabase
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
@@ -99,6 +101,7 @@ class UploadScreen: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        guard !redirectGuestToHomeIfNeeded() else { return }
         loadRecentUploads()
     }
 
@@ -113,7 +116,77 @@ class UploadScreen: UIViewController {
         }
     }
 
-    func startUploadFlow() { presentVisionKitScanner() }
+    func startUploadFlow() {
+        guard !GuestSessionManager.shared.isGuest() else { return }
+        presentVisionKitScanner()
+    }
+
+    private func redirectGuestToHomeIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest() else {
+            hasQueuedGuestGatePresentation = false
+            isPresentingGuestGate = false
+            return false
+        }
+
+        guard let tabBarController, tabBarController.selectedIndex == 1 else { return false }
+        guard !hasQueuedGuestGatePresentation, !isPresentingGuestGate else { return true }
+
+        hasQueuedGuestGatePresentation = true
+        tabBarController.selectedIndex = 0
+
+        DispatchQueue.main.async { [weak self] in
+            self?.presentGuestGateIfNeeded()
+        }
+
+        return true
+    }
+
+    private func presentGuestGateIfNeeded() {
+        guard GuestSessionManager.shared.isGuest() else {
+            hasQueuedGuestGatePresentation = false
+            isPresentingGuestGate = false
+            return
+        }
+
+        guard hasQueuedGuestGatePresentation, !isPresentingGuestGate else { return }
+        guard let presenter = guestGatePresenter(), presenter.presentedViewController == nil else { return }
+
+        let gateModal = GuestFeatureGateModal(
+            featureName: "sheet music upload",
+            onSignUp: { [weak self] in
+                self?.scheduleAuthPresentation(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.scheduleAuthPresentation(mode: .logIn)
+            }
+        )
+
+        hasQueuedGuestGatePresentation = false
+        isPresentingGuestGate = true
+        gateModal.presentationController?.delegate = self
+        presenter.present(gateModal, animated: true)
+    }
+
+    private func scheduleAuthPresentation(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, let presenter = self.guestGatePresenter(), presenter.presentedViewController == nil else { return }
+
+            self.isPresentingGuestGate = false
+
+            let authViewController = AuthViewController(initialMode: mode)
+            let authNavigationController = UINavigationController(rootViewController: authViewController)
+            authNavigationController.modalPresentationStyle = .fullScreen
+            presenter.present(authNavigationController, animated: true)
+        }
+    }
+
+    private func guestGatePresenter() -> UIViewController? {
+        if let navigationController = tabBarController?.selectedViewController as? UINavigationController {
+            return navigationController.visibleViewController ?? navigationController.topViewController ?? navigationController
+        }
+
+        return tabBarController?.selectedViewController ?? tabBarController
+    }
 
     // MARK: - NavBar
     private func setupNavBar() {
@@ -1824,5 +1897,12 @@ extension UploadScreen: UIScrollViewDelegate {
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
             largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
         }
+    }
+}
+
+extension UploadScreen: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        hasQueuedGuestGatePresentation = false
+        isPresentingGuestGate = false
     }
 }

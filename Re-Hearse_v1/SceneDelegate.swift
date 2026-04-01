@@ -36,45 +36,36 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func performAuthRouting() {
-        Task {
-            let client = SupabaseManager.shared.client
-            let session = try? await client.auth.session
-            let hasSession = session != nil
+        let guestSessionManager = GuestSessionManager.shared
 
-            if hasSession, let validSession = session {
-                do {
-                    let userId = validSession.user.id.uuidString
+        if guestSessionManager.isAuthenticated() {
+            showMainApp()
+            return
+        }
 
-                    // Check onboarding status
-                    struct OnboardingRow: Decodable {
-                        let genres: [String]?
-                    }
+        _ = guestSessionManager.getOrCreateGuestID()
 
-                    let row: OnboardingRow? = try? await client
-                        .from("user_onboarding")
-                        .select("genres")
-                        .eq("id", value: userId)
-                        .single()
-                        .execute()
-                        .value
+        routeGuest(to: guestSessionManager.resolveInitialScreen())
+    }
 
-                    await MainActor.run {
-                        if let genres = row?.genres, !genres.isEmpty {
-                            self.showMainApp()
-                        } else {
-                            self.showLoginScreen()
-                        }
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.showLoginScreen()
-                    }
-                }
-            } else {
-                await MainActor.run {
-                    self.showLoginScreen()
-                }
-            }
+    private func routeGuest(to screen: GuestSessionManager.InitialScreen) {
+        switch screen {
+        case .infoCard:
+            showInfoCard()
+        case .onboarding:
+            showOnboarding()
+        case .home:
+            showMainApp()
+        }
+    }
+
+    private func handleInfoCardDismissal() {
+        UserDefaults.standard.set(true, forKey: GuestSessionManager.shared.kHasSeenInfoCard)
+
+        if UserDefaults.standard.bool(forKey: GuestSessionManager.shared.kHasCompletedOnboarding) {
+            showMainApp()
+        } else {
+            showOnboarding()
         }
     }
 
@@ -93,6 +84,28 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func showMainApp() {
         let tabBar = MainTabBarController()
         setRootViewController(tabBar)
+    }
+
+    func showInfoCard() {
+        guard let presenter = window?.rootViewController,
+              presenter.presentedViewController == nil else { return }
+
+        let hostingController = UIHostingController(
+            rootView: RehearsalInfoCardWrapper { [weak self, weak presenter] in
+                presenter?.dismiss(animated: false) {
+                    self?.handleInfoCardDismissal()
+                }
+            }
+        )
+        hostingController.modalPresentationStyle = .overFullScreen
+        hostingController.view.backgroundColor = .clear
+
+        presenter.present(hostingController, animated: false)
+    }
+
+    func showOnboarding() {
+        let hostingController = UIHostingController(rootView: OnboardingFlowRoot())
+        setRootViewController(hostingController)
     }
 
     /// Route to the login / sign-up screen
@@ -162,4 +175,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // when both attempt to consume the single-use OAuth callback.
     }
 
+}
+
+private struct RehearsalInfoCardWrapper: View {
+    let onDismiss: () -> Void
+
+    @State private var isPresented = true
+
+    var body: some View {
+        RehearsalInfoCard(
+            isPresented: Binding(
+                get: { isPresented },
+                set: { updatedValue in
+                    let wasPresented = isPresented
+                    isPresented = updatedValue
+
+                    guard wasPresented, !updatedValue else { return }
+                    onDismiss()
+                }
+            )
+        )
+    }
 }

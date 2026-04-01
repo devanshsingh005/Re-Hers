@@ -828,6 +828,7 @@ final class UploadPageNextViewController: UIViewController {
     @objc private func didTapPlayAlong() {
         NavigationBarHelper.animateButtonPress(playAlongButton) { [weak self] in
             guard let self = self else { return }
+            guard !self.presentGuestPlayAlongGateIfNeeded() else { return }
             if self.isProcessing { 
                 let a = UIAlertController(title: "Processing", message: "Please wait for the analysis to complete.", preferredStyle: .alert)
                 a.addAction(UIAlertAction(title: "OK", style: .default))
@@ -853,6 +854,8 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     private func startPlayAlong(with json: [String: Any]) {
+        guard !presentGuestPlayAlongGateIfNeeded() else { return }
+
         guard let data = try? JSONSerialization.data(withJSONObject: json) else {
             let a = UIAlertController(title: "Error", message: "Failed to prepare data for Play Along.", preferredStyle: .alert)
             a.addAction(UIAlertAction(title: "OK", style: .default))
@@ -865,6 +868,35 @@ final class UploadPageNextViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+    }
+
+    @discardableResult
+    private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let modal = GuestFeatureGateModal(
+            featureName: "play along",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        present(modal, animated: true)
+        return true
+    }
+
+    private func presentGuestAuth(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.presentedViewController == nil else { return }
+
+            let authVC = AuthViewController(initialMode: mode)
+            let nav = UINavigationController(rootViewController: authVC)
+            nav.modalPresentationStyle = .fullScreen
+            self.present(nav, animated: true)
+        }
     }
 
     @objc private func didTapAnimation() {

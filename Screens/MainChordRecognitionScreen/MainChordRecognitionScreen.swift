@@ -8,6 +8,8 @@ import AVFoundation
 import Accelerate
 
 final class ChordRecognitionViewController: UIViewController {
+    private var hasPresentedGuestGate = false
+    private weak var guestGateHostNavigationController: UINavigationController?
 
     // MARK: - Toggle mode
     // true  = fake mode (Mac / Simulator)
@@ -129,6 +131,9 @@ final class ChordRecognitionViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        guard !redirectGuestIfNeeded() else { return }
+
         view.backgroundColor = .white
         title = "Chord Recognition"
         navigationController?.navigationBar.prefersLargeTitles = false
@@ -165,6 +170,44 @@ final class ChordRecognitionViewController: UIViewController {
         super.viewWillDisappear(animated)
         stopFakeAudio()
         stopListening()
+    }
+
+    private func redirectGuestIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(),
+              !hasPresentedGuestGate,
+              let navigationController else { return false }
+
+        hasPresentedGuestGate = true
+        guestGateHostNavigationController = navigationController
+
+        let modal = GuestFeatureGateModal(
+            featureName: "chord recognition",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        modal.presentationController?.delegate = self
+        navigationController.popViewController(animated: false)
+        DispatchQueue.main.async { [weak navigationController] in
+            navigationController?.present(modal, animated: true)
+        }
+        return true
+    }
+
+    private func presentGuestAuth(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let navigationController = self?.guestGateHostNavigationController,
+                  navigationController.presentedViewController == nil else { return }
+
+            let authVC = AuthViewController(initialMode: mode)
+            let nav = UINavigationController(rootViewController: authVC)
+            nav.modalPresentationStyle = .fullScreen
+            navigationController.present(nav, animated: true)
+        }
     }
 
     // MARK: - Setup
@@ -438,6 +481,12 @@ final class ChordRecognitionViewController: UIViewController {
         
         // Update wave with new parameters
         updateWave(with: amplitude, frequency: frequency)
+    }
+}
+
+extension ChordRecognitionViewController: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        hasPresentedGuestGate = false
     }
 }
 

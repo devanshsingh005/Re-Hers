@@ -358,6 +358,8 @@ class DiscoverSongDetailViewController: UIViewController {
         animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
+        guard !presentGuestPlayAlongGateIfNeeded() else { return }
+
         guard let json = sheetMusicJSON,
               let data = try? JSONSerialization.data(withJSONObject: json) else {
             showConvertedJSONMissingError()
@@ -369,6 +371,35 @@ class DiscoverSongDetailViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+    }
+
+    @discardableResult
+    private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let modal = GuestFeatureGateModal(
+            featureName: "play along",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        present(modal, animated: true)
+        return true
+    }
+
+    private func presentGuestAuth(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.presentedViewController == nil else { return }
+
+            let authVC = AuthViewController(initialMode: mode)
+            let nav = UINavigationController(rootViewController: authVC)
+            nav.modalPresentationStyle = .fullScreen
+            self.present(nav, animated: true)
+        }
     }
 
     @objc private func didTapAnimation() {

@@ -13,8 +13,9 @@ import SwiftUI
 
 
 final class AuthViewController: UIViewController {
-    private enum DefaultsKey {
-        static let hasSeenAppIntroCard = "hasSeenAppIntroCard"
+    enum AuthMode {
+        case logIn
+        case signUp
     }
     
     // MARK: - Constraint Storage
@@ -71,6 +72,7 @@ final class AuthViewController: UIViewController {
     
     private let errorLabel = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let initialMode: AuthMode
     
     private var isLoginMode: Bool {
         modeSegment.selectedSegmentIndex == 0
@@ -87,46 +89,26 @@ final class AuthViewController: UIViewController {
             return 32
         }
     }
+
+    init(initialMode: AuthMode = .logIn) {
+        self.initialMode = initialMode
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         view.backgroundColor = ComponentColors.AuthScreen.background
         
-        // default to LOGIN (design in screenshot)
-        modeSegment.selectedSegmentIndex = 0
+        modeSegment.selectedSegmentIndex = initialMode == .logIn ? 0 : 1
         
         setupViews()
         updateTextsForMode()
-    }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        
-        // Only show the intro card once per fresh install
-        if !UserDefaults.standard.bool(forKey: DefaultsKey.hasSeenAppIntroCard) {
-            showRehearsalInfoCard()
-        }
-    }
-    
-    private func showRehearsalInfoCard() {
-        let binding = Binding<Bool>(
-            get: { true },
-            set: { isVisible in
-                if !isVisible {
-                    self.presentedViewController?.dismiss(animated: false, completion: {
-                        UserDefaults.standard.set(true, forKey: DefaultsKey.hasSeenAppIntroCard)
-                    })
-                }
-            }
-        )
-        
-        let introView = RehearsalInfoCard(isPresented: binding)
-        let hostingController = UIHostingController(rootView: introView)
-        hostingController.modalPresentationStyle = .overFullScreen
-        hostingController.view.backgroundColor = .clear // Let the ZStack handle dimming
-        
-        present(hostingController, animated: false, completion: nil)
     }
 }
 
@@ -804,6 +786,8 @@ extension AuthViewController {
     func routeAfterLogin() {
         Task {
             do {
+                await GuestSessionManager.shared.migrateGuestIfNeeded()
+
                 let client = SupabaseManager.shared.client
                 let session = try await client.auth.session
                 let userId = session.user.id.uuidString

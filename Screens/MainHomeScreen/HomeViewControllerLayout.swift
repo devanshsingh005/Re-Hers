@@ -250,6 +250,36 @@ extension HomeViewController {
     }
 
     @objc func playAlongTapped() {
+        guard !presentGuestPlayAlongGateIfNeeded() else { return }
         navigationController?.pushViewController(PlayAlongViewController(), animated: true)
+    }
+
+    @discardableResult
+    private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let modal = GuestFeatureGateModal(
+            featureName: "play along",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        present(modal, animated: true)
+        return true
+    }
+
+    private func presentGuestAuth(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.presentedViewController == nil else { return }
+
+            let authVC = AuthViewController(initialMode: mode)
+            let nav = UINavigationController(rootViewController: authVC)
+            nav.modalPresentationStyle = .fullScreen
+            self.present(nav, animated: true)
+        }
     }
 }
