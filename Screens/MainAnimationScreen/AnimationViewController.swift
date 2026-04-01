@@ -61,6 +61,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         navBar.onBackTap = nil
         navBar.onMenuTap = nil
         navBar.onSeekProgress = nil
+        navBar.onTempoChanged = nil
     }
 
     // MARK: - Lifecycle
@@ -226,9 +227,13 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
                 self?.dismiss(animated: true)
             }
         }
-        navBar.onMenuTap = { [weak self] in self?.toggleSettingsMenu() }
+        navBar.onMenuTap      = { [weak self] in self?.toggleSettingsMenu() }
         navBar.onSeekProgress = { [weak self] fraction in
             self?.seekToProgress(CGFloat(fraction))
+        }
+        navBar.onTempoChanged = { [weak self] tempo in
+            self?.tempoMultiplier = tempo
+        }
         }
     }
 
@@ -723,13 +728,11 @@ private final class SettingsMenuView: UIView {
         currentTempo = max(0.5, min(2.0, currentTempo + delta))
         currentTempo = (currentTempo * 4).rounded() / 4
         onTempoChanged?(currentTempo)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
     
     @objc private func instTapped(_ sender: UIButton) {
         let type = AudioEngineManager.InstrumentType.allCases[sender.tag]
         onInstrumentChanged?(type)
-        UISelectionFeedbackGenerator().selectionChanged()
         
         // Flash feedback
         UIView.animate(withDuration: 0.1) {

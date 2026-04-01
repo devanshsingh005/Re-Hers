@@ -318,7 +318,7 @@ final class SheetMusicView: UIView {
         self.maxPixelsPerTick = pixelsPerTick
         songPixelLength = CGFloat(globalTick) * pixelsPerTick
         canvasW = max(3000, clefW + songPixelLength + 400)
-        debugLog("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(totalTicks)")
+        print("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(totalTicks)")
     }
 
     private func noteFrom(_ d: [String:Any], tick: Int) -> SheetNote? {

@@ -67,11 +67,15 @@ final class RecentPlayService {
 
         debugLog("[RecentPlayService] Recording play for song: \(songId), user: \(userId)")
 
-        try await SupabaseManager.shared.client
-            .from("recent_plays")
-            .upsert(row, onConflict: "user_id,song_id")
-            .execute()
-
-        debugLog("[RecentPlayService] ✅ Play recorded successfully")
+        do {
+            try await SupabaseManager.shared.client
+                .from("recent_plays")
+                .upsert(row, onConflict: "user_id,song_id")
+                .execute()
+            print("[RecentPlayService] ✅ Play recorded successfully")
+        } catch {
+            print("[RecentPlayService] ❌ Failed to record play: \(error)")
+            throw error
+        }
     }
 }

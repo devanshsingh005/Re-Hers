@@ -16,6 +16,11 @@ final class LessonNavBarView: UIView {
     // Tracks if user is actively scrubbing so we don't jump the thumb
     private var isScrubbing = false
 
+    var onTempoChanged: ((Double)->Void)?
+
+    func setSongTitle(_ t: String) {}
+    func setPlaybackControlsHidden(_ hidden: Bool) {}
+
     override init(frame: CGRect) { super.init(frame: frame); build() }
     required init?(coder: NSCoder) { fatalError() }
 
