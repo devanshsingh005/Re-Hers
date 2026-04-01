@@ -6,6 +6,7 @@
 import UIKit
 import AVFoundation
 import PhotosUI
+import VisionKit
 import Supabase
 import Auth
 internal import PostgREST
@@ -39,6 +40,7 @@ class UploadScreen: UIViewController {
     private var activeQuizPopup: UploadQuizPopup?
     private var recentUploadsStack: UIStackView?
     private weak var activeDocumentPicker: UIDocumentPickerViewController?
+    private weak var activeDocumentScanner: VNDocumentCameraViewController?
     private weak var activePhotoPicker: PHPickerViewController?
     private weak var activeCameraController: UploadCameraCaptureViewController?
     private var profileFetchTask: Task<Void, Never>?
@@ -109,7 +111,7 @@ class UploadScreen: UIViewController {
         }
     }
 
-    func startUploadFlow() { presentDocumentScanner() }
+    func startUploadFlow() { presentVisionKitScanner() }
 
     // MARK: - NavBar
     private func setupNavBar() {
@@ -424,7 +426,7 @@ class UploadScreen: UIViewController {
             sender.transform = .identity
         }
     }
-    @objc private func scanTapped()       { presentDocumentScanner() }
+    @objc private func scanTapped()       { presentVisionKitScanner() }
     @objc private func uploadFileTapped() { openFileManager() }
 
     // MARK: - Recent Uploads Section
@@ -875,31 +877,28 @@ class UploadScreen: UIViewController {
         return ["api_response": obj, "status": "success"]
     }
 
-    // MARK: - Document Scanner
-    private func presentDocumentScanner() {
-        let sheet = UIAlertController(title: "Scan Sheet Music",
-                                      message: "Capture a page with the camera or pick one from your library.",
-                                      preferredStyle: .actionSheet)
-
-        if AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil {
-            sheet.addAction(UIAlertAction(title: "Camera", style: .default) { [weak self] _ in
-                self?.presentUploadCamera()
-            })
+    // MARK: - Document Scanner (VisionKit)
+    private func presentVisionKitScanner() {
+        guard VNDocumentCameraViewController.isSupported else {
+            presentAlert(title: "Scanner Unavailable",
+                         message: "Document scanning is not supported on this device.")
+            return
         }
+        let scanner = VNDocumentCameraViewController()
+        scanner.delegate = self
+        activeDocumentScanner = scanner
+        present(scanner, animated: true)
+    }
 
-        sheet.addAction(UIAlertAction(title: "Photo Library", style: .default) { [weak self] _ in
-            self?.presentPhotoLibraryPicker()
-        })
-
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = view
-            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
-            popover.permittedArrowDirections = []
+    private func dismissDocumentScanner(_ scanner: VNDocumentCameraViewController,
+                                        completion: (() -> Void)? = nil) {
+        scanner.delegate = nil
+        activeDocumentScanner = nil
+        guard scanner.presentingViewController != nil else {
+            completion?()
+            return
         }
-
-        present(sheet, animated: true)
+        scanner.dismiss(animated: true, completion: completion)
     }
 
     private func presentUploadCamera() {
@@ -989,25 +988,39 @@ class UploadScreen: UIViewController {
         guard !images.isEmpty else { return nil }
         let pdf = NSMutableData()
         UIGraphicsBeginPDFContextToData(pdf, CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
-        defer { UIGraphicsEndPDFContext() }
         for (index, image) in images.enumerated() {
             autoreleasepool {
-                UIGraphicsBeginPDFPageWithInfo(CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
-                let s    = min(Constants.pdfPageSize.width  / image.size.width,
-                               Constants.pdfPageSize.height / image.size.height, 1.0)
-                let w    = image.size.width * s;  let h = image.size.height * s
-                image.draw(in: CGRect(x: (Constants.pdfPageSize.width  - w) / 2,
-                                      y: (Constants.pdfPageSize.height - h) / 2,
-                                    width: w, height: h))
-                let txt   = "\(index + 1)"
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.gray
+                // Normalize orientation — VisionKit images can arrive rotated
+                let normalized = image.normalizedOrientation()
+                UIGraphicsBeginPDFPageWithInfo(
+                    CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
+                // Scale to fit the page, no 1.0 cap — scanner images are always high-res
+                let scale = min(Constants.pdfPageSize.width  / normalized.size.width,
+                                Constants.pdfPageSize.height / normalized.size.height)
+                let w = normalized.size.width  * scale
+                let h = normalized.size.height * scale
+                let rect = CGRect(x: (Constants.pdfPageSize.width  - w) / 2,
+                                  y: (Constants.pdfPageSize.height - h) / 2,
+                                  width: w, height: h)
+                normalized.draw(in: rect)
+                // Page number
+                let txt = "\(index + 1)"
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 10),
+                    .foregroundColor: UIColor.gray
                 ]
-                let sz = txt.size(withAttributes: attributes)
+                let sz = txt.size(withAttributes: attrs)
                 txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2,
-                                    y: 10, width: sz.width, height: sz.height), withAttributes: attributes)
+                                    y: 10, width: sz.width, height: sz.height),
+                         withAttributes: attrs)
             }
         }
+        // ⚠️ MUST call EndPDFContext BEFORE reading pdf data.
+        // Swift evaluates `return pdf as Data` (copies NSMutableData → Data)
+        // BEFORE a `defer` fires, so the PDF trailer would never be written.
+        UIGraphicsEndPDFContext()
+
+        guard pdf.length > 4 else { return nil }
         return pdf as Data
     }
 
@@ -1051,12 +1064,14 @@ class UploadScreen: UIViewController {
     }
 
     private func releaseTransientPickers() {
-        activeDocumentPicker?.delegate = nil
-        activePhotoPicker?.delegate = nil
+        activeDocumentPicker?.delegate  = nil
+        activePhotoPicker?.delegate     = nil
         activeCameraController?.delegate = nil
-        activeDocumentPicker = nil
-        activePhotoPicker = nil
+        activeDocumentScanner?.delegate = nil
+        activeDocumentPicker   = nil
+        activePhotoPicker      = nil
         activeCameraController = nil
+        activeDocumentScanner  = nil
     }
 
     private func dismissDocumentPicker(_ controller: UIDocumentPickerViewController,
@@ -1500,6 +1515,63 @@ extension UploadCameraCaptureViewController: AVCapturePhotoCaptureDelegate {
     }
 }
 
+// MARK: - VNDocumentCameraViewControllerDelegate
+extension UploadScreen: VNDocumentCameraViewControllerDelegate {
+
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                      didFinishWith scan: VNDocumentCameraScan) {
+        dismissDocumentScanner(controller) { [weak self] in
+            guard let self else { return }
+            // Collect all scanned pages as UIImages
+            var pages: [UIImage] = []
+            for index in 0 ..< scan.pageCount {
+                autoreleasepool {
+                    pages.append(scan.imageOfPage(at: index))
+                }
+            }
+            guard !pages.isEmpty else {
+                self.presentAlert(title: "Scan Empty",
+                                  message: "No pages were captured. Please try again.")
+                return
+            }
+            // Convert pages → PDF, then run the standard upload pipeline
+            guard let pdfData = self.createPDF(from: pages) else {
+                self.presentAlert(title: "Scan Failed",
+                                  message: "Could not create a PDF from the scanned pages.")
+                return
+            }
+            self.currentUploadData = pdfData
+            self.currentFileName   = self.generateTimestampFilename()
+            self.currentFileType   = "application/pdf"
+            let popup = self.showQuizPopup()
+            self.uploadTask?.cancel()
+            self.uploadTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.saveUploadToDatabase(imageData: pdfData,
+                                                        fileName: self.currentFileName,
+                                                        fileType: self.currentFileType,
+                                                        popup: popup)
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { self.handleUploadError(error, popup: popup) }
+                }
+            }
+        }
+    }
+
+    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+        dismissDocumentScanner(controller)
+    }
+
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                      didFailWithError error: Error) {
+        dismissDocumentScanner(controller) { [weak self] in
+            self?.presentAlert(title: "Scan Failed", message: error.localizedDescription)
+        }
+    }
+}
+
 // MARK: - UIDocumentPickerDelegate + Upload Delegates
 extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                         PHPickerViewControllerDelegate, UploadCameraCaptureViewControllerDelegate {
@@ -1507,9 +1579,10 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
     func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) { activeQuizPopup = nil }
 
     func openFileManager() {
+        // Restrict to PDF only at the picker level
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [.pdf, .data, .item], asCopy: true)
-        picker.delegate             = self
+            forOpeningContentTypes: [.pdf], asCopy: true)
+        picker.delegate                = self
         picker.allowsMultipleSelection = false
         activeDocumentPicker = picker
         present(picker, animated: true)
@@ -1519,8 +1592,30 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
         guard let fileURL = urls.first else { return }
         dismissDocumentPicker(controller) { [weak self] in
             guard let self else { return }
+
+            // ── Layer 1: extension check ──────────────────────────────────────
+            guard fileURL.pathExtension.lowercased() == "pdf" else {
+                self.presentAlert(
+                    title: "Invalid File",
+                    message: "Only PDF files are supported. Please select a .pdf file."
+                )
+                return
+            }
+
             do {
                 let data = try Data(contentsOf: fileURL)
+
+                // ── Layer 2: magic-byte check (%PDF) ─────────────────────────
+                let pdfMagic: [UInt8] = [0x25, 0x50, 0x44, 0x46]   // %PDF
+                guard data.count > 4,
+                      data.prefix(4).elementsEqual(pdfMagic) else {
+                    self.presentAlert(
+                        title: "Invalid File",
+                        message: "The selected file does not appear to be a valid PDF."
+                    )
+                    return
+                }
+
                 self.currentUploadData = data
                 self.currentFileName   = self.generateTimestampFilename()
                 self.currentFileType   = "application/pdf"
@@ -1620,6 +1715,20 @@ private class GradientView: UIView {
     }
     required init?(coder: NSCoder) { fatalError() }
     override func layoutSubviews() { super.layoutSubviews(); gl.frame = bounds }
+}
+
+// MARK: - UIImage Orientation Normalization
+private extension UIImage {
+    /// Redraws the image into a new context so imageOrientation == .up.
+    /// VisionKit scan pages often carry non-up orientations; drawing them
+    /// directly into the PDF context without normalization produces rotated pages.
+    func normalizedOrientation() -> UIImage {
+        guard imageOrientation != .up, let cgImage else { return self }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
 }
 
 // MARK: - UILabel Tracking
