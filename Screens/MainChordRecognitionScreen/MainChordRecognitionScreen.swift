@@ -199,7 +199,7 @@ final class ChordRecognitionViewController: UIViewController {
     }
 
     private func presentGuestAuth(mode: AuthViewController.AuthMode) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let navigationController = self?.guestGateHostNavigationController,
                   navigationController.presentedViewController == nil else { return }
 

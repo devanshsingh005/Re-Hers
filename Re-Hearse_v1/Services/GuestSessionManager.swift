@@ -24,6 +24,10 @@ final class GuestSessionManager {
         let practice_mins: Int
     }
 
+    private struct ExistingOnboardingRow: Decodable {
+        let id: String
+    }
+
     private init() {}
 
     func getOrCreateGuestID() -> String {
@@ -79,6 +83,19 @@ final class GuestSessionManager {
         )
 
         do {
+            let existingOnboarding: ExistingOnboardingRow? = try await SupabaseManager.shared.client
+                .from("user_onboarding")
+                .select("id")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+                .value
+
+            if existingOnboarding != nil {
+                clearGuestState()
+                return
+            }
+
             try await SupabaseManager.shared.client
                 .from("profiles")
                 .upsert(["id": userId, "avatar_url": avatarUrl])

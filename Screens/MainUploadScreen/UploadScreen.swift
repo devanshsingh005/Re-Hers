@@ -168,7 +168,7 @@ class UploadScreen: UIViewController {
     }
 
     private func scheduleAuthPresentation(mode: AuthViewController.AuthMode) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self, let presenter = self.guestGatePresenter(), presenter.presentedViewController == nil else { return }
 
             self.isPresentingGuestGate = false

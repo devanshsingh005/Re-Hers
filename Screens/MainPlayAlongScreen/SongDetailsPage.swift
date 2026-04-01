@@ -348,7 +348,7 @@ class PlayAlongSongDetailViewController: UIViewController {
     }
 
     private func presentGuestAuth(mode: AuthViewController.AuthMode) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self, self.presentedViewController == nil else { return }
 
             let authVC = AuthViewController(initialMode: mode)

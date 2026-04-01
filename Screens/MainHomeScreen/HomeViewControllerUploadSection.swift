@@ -97,7 +97,15 @@ extension HomeViewController {
 
     private func executeUploadTransition() {
         guard let tabBarController = self.tabBarController else { return }
-        tabBarController.selectedIndex = 1
+        if let mainTabBarController = tabBarController as? MainTabBarController,
+           !mainTabBarController.attemptSelectUploadTab() {
+            return
+        }
+
+        if !(tabBarController is MainTabBarController) {
+            tabBarController.selectedIndex = 1
+        }
+
         if let nav = tabBarController.viewControllers?[1] as? UINavigationController,
            let uploadVC = nav.viewControllers.first as? UploadScreen {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { uploadVC.startUploadFlow() }

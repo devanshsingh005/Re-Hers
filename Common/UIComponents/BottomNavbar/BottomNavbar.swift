@@ -8,13 +8,15 @@
 import Foundation
 import UIKit
 
-class MainTabBarController: UITabBarController {
+class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
+    private weak var activeGuestGateModal: GuestFeatureGateModal?
     
     override func viewDidLoad() {
         super.viewDidLoad()
         if #available(iOS 18.0, *) {
             self.mode = .tabBar
         }
+        delegate = self
         setupTabs()
         setupAppearance()
     }
@@ -117,6 +119,65 @@ class MainTabBarController: UITabBarController {
         // Reapply appearance to prevent iOS from clearing labels after selection
         reapplyTabBarAppearance()
     }
+
+    func attemptSelectUploadTab() -> Bool {
+        guard let viewControllers, viewControllers.indices.contains(1) else { return false }
+
+        let uploadController = viewControllers[1]
+        guard shouldAllowSelection(of: uploadController) else { return false }
+
+        selectedIndex = 1
+        return true
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        shouldAllowSelection(of: viewController)
+    }
+
+    private func shouldAllowSelection(of viewController: UIViewController) -> Bool {
+        guard isUploadTab(viewController) else { return true }
+        guard GuestSessionManager.shared.isGuest() else { return true }
+
+        presentUploadGuestGateIfNeeded()
+        return false
+    }
+
+    private func isUploadTab(_ viewController: UIViewController) -> Bool {
+        guard let viewControllers, viewControllers.indices.contains(1) else { return false }
+        return viewControllers[1] === viewController
+    }
+
+    private func presentUploadGuestGateIfNeeded() {
+        guard activeGuestGateModal == nil else { return }
+        guard presentedViewController == nil else { return }
+
+        let gateModal = GuestFeatureGateModal(
+            featureName: "sheet music upload",
+            onSignUp: { [weak self] in
+                self?.presentAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentAuth(mode: .logIn)
+            }
+        )
+
+        activeGuestGateModal = gateModal
+        gateModal.presentationController?.delegate = self
+        present(gateModal, animated: true)
+    }
+
+    private func presentAuth(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.activeGuestGateModal = nil
+            guard self.presentedViewController == nil else { return }
+
+            let authViewController = AuthViewController(initialMode: mode)
+            let authNavigationController = UINavigationController(rootViewController: authViewController)
+            authNavigationController.modalPresentationStyle = .fullScreen
+            self.present(authNavigationController, animated: true)
+        }
+    }
     
     // MARK: - Orientation Delegation
 
@@ -126,6 +187,12 @@ class MainTabBarController: UITabBarController {
     
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         return selectedViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
+    }
+}
+
+extension MainTabBarController: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        activeGuestGateModal = nil
     }
 }
 

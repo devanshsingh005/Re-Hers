@@ -135,12 +135,14 @@ final class GuestFeatureGateModal: UIViewController {
     }
 
     @objc private func signUpTapped() {
-        onSignUp()
-        dismiss(animated: true)
+        dismiss(animated: true) { [onSignUp] in
+            onSignUp()
+        }
     }
 
     @objc private func logInTapped() {
-        onLogIn()
-        dismiss(animated: true)
+        dismiss(animated: true) { [onLogIn] in
+            onLogIn()
+        }
     }
 }
