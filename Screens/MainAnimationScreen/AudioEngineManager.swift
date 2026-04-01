@@ -170,7 +170,7 @@ final class AudioEngineManager {
         guard let engine else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers, .allowBluetoothHFP])
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
             try engine.start()
             isStarted = true
@@ -244,14 +244,19 @@ final class AudioEngineManager {
 
     func startNote(midi: UInt8, velocity: UInt8 = 90) {
         guard isStarted else { return }
-        if activeNotes.contains(midi) { stopNote(midi: midi) }
+
+        // If this MIDI note is already active, stop it cleanly first
+        // so the sampler channel is freed before we re-allocate it.
+        if activeNotes.contains(midi) {
+            stopNote(midi: midi)
+        }
 
         if useFallback {
             playTone(midi: midi, velocity: velocity)
         } else {
             guard let sampler, sfLoaded else { return }
             let channel = allocateSamplerChannel(for: midi)
-            let vel = UInt8(clamping: Int(velocity) + Int.random(in: -5...5))
+            let vel = UInt8(clamping: Int(velocity) + Int.random(in: -4...4))
             sampler.startNote(midi, withVelocity: vel, onChannel: channel)
         }
         activeNotes.insert(midi)

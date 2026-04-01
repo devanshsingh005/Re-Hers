@@ -1,127 +1,120 @@
 import UIKit
 
-// MARK: - LessonNavBarView  — Liquid Glass effect
-//
-// Layout:  ← back  |  TITLE (centred)  |  0.5×──●──2×  1×  ⋯
-// Uses UIVisualEffectView (ultraThinMaterial) for liquid glass look.
-// No opaque background — blurs whatever is behind it.
+// MARK: - LessonNavBarView  — Three floating pills
+// Layout:  [<]  [ -----O------------- ]  [...]
 
 final class LessonNavBarView: UIView {
 
     var onBackTap:      (()->Void)?
-    var onTempoChanged: ((Double)->Void)?
+    var onSeekProgress: ((Double)->Void)?
     var onMenuTap:      (()->Void)?
-    private(set) var tempoMultiplier: Double = 1.0
 
-    private let blurView    = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-    private lazy var backBtn = NavigationBarHelper.makeCircularBackButton()
-    private let titleLabel  = UILabel()
-    private let tempoSlider = UISlider()
-    private let tempoLabel  = UILabel()
-    private let menuBtn     = UIButton(type: .system)
-
-    func setSongTitle(_ t: String) { titleLabel.text = t }
-
-    private var rightStack: UIStackView?
-    func setPlaybackControlsHidden(_ hidden: Bool) {
-        rightStack?.isHidden = hidden
-    }
+    private let backBtn = UIButton(type: .system)
+    private let progressSlider = UISlider() // Native iOS Slider
+    private let menuBtn = UIButton(type: .system)
+    
+    // Tracks if user is actively scrubbing so we don't jump the thumb
+    private var isScrubbing = false
 
     override init(frame: CGRect) { super.init(frame: frame); build() }
     required init?(coder: NSCoder) { fatalError() }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        blurView.frame = bounds
-    }
-
     private func build() {
         backgroundColor = .clear
 
-        insertSubview(blurView, at: 0)
+        let btnSize: CGFloat = 40 // Slimmer, native touch target size
 
-        let border = CALayer()
-        border.backgroundColor = UIColor.separator.cgColor
-        DispatchQueue.main.async {
-            border.frame = CGRect(x: 0, y: self.bounds.height - 0.5,
-                                  width: self.bounds.width, height: 0.5)
-            self.layer.addSublayer(border)
-        }
-
-        // ── Back button (circular global style) ────────────────────────────────────
+        // ── Left: Back Button Pill ────────────────────────────────────
+        let backContainer = makePillContainer(size: btnSize)
+        
+        // Native iOS back chevron weight and size
+        let backCfg = UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
+        backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: backCfg), for: .normal)
+        backBtn.tintColor = .label
         backBtn.addTarget(self, action: #selector(didBack), for: .touchUpInside)
-
-        // ── Title ────────────────────────────────────────────────────────
-        titleLabel.text = "TITLE"
-        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        titleLabel.textColor = .label
-        titleLabel.textAlignment = .center
-
-        // ── Tempo slider ─────────────────────────────────────────────────
-        tempoSlider.minimumValue = 0.5
-        tempoSlider.maximumValue = 2.0
-        tempoSlider.value        = 1.0
-        tempoSlider.minimumTrackTintColor = BrandColors.brand
-        tempoSlider.maximumTrackTintColor = .systemGray4
-        tempoSlider.setThumbImage(thumbImage(), for: .normal)
-        tempoSlider.addTarget(self, action: #selector(sliderMoved), for: .valueChanged)
-        tempoSlider.widthAnchor.constraint(equalToConstant: 110).isActive = true
-
-        let minL = tinyLbl("0.5×")
-        let maxL = tinyLbl("2×")
-
-        tempoLabel.text = "1×"
-        tempoLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        tempoLabel.textColor = .label
-        tempoLabel.textAlignment = .center
-        tempoLabel.widthAnchor.constraint(equalToConstant: 28).isActive = true
-
-        let sliderRow = UIStackView(arrangedSubviews: [minL, tempoSlider, maxL, tempoLabel])
-        sliderRow.axis = .horizontal; sliderRow.spacing = 5; sliderRow.alignment = .center
-
-        // ── Menu button ──────────────────────────────────────────────────
-        let menuCfg = UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)
+        
+        backContainer.contentView.addSubview(backBtn)
+        backBtn.translatesAutoresizingMaskIntoConstraints = false
+        
+        // ── Right: Menu Button Pill ───────────────────────────────────
+        let menuContainer = makePillContainer(size: btnSize)
+        
+        let menuCfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         menuBtn.setImage(UIImage(systemName: "ellipsis.circle", withConfiguration: menuCfg), for: .normal)
         menuBtn.tintColor = .label
         menuBtn.addTarget(self, action: #selector(didMenu), for: .touchUpInside)
-        menuBtn.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        menuBtn.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        
+        menuContainer.contentView.addSubview(menuBtn)
+        menuBtn.translatesAutoresizingMaskIntoConstraints = false
 
-        // ── Right cluster ────────────────────────────────────────────────
-        let right = UIStackView(arrangedSubviews: [sliderRow, menuBtn])
-        right.axis = .horizontal; right.spacing = 8; right.alignment = .center
-        self.rightStack = right
-
-        // ── Assemble ─────────────────────────────────────────────────────
-        [backBtn, titleLabel, right].forEach {
+        // ── Center: Slider Pill ─────────────────────────────────────
+        let sliderContainer = makePillContainer(size: btnSize)
+        
+        progressSlider.minimumValue = 0.0
+        progressSlider.maximumValue = 1.0
+        progressSlider.value        = 0.0
+        progressSlider.minimumTrackTintColor = BrandColors.brand
+        progressSlider.maximumTrackTintColor = UIColor.tertiaryLabel
+        progressSlider.setThumbImage(thumbImage(), for: .normal)
+        progressSlider.addTarget(self, action: #selector(sliderBegan), for: .touchDown)
+        progressSlider.addTarget(self, action: #selector(sliderChanged), for: .valueChanged)
+        progressSlider.addTarget(self, action: #selector(sliderEnded), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        
+        sliderContainer.contentView.addSubview(progressSlider)
+        progressSlider.translatesAutoresizingMaskIntoConstraints = false
+        
+        // ── Assemble ──────────────────────────────────────────────────
+        [backContainer, sliderContainer, menuContainer].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
-
+        
         NSLayoutConstraint.activate([
-            backBtn.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 8),
-            backBtn.centerYAnchor.constraint(equalTo: centerYAnchor),
-            backBtn.widthAnchor.constraint(equalToConstant: 44),
-            backBtn.heightAnchor.constraint(equalToConstant: 44),
-
-            right.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -10),
-            right.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backBtn.trailingAnchor, constant: 8),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: right.leadingAnchor, constant: -8)
+            // Back Container
+            backContainer.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            backContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backContainer.widthAnchor.constraint(equalToConstant: btnSize),
+            backContainer.heightAnchor.constraint(equalToConstant: btnSize),
+            
+            backBtn.centerXAnchor.constraint(equalTo: backContainer.centerXAnchor),
+            backBtn.centerYAnchor.constraint(equalTo: backContainer.centerYAnchor),
+            backBtn.widthAnchor.constraint(equalToConstant: btnSize),
+            backBtn.heightAnchor.constraint(equalToConstant: btnSize),
+            
+            // Menu Container
+            menuContainer.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            menuContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
+            menuContainer.widthAnchor.constraint(equalToConstant: btnSize),
+            menuContainer.heightAnchor.constraint(equalToConstant: btnSize),
+            
+            menuBtn.centerXAnchor.constraint(equalTo: menuContainer.centerXAnchor),
+            menuBtn.centerYAnchor.constraint(equalTo: menuContainer.centerYAnchor),
+            menuBtn.widthAnchor.constraint(equalToConstant: btnSize),
+            menuBtn.heightAnchor.constraint(equalToConstant: btnSize),
+            
+            // Slider Container
+            sliderContainer.leadingAnchor.constraint(equalTo: backContainer.trailingAnchor, constant: 16),
+            sliderContainer.trailingAnchor.constraint(equalTo: menuContainer.leadingAnchor, constant: -16),
+            sliderContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
+            sliderContainer.heightAnchor.constraint(equalToConstant: btnSize),
+            
+            // Progress Slider inside Container (padded)
+            progressSlider.leadingAnchor.constraint(equalTo: sliderContainer.leadingAnchor, constant: 20),
+            progressSlider.trailingAnchor.constraint(equalTo: sliderContainer.trailingAnchor, constant: -20),
+            progressSlider.centerYAnchor.constraint(equalTo: sliderContainer.centerYAnchor)
         ])
     }
 
-    private func tinyLbl(_ t: String) -> UILabel {
-        let l = UILabel(); l.text = t
-        l.font = .systemFont(ofSize: 9); l.textColor = .secondaryLabel
-        return l
+    private func makePillContainer(size: CGFloat) -> UIVisualEffectView {
+        // Native iOS glass material, adapting perfectly to light/dark mode sheet music
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        blur.layer.cornerRadius = size / 2
+        blur.clipsToBounds = true
+        return blur
     }
 
     private func thumbImage() -> UIImage {
-        let s = CGSize(width: 16, height: 16)
+        let s = CGSize(width: 14, height: 14) // Native, delicate thumb
         UIGraphicsBeginImageContextWithOptions(s, false, 0)
         BrandColors.brand.setFill()
         UIBezierPath(ovalIn: CGRect(origin: .zero, size: s)).fill()
@@ -135,13 +128,30 @@ final class LessonNavBarView: UIView {
             self?.onBackTap?()
         }
     }
-    @objc private func didMenu() { onMenuTap?() }
+    
+    @objc private func didMenu() {
+        NavigationBarHelper.animateButtonPress(menuBtn) { [weak self] in
+            self?.onMenuTap?()
+        }
+    }
 
-    @objc private func sliderMoved() {
-        let snap = (Double(tempoSlider.value) * 4).rounded() / 4
-        tempoSlider.value  = Float(snap)
-        tempoMultiplier    = snap
-        tempoLabel.text    = snap == 1.0 ? "1×" : String(format: "%.2g×", snap)
-        onTempoChanged?(snap)
+    @objc private func sliderBegan() {
+        isScrubbing = true
+    }
+
+    @objc private func sliderChanged() {
+        // Continuous seeking while dragging
+        onSeekProgress?(Double(progressSlider.value))
+    }
+
+    @objc private func sliderEnded() {
+        isScrubbing = false
+        onSeekProgress?(Double(progressSlider.value))
+    }
+
+    // Called from AnimationViewController to visually update progress
+    func updateProgress(_ process: Double) {
+        guard !isScrubbing else { return }
+        progressSlider.value = Float(max(0, min(1, process)))
     }
 }

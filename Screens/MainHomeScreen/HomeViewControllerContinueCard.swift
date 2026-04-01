@@ -27,19 +27,40 @@ struct PracticeCardTheme {
             shadow: UIColor(red: 0.00, green: 0.23, blue: 0.48, alpha: 1.0),
             bgLight: UIColor(hex: "#F2F5F8"), bgDark: UIColor(hex: "#050A14")
         ),
-        // Forest Green
-        PracticeCardTheme(
-            start: UIColor(red: 0.00, green: 0.34, blue: 0.18, alpha: 1.0),
-            end: UIColor(red: 0.00, green: 0.54, blue: 0.29, alpha: 1.0),
-            shadow: UIColor(red: 0.00, green: 0.34, blue: 0.18, alpha: 1.0),
-            bgLight: UIColor(hex: "#F2F8F4"), bgDark: UIColor(hex: "#05140A")
-        ),
         // Crimson Red
         PracticeCardTheme(
             start: UIColor(red: 0.48, green: 0.00, blue: 0.08, alpha: 1.0),
             end: UIColor(red: 0.71, green: 0.00, blue: 0.14, alpha: 1.0),
             shadow: UIColor(red: 0.48, green: 0.00, blue: 0.08, alpha: 1.0),
             bgLight: UIColor(hex: "#F8F2F3"), bgDark: UIColor(hex: "#140508")
+        ),
+        // Teal Aurora
+        PracticeCardTheme(
+            start: UIColor(red: 0.00, green: 0.45, blue: 0.45, alpha: 1.0),
+            end: UIColor(red: 0.00, green: 0.65, blue: 0.65, alpha: 1.0),
+            shadow: UIColor(red: 0.00, green: 0.45, blue: 0.45, alpha: 1.0),
+            bgLight: UIColor(hex: "#F2F8F8"), bgDark: UIColor(hex: "#051414")
+        ),
+        // Golden Hour
+        PracticeCardTheme(
+            start: UIColor(red: 0.65, green: 0.45, blue: 0.00, alpha: 1.0),
+            end: UIColor(red: 0.85, green: 0.65, blue: 0.00, alpha: 1.0),
+            shadow: UIColor(red: 0.65, green: 0.45, blue: 0.00, alpha: 1.0),
+            bgLight: UIColor(hex: "#F8F6EF"), bgDark: UIColor(hex: "#141105")
+        ),
+        // Indigo Dusk
+        PracticeCardTheme(
+            start: UIColor(red: 0.25, green: 0.20, blue: 0.60, alpha: 1.0),
+            end: UIColor(red: 0.45, green: 0.40, blue: 0.85, alpha: 1.0),
+            shadow: UIColor(red: 0.25, green: 0.20, blue: 0.60, alpha: 1.0),
+            bgLight: UIColor(hex: "#F4F3F8"), bgDark: UIColor(hex: "#0B0A1A")
+        ),
+        // Slate Glass
+        PracticeCardTheme(
+            start: UIColor(red: 0.20, green: 0.25, blue: 0.30, alpha: 1.0),
+            end: UIColor(red: 0.35, green: 0.45, blue: 0.55, alpha: 1.0),
+            shadow: UIColor(red: 0.20, green: 0.25, blue: 0.30, alpha: 1.0),
+            bgLight: UIColor(hex: "#F4F5F6"), bgDark: UIColor(hex: "#0A0D10")
         )
     ]
     
@@ -106,10 +127,6 @@ extension HomeViewController {
         let outerContainer = UIView()
         outerContainer.tag = 992
         outerContainer.translatesAutoresizingMaskIntoConstraints = false
-        outerContainer.layer.shadowColor = UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).cgColor
-        outerContainer.layer.shadowOpacity = 0.3
-        outerContainer.layer.shadowRadius = 24
-        outerContainer.layer.shadowOffset = CGSize(width: 0, height: 12)
         outerContainer.addSubview(wrapper)
         
         NSLayoutConstraint.activate([

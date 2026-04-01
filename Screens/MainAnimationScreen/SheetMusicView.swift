@@ -14,7 +14,7 @@ final class SheetMusicView: UIView {
     private let noteRadius:  CGFloat = 4.5
     private let clefW:       CGFloat = 110   // column for brace + clef symbols (increased)
     private let msrW:        CGFloat = 260  // pixels per measure on canvas
-    
+
     // Brand Color
     private let brandOrange = UIColor(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0, alpha: 1.0) // #EF9408
 
@@ -27,7 +27,7 @@ final class SheetMusicView: UIView {
     private var score:          Score?
     private var lastBounds      = CGRect.zero
     private var renderPending   = false
-    
+
     // For perfect tick-based synchronization
     private var totalTicks:       Int = 1000
     private var maxPixelsPerTick: CGFloat = 1.0
@@ -36,11 +36,8 @@ final class SheetMusicView: UIView {
     private let contentLayer = CALayer()   // all note/staff drawing lives here
     private let playhead     = UIView()
     private let fadeOverlay  = UIView()
-    private let progressBarTrack = UIView()
-    private let progressBar  = UIView()
-    private let progressThumb = UIView()
     private let feedbackOverlay = UIView()
-    
+
     // Delegate to communicate seeks
     var onSeekProgress: ((CGFloat) -> Void)?
     
@@ -63,7 +60,7 @@ final class SheetMusicView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func setChordCount(_ n: Int) {}
-    
+
     func configure(with chords: [SongChord]) {
         // Since SheetMusicView already has loadJSON/loadData logic that parses everything,
         // and PlayAlongViewController calls configure(with: st) where st is [SongChord],
@@ -83,7 +80,7 @@ final class SheetMusicView: UIView {
         layer.addSublayer(contentLayer)
 
         // Fix: thin solid playhead line
-        playhead.backgroundColor    = brandOrange // Use brand orange instead of standard blue
+        playhead.backgroundColor    = brandOrange
         playhead.layer.cornerRadius = 0
         playhead.isUserInteractionEnabled = false
         addSubview(playhead)
@@ -93,82 +90,25 @@ final class SheetMusicView: UIView {
         fadeOverlay.isUserInteractionEnabled = false
         addSubview(fadeOverlay)
 
-        // Progress bar container & track
-        progressBarTrack.backgroundColor = UIColor.systemGray4
-        progressBarTrack.layer.cornerRadius = 4
-        progressBarTrack.isUserInteractionEnabled = true
-        addSubview(progressBarTrack)
-        
-        // Progress bar fill
-        progressBar.backgroundColor = brandOrange
-        progressBar.layer.cornerRadius = 4
-        progressBar.isUserInteractionEnabled = false
-        progressBarTrack.addSubview(progressBar)
-        
-        // Progress thumb (circle)
-        progressThumb.backgroundColor = brandOrange
-        progressThumb.layer.cornerRadius = 8
-        progressThumb.layer.shadowColor = brandOrange.cgColor
-        progressThumb.layer.shadowOpacity = 0.4
-        progressThumb.layer.shadowRadius = 4
-        progressThumb.isUserInteractionEnabled = false
-        progressBarTrack.addSubview(progressThumb)
-
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleProgressPan(_:)))
-        progressBarTrack.addGestureRecognizer(pan)
-        
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleProgressTap(_:)))
-        progressBarTrack.addGestureRecognizer(tap)
-
-        // Feedback overlay setup
+        // Feedback overlay
         feedbackOverlay.isUserInteractionEnabled = false
         feedbackOverlay.alpha = 0
         addSubview(feedbackOverlay)
     }
 
-    func setProgressBarHidden(_ hidden: Bool) {
-        progressBarTrack.isHidden = hidden
-        progressBar.isHidden = hidden
-        progressThumb.isHidden = hidden
-    }
-
-    @objc private func handleProgressPan(_ gesture: UIPanGestureRecognizer) {
-        let loc = gesture.location(in: progressBarTrack)
-        let p = max(0, min(1, loc.x / progressBarTrack.bounds.width))
-        onSeekProgress?(p)
-    }
-    
-    @objc private func handleProgressTap(_ gesture: UITapGestureRecognizer) {
-        let loc = gesture.location(in: progressBarTrack)
-        let p = max(0, min(1, loc.x / progressBarTrack.bounds.width))
-        onSeekProgress?(p)
-    }
+    func setProgressBarHidden(_ hidden: Bool) {}
 
     // MARK: layoutSubviews — FRAME MATH ONLY
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        let gt  = trebleTop
+        let gt   = trebleTop
         let visH = totalStaffHeight
-        // Fix 3: playhead is a 3pt wide solid blue vertical line at 28% of width
-        let phX = bounds.width * 0.28
+        let phX  = bounds.width * 0.28
         let phW: CGFloat = 3
-        playhead.frame = CGRect(x: phX, y: gt - 12, width: phW, height: visH + 24)
-
-        fadeOverlay.frame = CGRect(x: 0, y: 0, width: phX, height: bounds.height)
-        
-        let trackPaddingX: CGFloat = 50
-        let trackY: CGFloat = 16
-        let trackW = bounds.width - (trackPaddingX * 2)
-        let trackH: CGFloat = 8
-        
-        progressBarTrack.frame = CGRect(x: trackPaddingX, y: trackY, width: trackW, height: trackH)
-        
-        let fillW = trackW * scrollFraction
-        progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: trackH)
-        progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
-        
+        playhead.frame    = CGRect(x: phX, y: gt - 12, width: phW, height: visH + 24)
+        fadeOverlay.frame = CGRect(x: 0,   y: 0, width: phX, height: bounds.height)
         feedbackOverlay.frame = bounds
 
         if bounds != lastBounds {
@@ -181,41 +121,24 @@ final class SheetMusicView: UIView {
     func updatePlaybackProgress(_ p: CGFloat) {
         let p = max(0, min(1, p))
         scrollFraction = p
-
-        // Scroll the content layer so the note at fraction p aligns with the playhead
         let targetX = clefW + p * songPixelLength + 16
         let tx = playhead.frame.midX - targetX
-
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
-        
-        let trackW = bounds.width - 100
-        let fillW = trackW * scrollFraction
-        progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: 8)
-        progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
     }
 
-    /// Update progress based precisely on the loaded sheet's tick timeline
     func updateToTick(_ tick: Double) {
         let maxTick = max(1.0, Double(totalTicks))
         let p = max(0, min(1, CGFloat(tick / maxTick)))
         scrollFraction = p
-        
-        // Use exact tick mapping for perfect synchronization
         let targetX = clefW + CGFloat(tick) * maxPixelsPerTick + 16
         let tx = playhead.frame.midX - targetX
-        
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
         CATransaction.commit()
-        
-        let trackW = bounds.width - 100
-        let fillW = trackW * scrollFraction
-        progressBar.frame = CGRect(x: 0, y: 0, width: fillW, height: 8)
-        progressThumb.frame = CGRect(x: fillW - 8, y: -4, width: 16, height: 16)
     }
 
     func resetProgress() {
@@ -224,10 +147,6 @@ final class SheetMusicView: UIView {
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DIdentity
         CATransaction.commit()
-        progressBar.frame = CGRect(x: 0, y: 0, width: 0, height: 8)
-        progressThumb.frame = CGRect(x: -8, y: -4, width: 16, height: 16)
-        
-        // Remove all wrong note markers
         contentLayer.sublayers?.filter { $0.name == "WrongNoteMarker" }.forEach { $0.removeFromSuperlayer() }
     }
 
@@ -330,13 +249,13 @@ final class SheetMusicView: UIView {
         }
         // --- Infer beats from first measure note durations if no time sig found ---
         if defaultBeats == 4 {
-            if let first = arr.first {
+        if let first = arr.first {
                 var rn: [[String:Any]] = []
                 if let a = first["note"] as? [[String:Any]] { rn = a }
                 else if let o = first["note"] as? [String:Any] { rn = [o] }
                 let total = rn.filter { $0["chord"] == nil }.compactMap { MusicJSONLoader.intVal($0["duration"]) }.reduce(0, +)
-                if total > 0 && divisions > 0 { defaultBeats = total / divisions }
-            }
+            if total > 0 && divisions > 0 { defaultBeats = total / divisions }
+        }
         }
         // pixelsPerTick is now computed from actual beats × divisions per measure
         let ticksPerMeasure = defaultBeats * divisions
@@ -587,7 +506,7 @@ final class SheetMusicView: UIView {
         
         let w = noteRadius * 2.5
         let h = noteRadius * 1.6
-        
+
         // True oval shape for the notehead
         let hd = CAShapeLayer()
         let ovalPath = UIBezierPath(ovalIn: CGRect(x: -w/2, y: -h/2, width: w, height: h))

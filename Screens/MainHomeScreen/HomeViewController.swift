@@ -189,6 +189,21 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                 stack.addArrangedSubview(makePillTag(text: text))
             }
         }
+        
+        // ── Details ──────────────────────────────────────────────────
+        if let stack = self.topCardDetailsStack {
+            stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            let levelText = song.level <= 3 ? "Beginner" : (song.level <= 6 ? "Intermediate" : "Advanced")
+            stack.addArrangedSubview(self.makeDetailItem(icon: "gauge.with.needle", text: levelText))
+            stack.addArrangedSubview(self.makeDetailItem(icon: "person.fill", text: song.composer))
+            stack.addArrangedSubview(self.makeDetailItem(icon: "metronome", text: song.tempo))
+        }
+
+        // ── Gradient Background ──────────────────────────────────────
+        if let wrapper = view.viewWithTag(991) as? PracticeCardBackgroundView {
+            let theme = PracticeCardTheme.theme(for: song.title)
+            wrapper.updateColors(start: theme.start, end: theme.end)
+        }
 
         self.topCardTitleLabel?.superview?.layoutIfNeeded()
     }
@@ -244,12 +259,12 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         guard let stack = recentsStackView else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         
-        if recents.isEmpty {
+        if recents.count <= 1 {
             stack.addArrangedSubview(createEmptyRecentsView())
             return
         }
         
-        for recent in recents {
+        for recent in recents.dropFirst(1) {
             // Stable image from title hash so it doesn't flicker on refresh
             let hash = abs(recent.songs.title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
             let imgName = "trackimage_\((hash % 16) + 1)"

@@ -112,18 +112,18 @@ class MainTabBarController: UITabBarController {
         }
         tabBar.isTranslucent = true
     }
-
+    
     override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
         // Reapply appearance to prevent iOS from clearing labels after selection
         reapplyTabBarAppearance()
     }
-
+    
     // MARK: - Orientation Delegation
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         return selectedViewController?.supportedInterfaceOrientations ?? .portrait
     }
-
+    
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         return selectedViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
     }

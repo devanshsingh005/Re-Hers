@@ -8,6 +8,7 @@
 
 import UIKit
 import PDFKit
+import Supabase
 
 final class DiscoverSongPreviewViewController: UIViewController {
 
@@ -18,13 +19,8 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
     // MARK: - Private State
 
-    private var supabase: SupabaseClient { SupabaseManager.shared.client }
-
-    private var loadedPDFData: Data?
-    private var uploadPopup: UploadQuizPopup?
-    private var recentPlayTask: Task<Void, Never>?
+    private var loadedPDF: PDFDocument?
     private var pdfLoadTask: Task<Void, Never>?
-    private var discoveryUploadTask: Task<Void, Never>?
 
     // MARK: - UI
 
@@ -138,24 +134,13 @@ final class DiscoverSongPreviewViewController: UIViewController {
         setupLayout()
         applyData()
         loadPDF()
-
-        if let songId = song?.id {
-            recentPlayTask = Task { [weak self] in
-                do {
-                    try await RecentPlayService.shared.recordPlay(songId: songId)
-                } catch {
-                    print("[SongPreview] Failed to record play: \(error)")
-                }
-                self?.recentPlayTask = nil
-            }
-        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
 
-        if loadedPDFData == nil, previewImageView.image == nil, pdfLoadTask == nil {
+        if loadedPDF == nil && pdfLoadTask == nil {
             loadPDF()
         }
     }
@@ -204,7 +189,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
         contentView.addSubview(cardView)
         cardView.addSubview(songTitleLabel)
         cardView.addSubview(sheetCardView)
-        sheetCardView.addSubview(previewImageView)
+        sheetCardView.addSubview(pdfView)
         sheetCardView.addSubview(pdfSpinner)
         sheetCardView.addSubview(pdfErrorLabel)
 
@@ -233,7 +218,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
             sheetCardView.topAnchor.constraint(equalTo: songTitleLabel.bottomAnchor, constant: 14),
             sheetCardView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
             sheetCardView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -12),
-            sheetCardView.heightAnchor.constraint(equalToConstant: 480),
+            sheetCardView.heightAnchor.constraint(equalToConstant: 580),
             sheetCardView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
 
             pdfView.topAnchor.constraint(equalTo: sheetCardView.topAnchor),
@@ -264,7 +249,6 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
     private func applyData() {
         songTitleLabel.text = song?.title ?? "Song name"
-        setButtonLoading(false)
     }
 
     // MARK: - Remote Asset Helpers
@@ -279,9 +263,9 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
         if trimmed.hasPrefix("/") {
             return ReHersAPI.url(path: trimmed)
+        } else {
+            return ReHersAPI.url(path: "/" + trimmed)
         }
-
-        return nil
     }
 
     private func fetchRemoteData(from rawValue: String) async throws -> Data {
@@ -314,7 +298,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
         pdfView.isHidden = true
         pdfErrorLabel.isHidden = true
 
-        Task {
+        pdfLoadTask = Task {
             let sheetURL = song?.labeledPdfPath ?? song?.sheetUrl
             guard let sheetURL, !sheetURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 await MainActor.run { self.showPDFError() }
@@ -333,7 +317,6 @@ final class DiscoverSongPreviewViewController: UIViewController {
                 await MainActor.run { self.showPDFError() }
             }
             await MainActor.run {
-                self.showPDFError()
                 self.pdfLoadTask = nil
             }
         }
@@ -361,7 +344,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
         NavigationBarHelper.animateButtonPress(sheetCardView) { [weak self] in
             guard let self, let doc = self.loadedPDF else { return }
             let vc = MaximizeUploadPageViewController()
-            vc.pdfData = pdfData
+            vc.pdfData = doc.dataRepresentation()
             vc.pdfDocument = doc
             vc.modalPresentationStyle = .fullScreen
             self.present(vc, animated: true)
@@ -377,94 +360,6 @@ final class DiscoverSongPreviewViewController: UIViewController {
                 return
             }
 
-            await MainActor.run {
-                self.discoveryUploadTask = nil
-            }
-        }
-    }
-
-    // MARK: - Step 1: Resolve PDF Data
-
-    private func resolvePDFData() async throws -> Data {
-        let candidates = await buildPDFCandidates()
-        guard !candidates.isEmpty else { throw ConvertError.noPDFSource }
-
-        for url in candidates {
-            if let (data, resp) = try? await URLSession.shared.data(from: url),
-               (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
-               !data.isEmpty {
-                return data
-            }
-        }
-        throw ConvertError.pdfDownloadFailed
-    }
-
-    // MARK: - Step 2+3: Upload Pipeline (mirrors UploadScreen.saveUploadToDatabase)
-
-    private func runUploadPipeline(pdfData: Data) async throws {
-        guard let uidStr = await currentUserId(), let userId = UUID(uuidString: uidStr) else {
-            throw ConvertError.invalidUser
-        }
-        guard let token = await authToken() else {
-            throw ConvertError.missingToken
-        }
-
-        let fileName = generateFilename(for: song?.title)
-
-        let api = try await callConversionAPI(
-            imageData: pdfData, fileName: fileName, fileType: "application/pdf", token: token)
-
-        guard let jobIdStr = api["job_id"] as? String,
-              let jobId = UUID(uuidString: jobIdStr) else { throw ConvertError.badAPIResponse }
-
-        let apiUidStr = uidStr.lowercased()
-        let outputURL = "\(ReHersAPI.baseURLString)/sheets/\(jobIdStr.lowercased())"
-
-        var jsonDict: [String: Any] = [
-            "uploaded_at":       ISO8601DateFormatter().string(from: Date()),
-            "title":             song?.title ?? fileName,
-            "original_filename": fileName,
-            "job_id":            jobIdStr,
-            "user_id":           apiUidStr,
-            "output_url":        outputURL,
-            "file_size_bytes":   pdfData.count
-        ]
-        let protectedKeys: Set<String> = ["job_id", "user_id", "output_url", "title", "status"]
-        for (k, v) in api where !protectedKeys.contains(k) { jsonDict[k] = v }
-
-        let existingScans: [ScanRecord] = try await supabase.from("scans").select()
-            .eq("user_id", value: userId)
-            .like("json_data->>'job_id'", pattern: "%\(jobIdStr)%")
-            .execute().value
-
-        if existingScans.isEmpty {
-            let ins = ScanInsert(
-                userId: userId, jsonData: AnyCodable(jsonDict),
-                processingId: jobIdStr, status: "pending",
-                originalFilename: fileName, fileType: "application/pdf",
-                processedAt: ISO8601DateFormatter().string(from: Date()))
-            // Fire-and-forget insert — we don't need the returned record
-            try await supabase.from("scans").insert(ins).execute()
-        } else if let existing = existingScans.first {
-            let upd = ScanUpdate(
-                jsonData: AnyCodable(jsonDict), status: "pending",
-                processedAt: ISO8601DateFormatter().string(from: Date()),
-                updatedAt: ISO8601DateFormatter().string(from: Date()))
-            try await supabase.from("scans").update(upd)
-                .eq("id", value: Int(existing.id)).execute()
-        }
-
-        uploadPopup?.updateProgress(0.9)
-        
-        await MainActor.run {
-            self.releasePDFResources()
-            let vc       = UploadPageNextViewController()
-            vc.jobId     = jobId
-            vc.resultURL = outputURL
-            vc.onDataReady = { [weak self] in
-                self?.uploadPopup?.notifyUploadComplete()
-            }
-
             let vc = DiscoverSongDetailViewController()
             vc.song = song
             vc.passedImage = self.songImage
@@ -472,133 +367,16 @@ final class DiscoverSongPreviewViewController: UIViewController {
         }
     }
 
-    // MARK: - Conversion API (identical to UploadScreen.callConversionAPI)
-
-    private func callConversionAPI(imageData: Data, fileName: String,
-                                   fileType: String, token: String) async throws -> [String: Any] {
-        guard let url = ReHersAPI.url(path: "/convert") else {
-            throw ConvertError.noResponse
-        }
-        let boundary = UUID().uuidString
-        var req      = URLRequest(url: url)
-        req.httpMethod          = "POST"
-        req.timeoutInterval     = 60
-        if #available(iOS 14.5, *) {
-            req.assumesHTTP3Capable = false
-        }
-        req.setValue("Bearer \(token)",                            forHTTPHeaderField: "Authorization")
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var body = Data()
-        body.appendStr("--\(boundary)\r\n")
-        body.appendStr("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
-        body.appendStr("Content-Type: \(fileType)\r\n\r\n")
-        body.append(imageData)
-        body.appendStr("\r\n--\(boundary)--\r\n")
-        req.httpBody = body
-
-        let (data, response) = try await ReHersPinnedSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw ConvertError.noResponse }
-        guard (200...299).contains(http.statusCode) else {
-            let msg = String(data: data, encoding: .utf8) ?? ""
-            throw ConvertError.apiError(http.statusCode, msg)
-        }
-        let obj = try JSONSerialization.jsonObject(with: data)
-        if let d = obj as? [String: Any]                    { return d }
-        if let a = obj as? [[String: Any]], let f = a.first { return f }
-        return ["api_response": obj, "status": "success"]
-    }
-
-    // MARK: - Auth Helpers (mirrors UploadScreen)
-
-    private func currentUserId() async -> String? {
-        do    { return try await SupabaseManager.shared.currentUserId() }
-        catch { debugLog("[Auth] authentication failed"); return nil }
-    }
-
-    private func authToken() async -> String? {
-        do    { return try await SupabaseManager.shared.accessToken() }
-        catch { debugLog("[Auth] authentication failed"); return nil }
-    }
-
-    // MARK: - UI Helpers
-
-    private func setButtonLoading(_ loading: Bool) {
-        getConvertedButton.isEnabled = !loading
-        var cfg = getConvertedButton.configuration ?? UIButton.Configuration.filled()
-        let convertedPDFURL = song?.labeledPdfPath ?? song?.sheetUrl
-        let baseTitle = (convertedPDFURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
-            ? "Open Converted"
-            : "Converted Missing"
-        var t = AttributedString(loading ? "Opening…" : baseTitle)
-        t.font = .systemFont(ofSize: 18, weight: .bold)
-        cfg.attributedTitle = t
-        cfg.showsActivityIndicator = loading
-        getConvertedButton.configuration = cfg
-    }
 
     private func cancelPendingTasks() {
-        recentPlayTask?.cancel()
-        recentPlayTask = nil
-
         pdfLoadTask?.cancel()
         pdfLoadTask = nil
-
-        discoveryUploadTask?.cancel()
-        discoveryUploadTask = nil
     }
 
     private func releasePDFResources() {
         pdfSpinner.stopAnimating()
-        previewImageView.image = nil
-        previewImageView.isHidden = true
-        loadedPDFData = nil
-    }
-
-    private static func renderPDFPreviewImage(from data: Data, maxDimension: CGFloat = 1024) -> UIImage? {
-        autoreleasepool {
-            guard let provider = CGDataProvider(data: data as CFData),
-                  let document = CGPDFDocument(provider),
-                  let page = document.page(at: 1) else {
-                return nil
-            }
-
-            let pageRect = page.getBoxRect(.mediaBox)
-            guard pageRect.width > 0, pageRect.height > 0 else { return nil }
-
-            let scale = min(maxDimension / max(pageRect.width, pageRect.height), 2.0)
-            let width = max(Int(pageRect.width * scale), 1)
-            let height = max(Int(pageRect.height * scale), 1)
-            let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
-
-            guard let context = CGContext(
-                data: nil,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: 0,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else {
-                return nil
-            }
-
-            context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
-            context.fill(targetRect)
-            context.saveGState()
-            context.concatenate(page.getDrawingTransform(.mediaBox, rect: targetRect, rotate: 0, preserveAspectRatio: true))
-            context.drawPDFPage(page)
-            context.restoreGState()
-
-            guard let cgImage = context.makeImage() else { return nil }
-            return UIImage(cgImage: cgImage)
-        }
-    }
-
-    private func generateFilename(for title: String?) -> String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd_HHmmss"
-        let base = title?.replacingOccurrences(of: " ", with: "_") ?? "SheetMusic"
-        return "\(base)_\(f.string(from: Date())).pdf"
+        pdfView.document = nil
+        loadedPDF = nil
     }
 
     private func presentErrorAlert(_ message: String) {

@@ -43,14 +43,22 @@ final class AnimatedPianoKeyView: UIView {
         resetAppearance()
     }
 
-    // MARK: - Plain Text Key Label
     private func setupKeyLabel() {
-        noteLabel.text = noteName
-        noteLabel.font = .systemFont(ofSize: keyType == .white ? 7 : 5.5, weight: .bold)
-        noteLabel.textColor = keyType == .white ? UIColor.darkGray : UIColor.lightGray
+        noteLabel.text          = noteName
+        noteLabel.numberOfLines = keyType == .white ? 2 : 1   // black keys: 1 line only
         noteLabel.textAlignment = .center
         noteLabel.isUserInteractionEnabled = false
         noteLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        if keyType == .white {
+            noteLabel.font      = .systemFont(ofSize: 7, weight: .bold)
+            noteLabel.textColor = UIColor.darkGray
+        } else {
+            // Smaller, single-line label so it fits inside the narrow black key
+            noteLabel.font      = .systemFont(ofSize: 4.0, weight: .semibold)
+            noteLabel.textColor = UIColor.white.withAlphaComponent(0.85)
+        }
+
         addSubview(noteLabel)
 
         if keyType == .white {
@@ -61,16 +69,15 @@ final class AnimatedPianoKeyView: UIView {
         } else {
             NSLayoutConstraint.activate([
                 noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
             ])
         }
     }
 
     // MARK: - Colours
     // LEFT hand = blue, RIGHT hand = red
-
-    static let leftColor  = BrandColors.brand   // blue for left hand
-    static let rightColor = UIColor.systemRed     // red for right hand
+    static let leftColor  = UIColor.systemBlue    // blue for left hand
+    static let rightColor = UIColor.systemRed      // red for right hand
 
     func animatePress(hand: HandType? = nil, color overrideColor: UIColor? = nil) {
         let color: UIColor
@@ -313,6 +320,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     }
 
     private func midiToName(_ midi: UInt8) -> String {
+        // White keys: plain name (C, D, E…). Black keys: sharp name only (C#, D#…) — no flat enharmonic.
         let n = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
         return "\(n[Int(midi)%12])\(Int(midi)/12-1)"
     }

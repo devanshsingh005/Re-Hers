@@ -162,43 +162,49 @@ final class PianoAnimationkeyboardViewController: UIViewController {
 
     // MARK: - Play Chord
     func playChord(left: [String], right: [String], duration: Double) {
-        pendingNoteOff?.cancel(); pendingNoteOff = nil
+        // ✅ FIX 1: Stop the pending note-off timer AND flush active notes immediately.
+        // Old code cancelled the work item silently, leaving previous notes ringing.
+        if let pending = pendingNoteOff {
+            pending.cancel()
+            pendingNoteOff = nil
+        }
+        // Stop whatever is currently sounding before starting the new chord
+        AudioEngineManager.shared.stopAllNotes()
 
         // Highlight keys
         pianoKeyboard.playChord(leftHand: left, rightHand: right)
 
-        // Audio — play all notes
-        let all = left + right
-        for n in all {
-            if let m = AudioEngineManager.shared.midiNumber(from: n) {
-                AudioEngineManager.shared.startNote(midi: m)
+        let all = (left + right).filter { !$0.isEmpty }
+        guard !all.isEmpty else { return }
+
+        // ✅ FIX 2: Small pre-attack gap so the audio engine fully releases
+        // previous resonance before the new chord sounds. Avoids muddy chord blending.
+        let attackDelay = 0.015
+        DispatchQueue.main.asyncAfter(deadline: .now() + attackDelay) {
+            for n in all {
+                if let m = AudioEngineManager.shared.midiNumber(from: n) {
+                    AudioEngineManager.shared.startNote(midi: m)
+                }
             }
         }
 
         // Show hand labels
-        UIView.animate(withDuration: 0.12) {
+        UIView.animate(withDuration: 0.10) {
             self.leftLabel.alpha  = left.isEmpty  ? 0 : 1
             self.rightLabel.alpha = right.isEmpty ? 0 : 1
         }
 
-        // Scroll keyboard to follow melody
-        if let lead = right.first ?? left.first, lead != lastLeadNote {
-            lastLeadNote = lead
-            pianoKeyboard.scrollToNote(lead)
-        }
+        // ✅ FIX 3: Note-off timing — use 85% of duration for crisp articulation.
+        // For very short notes (< 0.15s) use 80% so fast runs don't blur together.
+        let noteFraction: Double = duration < 0.15 ? 0.80 : 0.85
+        let stopAt = max(0.05, duration * noteFraction)
 
-        // Schedule note-off
-        let stopAt = max(0.04, duration - 0.04)
         let work = DispatchWorkItem { [weak self] in
-            for n in all {
-                if let m = AudioEngineManager.shared.midiNumber(from: n) {
-                    AudioEngineManager.shared.stopNote(midi: m)
-                }
-            }
+            AudioEngineManager.shared.stopAllNotes()
             self?.pendingNoteOff = nil
         }
         pendingNoteOff = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + stopAt, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + attackDelay + stopAt, execute: work)
     }
 
     // MARK: - Reset

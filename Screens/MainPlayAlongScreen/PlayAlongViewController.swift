@@ -88,6 +88,14 @@ final class PlayAlongViewController: UIViewController {
         releaseAudioPlaybackSession()
         pitchDetector.stopListening()
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = false
+
+        // Force portrait on exit so the app doesn't stay stuck in landscape mode
+        if #available(iOS 16.0, *) {
+            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+            windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+        } else {
+            UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+        }
     }
 
     private func acquireAudioPlaybackSessionIfNeeded() {

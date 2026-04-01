@@ -15,11 +15,11 @@ extension HomeViewController {
 
         let cardBgColor = ComponentColors.SongCard.background
         let container = UIView()
-        container.backgroundColor = cardBgColor
+        container.backgroundColor = UIColor(red: 0.23, green: 0.00, blue: 0.48, alpha: 1.0).withAlphaComponent(0.05)
         container.layer.cornerRadius = 18
         container.layer.masksToBounds = true
         container.layer.borderWidth = 1.0
-        container.layer.borderColor = ComponentColors.SongCard.border.cgColor
+        container.layer.borderColor = BrandColors.stroke.cgColor
         container.translatesAutoresizingMaskIntoConstraints = false
 
         let iconContainer = UIView()

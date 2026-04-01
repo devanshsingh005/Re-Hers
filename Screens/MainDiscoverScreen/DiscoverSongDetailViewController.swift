@@ -18,20 +18,17 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Private State
     private var originalPDFDocument: PDFDocument?
     private var labeledPDFDocument: PDFDocument?
-    private var sheetMusicJSON: [String: Any]?
     private var recentPlayTask: Task<Void, Never>?
     private var sheetLoadTask: Task<Void, Never>?
+    private var sheetMusicJSON: [String: Any]? {
+        didSet { updateActionButtonState() }
+    }
 
     // MARK: - Scroll Container
     private let mainScrollView = UIScrollView()
     private let contentView    = UIView()
 
     // MARK: - UI Elements
-    private let albumArtBackgroundContainer = UIView()
-    private let albumArtBackgroundView      = UIImageView()
-    private let albumArtCardView            = UIImageView()
-
-    private let bookmarkButton  = UIButton(type: .system)
     private let songTitleLabel  = UILabel()
     private let artistLabel     = UILabel()
     private let sheetToggle     = UISegmentedControl(items: ["Original", "Labeled"])
@@ -41,7 +38,6 @@ class DiscoverSongDetailViewController: UIViewController {
     private let buttonStack     = UIStackView()
 
     private let sheetContainer      = UIView()
-    private let previewButton       = UIButton(type: .system)
     private let pdfView             = PDFView()
     private let pdfLoadingIndicator = UIActivityIndicatorView(style: .medium)
     private let pdfErrorLabel       = UILabel()
@@ -92,14 +88,13 @@ class DiscoverSongDetailViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        if loadedPDFData == nil, previewImageView.image == nil, sheetLoadTask == nil {
+        if originalPDFDocument == nil && labeledPDFDocument == nil && sheetLoadTask == nil {
             loadSheetData()
         }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-
         let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
         if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
             cancelPendingTasks()
@@ -110,6 +105,19 @@ class DiscoverSongDetailViewController: UIViewController {
     deinit {
         cancelPendingTasks()
         releasePDFResources()
+    }
+    
+    private func cancelPendingTasks() {
+        sheetLoadTask?.cancel()
+        sheetLoadTask = nil
+        recentPlayTask?.cancel()
+        recentPlayTask = nil
+    }
+
+    private func releasePDFResources() {
+        originalPDFDocument = nil
+        labeledPDFDocument = nil
+        pdfView.document = nil
     }
 
     // MARK: - Apply Passed Data
@@ -178,7 +186,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func setupContent() {
         songTitleLabel.textAlignment = .center
-        songTitleLabel.font = .systemFont(ofSize: 34, weight: .bold)
+        songTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         songTitleLabel.textColor = ComponentColors.SongDetailScreen.songTitle
         songTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(songTitleLabel)
@@ -202,6 +210,7 @@ class DiscoverSongDetailViewController: UIViewController {
         playAlongButton.layer.shadowOpacity = 0.15
         playAlongButton.layer.shadowRadius  = 6
         playAlongButton.layer.shadowOffset  = CGSize(width: 0, height: 3)
+        playAlongButton.isEnabled = false
 
         animationButton.setTitle("Animation", for: .normal)
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
@@ -209,6 +218,7 @@ class DiscoverSongDetailViewController: UIViewController {
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
         animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
+        animationButton.isEnabled = false
 
         buttonStack.axis         = .horizontal
         buttonStack.spacing      = 26
@@ -221,25 +231,10 @@ class DiscoverSongDetailViewController: UIViewController {
         sheetContainer.translatesAutoresizingMaskIntoConstraints = false
         sheetContainer.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicCardFill
         sheetContainer.layer.cornerRadius = 20
+        sheetContainer.layer.borderWidth  = 0.5
+        sheetContainer.layer.borderColor  = UIColor.separator.cgColor
         sheetContainer.clipsToBounds = true
         contentView.addSubview(sheetContainer)
-
-        var previewConfig = UIButton.Configuration.filled()
-        previewConfig.title = "Preview"
-        previewConfig.baseForegroundColor = .white
-        previewConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        previewConfig.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
-        previewConfig.cornerStyle = .fixed
-        previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var output = incoming
-            output.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-            return output
-        }
-        previewButton.configuration = previewConfig
-        previewButton.layer.cornerRadius = 16
-        previewButton.clipsToBounds = true
-        previewButton.translatesAutoresizingMaskIntoConstraints = false
-        sheetContainer.addSubview(previewButton)
 
         pdfView.layer.cornerRadius  = 12
         pdfView.clipsToBounds       = true
@@ -273,7 +268,7 @@ class DiscoverSongDetailViewController: UIViewController {
         contentView.addSubview(bottomSpacer)
     }
 
-        // MARK: - Constraints
+    // MARK: - Constraints
 
     private func setupConstraints() {
         NSLayoutConstraint.activate([
@@ -288,41 +283,37 @@ class DiscoverSongDetailViewController: UIViewController {
             artistLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             sheetToggle.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 22),
-            sheetToggle.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            sheetToggle.widthAnchor.constraint(equalToConstant: 240),
+            sheetToggle.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            sheetToggle.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             sheetContainer.topAnchor.constraint(equalTo: sheetToggle.bottomAnchor, constant: 20),
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            sheetContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 420),
+            sheetContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 560),
 
             buttonStack.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 24),
             buttonStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             buttonStack.widthAnchor.constraint(equalToConstant: 320),
             buttonStack.heightAnchor.constraint(equalToConstant: 46),
 
-            previewButton.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 14),
-            previewButton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
-            previewButton.heightAnchor.constraint(equalToConstant: 32),
+            pdfView.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 2),
+            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 2),
+            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -2),
+            pdfView.heightAnchor.constraint(equalToConstant: 520),
+            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -2),
 
-            pdfView.topAnchor.constraint(equalTo: previewButton.bottomAnchor, constant: 12),
-            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 10),
-            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -10),
-            pdfView.heightAnchor.constraint(equalToConstant: 380),
-            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -10),
-
-            pdfLoadingIndicator.centerXAnchor.constraint(equalTo: previewImageView.centerXAnchor),
-            pdfLoadingIndicator.centerYAnchor.constraint(equalTo: previewImageView.centerYAnchor),
+            pdfLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
+            pdfLoadingIndicator.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
 
             pdfErrorLabel.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             pdfErrorLabel.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
             pdfErrorLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
             pdfErrorLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
 
-            bottomSpacer.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor),
+            bottomSpacer.topAnchor.constraint(equalTo: buttonStack.bottomAnchor),
             bottomSpacer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             bottomSpacer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            bottomSpacer.heightAnchor.constraint(equalToConstant: 24),
+            bottomSpacer.heightAnchor.constraint(equalToConstant: 40),
             bottomSpacer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
@@ -332,7 +323,14 @@ class DiscoverSongDetailViewController: UIViewController {
     private func setupActions() {
         playAlongButton.addTarget(self, action: #selector(openPlayAlongVC),       for: .touchUpInside)
         animationButton.addTarget(self, action: #selector(didTapAnimation),       for: .touchUpInside)
-        previewButton.addTarget(self, action: #selector(didTapPDFView), for: .touchUpInside)
+    }
+
+    private func updateActionButtonState() {
+        let hasJSON = sheetMusicJSON != nil
+        playAlongButton.isEnabled = hasJSON
+        animationButton.isEnabled = hasJSON
+        playAlongButton.alpha = hasJSON ? 1.0 : 0.6
+        animationButton.alpha = hasJSON ? 1.0 : 0.6
     }
 
     @objc private func sheetToggleChanged() {
@@ -363,7 +361,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
         guard let json = sheetMusicJSON,
               let data = try? JSONSerialization.data(withJSONObject: json) else {
-            showAnimationError("No converted JSON data is available for this song yet.")
+            showConvertedJSONMissingError()
             return
         }
 
@@ -381,7 +379,7 @@ class DiscoverSongDetailViewController: UIViewController {
         playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
 
         guard let json = sheetMusicJSON else {
-            showAnimationError("No sheet music data available yet.\nPlease wait a moment and try again.")
+            showConvertedJSONMissingError()
             return
         }
 
@@ -404,40 +402,25 @@ class DiscoverSongDetailViewController: UIViewController {
         present(a, animated: true)
     }
 
-    @objc private func bookmarkTapped() {
-        let on = bookmarkButton.tintColor == UIColor.systemYellow
-        bookmarkButton.tintColor = on ? ComponentColors.SongCard.chevronIcon : .systemYellow
-        bookmarkButton.setImage(UIImage(systemName: on ? "bookmark" : "bookmark.fill"), for: .normal)
-    }
-
-    @objc private func handleBack() {
-        navigationController?.popViewController(animated: true)
-    }
-
-    @objc private func handleChord() {
-        navigationController?.pushViewController(ChordRecognitionViewController(), animated: true)
-    }
-
-    @objc private func handleProfile() {
-        navigationController?.pushViewController(UserProfileViewController(), animated: true)
+    private func showConvertedJSONMissingError() {
+        let message: String
+        if let jsonPath = song?.outputJsonPath, !jsonPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            message = "The converted JSON has not loaded yet. Please wait a moment and try again."
+        } else {
+            message = "This song does not have a converted JSON path yet. Add `output_json_path` for this song in Supabase first."
+        }
+        showAnimationError(message)
     }
 
     // MARK: - Fetch Data
 
     private func loadSheetData() {
-        guard let sheetId = song?.sheetFileId else {
-            debugLog("[DiscoverDetail] ❌ No sheetFileId")
-            self.showPDFError()
-            return
-        }
 
         sheetLoadTask?.cancel()
         pdfLoadingIndicator.startAnimating()
-        previewImageView.image = nil
-        previewImageView.isHidden = true
         pdfErrorLabel.isHidden = true
 
-        Task {
+        sheetLoadTask = Task {
             async let originalTask: Void = self.loadOriginalPDF()
             async let labeledTask: Void = self.loadConvertedPDF()
             async let jsonTask: Void = self.loadConvertedJSON()
@@ -455,9 +438,10 @@ class DiscoverSongDetailViewController: UIViewController {
 
         if trimmed.hasPrefix("/") {
             return ReHersAPI.url(path: trimmed)
+        } else {
+            // Assume it's a relative backend path even without a leading slash
+            return ReHersAPI.url(path: "/" + trimmed)
         }
-
-        return nil
     }
 
     private func fetchRemoteData(from rawValue: String) async throws -> Data {
@@ -561,7 +545,7 @@ class DiscoverSongDetailViewController: UIViewController {
         let doc = sheetToggle.selectedSegmentIndex == 0 ? originalPDFDocument : labeledPDFDocument
         guard let doc else { return }
         let vc = MaximizeUploadPageViewController()
-        vc.pdfData = pdfData
+        vc.pdfData = doc.dataRepresentation()
         vc.pdfDocument = doc
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
@@ -569,8 +553,6 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func showPDFError() {
         pdfLoadingIndicator.stopAnimating()
-        previewImageView.image = nil
-        previewImageView.isHidden = true
         pdfErrorLabel.isHidden = false
     }
 

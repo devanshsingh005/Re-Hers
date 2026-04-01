@@ -52,16 +52,17 @@ final class RecentPlayService {
             return
         }
 
-        struct PlayRow: Encodable {
+        struct PlayRow: Codable {
             let user_id: UUID
             let song_id: UUID
             let last_played_at: String
         }
 
+        let dateStr = ISO8601DateFormatter().string(from: Date())
         let row = PlayRow(
             user_id: userId,
             song_id: songId,
-            last_played_at: ISO8601DateFormatter().string(from: Date())
+            last_played_at: dateStr
         )
 
         debugLog("[RecentPlayService] Recording play for song: \(songId), user: \(userId)")
