@@ -7,6 +7,8 @@ import UIKit
 import AVFoundation
 import PhotosUI
 import VisionKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import Supabase
 import Auth
 internal import PostgREST
@@ -1522,11 +1524,14 @@ extension UploadScreen: VNDocumentCameraViewControllerDelegate {
                                       didFinishWith scan: VNDocumentCameraScan) {
         dismissDocumentScanner(controller) { [weak self] in
             guard let self else { return }
-            // Collect all scanned pages as UIImages
+            // Collect all scanned pages — VisionKit already removes shadows
+            // and corrects perspective. We then apply Apple's built-in
+            // CIPhotoEffectNoir filter for a pure B&W scanned-document look.
             var pages: [UIImage] = []
             for index in 0 ..< scan.pageCount {
                 autoreleasepool {
-                    pages.append(scan.imageOfPage(at: index))
+                    let raw = scan.imageOfPage(at: index)
+                    pages.append(raw.applyDocumentStyle())
                 }
             }
             guard !pages.isEmpty else {
@@ -1717,7 +1722,7 @@ private class GradientView: UIView {
     override func layoutSubviews() { super.layoutSubviews(); gl.frame = bounds }
 }
 
-// MARK: - UIImage Orientation Normalization
+// MARK: - UIImage Orientation Normalization + Document Style
 private extension UIImage {
     /// Redraws the image into a new context so imageOrientation == .up.
     /// VisionKit scan pages often carry non-up orientations; drawing them
@@ -1729,6 +1734,43 @@ private extension UIImage {
             draw(in: CGRect(origin: .zero, size: size))
         }
     }
+
+    /// Converts a VisionKit scanned page to a pure B&W document image.
+    /// Pipeline (all Apple-native Core Image, no custom processing):
+    ///   1. CIPhotoEffectNoir  — desaturates + applies film-noir contrast curve
+    ///   2. CIColorControls    — boosts contrast further so stave lines are crisp black
+    /// The shared CIContext is GPU-backed and reused across pages to avoid
+    /// re-allocating the Metal pipeline on every call (memory-safe).
+    func applyDocumentStyle() -> UIImage {
+        guard let ciInput = CIImage(image: self) else { return self }
+
+        // Step 1 — B&W via Apple's built-in Noir filter
+        let noir = CIFilter.photoEffectNoir()
+        noir.inputImage = ciInput
+        guard let noirOutput = noir.outputImage else { return self }
+
+        // Step 2 — Boost contrast so music notation lines are razor-sharp
+        let controls = CIFilter.colorControls()
+        controls.inputImage  = noirOutput
+        controls.saturation  = 0.0   // ensure fully desaturated
+        controls.contrast    = 1.4   // crisp stave lines
+        controls.brightness  = 0.05  // lift shadows slightly so paper stays white
+        guard let finalCI = controls.outputImage else { return self }
+
+        // Render using a shared GPU-backed context (no memory leak — static let)
+        let cgResult = UIImage.ciContext.createCGImage(finalCI, from: finalCI.extent)
+        guard let cgResult else { return self }
+
+        let rendered = UIGraphicsImageRenderer(size: size).image { _ in
+            UIImage(cgImage: cgResult, scale: scale, orientation: imageOrientation)
+                .draw(in: CGRect(origin: .zero, size: size))
+        }
+        return rendered
+    }
+
+    /// Shared Metal-backed CIContext. Creating one per page would re-allocate
+    /// the GPU pipeline on every call — a significant memory/perf leak.
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 }
 
 // MARK: - UILabel Tracking
