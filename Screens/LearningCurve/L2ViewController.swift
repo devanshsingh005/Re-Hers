@@ -1600,7 +1600,7 @@ class LessonDetailViewController: UIViewController {
 
         let sheet = TryYourselfViewController(noteName: variant)
         sheet.modalPresentationStyle = .pageSheet
-        if let sp = sheet.sheetPresentationController {
+        if #available(iOS 15.0, *), let sp = sheet.sheetPresentationController {
             sp.detents = [.medium()]
             sp.prefersGrabberVisible = true
             sp.preferredCornerRadius = 30
@@ -1702,7 +1702,7 @@ class LessonDetailViewController: UIViewController {
                     }
                 }
             } catch {
-                print("[LessonDetailViewController] loadCompletedVariants error: \(error)")
+                debugLog("[LessonDetailViewController] loadCompletedVariants error: \(error)")
             }
         }
     }

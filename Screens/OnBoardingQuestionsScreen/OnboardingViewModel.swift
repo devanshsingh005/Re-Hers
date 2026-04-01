@@ -91,9 +91,9 @@ class OnboardingViewModel: ObservableObject {
                 .upsert(payload)
                 .execute()
             
-            print("Successfully finalized onboarding for \(userId) with icon \(randomIcon)")
+            debugLog("Successfully finalized onboarding for \(userId) with icon \(randomIcon)")
         } catch {
-            print("Database error during onboarding finalization: \(error.localizedDescription)")
+            debugLog("Database error during onboarding finalization: \(error.localizedDescription)")
         }
         
         // Always navigate Home if we have a userId, even if DB updates failed 
@@ -108,7 +108,7 @@ class OnboardingViewModel: ObservableObject {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }),
-              let window = scene.keyWindow else { return }
+              let window = scene.windows.first(where: { $0.isKeyWindow }) else { return }
 
         UIView.transition(with: window,
                           duration: 0.35,

@@ -422,19 +422,19 @@ extension ChordDetector {
             ["E2", "E4", "G4", "B4"],   // Em with bass
         ]
         
-        print("🎹 Chord Detection Examples:")
-        print("=" * 40)
+        debugLog("🎹 Chord Detection Examples:")
+        debugLog("=" * 40)
         
         for (index, notes) in testChords.enumerated() {
             let chord = detector.detectChord(from: notes)
             let possible = detector.detectPossibleChords(from: notes, limit: 2)
             
-            print("Test \(index + 1): \(notes.joined(separator: ", "))")
-            print("  Detected: \(chord)")
+            debugLog("Test \(index + 1): \(notes.joined(separator: ", "))")
+            debugLog("  Detected: \(chord)")
             if !possible.isEmpty {
-                print("  Possible: \(possible.joined(separator: ", "))")
+                debugLog("  Possible: \(possible.joined(separator: ", "))")
             }
-            print()
+            debugLog()
         }
     }
 }

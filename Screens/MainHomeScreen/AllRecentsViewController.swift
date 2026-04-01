@@ -69,7 +69,7 @@ final class AllRecentsViewController: UIViewController {
                 let recents = try await RecentPlayService.shared.fetchRecents(limit: 50)
                 await MainActor.run { self.populate(recents) }
             } catch {
-                print("[AllRecents] ❌ \(error)")
+                debugLog("[AllRecents] ❌ \(error)")
                 await MainActor.run { self.showEmpty() }
             }
         }

@@ -51,7 +51,9 @@ final class SheetMusicView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setup()
+        #if DEBUG
         loadJSON()
+        #endif
     }
 
     func loadData(_ data: Data) {
@@ -270,21 +272,25 @@ final class SheetMusicView: UIView {
     private var totalStaffHeight: CGFloat { isSingleStaff ? staffH : (staffH * 2 + staffGap) }
 
     // MARK: JSON
+    #if DEBUG
     private func loadJSON() {
         guard let url  = Bundle.main.url(forResource:"sheet_test", withExtension:"json"),
               let data = try? Data(contentsOf: url)
-        else { print("❌ sheet_test.json not found"); return }
+        else { debugLog("❌ bundled debug sheet data not found"); return }
         parseJSON(data); setNeedsLayout()
     }
+    #else
+    private func loadJSON() {}
+    #endif
 
     private func parseJSON(_ data: Data) {
-        print("📄 [SheetMusicView] parseJSON starting, data size: \(data.count) bytes")
+        debugLog("📄 [SheetMusicView] parseJSON starting, data size: \(data.count) bytes")
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String:Any]
         else { 
-            print("❌ [SheetMusicView] parseJSON failed: Invalid JSON format")
+            debugLog("❌ [SheetMusicView] parseJSON failed: Invalid JSON format")
             return 
         }
-        print("🔍 [SheetMusicView] Root keys: \(root.keys.joined(separator: ", "))")
+        debugLog("🔍 [SheetMusicView] Root keys: \(root.keys.joined(separator: ", "))")
 
         // "part" is [[String:Any]] (array), not [String:Any] — must handle both
         var raw: [[String:Any]]?
@@ -299,7 +305,7 @@ final class SheetMusicView: UIView {
         }
         if raw == nil || raw!.isEmpty { raw = deepFind(root) }
         guard let arr = raw, !arr.isEmpty else {
-            print("❌ SheetMusicView: no measures found in JSON")
+            debugLog("❌ SheetMusicView: no measures found in JSON")
             return
         }
 
@@ -393,7 +399,7 @@ final class SheetMusicView: UIView {
         self.maxPixelsPerTick = pixelsPerTick
         songPixelLength = CGFloat(globalTick) * pixelsPerTick
         canvasW = max(3000, clefW + songPixelLength + 400)
-        print("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(totalTicks)")
+        debugLog("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(totalTicks)")
     }
 
     private func noteFrom(_ d: [String:Any], tick: Int) -> SheetNote? {

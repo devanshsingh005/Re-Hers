@@ -36,7 +36,7 @@ final class PlayAlongViewController: UIViewController {
     }
     
     deinit {
-        print("🧹 Cleaning up PlayAlong session")
+        debugLog("🧹 Cleaning up PlayAlong session")
         pitchDetector.stopListening()
         AudioEngineManager.shared.stopAllNotes()
         releaseAudioPlaybackSession()
@@ -110,7 +110,9 @@ final class PlayAlongViewController: UIViewController {
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func forceLandscape() {
-        self.setNeedsUpdateOfSupportedInterfaceOrientations()
+        if #available(iOS 16.0, *) {
+            self.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
         UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
     }
 
@@ -166,7 +168,7 @@ final class PlayAlongViewController: UIViewController {
     }
     
     @objc private func micIndicatorTapped() {
-        print("🎙️ Manual Mic Reset requested")
+        debugLog("🎙️ Manual Mic Reset requested")
         pitchDetector.stopListening()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.pitchDetector.startListening()
@@ -203,7 +205,7 @@ final class PlayAlongViewController: UIViewController {
         let result: [SongChord]?
         
         if let data = sheetMusicData {
-            print("📄 [PlayAlong] RECEIVED DYNAMIC DATA: \(data.count) bytes")
+            debugLog("📄 [PlayAlong] RECEIVED DYNAMIC DATA: \(data.count) bytes")
             
             // Fix: Tell SheetMusicView to parse the raw data directly
             sheetMusic.loadData(data)
@@ -211,22 +213,27 @@ final class PlayAlongViewController: UIViewController {
             do {
                 result = try MusicJSONLoader.loadSongChords(from: data)
                 if let count = result?.count {
-                    print("✅ [PlayAlong] Successfully parsed \(count) chords from dynamic data")
+                    debugLog("✅ [PlayAlong] Successfully parsed \(count) chords from dynamic data")
                 }
             } catch {
-                print("❌ [PlayAlong] FAILED to parse dynamic data: \(error)")
+                debugLog("❌ [PlayAlong] FAILED to parse dynamic data: \(error)")
                 result = nil
             }
         } else {
-            print("📄 [PlayAlong] No dynamic data, falling back to sheet_test")
+            #if DEBUG
+            debugLog("📄 [PlayAlong] No dynamic data, falling back to sheet_test")
             result = MusicJSONLoader().loadJSON(from: "sheet_test")
+            #else
+            debugLog("⚠️ [PlayAlong] No sheet data provided")
+            result = nil
+            #endif
         }
         
         if let st = result {
             sheetMusic.configure(with: st)
             engine.start(with: st)
         } else {
-            print("❌ [PlayAlong] Failed to load any sheet data")
+            debugLog("❌ [PlayAlong] Failed to load any sheet data")
         }
     }
     
@@ -269,9 +276,10 @@ final class PlayAlongViewController: UIViewController {
     }
 
     @objc private func simulateSession() {
-        print("🚀 Starting Simulator Simulation (sheet_test)...")
+        #if DEBUG
+        debugLog("🚀 Starting Simulator Simulation...")
         var delay: Double = 0
-        // Longer sequence from sheet_test.json
+        // Longer sequence from the bundled debug sheet data
         let notesToPlay = [
             "F5", "F5", "E5", "E5", "D5", "E5", "F5", "E5", "D5", "C5",
             "F5", "E5", "D5", "C5", "D5", "E5", "F5", "G5", "A5", "G5"
@@ -285,6 +293,7 @@ final class PlayAlongViewController: UIViewController {
                 else { self.handleInput(note: note) }
             }
         }
+        #endif
     }
 }
 

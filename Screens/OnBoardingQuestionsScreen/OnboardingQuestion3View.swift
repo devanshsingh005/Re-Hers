@@ -56,7 +56,6 @@ struct OnboardingQuestion3View: View {
                             Text("\(currentMins)")
                                 .font(.system(size: 64, weight: .bold))
                                 .foregroundColor(Color(SemanticColors.Text.primary))
-                                .contentTransition(.numericText())
                                 .animation(.spring(response: 0.35, dampingFraction: 0.65), value: currentMins)
                                 .shadow(color: Color(SemanticColors.Text.primary).opacity(0.2), radius: 8, x: 0, y: 4)
 
@@ -79,8 +78,8 @@ struct OnboardingQuestion3View: View {
                             Slider(value: $sliderIndex, in: 0...Double(steps.count - 1), step: 1) { _ in
                                 viewModel.practiceMins = currentMins
                             }
-                            .tint(Color(SemanticColors.DataViz.progressFill))
-                            .onChange(of: sliderIndex) { _, _ in
+                            .accentColor(Color(SemanticColors.DataViz.progressFill))
+                            .onChange(of: sliderIndex) { _ in
                                 viewModel.practiceMins = currentMins
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
@@ -151,15 +150,15 @@ struct OnboardingQuestion3View: View {
                 .ignoresSafeArea()
         )
         .navigationBarHidden(true)
-        .alert("Error", isPresented: Binding<Bool>(
+        .alert(isPresented: Binding<Bool>(
             get: { viewModel.errorMessage != nil },
             set: { _ in viewModel.errorMessage = nil }
         )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            if let msg = viewModel.errorMessage {
-                Text(msg)
-            }
+            Alert(
+                title: Text("Error"),
+                message: Text(viewModel.errorMessage ?? ""),
+                dismissButton: .cancel(Text("OK"))
+            )
         }
         .onAppear {
             if let idx = steps.firstIndex(of: viewModel.practiceMins) {

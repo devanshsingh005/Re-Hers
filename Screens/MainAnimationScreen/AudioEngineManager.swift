@@ -174,9 +174,9 @@ final class AudioEngineManager {
             try session.setActive(true)
             try engine.start()
             isStarted = true
-            print("🎹 Audio engine started")
+            debugLog("🎹 Audio engine started")
         } catch {
-            print("❌ Engine start failed:", error); return
+            debugLog("❌ Engine start failed:", error); return
         }
         loadSoundFont(for: currentInstrument)
     }
@@ -211,7 +211,7 @@ final class AudioEngineManager {
         }
 
         // 3. Pure tone fallback — always sounds decent
-        print("⚠️ No soundfont found — using sine-wave fallback")
+        debugLog("⚠️ No soundfont found — using sine-wave fallback")
         useFallback = true
         sfLoaded    = true  // allow playback via fallback path
     }
@@ -224,7 +224,7 @@ final class AudioEngineManager {
                 bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: 0)
             sfLoaded = true
             useFallback = false
-            print("🎹 Loaded:", url.lastPathComponent)
+            debugLog("🎹 Loaded:", url.lastPathComponent)
             return true
         } catch {
             return false

@@ -2,6 +2,14 @@ import UIKit
 import Supabase
 import Auth
 
+@inline(__always)
+func debugLog(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+    #if DEBUG
+    let message = items.map { String(describing: $0) }.joined(separator: separator)
+    Swift.print(message, terminator: terminator)
+    #endif
+}
+
 public final class NavigationBarHelper {
     public static let profileDidUpdateNotification = Notification.Name("NavigationBarProfileDidUpdate")
     
@@ -27,13 +35,12 @@ public final class NavigationBarHelper {
         
         // Day Badge
         if let target = target, let action = dayBadgeAction {
-            var config = UIButton.Configuration.filled()
-            config.title = "🔥 Day 1"
-            config.baseForegroundColor = .black
-            config.baseBackgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
-            config.cornerStyle = .capsule
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
-            let dayBadge = UIButton(configuration: config)
+            let dayBadge = UIButton(type: .system)
+            dayBadge.setTitle("🔥 Day 1", for: .normal)
+            dayBadge.setTitleColor(.black, for: .normal)
+            dayBadge.backgroundColor = UIColor(red: 1, green: 0.75, blue: 0.2, alpha: 1)
+            dayBadge.layer.cornerRadius = 14
+            dayBadge.contentEdgeInsets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
             dayBadge.titleLabel?.font = .boldSystemFont(ofSize: 14)
             dayBadge.addTarget(target, action: action, for: .touchUpInside)
             stackView.addArrangedSubview(dayBadge)
@@ -178,17 +185,10 @@ public final class NavigationBarHelper {
         }
         
         private func setup() {
-            var config = UIButton.Configuration.plain()
-            
             let chevronCfg = UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
-            config.image = UIImage(systemName: "chevron.backward", withConfiguration: chevronCfg)
-            
-            // Clean Native Styling (No backgrounds, no shadows)
-            config.baseForegroundColor = .label // Adaptive black/white
-            
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 10)
-            
-            self.configuration = config
+            setImage(UIImage(systemName: "chevron.backward", withConfiguration: chevronCfg), for: .normal)
+            tintColor = .label
+            contentEdgeInsets = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 10)
             
             // Remove Shadow (Reset to default)
             layer.shadowColor = UIColor.clear.cgColor
@@ -316,8 +316,12 @@ public final class NavigationBarHelper {
             navBackgroundView.contentView.addSubview(shadowView)
         }
 
-        let window = containerView.window?.windowScene?.keyWindow
-            ?? UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        let window = containerView.window
+            ?? (containerView.window?.windowScene?.windows.first { $0.isKeyWindow })
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first { $0.isKeyWindow }
         let topPadding = window?.safeAreaInsets.top ?? 0
         let navHeight: CGFloat = 44 + topPadding
 

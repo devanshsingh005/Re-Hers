@@ -24,7 +24,7 @@ struct MusicJSONLoader {
         do {
             return try MusicJSONLoader.loadSongChords(fromBundleFilename: filename + ".json")
         } catch {
-            print("[MusicJSONLoader] Error loading \(filename): \(error)")
+            debugLog("[MusicJSONLoader] Error loading \(filename): \(error)")
             return nil
         }
     }
@@ -216,7 +216,7 @@ struct MusicJSONLoader {
             ))
         }
 
-        print("[MusicJSONLoader] ✅ \(chords.count) chords | bpm=\(bpm) | divs=\(divisions) | dur≈\(String(format:"%.1f",chords.reduce(0){$0+$1.duration}))s")
+        debugLog("[MusicJSONLoader] ✅ \(chords.count) chords | bpm=\(bpm) | divs=\(divisions) | dur≈\(String(format:"%.1f",chords.reduce(0){$0+$1.duration}))s")
         return chords
     }
 
@@ -249,7 +249,7 @@ struct MusicJSONLoader {
     private static func findMeasures(in dict: [String: Any]) -> [[String: Any]]? {
         // Direct hit: this dict has a "measure" array
         if let arr = dict["measure"] as? [[String: Any]], !arr.isEmpty { 
-            print("📎 [MusicJSONLoader] Found 'measure' array directly")
+            debugLog("📎 [MusicJSONLoader] Found 'measure' array directly")
             return arr 
         }
 
@@ -262,7 +262,7 @@ struct MusicJSONLoader {
             }
             // Recurse into an array of dicts — collect & flatten all parts' measures
             if let arr = v as? [[String: Any]] {
-                print("📂 [MusicJSONLoader] Recursing into array for key: \(key)")
+                debugLog("📂 [MusicJSONLoader] Recursing into array for key: \(key)")
                 let allMeasures = arr.compactMap { findMeasures(in: $0) }.flatMap { $0 }
                 if !allMeasures.isEmpty { return allMeasures }
             }

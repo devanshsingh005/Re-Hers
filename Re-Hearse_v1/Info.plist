@@ -2,12 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
-	<key>UIFileSharingEnabled</key>
-	<true/>
 	<key>CFBundleIdentifier</key>
-	<string></string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -32,16 +28,18 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>io.supabase.rehearse</string>
+				<string>rehearse</string>
 			</array>
 		</dict>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Re-Hers needs the microphone to detect the notes you sing or play.</string>
+	<string>Re-Hearse uses your microphone to listen to you play and provide real-time chord recognition and feedback.</string>
 	<key>SUPABASE_KEY</key>
 	<string>$(SUPABASE_KEY)</string>
 	<key>SUPABASE_URL</key>
 	<string>$(SUPABASE_URL)</string>
+	<key>PUBLIC_LEGAL_BASE_URL</key>
+	<string>https://rehearse.app</string>
 	<key>BACKEND_API_URL</key>
 	<string>$(BACKEND_API_URL)</string>
 </dict>

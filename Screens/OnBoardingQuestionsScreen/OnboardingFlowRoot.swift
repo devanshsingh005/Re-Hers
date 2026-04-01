@@ -5,9 +5,10 @@ struct OnboardingFlowRoot: View {
     @StateObject var viewModel = OnboardingViewModel()
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             OnboardingQuestion1View()
                 .environmentObject(viewModel)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }

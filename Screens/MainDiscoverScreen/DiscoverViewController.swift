@@ -420,15 +420,12 @@ final class DiscoverViewController: UIViewController {
         let orange = ComponentColors.HomeScreen.actionButtonFill
 
         func updateBtn(_ btn: UIButton, active: Bool, label: String) {
-            var title = AttributedString("\(label)  ▾")
-            title.font = .systemFont(ofSize: 15, weight: .semibold)
-            btn.configuration?.attributedTitle     = title
-            btn.configuration?.baseBackgroundColor = active
+            btn.setTitle("\(label)  ▾", for: .normal)
+            btn.backgroundColor = active
                 ? orange.withAlphaComponent(0.15)
                 : ComponentColors.DiscoverScreen.chipBackgroundDefault
-            btn.configuration?.baseForegroundColor = active
-                ? orange
-                : ComponentColors.DiscoverScreen.chipTextDefault
+            btn.setTitleColor(active ? orange : ComponentColors.DiscoverScreen.chipTextDefault, for: .normal)
+            btn.tintColor = active ? orange : ComponentColors.DiscoverScreen.chipTextDefault
         }
 
         updateBtn(levelButton,
@@ -507,18 +504,19 @@ final class DiscoverViewController: UIViewController {
     // MARK: Helpers
 
     private func makeFilterButton(icon: String, title: String) -> UIButton {
-        var cfg = UIButton.Configuration.filled()
-        cfg.baseBackgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
-        cfg.baseForegroundColor = ComponentColors.DiscoverScreen.chipTextDefault
-        cfg.image               = UIImage(systemName: icon)
-        cfg.imagePlacement      = .leading
-        cfg.imagePadding        = 8
-        cfg.contentInsets       = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 14)
-        cfg.cornerStyle         = .medium
-        var attrTitle = AttributedString("\(title)  ▾")
-        attrTitle.font = .systemFont(ofSize: 15, weight: .semibold)
-        cfg.attributedTitle = attrTitle
-        let btn = UIButton(configuration: cfg)
+        let btn = UIButton(type: .system)
+        btn.setImage(UIImage(systemName: icon), for: .normal)
+        btn.setTitle("\(title)  ▾", for: .normal)
+        btn.setTitleColor(ComponentColors.DiscoverScreen.chipTextDefault, for: .normal)
+        btn.tintColor = ComponentColors.DiscoverScreen.chipTextDefault
+        btn.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
+        btn.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        btn.layer.cornerRadius = 14
+        btn.clipsToBounds = true
+        btn.contentEdgeInsets = UIEdgeInsets(top: 10, left: 16, bottom: 10, right: 14)
+        btn.semanticContentAttribute = .forceLeftToRight
+        btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
+        btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: -4)
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }
@@ -600,7 +598,7 @@ final class DiscoverViewController: UIViewController {
                     }
                 }
             } catch {
-                print("Error fetching profile: \(error)")
+                debugLog("Error fetching profile: \(error)")
                 await MainActor.run {
                     largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
                     largeProfileButton.tintColor = .secondaryLabel

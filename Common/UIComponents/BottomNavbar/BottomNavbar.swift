@@ -69,7 +69,9 @@ class MainTabBarController: UITabBarController {
         let globalAppearance = UITabBarAppearance()
         globalAppearance.configureWithDefaultBackground()
         UITabBar.appearance().standardAppearance   = globalAppearance
-        UITabBar.appearance().scrollEdgeAppearance  = globalAppearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = globalAppearance
+        }
 
         reapplyTabBarAppearance()
     }
@@ -104,9 +106,11 @@ class MainTabBarController: UITabBarController {
         appearance.compactInlineLayoutAppearance.normal.titleTextAttributes    = normalAttrs
         appearance.compactInlineLayoutAppearance.selected.titleTextAttributes  = selectedAttrs
 
-        tabBar.standardAppearance   = appearance
-        tabBar.scrollEdgeAppearance  = appearance
-        tabBar.isTranslucent         = true
+        tabBar.standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            tabBar.scrollEdgeAppearance = appearance
+        }
+        tabBar.isTranslucent = true
     }
 
     override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
@@ -136,4 +140,3 @@ extension UINavigationController {
         return topViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
     }
 }
-

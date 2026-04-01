@@ -1,4 +1,32 @@
 import SwiftUI
+import SafariServices
+
+private enum LegalSupportInfo {
+    static let operatorName = "Re-Hearse"
+    static let supportEmail = "support@rehearse.app"
+    static var publicSiteBaseURL: URL {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "PUBLIC_LEGAL_BASE_URL") as? String,
+           let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+           !raw.isEmpty {
+            return url
+        }
+        return URL(string: "https://rehearse.app")!
+    }
+
+    static var privacyPolicyURL: URL? {
+        publicSiteBaseURL.appendingPathComponent("privacy-policy")
+    }
+
+    static var termsURL: URL? {
+        publicSiteBaseURL.appendingPathComponent("terms-of-service")
+    }
+
+    static var supportMailURL: URL? {
+        let subject = "Re-Hearse Support"
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Re-Hearse%20Support"
+        return URL(string: "mailto:\(supportEmail)?subject=\(subject)")
+    }
+}
 
 // MARK: - Data Models
 
@@ -147,7 +175,7 @@ struct LegalData {
                 "Usage data: features used, actions taken, and interaction patterns",
                 "Cookies and similar tracking technologies"
             ]),
-            .paragraph("If you sign in using a third-party service (such as Google or Apple), we may receive basic profile information as permitted by those services.")
+            .paragraph("We currently support account access through your Re-Hearse credentials. If we add a third-party sign-in option in the future, we will update this policy before collecting any additional profile information from that provider.")
         ]),
         LegalSection(number: "3", title: "How We Use Your Data", content: [
             .paragraph("We use the data we collect to:"),
@@ -260,14 +288,15 @@ public enum LegalTab: String, CaseIterable, Identifiable {
 public struct LegalScreenView: View {
 
     @State private var selectedTab: LegalTab
-    @Environment(\.dismiss) private var dismiss
+    @State private var presentedURL: URL?
+    @Environment(\.presentationMode) private var presentationMode
 
     public init(initialTab: LegalTab = .terms) {
         _selectedTab = State(initialValue: initialTab)
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 Section {
                     Picker("Legal Document", selection: $selectedTab) {
@@ -281,8 +310,7 @@ public struct LegalScreenView: View {
                 Section {
                     VStack(alignment: .leading) {
                         Label(selectedTab.rawValue, systemImage: selectedTab.icon)
-                            .font(.headline)
-                            .fontWeight(.semibold)
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(Color(UIColor.label))
 
                         Text("Last updated: \(selectedTab == .terms ? LegalData.tosLastUpdated : LegalData.ppLastUpdated)")
@@ -306,6 +334,34 @@ public struct LegalScreenView: View {
                     }
                 }
 
+                Section(header: Text("Contact & Public Links")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Operator: \(LegalSupportInfo.operatorName)")
+                            .font(.system(.body))
+                            .foregroundColor(Color(UIColor.label))
+
+                        if let privacyURL = LegalSupportInfo.privacyPolicyURL {
+                            Button("Open Public Privacy Policy") {
+                                presentedURL = privacyURL
+                            }
+                        }
+
+                        if let termsURL = LegalSupportInfo.termsURL {
+                            Button("Open Public Terms of Service") {
+                                presentedURL = termsURL
+                            }
+                        }
+
+                        if let mailURL = LegalSupportInfo.supportMailURL {
+                            Link("Email Support: \(LegalSupportInfo.supportEmail)", destination: mailURL)
+                        } else {
+                            Text("Support: \(LegalSupportInfo.supportEmail)")
+                                .font(.system(.body))
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
                 Section(footer: Text("Copyright Rehearse")) {
                     EmptyView()
                 }
@@ -316,9 +372,24 @@ public struct LegalScreenView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
+            }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+        .sheet(
+            isPresented: Binding(
+                get: { presentedURL != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        presentedURL = nil
+                    }
+                }
+            )
+        ) {
+            if let url = presentedURL {
+                SafariSheet(url: url)
             }
         }
     }
@@ -337,12 +408,10 @@ private struct LegalSectionContentView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(section.number)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(Color.accentColor)
                 Text(section.title)
-                    .font(.body)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(Color(UIColor.label))
             }
 
@@ -379,8 +448,7 @@ private struct LegalSectionContentView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Color(UIColor.label))
                     Text(body)
                         .font(.system(.subheadline))
@@ -418,9 +486,9 @@ public struct LegalAgreementView: View {
     private var canAccept: Bool { didConfirmAgreement }
 
     public var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
-                Section("Documents") {
+                Section(header: Text("Documents")) {
                     Button {
                         presentedTab = .terms
                     } label: {
@@ -467,7 +535,11 @@ public struct LegalAgreementView: View {
                             onAccept()
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .foregroundColor(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(canAccept ? Color.accentColor : Color(UIColor.systemGray3))
+                    .cornerRadius(12)
                     .disabled(!canAccept)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
@@ -481,12 +553,14 @@ public struct LegalAgreementView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Decline", role: .destructive) {
+                    Button("Decline") {
                         onDecline()
                     }
+                    .foregroundColor(.red)
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .sheet(item: $presentedTab) { tab in
             LegalScreenView(initialTab: tab)
         }
@@ -501,7 +575,19 @@ public struct LegalAgreementView: View {
 
 #Preview("Legal Agreement (Onboarding)") {
     LegalAgreementView(
-        onAccept:  { print("User accepted") },
-        onDecline: { print("User declined") }
+        onAccept:  { debugLog("User accepted") },
+        onDecline: { debugLog("User declined") }
     )
+}
+
+private struct SafariSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.dismissButtonStyle = .close
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }

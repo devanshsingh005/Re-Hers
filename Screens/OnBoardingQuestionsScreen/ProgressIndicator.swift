@@ -22,14 +22,14 @@ struct ProgressIndicator: View {
 
 struct CustomOnboardingNavBar: View {
     let step: Int
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.presentationMode) private var presentationMode
     @EnvironmentObject var viewModel: OnboardingViewModel
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 if step > 1 {
-                    Button(action: { dismiss() }) {
+                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 16, weight: .semibold))

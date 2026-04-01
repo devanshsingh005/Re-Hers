@@ -112,14 +112,13 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
     }()
 
     private lazy var getConvertedButton: UIButton = {
-        var cfg                 = UIButton.Configuration.filled()
-        cfg.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        cfg.baseForegroundColor = ComponentColors.SongDetailScreen.primaryActionText
-        cfg.cornerStyle         = .large
-        var title               = AttributedString("Get Converted")
-        title.font              = .systemFont(ofSize: 18, weight: .bold)
-        cfg.attributedTitle     = title
-        let btn                 = UIButton(configuration: cfg)
+        let btn = UIButton(type: .system)
+        btn.setTitle("Get Converted", for: .normal)
+        btn.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
+        btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        btn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        btn.layer.cornerRadius = 16
+        btn.contentEdgeInsets = UIEdgeInsets(top: 14, left: 20, bottom: 14, right: 20)
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()
@@ -151,7 +150,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
                 do {
                     try await RecentPlayService.shared.recordPlay(songId: songId)
                 } catch {
-                    print("[SongPreview] ❌ Failed to record play: \(error)")
+                    debugLog("[SongPreview] ❌ Failed to record play: \(error)")
                 }
                 self?.recentPlayTask = nil
             }
@@ -522,7 +521,7 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
             vc.onDataReady = { [weak self] in
                 self?.uploadPopup?.notifyUploadComplete()
             }
-            print("[Convert] → UploadPageNextVC jobId=\(jobId.uuidString)")
+            debugLog("[Convert] → UploadPageNextVC jobId=\(jobId.uuidString)")
             self.navigationController?.pushViewController(vc, animated: true)
         }
     }
@@ -538,7 +537,9 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
         var req      = URLRequest(url: url)
         req.httpMethod          = "POST"
         req.timeoutInterval     = 60
-        req.assumesHTTP3Capable = false
+        if #available(iOS 14.5, *) {
+            req.assumesHTTP3Capable = false
+        }
         req.setValue("Bearer \(token)",                            forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -566,24 +567,20 @@ final class DiscoverSongPreviewViewController: UIViewController, UploadQuizPopup
 
     private func currentUserId() async -> String? {
         do    { return try await SupabaseManager.shared.currentUserId() }
-        catch { print("[Auth] authentication failed"); return nil }
+        catch { debugLog("[Auth] authentication failed"); return nil }
     }
 
     private func authToken() async -> String? {
         do    { return try await SupabaseManager.shared.accessToken() }
-        catch { print("[Auth] authentication failed"); return nil }
+        catch { debugLog("[Auth] authentication failed"); return nil }
     }
 
     // MARK: - UI Helpers
 
     private func setButtonLoading(_ loading: Bool) {
         getConvertedButton.isEnabled = !loading
-        var cfg = getConvertedButton.configuration ?? UIButton.Configuration.filled()
-        var t   = AttributedString(loading ? "Converting…" : "Get Converted")
-        t.font  = .systemFont(ofSize: 18, weight: .bold)
-        cfg.attributedTitle        = t
-        cfg.showsActivityIndicator = loading
-        getConvertedButton.configuration = cfg
+        getConvertedButton.setTitle(loading ? "Converting..." : "Get Converted", for: .normal)
+        getConvertedButton.alpha = loading ? 0.8 : 1.0
     }
 
     private func cancelPendingTasks() {

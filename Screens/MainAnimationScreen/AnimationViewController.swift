@@ -120,7 +120,9 @@ final class AnimationViewController: UIViewController {
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func forceLandscape() {
-        self.setNeedsUpdateOfSupportedInterfaceOrientations()
+        if #available(iOS 16.0, *) {
+            self.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
         UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
     }
 
@@ -230,7 +232,15 @@ final class AnimationViewController: UIViewController {
         if let data = sheetMusicData {
             mgr = PianoDemoManager(withData: data)
         } else {
+            #if DEBUG
             mgr = PianoDemoManager()
+            #else
+            allChords = []
+            totalDuration = 0
+            sheetCard.setChordCount(0)
+            debugLog("⚠️ [Animation] No sheet data provided")
+            return
+            #endif
         }
         mgr.loadSong(tempoBPM: 84)
 
@@ -240,7 +250,7 @@ final class AnimationViewController: UIViewController {
         totalDuration = arr.reduce(0) { $0 + $1.duration }
         sheetCard.setChordCount(allChords.count)
         if let data = sheetMusicData { sheetCard.loadData(data) }
-        print("🎵 \(allChords.count) chords  ~\(String(format: "%.1f", totalDuration))s")
+        debugLog("🎵 \(allChords.count) chords  ~\(String(format: "%.1f", totalDuration))s")
     }
 
     // MARK: - Gestures

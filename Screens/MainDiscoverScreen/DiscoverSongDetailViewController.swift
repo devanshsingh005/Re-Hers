@@ -75,7 +75,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 do {
                     try await RecentPlayService.shared.recordPlay(songId: songId)
                 } catch {
-                    print("[DiscoverDetail] ❌ Failed to record play: \(error)")
+                    debugLog("[DiscoverDetail] ❌ Failed to record play: \(error)")
                 }
                 self?.recentPlayTask = nil
             }
@@ -428,7 +428,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func loadSheetData() {
         guard let sheetId = song?.sheetFileId else {
-            print("[DiscoverDetail] ❌ No sheetFileId")
+            debugLog("[DiscoverDetail] ❌ No sheetFileId")
             self.showPDFError()
             return
         }
@@ -492,7 +492,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 if let (data, resp) = try? await URLSession.shared.data(from: url),
                    (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0),
                    let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("[DiscoverDetail][JSON] ✅ keys=\(parsed.keys.sorted())")
+                    debugLog("[DiscoverDetail][JSON] ✅ keys=\(parsed.keys.sorted())")
                     await MainActor.run { self.sheetMusicJSON = parsed }
                     break
                 }

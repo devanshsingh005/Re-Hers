@@ -90,7 +90,7 @@ final class UploadPageNextViewController: UIViewController {
         view.backgroundColor = ComponentColors.App.screenBackground
         setupNativeNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
         showProcessingState()
-        print("[VDL] jobId=\(jobId?.uuidString.lowercased() ?? "nil")  hasResultURL=\(resultURL?.isEmpty == false)")
+        debugLog("[VDL] jobId=\(jobId?.uuidString.lowercased() ?? "nil")  hasResultURL=\(resultURL?.isEmpty == false)")
         loadFromJobId()
     }
 
@@ -131,8 +131,8 @@ final class UploadPageNextViewController: UIViewController {
 
     private func loadFromJobId() {
         guard let jobId else {
-            print("[Load] ❌ No jobId — showing sample")
-            showSampleSheetMusic()
+            debugLog("[Load] ❌ No jobId available for upload result screen")
+            showUnavailableState(message: "We couldn't load this upload. Please return to Uploads and try again.")
             return
         }
         jobLoadTask?.cancel()
@@ -161,8 +161,10 @@ final class UploadPageNextViewController: UIViewController {
                 .value
 
             guard let row = rows.first else {
-                print("[Load] ❌ No job found for jobId=\(jobId)")
-                await MainActor.run { self.showSampleSheetMusic() }
+                debugLog("[Load] ❌ No job found for jobId=\(jobId)")
+                await MainActor.run {
+                    self.showUnavailableState(message: "This upload is no longer available. Please refresh your uploads list.")
+                }
                 return
             }
 
@@ -174,24 +176,24 @@ final class UploadPageNextViewController: UIViewController {
             if let preSupplied = self.resultURL, !preSupplied.isEmpty {
                 if isLegacyPublicStorageURL(preSupplied) {
                     let authenticatedURL = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
-                    print("[Load] Ignoring legacy public resultURL; using authenticated route: \(authenticatedURL)")
+                    debugLog("[Load] Ignoring legacy public resultURL; using authenticated route: \(authenticatedURL)")
                     _ = authenticatedURL
                 } else {
-                    print("[Load] Using pre-supplied authenticated resultURL")
+                    debugLog("[Load] Using pre-supplied authenticated resultURL")
                     _ = preSupplied
                 }
             } else if let dbURL = row.resultUrl, !dbURL.isEmpty {
                 if isLegacyPublicStorageURL(dbURL) {
                     let authenticatedURL = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
-                    print("[Load] Ignoring legacy DB result_url; using authenticated route: \(authenticatedURL)")
+                    debugLog("[Load] Ignoring legacy DB result_url; using authenticated route: \(authenticatedURL)")
                     _ = authenticatedURL
                 } else {
-                    print("[Load] Using DB result_url")
+                    debugLog("[Load] Using DB result_url")
                     _ = dbURL
                 }
             } else {
                 let derived = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
-                print("[Load] No result_url — using derived: \(derived)")
+                debugLog("[Load] No result_url — using derived: \(derived)")
                 _ = derived
             }
 
@@ -199,8 +201,10 @@ final class UploadPageNextViewController: UIViewController {
             await MainActor.run { self.startPollingJobStatus() }
 
         } catch {
-            print("[Load] ❌ DB error: \(error)")
-            await MainActor.run { self.showSampleSheetMusic() }
+            debugLog("[Load] ❌ DB error: \(error)")
+            await MainActor.run {
+                self.showUnavailableState(message: "We hit a problem loading this upload. Please try again.")
+            }
         }
     }
 
@@ -222,9 +226,9 @@ final class UploadPageNextViewController: UIViewController {
 
     private func loadSheetPDF(from urlString: String) {
         guard let url = URL(string: urlString) else {
-            print("[PDF] ❌ Invalid URL: \(urlString)"); return
+            debugLog("[PDF] ❌ Invalid URL: \(urlString)"); return
         }
-        print("[PDF] 🔄 Loading: \(urlString)")
+        debugLog("[PDF] 🔄 Loading: \(urlString)")
         releasePreviewResources()
         sheetLoadingIndicator.startAnimating()
         sheetImageView.isHidden = true
@@ -241,7 +245,7 @@ final class UploadPageNextViewController: UIViewController {
 
                 guard (200...299).contains(code) else {
                     let body = String(data: data, encoding: .utf8) ?? "<binary>"
-                    print("[PDF] ❌ HTTP \(code): \(body)")
+                    debugLog("[PDF] ❌ HTTP \(code): \(body)")
                     await MainActor.run {
                         self.sheetLoadingIndicator.stopAnimating()
                         self.statusLabel.text      = "PDF unavailable (HTTP \(code))."
@@ -257,7 +261,7 @@ final class UploadPageNextViewController: UIViewController {
                     self.handlePDFData(data, previewImage: previewImage)
                 }
             } catch {
-                print("[PDF] ❌ Network error: \(error.localizedDescription)")
+                debugLog("[PDF] ❌ Network error: \(error.localizedDescription)")
                 await MainActor.run {
                     self.sheetLoadingIndicator.stopAnimating()
                     self.statusLabel.text      = "Network error. Tap Refresh to retry."
@@ -270,14 +274,14 @@ final class UploadPageNextViewController: UIViewController {
 
     private func handlePDFData(_ data: Data, previewImage: UIImage?) {
         guard let previewImage else {
-            print("[PDF] ❌ Not a valid PDF preview")
+            debugLog("[PDF] ❌ Not a valid PDF preview")
             statusLabel.text       = "Could not display sheet. Tap Refresh to retry."
             statusLabel.isHidden   = false
             refreshButton.isHidden = false
             return
         }
 
-        print("[PDF] ✅ Prepared inline preview image")
+        debugLog("[PDF] ✅ Prepared inline preview image")
         loadedPDFData         = data
         sheetImageView.image  = previewImage
         sheetImageView.isHidden = false
@@ -355,7 +359,7 @@ final class UploadPageNextViewController: UIViewController {
                 await MainActor.run { self.updateProcessingStatus(message: "Job queued…") }
             }
         } catch {
-            print("[Poll] DB polling error")
+            debugLog("[Poll] DB polling error")
             stopPolling()
             DispatchQueue.main.async { self.showErrorState() }
         }
@@ -374,11 +378,11 @@ final class UploadPageNextViewController: UIViewController {
 
         let pdfURL = deriveLabeledPDFURL(jobId: currentJobId)
         if let relPath = resultUrl, isLegacyPublicStorageURL(relPath) {
-            print("[PDF] Ignoring legacy public PDF path; using authenticated route")
+            debugLog("[PDF] Ignoring legacy public PDF path; using authenticated route")
         } else {
-            print("[PDF] Using authenticated backend PDF route")
+            debugLog("[PDF] Using authenticated backend PDF route")
         }
-        print("[PDF] ✅ Loading labeled PDF")
+        debugLog("[PDF] ✅ Loading labeled PDF")
         await MainActor.run { self.loadSheetPDF(from: pdfURL) }
 
         // Download output.json and populate chord/key/time/tempo fields
@@ -389,7 +393,7 @@ final class UploadPageNextViewController: UIViewController {
 
     private func fetchOutputJSON(jobId: UUID, pdfPath: String) async {
         let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: pdfPath)
-        print("[JSON] Fetching output.json from authenticated route")
+        debugLog("[JSON] Fetching output.json from authenticated route")
 
         jsonFetchTask?.cancel()
         jsonFetchTask = Task { [weak self] in
@@ -403,18 +407,18 @@ final class UploadPageNextViewController: UIViewController {
                 )
 
                 guard (200...299).contains(code) else {
-                    print("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
+                    debugLog("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
                     return
                 }
 
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
+                    debugLog("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
                     await parseAndDisplayJSON(json)
                 } else {
-                    print("❌ [JSON] output.json is not a dictionary")
+                    debugLog("❌ [JSON] output.json is not a dictionary")
                 }
             } catch {
-                print("❌ [JSON] Error fetching/parsing output.json: \(error)")
+                debugLog("❌ [JSON] Error fetching/parsing output.json: \(error)")
             }
         }
 
@@ -430,7 +434,7 @@ final class UploadPageNextViewController: UIViewController {
         let keySig   = extractKeySignature(json)
         let tempoStr = extractTempo(json)
         let header   = extractStaffHeader(json)
-        print("[ParseJSON] chords=\(chords.count) \(Array(chords.prefix(4)))  staff=\(header)")
+        debugLog("[ParseJSON] chords=\(chords.count) \(Array(chords.prefix(4)))  staff=\(header)")
         await MainActor.run {
             self.sheetHeaderLabel.text = header
             self.displaySheetData(SheetMusicData(
@@ -461,19 +465,19 @@ final class UploadPageNextViewController: UIViewController {
 
             if usePinnedSession {
                 guard let token = await (didRetryAfterRefresh ? refreshAuthToken() : authToken()) else {
-                    print("❌ [\(logPrefix)] Missing auth credentials")
+                    debugLog("❌ [\(logPrefix)] Missing auth credentials")
                     return (Data(), 401)
                 }
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                print("[\(logPrefix)] Authorization header set: true")
+                debugLog("[\(logPrefix)] Authorization header set: true")
             }
 
             let (data, response) = try await session.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("[\(logPrefix)] HTTP \(code)  bytes=\(data.count)")
+            debugLog("[\(logPrefix)] HTTP \(code)  bytes=\(data.count)")
 
             if code == 401 && usePinnedSession && !didRetryAfterRefresh {
-                print("[\(logPrefix)] 401 received, refreshing session and retrying once")
+                debugLog("[\(logPrefix)] 401 received, refreshing session and retrying once")
                 didRetryAfterRefresh = true
                 continue
             }
@@ -749,6 +753,27 @@ final class UploadPageNextViewController: UIViewController {
         refreshButton.isHidden = false
     }
 
+    private func showUnavailableState(message: String) {
+        extractedChords = []
+        timeSignature = "Unavailable"
+        tempo = "Unavailable"
+        keySignature = "Unavailable"
+        sheetMusicJSON = nil
+        sheetMusicText = ""
+        loadedPDFData = nil
+        sheetHeaderLabel.text = "Upload unavailable"
+        metronomeLabel.text = "Metronome: Unavailable"
+        keyLabel.text = "Key: Unavailable"
+        timeLabel.text = "Time: Unavailable"
+        chordLabel.text = "Chords: Unavailable"
+        tipsBodyLabel.text = message
+        progressView.isHidden = true
+        statusLabel.text = "Upload unavailable"
+        statusLabel.isHidden = false
+        refreshButton.isHidden = false
+    }
+
+    #if DEBUG
     private func showSampleSheetMusic() {
         extractedChords = ["C", "G", "Am", "F"]
         timeSignature = "4/4"; tempo = "120 BPM"; keySignature = "C Major"
@@ -760,6 +785,7 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.isHidden   = true
         refreshButton.isHidden = true
     }
+    #endif
 
     private func updatePracticeTips() {
         var tips = ""
@@ -904,16 +930,11 @@ final class UploadPageNextViewController: UIViewController {
         sheetHeaderLabel.textColor = .label
         sheetHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        var previewConfig = UIButton.Configuration.filled()
-        previewConfig.title              = "Preview"
-        previewConfig.baseForegroundColor  = .white
-        previewConfig.baseBackgroundColor  = ComponentColors.HomeScreen.actionButtonFill
-        previewConfig.contentInsets      = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
-        previewConfig.cornerStyle        = .fixed
-        previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var o = incoming; o.font = UIFont.systemFont(ofSize: 14, weight: .semibold); return o
-        }
-        previewButton.configuration      = previewConfig
+        previewButton.setTitle("Preview", for: .normal)
+        previewButton.setTitleColor(.white, for: .normal)
+        previewButton.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill
+        previewButton.titleLabel?.font   = .systemFont(ofSize: 14, weight: .semibold)
+        previewButton.contentEdgeInsets  = UIEdgeInsets(top: 7, left: 18, bottom: 7, right: 18)
         previewButton.layer.cornerRadius = 16
         previewButton.clipsToBounds      = true
         previewButton.translatesAutoresizingMaskIntoConstraints = false
@@ -991,20 +1012,20 @@ final class UploadPageNextViewController: UIViewController {
         tipsBodyLabel.textColor   = .label
         tipsBodyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        var playConfig = UIButton.Configuration.filled()
-        playConfig.title              = "Play Along"
-        playConfig.baseForegroundColor  = .white
-        playConfig.baseBackgroundColor  = ComponentColors.HomeScreen.actionButtonFill
-        playConfig.cornerStyle        = .capsule
-        playAlongButton.configuration = playConfig
+        playAlongButton.setTitle("Play Along", for: .normal)
+        playAlongButton.setTitleColor(.white, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        playAlongButton.layer.cornerRadius = 23
+        playAlongButton.clipsToBounds = true
         playAlongButton.translatesAutoresizingMaskIntoConstraints = false
 
-        var animConfig = UIButton.Configuration.filled()
-        animConfig.title              = "Animation"
-        animConfig.baseForegroundColor  = .label
-        animConfig.baseBackgroundColor  = ComponentColors.SongDetailScreen.sheetMusicBackground
-        animConfig.cornerStyle        = .capsule
-        animationButton.configuration = animConfig
+        animationButton.setTitle("Animation", for: .normal)
+        animationButton.setTitleColor(.label, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
+        animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        animationButton.layer.cornerRadius = 23
+        animationButton.clipsToBounds = true
         animationButton.translatesAutoresizingMaskIntoConstraints = false
     }
 

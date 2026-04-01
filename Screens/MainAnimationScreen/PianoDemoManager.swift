@@ -12,9 +12,15 @@ final class PianoDemoManager {
     var totalSongDuration: Double { chords.reduce(0) { $0 + $1.duration } }
     var isFinished: Bool { chordIndex >= chords.count }
 
+    #if DEBUG
     init(loadFrom filename: String = "sheet_test.json") {
         self.jsonFilename = filename
     }
+    #else
+    init(loadFrom filename: String = "") {
+        self.jsonFilename = filename
+    }
+    #endif
     init(withData data: Data) {
         self.jsonFilename = ""
         self.externalData = data
@@ -35,9 +41,9 @@ final class PianoDemoManager {
                     defaultTempoBPM: tempoBPM, defaultDivisions: divisions)
             }
             chords = loaded
-            print("[PianoDemoManager] ✅ \(loaded.count) chords  dur=\(String(format:"%.1f",totalSongDuration))s")
+            debugLog("[PianoDemoManager] ✅ \(loaded.count) chords  dur=\(String(format:"%.1f",totalSongDuration))s")
         } catch {
-            print("[PianoDemoManager] ❌", error)
+            debugLog("[PianoDemoManager] ❌", error)
         }
     }
 

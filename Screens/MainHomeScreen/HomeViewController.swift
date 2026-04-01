@@ -136,7 +136,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                     self.populatePlaylists(list)
                 }
             } catch {
-                print("Error fetching playlists: \(error)")
+                debugLog("Error fetching playlists: \(error)")
             }
         }
     }
@@ -157,7 +157,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                     await MainActor.run { self.updateHeroCard(with: song) }
                 }
             } catch {
-                print("Error fetching top song: \(error)")
+                debugLog("Error fetching top song: \(error)")
             }
         }
     }
@@ -235,7 +235,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                     self.populateRecents(recents)
                 }
             } catch {
-                print("Error fetching recents: \(error)")
+                debugLog("Error fetching recents: \(error)")
             }
         }
     }

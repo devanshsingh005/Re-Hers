@@ -204,7 +204,7 @@ class UploadQuizPopup: UIViewController {
         closeBtn.setImage(UIImage(systemName: "xmark"), for: .normal)
         closeBtn.tintColor = .secondaryLabel
         closeBtn.translatesAutoresizingMaskIntoConstraints = false
-        closeBtn.addAction(UIAction { [weak self] _ in self?.dismissPopup() }, for: .touchUpInside)
+        closeBtn.addTarget(self, action: #selector(dismissButtonTapped), for: .touchUpInside)
         cardView.addSubview(closeBtn)
         
         // Cloud icon wrap (orange tinted circle)
@@ -400,15 +400,13 @@ class UploadQuizPopup: UIViewController {
         doneOverlay.addSubview(doneSubLabel)
         
         let closeDoneBtn = UIButton(type: .system)
-        var config = UIButton.Configuration.filled()
-        config.title = "Done"
-        config.baseForegroundColor = .white
-        config.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        config.cornerStyle = .capsule
-        config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 40, bottom: 12, trailing: 40)
-        closeDoneBtn.configuration = config
+        closeDoneBtn.setTitle("Done", for: .normal)
+        closeDoneBtn.setTitleColor(.white, for: .normal)
+        closeDoneBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        closeDoneBtn.layer.cornerRadius = 24
+        closeDoneBtn.contentEdgeInsets = UIEdgeInsets(top: 12, left: 40, bottom: 12, right: 40)
         closeDoneBtn.translatesAutoresizingMaskIntoConstraints = false
-        closeDoneBtn.addAction(UIAction { [weak self] _ in self?.dismissPopup() }, for: .touchUpInside)
+        closeDoneBtn.addTarget(self, action: #selector(dismissButtonTapped), for: .touchUpInside)
         doneOverlay.addSubview(closeDoneBtn)
         
         NSLayoutConstraint.activate([
@@ -466,9 +464,7 @@ class UploadQuizPopup: UIViewController {
                 btn.layer.borderWidth = 0
             }
             
-            btn.addAction(UIAction { [weak self] _ in
-                self?.handleAnswer(selectedIndex: i)
-            }, for: .touchUpInside)
+            btn.addTarget(self, action: #selector(answerButtonTapped(_:)), for: .touchUpInside)
             
             answersStack.addArrangedSubview(btn)
         }
@@ -530,6 +526,14 @@ class UploadQuizPopup: UIViewController {
                 }
             }
         }
+    }
+
+    @objc private func dismissButtonTapped() {
+        dismissPopup()
+    }
+
+    @objc private func answerButtonTapped(_ sender: UIButton) {
+        handleAnswer(selectedIndex: sender.tag)
     }
     
     // MARK: - Dot Updates

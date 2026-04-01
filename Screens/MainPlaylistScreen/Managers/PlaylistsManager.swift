@@ -71,7 +71,7 @@ public final class PlaylistsManager {
                             displayImageUrl = signedUrl.absoluteString
                         }
                     } catch {
-                        print("❌ Failed to sign URL for path \(path):", error)
+                        debugLog("❌ Failed to sign URL for path \(path):", error)
                     }
                 }
             }
@@ -151,7 +151,7 @@ public final class PlaylistsManager {
             .execute()
             .value
         
-        print("✅ Added track '\(title)' to playlist \(playlistId)")
+        debugLog("✅ Added track '\(title)' to playlist \(playlistId)")
         
         return PlaylistTrack(
             id: UUID(),
@@ -199,7 +199,7 @@ public final class PlaylistsManager {
             .execute()
             .value
         
-        print("✅ Added scan \(scan.id) '\(scan.title)' to playlist \(playlistId)")
+        debugLog("✅ Added scan \(scan.id) '\(scan.title)' to playlist \(playlistId)")
         
         return PlaylistTrack(
             id: UUID(),
@@ -391,7 +391,7 @@ public final class PlaylistsManager {
             .eq("id", value: Int(playlistItemId))
             .execute()
         
-        print("✅ Removed playlist item \(playlistItemId)")
+        debugLog("✅ Removed playlist item \(playlistItemId)")
     }
     
     // MARK: - Update Methods
@@ -403,7 +403,7 @@ public final class PlaylistsManager {
             .eq("id", value: id.uuidString)
             .execute()
         
-        print("✅ Updated playlist \(id) name to: \(newName)")
+        debugLog("✅ Updated playlist \(id) name to: \(newName)")
     }
     
     public func updateTrackName(playlistItemId: Int64, newTitle: String) async throws {
@@ -413,7 +413,7 @@ public final class PlaylistsManager {
             .eq("id", value: Int(playlistItemId))
             .execute()
         
-        print("✅ Updated track \(playlistItemId) title to: \(newTitle)")
+        debugLog("✅ Updated track \(playlistItemId) title to: \(newTitle)")
     }
     
     // MARK: - Delete Playlist
@@ -433,9 +433,9 @@ public final class PlaylistsManager {
                 .eq("id", value: id.uuidString)
                 .execute()
             
-            print("✅ Deleted playlist \(id)")
+            debugLog("✅ Deleted playlist \(id)")
         } catch {
-            print("❌ Delete error: \(error)")
+            debugLog("❌ Delete error: \(error)")
         }
     }
     
@@ -462,9 +462,9 @@ public final class PlaylistsManager {
                     coverImageUrl = try await uploadImageToStorage(image: finalImage)
                 } catch {
 
-                    print("⚠️ Image upload failed, falling back to local caches")
+                    debugLog("⚠️ Image upload failed, falling back to local caches")
 
-                    print("⚠️ Image upload failed, falling back to local cache")
+                    debugLog("⚠️ Image upload failed, falling back to local cache")
 
                     if let localFile = saveImageToDocuments(image: finalImage) {
                         coverImageUrl = localFile
@@ -490,7 +490,7 @@ public final class PlaylistsManager {
             .execute()
             .value
 
-        print("✅ Created playlist with ID: \(inserted.id)")
+        debugLog("✅ Created playlist with ID: \(inserted.id)")
         return inserted.id
     }
     
@@ -510,7 +510,7 @@ public final class PlaylistsManager {
             try await client.upload(fileName, data: imageData, options: options)
         } catch let nsError as NSError where nsError.domain == NSURLErrorDomain && nsError.code == -1005 {
             // Known iOS Simulator networking bug: "Network connection lost."
-            print("⚠️ Re-attempting upload due to Simulator HTTP -1005 bug...")
+            debugLog("⚠️ Re-attempting upload due to Simulator HTTP -1005 bug...")
             try await Task.sleep(nanoseconds: 1_000_000_000)
             try await client.upload(fileName, data: imageData, options: options)
         }
@@ -529,7 +529,7 @@ public final class PlaylistsManager {
             try data.write(to: url, options: [.atomic, .completeFileProtection])
             return filename
         } catch {
-            print("❌ Failed to save image to documents:", error)
+            debugLog("❌ Failed to save image to documents:", error)
             return nil
         }
     }

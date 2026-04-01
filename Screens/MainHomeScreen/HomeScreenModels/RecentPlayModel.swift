@@ -40,7 +40,7 @@ final class RecentPlayService {
             .order("last_played_at", ascending: false)
             .limit(limit)
             .execute().value
-        print("[RecentPlayService] Fetched \(result.count) recent plays")
+        debugLog("[RecentPlayService] Fetched \(result.count) recent plays")
         return result
     }
 
@@ -48,7 +48,7 @@ final class RecentPlayService {
     /// Uses upsert so the same song just updates `last_played_at`.
     func recordPlay(songId: UUID) async throws {
         guard let userId = SupabaseManager.shared.client.auth.currentUser?.id else {
-            print("[RecentPlayService] ❌ No current user, skipping recordPlay")
+            debugLog("[RecentPlayService] ❌ No current user, skipping recordPlay")
             return
         }
 
@@ -64,13 +64,13 @@ final class RecentPlayService {
             last_played_at: ISO8601DateFormatter().string(from: Date())
         )
 
-        print("[RecentPlayService] Recording play for song: \(songId), user: \(userId)")
+        debugLog("[RecentPlayService] Recording play for song: \(songId), user: \(userId)")
 
         try await SupabaseManager.shared.client
             .from("recent_plays")
             .upsert(row, onConflict: "user_id,song_id")
             .execute()
 
-        print("[RecentPlayService] ✅ Play recorded successfully")
+        debugLog("[RecentPlayService] ✅ Play recorded successfully")
     }
 }

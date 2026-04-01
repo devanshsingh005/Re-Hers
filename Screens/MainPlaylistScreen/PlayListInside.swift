@@ -265,7 +265,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     NotificationCenter.default.post(name: NSNotification.Name("PlaylistUpdated"), object: nil)
                 }
             } catch {
-                print("❌ Rename error: \(error)")
+                debugLog("❌ Rename error: \(error)")
             }
         }
     }
@@ -302,7 +302,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     self?.reloadTracksUI()
                 }
             } catch {
-                print("❌ Error fetching tracks: \(error)")
+                debugLog("❌ Error fetching tracks: \(error)")
                 DispatchQueue.main.async { [weak self] in
                     self?.activityIndicator.stopAnimating()
                     self?.reloadTracksUI()
@@ -316,7 +316,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         guard let playlistId = playlistId else { return }
         let picker = UploadPickerViewController()
         picker.modalPresentationStyle = .pageSheet
-        if let sheet = picker.sheetPresentationController {
+        if #available(iOS 15.0, *), let sheet = picker.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = 24
@@ -342,7 +342,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     self?.reloadTracksUI()
                 }
             } catch {
-                print("❌ Error adding scan to playlist: \(error)")
+                debugLog("❌ Error adding scan to playlist: \(error)")
                 DispatchQueue.main.async { [weak self] in
                     self?.activityIndicator.stopAnimating()
                     let alert = UIAlertController(title: "Error",
@@ -371,7 +371,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     self?.reloadTracksUI()
                 }
             } catch {
-                print("❌ Error removing track: \(error)")
+                debugLog("❌ Error removing track: \(error)")
                 DispatchQueue.main.async { [weak self] in
                     self?.activityIndicator.stopAnimating()
                 }
@@ -425,7 +425,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     self.fetchTracks()
                 }
             } catch {
-                print("❌ Track rename error: \(error)")
+                debugLog("❌ Track rename error: \(error)")
             }
         }
     }

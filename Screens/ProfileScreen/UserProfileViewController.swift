@@ -3,6 +3,7 @@
 //
 
 import UIKit
+import AVFoundation
 import Supabase
 import Auth
 import SwiftUI
@@ -56,11 +57,13 @@ final class UserProfileViewController: UIViewController {
 
     // Sign out
     private let signOutButton = UIButton(type: .system)
+    private let deleteAccountButton = UIButton(type: .system)
 
     // Data
     private var currentProfile: Profile?
     private var stats = ProfileStats()
     private weak var activeImagePicker: UIImagePickerController?
+    private var pendingDeleteAccountBearerToken: String?
 
     // MARK: - Init
     init() {
@@ -417,17 +420,33 @@ final class UserProfileViewController: UIViewController {
         signOutButton.layer.cornerRadius = 28
         signOutButton.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
         signOutButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(signOutButton)
+
+        deleteAccountButton.setTitle("Delete Account", for: .normal)
+        deleteAccountButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
+        deleteAccountButton.setTitleColor(ComponentColors.ProfileScreen.destructiveText, for: .normal)
+        deleteAccountButton.backgroundColor = UIColor.systemRed.withAlphaComponent(0.14)
+        deleteAccountButton.layer.cornerRadius = 28
+        deleteAccountButton.layer.borderWidth = 1
+        deleteAccountButton.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.3).cgColor
+        deleteAccountButton.addTarget(self, action: #selector(deleteAccountTapped), for: .touchUpInside)
+        deleteAccountButton.translatesAutoresizingMaskIntoConstraints = false
+
+        let actionsStack = UIStackView(arrangedSubviews: [signOutButton, deleteAccountButton])
+        actionsStack.axis = .vertical
+        actionsStack.spacing = 12
+        actionsStack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(actionsStack)
 
         // Anchor below practice progress card
-        let practiceCard = contentView.subviews.last(where: { $0 != signOutButton })!
+        let practiceCard = contentView.subviews.last(where: { $0 != actionsStack })!
 
         NSLayoutConstraint.activate([
-            signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
-            signOutButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            signOutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -48),
+            actionsStack.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
+            actionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            actionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            actionsStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
             signOutButton.heightAnchor.constraint(equalToConstant: 56),
-            signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
+            deleteAccountButton.heightAnchor.constraint(equalToConstant: 56),
         ])
     }
 
@@ -555,10 +574,10 @@ final class UserProfileViewController: UIViewController {
                     DailyGoalManager.shared.dailyGoalMinutes = goalMins
                 }
             } catch {
-                print("Error loading onboarding goal:", error)
+                debugLog("Error loading onboarding goal:", error)
             }
         } catch {
-            print("Error loading profile:", error)
+            debugLog("Error loading profile:", error)
             await MainActor.run { nameLabel.text = "Error" }
         }
     }
@@ -644,7 +663,7 @@ final class UserProfileViewController: UIViewController {
                 }
             }
         } catch {
-            print("Error loading stats:", error)
+            debugLog("Error loading stats:", error)
         }
     }
 
@@ -661,6 +680,10 @@ final class UserProfileViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func deleteAccountTapped() {
+        showDeleteAccountPasswordPrompt()
+    }
+
     private func performSignOut() {
         Task {
             do {
@@ -673,6 +696,131 @@ final class UserProfileViewController: UIViewController {
             } catch {
                 await MainActor.run {
                     showAlert(title: "Error", message: "Failed to sign out: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func showDeleteAccountPasswordPrompt() {
+        guard let email = SupabaseManager.shared.client.auth.currentUser?.email, !email.isEmpty else {
+            showAlert(title: "Error", message: "We could not load your account email for re-authentication.")
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "Re-authenticate",
+            message: "Enter the password for \(email) to continue.",
+            preferredStyle: .alert
+        )
+        alert.addTextField {
+            $0.placeholder = "Current password"
+            $0.isSecureTextEntry = true
+            $0.textContentType = .password
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self, weak alert] _ in
+            let password = alert?.textFields?.first?.text ?? ""
+            self?.reauthenticateBeforeDeletion(currentPassword: password)
+        })
+        present(alert, animated: true)
+    }
+
+    private func reauthenticateBeforeDeletion(currentPassword: String) {
+        guard !currentPassword.isEmpty else {
+            showAlert(title: "Password Required", message: "Enter your current password to delete your account.")
+            return
+        }
+
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser,
+                  let email = user.email else {
+                await MainActor.run {
+                    self.showAlert(title: "Error", message: "No active account session was found.")
+                }
+                return
+            }
+
+            do {
+                let tempClient = SupabaseManager.shared.makeEphemeralClient()
+                _ = try await tempClient.auth.signIn(email: email, password: currentPassword)
+                let reauthenticatedSession = try await tempClient.auth.session
+                await MainActor.run {
+                    self.pendingDeleteAccountBearerToken = reauthenticatedSession.accessToken
+                    self.showPermanentDeleteConfirmation()
+                }
+            } catch {
+                await MainActor.run {
+                    self.showAlert(title: "Delete Account Failed", message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func showPermanentDeleteConfirmation() {
+        let alert = UIAlertController(
+            title: "Delete Account",
+            message: "This will permanently delete your account and all your data. This cannot be undone.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Delete Permanently", style: .destructive) { [weak self] _ in
+            self?.performPermanentAccountDeletion()
+        })
+        present(alert, animated: true)
+    }
+
+    private func performPermanentAccountDeletion() {
+        Task {
+            do {
+                guard let bearerToken = pendingDeleteAccountBearerToken else {
+                    await MainActor.run {
+                        self.showAlert(title: "Delete Account Failed", message: "Re-authentication expired. Please try again.")
+                    }
+                    return
+                }
+                try await SupabaseManager.shared.client.functions.invoke(
+                    "delete-account",
+                    options: FunctionInvokeOptions(
+                        headers: ["Authorization": "Bearer \(bearerToken)"]
+                    )
+                )
+
+                await MainActor.run {
+                    self.pendingDeleteAccountBearerToken = nil
+                    self.showDeletionSuccessAndSignOut()
+                }
+            } catch {
+                await MainActor.run {
+                    self.pendingDeleteAccountBearerToken = nil
+                    self.showAlert(title: "Delete Account Failed", message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func showDeletionSuccessAndSignOut() {
+        let alert = UIAlertController(
+            title: "Account Deleted",
+            message: "Your account was permanently deleted.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            self?.completeDeletionSignOut()
+        })
+        present(alert, animated: true)
+    }
+
+    private func completeDeletionSignOut() {
+        Task {
+            do {
+                try await SupabaseManager.shared.client.auth.signOut()
+            } catch {
+                debugLog("Local sign-out after deletion failed: \(error.localizedDescription)")
+            }
+
+            await MainActor.run {
+                if let sceneDelegate = self.view.window?.windowScene?.delegate as? SceneDelegate {
+                    sceneDelegate.showSplashAndRoute()
                 }
             }
         }
@@ -846,12 +994,52 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     }
 
     private func openCamera() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            presentProfileCameraPicker()
+        case .notDetermined:
+            let alert = UIAlertController(
+                title: "Use Camera for Profile Photo",
+                message: "Re-Hearse only uses the camera when you choose Camera so you can take a profile photo.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+                AVCaptureDevice.requestAccess(for: .video) { granted in
+                    DispatchQueue.main.async {
+                        granted ? self?.presentProfileCameraPicker() : self?.showCameraSettingsAlert()
+                    }
+                }
+            })
+            present(alert, animated: true)
+        case .denied, .restricted:
+            showCameraSettingsAlert()
+        @unknown default:
+            showCameraSettingsAlert()
+        }
+    }
+
+    private func presentProfileCameraPicker() {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.allowsEditing = false
         picker.delegate = self
         activeImagePicker = picker
         present(picker, animated: true)
+    }
+
+    private func showCameraSettingsAlert() {
+        let alert = UIAlertController(
+            title: "Camera Access Needed",
+            message: "Turn on camera access in Settings to take a profile photo.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
     }
 
     private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {
@@ -907,7 +1095,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     showAlert(title: "Success", message: "Photo updated!")
                 }
             } catch {
-                print("Profile upload error: \(error)")
+                debugLog("Profile upload error: \(error)")
                 await MainActor.run { showAlert(title: "Upload Error", message: error.localizedDescription) }
             }
         }

@@ -94,7 +94,7 @@ final class SupabaseProgressManager: Sendable {
         scorePoints:  Int
     ) async {
         guard let userID = await currentUserID() else {
-            print("[SupabaseProgressManager] recordPartCompleted: no logged-in user")
+            debugLog("[SupabaseProgressManager] recordPartCompleted: no logged-in user")
             return
         }
         
@@ -142,9 +142,9 @@ final class SupabaseProgressManager: Sendable {
                 .upsert(profileUpdate, onConflict: "id")
                 .execute()
             
-            print("[SupabaseProgressManager] Part saved — ch:\(chapterIndex) part:\(partIndex)")
+            debugLog("[SupabaseProgressManager] Part saved — ch:\(chapterIndex) part:\(partIndex)")
         } catch {
-            print("[SupabaseProgressManager] recordPartCompleted error: \(error)")
+            debugLog("[SupabaseProgressManager] recordPartCompleted error: \(error)")
         }
     }
     
@@ -156,7 +156,7 @@ final class SupabaseProgressManager: Sendable {
         scorePoints:     Int
     ) async {
         guard let userID = await currentUserID() else {
-            print("[SupabaseProgressManager] recordLessonCompleted: no logged-in user")
+            debugLog("[SupabaseProgressManager] recordLessonCompleted: no logged-in user")
             return
         }
         
@@ -198,10 +198,10 @@ final class SupabaseProgressManager: Sendable {
                 .upsert(profileUpdate, onConflict: "id")
                 .execute()
             
-            print("[SupabaseProgressManager] Lesson saved — ch:\(chapterIndex) ⭐\(stars) \(durationSeconds)s")
+            debugLog("[SupabaseProgressManager] Lesson saved — ch:\(chapterIndex) ⭐\(stars) \(durationSeconds)s")
             
         } catch {
-            print("[SupabaseProgressManager] recordLessonCompleted error: \(error)")
+            debugLog("[SupabaseProgressManager] recordLessonCompleted error: \(error)")
         }
     }
     
@@ -230,7 +230,7 @@ final class SupabaseProgressManager: Sendable {
         do {
             return try await db.auth.session.user.id
         } catch {
-            print("[SupabaseProgressManager] Auth session error: \(error)")
+            debugLog("[SupabaseProgressManager] Auth session error: \(error)")
             return nil
         }
     }

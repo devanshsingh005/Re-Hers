@@ -62,7 +62,7 @@ class PlaylistSongDetailViewController: UIViewController {
         setupScrollView()
         buildUI()
 
-        print("[SongDetail] viewDidLoad — passedSheetScanId=\(String(describing: passedSheetScanId))")
+        debugLog("[SongDetail] viewDidLoad — passedSheetScanId=\(String(describing: passedSheetScanId))")
         loadSheetData()
     }
 
@@ -280,7 +280,7 @@ class PlaylistSongDetailViewController: UIViewController {
     /// Output JSON is also fetched from the backend API concurrently (unchanged).
     private func loadSheetData() {
         guard let scanId = passedSheetScanId else {
-            print("[SongDetail] ❌ passedSheetScanId is nil — cannot load sheet data")
+            debugLog("[SongDetail] ❌ passedSheetScanId is nil — cannot load sheet data")
             errorLabel.isHidden = false
             return
         }
@@ -301,12 +301,12 @@ class PlaylistSongDetailViewController: UIViewController {
 
                 guard let dict = scans.first?.jsonData?.value as? [String: Any],
                       let jobId = (dict["job_id"] as? String).flatMap(UUID.init) else {
-                    print("[SongDetail] ❌ Could not extract job_id from scan \(scanId)")
+                    debugLog("[SongDetail] ❌ Could not extract job_id from scan \(scanId)")
                     await MainActor.run { self.showError() }
                     return
                 }
 
-                print("[SongDetail] ✓ jobId=\(jobId.uuidString)")
+                debugLog("[SongDetail] ✓ jobId=\(jobId.uuidString)")
 
                 // ── Step 2: read job row to get pdf_path + result_url ────────────
                 struct JobRow: Decodable {
@@ -320,12 +320,12 @@ class PlaylistSongDetailViewController: UIViewController {
                     .eq("id", value: jobId).limit(1).execute().value
 
                 guard let job = jobs.first else {
-                    print("[SongDetail] ❌ No job row found for jobId=\(jobId.uuidString)")
+                    debugLog("[SongDetail] ❌ No job row found for jobId=\(jobId.uuidString)")
                     await MainActor.run { self.showError() }
                     return
                 }
 
-                print("[SongDetail] job.result_url=\(job.resultUrl ?? "nil")")
+                debugLog("[SongDetail] job.result_url=\(job.resultUrl ?? "nil")")
 
                 await MainActor.run {
                     self.cachedPDFPath = job.pdfPath
@@ -341,7 +341,7 @@ class PlaylistSongDetailViewController: UIViewController {
                 _ = await (pdfTask, jsonTask)
 
             } catch {
-                print("[SongDetail] ❌ loadSheetData error: \(error)")
+                debugLog("[SongDetail] ❌ loadSheetData error: \(error)")
                 await MainActor.run { self.showError() }
             }
         }
@@ -357,16 +357,16 @@ class PlaylistSongDetailViewController: UIViewController {
         do {
             let (data, response) = try await ReHersPinnedSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            print("[SongDetail] fetchOutputJSON status=\(status)")
+            debugLog("[SongDetail] fetchOutputJSON status=\(status)")
             guard status == 200 else { return }
             guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   isValidScoreJSON(parsed) else {
-                print("[SongDetail] fetchOutputJSON — not valid score JSON")
+                debugLog("[SongDetail] fetchOutputJSON — not valid score JSON")
                 return
             }
             await MainActor.run { self.sheetMusicJSON = parsed }
         } catch {
-            print("[SongDetail] fetchOutputJSON error: \(error)")
+            debugLog("[SongDetail] fetchOutputJSON error: \(error)")
         }
     }
 
@@ -398,20 +398,20 @@ class PlaylistSongDetailViewController: UIViewController {
     ///   Never touches the Azure backend for the PDF bytes.
     private func fetchLabeledPDFWithPolling(resultUrl: String?, jobId: UUID?) async {
         guard let jId = jobId ?? cachedJobId else {
-            print("[SongDetail] ❌ no jobId for labeled PDF fetch")
+            debugLog("[SongDetail] ❌ no jobId for labeled PDF fetch")
             await MainActor.run { showError() }
             return
         }
 
         // ── Fast path: result_url is already available ───────────────────────────
         if let url = resultUrl, !url.isEmpty {
-            print("[SongDetail] result_url ready — going direct to Supabase CDN: \(url)")
+            debugLog("[SongDetail] result_url ready — going direct to Supabase CDN: \(url)")
             await fetchLabeledPDFFromStoragePath(url, jobId: jId)
             return
         }
 
         // ── Slow path: poll jobs table until result_url is populated ─────────────
-        print("[SongDetail] result_url nil — polling jobId=\(jId.uuidString)")
+        debugLog("[SongDetail] result_url nil — polling jobId=\(jId.uuidString)")
 
         pollTask = Task {
             struct JobPollRow: Decodable {
@@ -423,7 +423,7 @@ class PlaylistSongDetailViewController: UIViewController {
             }
 
             for attempt in 1...maxPollAttempts {
-                if Task.isCancelled { print("[SongDetail] poll cancelled"); return }
+                if Task.isCancelled { debugLog("[SongDetail] poll cancelled"); return }
 
                 do {
                     let rows: [JobPollRow] = try await supabase
@@ -432,7 +432,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
                     let status = rows.first?.status ?? "unknown"
                     let url    = rows.first?.resultUrl
-                    print("[SongDetail] poll \(attempt)/\(maxPollAttempts) status=\(status) url=\(url ?? "nil")")
+                    debugLog("[SongDetail] poll \(attempt)/\(maxPollAttempts) status=\(status) url=\(url ?? "nil")")
 
                     if status == "failed" {
                         await MainActor.run { self.showError() }
@@ -444,7 +444,7 @@ class PlaylistSongDetailViewController: UIViewController {
                         return
                     }
                 } catch {
-                    print("[SongDetail] poll \(attempt) error: \(error)")
+                    debugLog("[SongDetail] poll \(attempt) error: \(error)")
                 }
 
                 if attempt < maxPollAttempts {
@@ -452,7 +452,7 @@ class PlaylistSongDetailViewController: UIViewController {
                 }
             }
 
-            print("[SongDetail] ❌ polling exhausted")
+            debugLog("[SongDetail] ❌ polling exhausted")
             await MainActor.run { self.showError() }
         }
 
@@ -487,17 +487,17 @@ class PlaylistSongDetailViewController: UIViewController {
                 let raw = String(rawURL[range.upperBound...])
                 // Strip any query string that may already be on an existing signed URL
                 storagePath = raw.components(separatedBy: "?").first ?? raw
-                print("[SongDetail] extracted storage path: \(storagePath)")
+                debugLog("[SongDetail] extracted storage path: \(storagePath)")
             } else {
                 // Unrecognised URL format — try fetching as-is (still hits Supabase CDN)
-                print("[SongDetail] ⚠️ unrecognised URL format, fetching as-is: \(rawURL)")
+                debugLog("[SongDetail] ⚠️ unrecognised URL format, fetching as-is: \(rawURL)")
                 await fetchAndCache(urlString: rawURL, isOriginal: false)
                 return
             }
         } else {
             // Bare path (e.g. "uid/job-id/labeled.pdf")
             storagePath = rawURL
-            print("[SongDetail] bare storage path: \(storagePath)")
+            debugLog("[SongDetail] bare storage path: \(storagePath)")
         }
 
         do {
@@ -506,10 +506,10 @@ class PlaylistSongDetailViewController: UIViewController {
             let signedURL = try await supabase.storage
                 .from(bucketName)
                 .createSignedURL(path: storagePath, expiresIn: 3600)
-            print("[SongDetail] ✓ signed URL ready — fetching from Supabase CDN")
+            debugLog("[SongDetail] ✓ signed URL ready — fetching from Supabase CDN")
             await fetchAndCache(urlString: signedURL.absoluteString, isOriginal: false)
         } catch {
-            print("[SongDetail] ❌ createSignedURL failed path=\(storagePath): \(error)")
+            debugLog("[SongDetail] ❌ createSignedURL failed path=\(storagePath): \(error)")
             await MainActor.run { self.showError() }
         }
     }
@@ -517,7 +517,7 @@ class PlaylistSongDetailViewController: UIViewController {
     // MARK: - Original PDF (Supabase CDN — unchanged)
     private func fetchOriginalPDF() async {
         guard let path = cachedPDFPath else {
-            print("[SongDetail] ❌ fetchOriginalPDF — no cachedPDFPath")
+            debugLog("[SongDetail] ❌ fetchOriginalPDF — no cachedPDFPath")
             await MainActor.run { showError() }
             return
         }
@@ -527,7 +527,7 @@ class PlaylistSongDetailViewController: UIViewController {
                 .createSignedURL(path: path, expiresIn: 3600)
             await fetchAndCache(urlString: signedURL.absoluteString, isOriginal: true)
         } catch {
-            print("[SongDetail] ❌ fetchOriginalPDF createSignedURL failed: \(error)")
+            debugLog("[SongDetail] ❌ fetchOriginalPDF createSignedURL failed: \(error)")
             await MainActor.run { showError() }
         }
     }
@@ -541,7 +541,7 @@ class PlaylistSongDetailViewController: UIViewController {
     /// require the Bearer header + certificate pinning.
     private func fetchAndCache(urlString: String, isOriginal: Bool) async {
         guard let url = URL(string: urlString) else {
-            print("[SongDetail] ❌ invalid URL: \(urlString)")
+            debugLog("[SongDetail] ❌ invalid URL: \(urlString)")
             await MainActor.run { showError() }
             return
         }
@@ -561,15 +561,15 @@ class PlaylistSongDetailViewController: UIViewController {
         do {
             let (data, resp) = try await session.data(for: req)
             let statusCode = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            print("[SongDetail] fetchAndCache isOriginal=\(isOriginal) status=\(statusCode) bytes=\(data.count)")
+            debugLog("[SongDetail] fetchAndCache isOriginal=\(isOriginal) status=\(statusCode) bytes=\(data.count)")
 
             guard (200...299).contains(statusCode) else {
-                print("[SongDetail] ❌ non-2xx: \(statusCode)")
+                debugLog("[SongDetail] ❌ non-2xx: \(statusCode)")
                 await MainActor.run { self.showError() }
                 return
             }
             guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
-                print("[SongDetail] ❌ not a valid PDF (bytes=\(data.count))")
+                debugLog("[SongDetail] ❌ not a valid PDF (bytes=\(data.count))")
                 await MainActor.run { self.showError() }
                 return
             }
@@ -580,7 +580,7 @@ class PlaylistSongDetailViewController: UIViewController {
                 }
             }
         } catch {
-            print("[SongDetail] ❌ fetchAndCache error: \(error)")
+            debugLog("[SongDetail] ❌ fetchAndCache error: \(error)")
             await MainActor.run { self.showError() }
         }
     }

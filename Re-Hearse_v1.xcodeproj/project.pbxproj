@@ -66,7 +66,6 @@
 		84ADF69E2F5EAABA009F3D7D /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6932F5EAABA009F3D7D /* TopView.swift */; };
 		84ADF69F2F5EAABA009F3D7D /* SheetMusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6912F5EAABA009F3D7D /* SheetMusicView.swift */; };
 		84ADF6A02F5EAABA009F3D7D /* MusicJSONLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68A2F5EAABA009F3D7D /* MusicJSONLoader.swift */; };
-		84ADF6A12F5EAABA009F3D7D /* sheet_test.json in Resources */ = {isa = PBXBuildFile; fileRef = 84ADF6902F5EAABA009F3D7D /* sheet_test.json */; };
 		84AFA4462EF82681004A8110 /* PlayAlongViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */; };
 		84C6A9892ECCAD8D007DA0D0 /* WaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */; };
 		84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */; };
@@ -135,6 +134,7 @@
 		84AFA4452EF82681004A8110 /* PlayAlongViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayAlongViewController.swift; sourceTree = "<group>"; };
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
 		84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/Wurlitzer210.sf2; sourceTree = "<group>"; };
+		A4B9D9E02F91000100000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "Re-Hearse_v1/PrivacyInfo.xcprivacy"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D42F90000100000001 /* Re-Hearse_v1/Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Secrets.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Debug.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Release.xcconfig"; sourceTree = SOURCE_ROOT; };
@@ -148,7 +148,10 @@
 		842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Re-Hearse_v1" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Debug.xcconfig,
 				Info.plist,
+				Release.xcconfig,
+				Secrets.xcconfig,
 			);
 			target = 842B083A2EBA0465001AC579 /* Re-Hearse_v1 */;
 		};
@@ -331,6 +334,7 @@
 			isa = PBXGroup;
 			children = (
 				84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */,
+				A4B9D9E02F91000100000001 /* PrivacyInfo.xcprivacy */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
 				84DBA8592EBA72C7006DF51E /* Screens */,
@@ -563,7 +567,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */,
-				84ADF6A12F5EAABA009F3D7D /* sheet_test.json in Resources */,
 				842B088B2EBA594A001AC579 /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -651,9 +654,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Re-Hearse";
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to capture images for analysis and features.\n";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone is used for real-time chord recognition.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to select images.\n";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Re-Hearse uses your camera to photograph sheet music so it can be processed and used in your practice sessions.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses your microphone to listen to you play and provide real-time chord recognition and feedback.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Re-Hearse accesses your photo library so you can select sheet music images to use in your practice sessions.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -672,7 +675,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -688,9 +691,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Re-Hearse";
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to capture images for analysis and features.\n";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone is used for real-time chord recognition.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to select images.\n";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Re-Hearse uses your camera to photograph sheet music so it can be processed and used in your practice sessions.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses your microphone to listen to you play and provide real-time chord recognition and feedback.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Re-Hearse accesses your photo library so you can select sheet music images to use in your practice sessions.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -709,7 +712,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -765,7 +768,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -822,7 +825,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;

@@ -12,6 +12,8 @@ final class SupabaseManager {
     static let shared = SupabaseManager()
 
     let client: SupabaseClient
+    private let supabaseKey: String
+    private let resolvedSupabaseURL: URL
 
     var supabaseURL: String {
         Self.resolveSupabaseURL()
@@ -27,11 +29,27 @@ final class SupabaseManager {
             fatalError("SUPABASE_URL is not a valid URL — check build configuration")
         }
 
+        self.supabaseKey = key
+        self.resolvedSupabaseURL = resolvedSupabaseURL
         client = SupabaseClient(
             supabaseURL: resolvedSupabaseURL,
             supabaseKey: key,
             options: SupabaseClientOptions(
                 auth: .init(emitLocalSessionAsInitialSession: true)
+            )
+        )
+    }
+
+    func makeEphemeralClient() -> SupabaseClient {
+        SupabaseClient(
+            supabaseURL: resolvedSupabaseURL,
+            supabaseKey: supabaseKey,
+            options: SupabaseClientOptions(
+                auth: .init(
+                    storage: InMemoryAuthLocalStorage(),
+                    autoRefreshToken: false,
+                    emitLocalSessionAsInitialSession: false
+                )
             )
         )
     }
@@ -60,5 +78,28 @@ final class SupabaseManager {
         return rawURLString
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }
+}
+
+private final class InMemoryAuthLocalStorage: AuthLocalStorage, @unchecked Sendable {
+    private var store: [String: Data] = [:]
+    private let lock = NSLock()
+
+    func store(key: String, value: Data) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        store[key] = value
+    }
+
+    func retrieve(key: String) throws -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return store[key]
+    }
+
+    func remove(key: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        store.removeValue(forKey: key)
     }
 }

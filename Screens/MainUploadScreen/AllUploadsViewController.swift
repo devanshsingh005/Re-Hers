@@ -92,7 +92,7 @@ class AllUploadsViewController: UIViewController {
                     self.renderRows(scans)
                 }
             } catch {
-                print("[AllUploads] fetch error: \(error)")
+                debugLog("[AllUploads] fetch error: \(error)")
                 await MainActor.run {
                     self.loadingIndicator.stopAnimating()
                     self.renderRows([])
@@ -221,14 +221,14 @@ class AllUploadsViewController: UIViewController {
             guard let self else { return }
             guard let jobIdStr = jsonDict?["job_id"] as? String,
                   let jobId    = UUID(uuidString: jobIdStr) else {
-                print("[AllUploads] ❌ No job_id in scan \(scan.id)")
+                debugLog("[AllUploads] ❌ No job_id in scan \(scan.id)")
                 return
             }
             let outputURL = jsonDict?["output_url"] as? String
             let vc        = UploadPageNextViewController()
             vc.jobId      = jobId
             vc.resultURL  = outputURL
-            print("[AllUploads] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
+            debugLog("[AllUploads] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
             self.navigationController?.pushViewController(vc, animated: true)
         }, for: .touchUpInside)
 
@@ -295,7 +295,7 @@ class AllUploadsViewController: UIViewController {
                                   updatedAt: ISO8601DateFormatter().string(from: Date()))
             try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
         } catch {
-            print("[AllUploads] rename failed: \(error)")
+            debugLog("[AllUploads] rename failed: \(error)")
             await MainActor.run { self.loadUploads() }
         }
     }

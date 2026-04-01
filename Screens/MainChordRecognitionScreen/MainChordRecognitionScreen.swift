@@ -154,9 +154,6 @@ final class ChordRecognitionViewController: UIViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        AVAudioApplication.requestRecordPermission { granted in
-            print("Mic permission granted:", granted)
-        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -337,7 +334,7 @@ final class ChordRecognitionViewController: UIViewController {
         if useFakeMode {
             fakeTimer == nil ? startFakeAudio() : stopFakeAudio()
         } else {
-            pitchDetector.isListening ? stopListening() : startListening()
+            pitchDetector.isListening ? stopListening() : beginListeningFlow()
         }
     }
 
@@ -373,6 +370,49 @@ final class ChordRecognitionViewController: UIViewController {
     }
 
     // MARK: - Real audio + FFT
+    private func beginListeningFlow() {
+        switch pitchDetector.recordPermissionStatus() {
+        case .granted:
+            startListening()
+        case .undetermined:
+            presentMicrophoneRationale()
+        case .denied:
+            presentMicrophoneSettingsAlert()
+        @unknown default:
+            presentMicrophoneSettingsAlert()
+        }
+    }
+
+    private func presentMicrophoneRationale() {
+        let alert = UIAlertController(
+            title: "Use Microphone for Chord Recognition",
+            message: "Re-Hearse only uses the microphone after you tap Listen so it can identify the notes you are playing in real time.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            self?.pitchDetector.requestMicrophonePermission { granted in
+                guard let self else { return }
+                granted ? self.startListening() : self.presentMicrophoneSettingsAlert()
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentMicrophoneSettingsAlert() {
+        let alert = UIAlertController(
+            title: "Microphone Access Needed",
+            message: "Turn on microphone access in Settings to use live chord recognition.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
     private func startListening() {
         pitchDetector.startListening()
         micButton.backgroundColor = .systemYellow

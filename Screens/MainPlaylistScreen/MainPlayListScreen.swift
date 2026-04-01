@@ -313,7 +313,7 @@ class PlaylistViewController: UIViewController {
             do {
                 self.loadedPlaylists = try await playlistsManager.fetchRemotePlaylists()
             } catch {
-                print("❌ Fetch error: \(error)")
+                debugLog("❌ Fetch error: \(error)")
                 self.loadedPlaylists = []
             }
             DispatchQueue.main.async {
@@ -334,7 +334,7 @@ class PlaylistViewController: UIViewController {
     }
 
     private func updateEmptyState() {
-        print(loadedPlaylists.isEmpty ? "No playlists." : "Playlists loaded.")
+        debugLog(loadedPlaylists.isEmpty ? "No playlists." : "Playlists loaded.")
     }
 
     private func addPlaylist(name: String, image: UIImage?) {
@@ -733,23 +733,19 @@ class CreatePlaylistFooterView: UICollectionReusableView {
     private var dashedLayer: CAShapeLayer?
 
     private let button: UIButton = {
-        var config = UIButton.Configuration.plain()
         let img = UIImage(
             systemName: "plus.circle.fill",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
         )
-        config.image               = img
-        config.imagePlacement      = .leading
-        config.imagePadding        = 8
-        config.title               = "Create New Playlist"
-        config.baseForegroundColor = BrandColors.brand
-        config.titleTextAttributesTransformer =
-            UIConfigurationTextAttributesTransformer { attrs in
-                var a = attrs
-                a.font = UIFont.boldSystemFont(ofSize: 16)
-                return a
-            }
-        let btn = UIButton(configuration: config)
+        let btn = UIButton(type: .system)
+        btn.setImage(img, for: .normal)
+        btn.setTitle("Create New Playlist", for: .normal)
+        btn.setTitleColor(BrandColors.brand, for: .normal)
+        btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
+        btn.tintColor = BrandColors.brand
+        btn.semanticContentAttribute = .forceLeftToRight
+        btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
+        btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: -4)
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()

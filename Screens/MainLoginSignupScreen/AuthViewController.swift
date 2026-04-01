@@ -10,16 +10,12 @@ import UIKit
 import Supabase
 import Auth
 import SwiftUI
-import AuthenticationServices
 
 
 final class AuthViewController: UIViewController {
     private enum DefaultsKey {
         static let hasSeenAppIntroCard = "hasSeenAppIntroCard"
     }
-    
-    // MARK: - Constants
-    private let primaryOrangeColor = ComponentColors.HomeScreen.actionButtonFill
     
     // MARK: - Constraint Storage
     private var loginFieldConstraints: [NSLayoutConstraint] = []
@@ -69,14 +65,6 @@ final class AuthViewController: UIViewController {
     private let forgotPasswordButton = UIButton(type: .system)
     
     private let primaryButton = UIButton(type: .system)   // "NEXT" / "Sign Up"
-    
-    // Separator "Or"
-    private let leftSeparatorLine = UIView()
-    private let rightSeparatorLine = UIView()
-    private let orLabel = UILabel()
-    
-    // Social buttons
-    private let googleButton = UIButton(type: .system)
     
     // Bottom toggle ("Create a Account" / "Already have an account?")
     private let switchModeButton = UIButton(type: .system)
@@ -288,62 +276,6 @@ private extension AuthViewController {
                                 for: .touchUpInside)
         primaryButton.translatesAutoresizingMaskIntoConstraints = false
         
-        // MARK: - Separator "Or"
-        
-        leftSeparatorLine.backgroundColor = ComponentColors.Divider.color
-        rightSeparatorLine.backgroundColor = ComponentColors.Divider.color
-        
-        orLabel.text = "OR"
-        orLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        orLabel.textColor = ComponentColors.AuthScreen.bodyText
-        
-        [leftSeparatorLine, rightSeparatorLine, orLabel].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
-        
-        // MARK: - Social buttons
-        
-        // MARK: - Google Button Custom Subviews
-        let googleIconView = UIImageView(image: UIImage(named: "google_icon"))
-        googleIconView.contentMode = .scaleAspectFit
-        googleIconView.translatesAutoresizingMaskIntoConstraints = false
-        
-        let googleLabel = UILabel()
-        googleLabel.text = "Continue with Google"
-        googleLabel.textColor = .label
-        googleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        googleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        let googleArrowView = UIImageView(image: UIImage(systemName: "chevron.right"))
-        googleArrowView.tintColor = .label
-        googleArrowView.contentMode = .scaleAspectFit
-        googleArrowView.translatesAutoresizingMaskIntoConstraints = false
-        
-        googleButton.addSubview(googleIconView)
-        googleButton.addSubview(googleLabel)
-        googleButton.addSubview(googleArrowView)
-        
-        configureSocialButton(googleButton, title: "", image: nil)
-        
-        NSLayoutConstraint.activate([
-            googleIconView.leadingAnchor.constraint(equalTo: googleButton.leadingAnchor, constant: 20),
-            googleIconView.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor),
-            googleIconView.widthAnchor.constraint(equalToConstant: 24),
-            googleIconView.heightAnchor.constraint(equalToConstant: 24),
-            
-            googleLabel.leadingAnchor.constraint(equalTo: googleIconView.trailingAnchor, constant: 12),
-            googleLabel.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor),
-            
-            googleArrowView.trailingAnchor.constraint(equalTo: googleButton.trailingAnchor, constant: -20),
-            googleArrowView.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor),
-            googleArrowView.widthAnchor.constraint(equalToConstant: 18),
-            googleArrowView.heightAnchor.constraint(equalToConstant: 18)
-        ])
-        
-        googleButton.addTarget(self,
-                               action: #selector(googleButtonTapped),
-                               for: .touchUpInside)
-        
         // MARK: - Bottom switch mode
         
         switchModeButton.setTitle("Create a Account", for: .normal)
@@ -389,10 +321,6 @@ private extension AuthViewController {
          legalAgreementTextView,
          forgotPasswordButton,
          primaryButton,
-         leftSeparatorLine,
-         orLabel,
-         rightSeparatorLine,
-         googleButton,
          errorLabel,
          activityIndicator,
          switchModeButton].forEach {
@@ -573,24 +501,7 @@ private extension AuthViewController {
             errorLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
             errorLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
             
-            leftSeparatorLine.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 24),
-            leftSeparatorLine.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
-            leftSeparatorLine.heightAnchor.constraint(equalToConstant: 1),
-            
-            orLabel.centerYAnchor.constraint(equalTo: leftSeparatorLine.centerYAnchor),
-            orLabel.leadingAnchor.constraint(equalTo: leftSeparatorLine.trailingAnchor, constant: 8),
-            
-            rightSeparatorLine.leadingAnchor.constraint(equalTo: orLabel.trailingAnchor, constant: 8),
-            rightSeparatorLine.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
-            rightSeparatorLine.centerYAnchor.constraint(equalTo: orLabel.centerYAnchor),
-            rightSeparatorLine.heightAnchor.constraint(equalToConstant: 1),
-            
-            googleButton.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 24),
-            googleButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
-            googleButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
-            googleButton.heightAnchor.constraint(equalToConstant: 56),
-            
-            switchModeButton.topAnchor.constraint(equalTo: googleButton.bottomAnchor, constant: 24),
+            switchModeButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 24),
             switchModeButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             switchModeButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24)
         ])
@@ -652,34 +563,6 @@ private extension AuthViewController {
         let paddingView = UIView(frame: CGRect(x: 0, y: 0, width: 4, height: 10))
         textField.leftView = paddingView
         textField.leftViewMode = .always
-    }
-    
-    func configureSocialButton(_ button: UIButton,
-                               title: String,
-                               image: UIImage?) {
-        if !title.isEmpty {
-            button.setTitle("  " + title, for: .normal)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .medium)
-            button.setTitleColor(ComponentColors.AuthScreen.secondaryText, for: .normal)
-        }
-        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        button.layer.cornerRadius = 25 // Modified
-        button.layer.borderWidth = 0 // Modified
-        button.layer.borderColor = ComponentColors.AuthScreen.secondaryBorder.cgColor
-        
-        button.layer.shadowOffset = CGSize(width: 0, height: 2)
-        button.layer.shadowRadius = 4
-        button.layer.shadowOpacity = 0.1
-        button.backgroundColor = ComponentColors.AuthScreen.secondaryFill
-        button.layer.shadowColor = UIColor.black.cgColor
-        button.contentHorizontalAlignment = .center
-        
-        if let image = image {
-            button.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal)
-            button.imageView?.contentMode = .scaleAspectFit
-        }
-        
-        button.translatesAutoresizingMaskIntoConstraints = false
     }
     
     func updateTextsForMode() {
@@ -745,7 +628,7 @@ extension AuthViewController {
     private func presentLegalScreen(initialTab: LegalTab) {
         let legalVC = UIHostingController(rootView: LegalScreenView(initialTab: initialTab))
         legalVC.modalPresentationStyle = .pageSheet
-        if let sheet = legalVC.sheetPresentationController {
+        if #available(iOS 15.0, *), let sheet = legalVC.sheetPresentationController {
             sheet.detents = [.large()]
             sheet.prefersGrabberVisible = true
         }
@@ -838,115 +721,6 @@ extension AuthViewController {
         }
     }
 
-    @objc func googleButtonTapped() {
-        Task {
-            do {
-                let url = try SupabaseManager.shared.client.auth.getOAuthSignInURL(
-                    provider: .google,
-                    redirectTo: URL(string: "io.supabase.rehearse://login-callback")
-                )
-
-                await MainActor.run {
-                    let webSession = ASWebAuthenticationSession(
-                        url: url,
-                        callbackURLScheme: "io.supabase.rehearse"
-                    ) { callbackURL, error in
-
-                        // User cancelled — fail silently
-                        if let error = error as? ASWebAuthenticationSessionError,
-                           error.code == .canceledLogin { return }
-
-                        if let error = error {
-                            DispatchQueue.main.async {
-                                self.showError("Google sign-in failed: \(error.localizedDescription)")
-                            }
-                            return
-                        }
-
-                        guard let callbackURL = callbackURL else {
-                            DispatchQueue.main.async {
-                                self.showError("Google sign-in failed: no callback URL.")
-                            }
-                            return
-                        }
-
-                        // Exchange the callback URL for a Supabase session.
-                        // IMPORTANT: After handle() succeeds we query onboarding
-                        // INLINE in the same Task — this avoids the race condition
-                        // where routeAfterLogin() spawns a *new* Task and tries to
-                        // read client.auth.session before it is fully committed.
-                        Task {
-                            do {
-                                let client = SupabaseManager.shared.client
-                                client.auth.handle(callbackURL)
-
-                                // The SDK securely stores the session in the iOS Keychain.
-                                // Sometimes fetching .session immediately throws "Auth session missing"
-                                // because the Keychain write hasn't propagated across threads yet.
-                                // We retry up to 5 times (max 1.5s delay) to ensure it syncs.
-                                var session: Session?
-                                for _ in 0..<5 {
-                                    if let s = try? await client.auth.session {
-                                        session = s
-                                        break
-                                    }
-                                    try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
-                                }
-                                
-                                guard let validSession = session else {
-                                    throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Session took too long to save. Please restart the app."])
-                                }
-
-                                let userId = validSession.user.id.uuidString
-
-                                // Check onboarding completion inline
-                                struct OnboardingRow: Decodable {
-                                    let genres: [String]?
-                                }
-                                let shouldOnboard: Bool
-
-                                do {
-                                    let row: OnboardingRow = try await client
-                                        .from("user_onboarding")
-                                        .select("genres")
-                                        .eq("id", value: userId)
-                                        .single()
-                                        .execute()
-                                        .value
-                                        
-                                    shouldOnboard = row.genres == nil || row.genres!.isEmpty
-                                } catch {
-                                    print("Google Auth Onboarding Check - no record found")
-                                    shouldOnboard = true // no record → show onboarding
-                                }
-                                
-                                await MainActor.run {
-                                    if shouldOnboard {
-                                        self.showOnboardingFlow()
-                                    } else {
-                                        self.showHomeScreen()
-                                    }
-                                }
-
-                            } catch {
-                                await MainActor.run {
-                                    self.showError("Sign-in failed: \(error.localizedDescription)")
-                                }
-                            }
-                        }
-                    }
-
-                    webSession.presentationContextProvider = self
-                    webSession.prefersEphemeralWebBrowserSession = true
-                    webSession.start()
-                }
-            } catch {
-                await MainActor.run {
-                    self.showError("Failed to start Google login: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
 }
 
 extension AuthViewController: UITextViewDelegate {
@@ -962,15 +736,6 @@ extension AuthViewController: UITextViewDelegate {
         }
 
         return true
-    }
-}
-
-// MARK: - ASWebAuthenticationPresentationContextProviding
-extension AuthViewController: ASWebAuthenticationPresentationContextProviding {
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        if let window = self.view.window { return window }
-        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-        return UIWindow(windowScene: scene!)
     }
 }
 
@@ -1065,7 +830,7 @@ extension AuthViewController {
                         showOnboardingFlow()
                     }
                 } catch {
-                    print("Email Auth Onboarding Check - no record found")
+                    debugLog("Email Auth Onboarding Check - no record found")
                     // No onboarding record found at all → show onboarding
                     showOnboardingFlow()
                 }
@@ -1088,7 +853,7 @@ extension AuthViewController {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }),
-              let window = scene.keyWindow else { return }
+              let window = scene.windows.first(where: { $0.isKeyWindow }) else { return }
 
         UIView.transition(with: window,
                           duration: 0.35,

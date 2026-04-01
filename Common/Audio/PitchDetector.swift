@@ -38,26 +38,30 @@ public final class PitchDetector {
     }
     
     // MARK: - Start/Stop
-    
-    /// Requests microphone permission and starts the audio engine.
-    func startListening() {
-        // If already requested in this run, just check status and start
-        if PitchDetector.hasRequestedPermissionInSession {
-            if AVAudioApplication.shared.recordPermission == .granted {
-                self.startEngine()
+
+    func recordPermissionStatus() -> AVAudioSession.RecordPermission {
+        AVAudioSession.sharedInstance().recordPermission
+    }
+
+    func requestMicrophonePermission(_ completion: @escaping (Bool) -> Void) {
+        let audioSession = AVAudioSession.sharedInstance()
+        PitchDetector.hasRequestedPermissionInSession = true
+        audioSession.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                completion(granted)
             }
+        }
+    }
+
+    /// Starts the audio engine once permission has already been granted.
+    func startListening() {
+        let audioSession = AVAudioSession.sharedInstance()
+
+        if audioSession.recordPermission != .granted {
             return
         }
-        
-        // First time in this session
-        PitchDetector.hasRequestedPermissionInSession = true
-        AVAudioApplication.requestRecordPermission { [weak self] granted in
-            guard let self = self, granted else { return }
-            
-            DispatchQueue.main.async {
-                self.startEngine()
-            }
-        }
+
+        self.startEngine()
     }
     
     /// Stops the audio engine and removes the tap.
@@ -71,7 +75,7 @@ public final class PitchDetector {
         }
         fftSetup = nil
         isListening = false
-        print("🛑 [PitchDetector] Stopped listening")
+        debugLog("🛑 [PitchDetector] Stopped listening")
     }
     
     // MARK: - Audio Session & Engine
@@ -104,9 +108,9 @@ public final class PitchDetector {
             
             try audioEngine.start()
             isListening = true
-            print("🎙️ [PitchDetector] Started listening")
+            debugLog("🎙️ [PitchDetector] Started listening")
         } catch {
-            print("❌ [PitchDetector] Engine start error:", error)
+            debugLog("❌ [PitchDetector] Engine start error:", error)
         }
     }
     

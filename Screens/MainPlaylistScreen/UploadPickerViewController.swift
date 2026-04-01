@@ -136,7 +136,7 @@ class UploadPickerViewController: UIViewController {
                     self.renderRows(uploads)
                 }
             } catch {
-                print("[UploadPicker] fetch error: \(error)")
+                debugLog("[UploadPicker] fetch error: \(error)")
                 await MainActor.run {
                     self.loadingIndicator.stopAnimating()
                     self.renderRows([])

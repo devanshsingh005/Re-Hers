@@ -212,7 +212,7 @@ class UploadScreen: UIViewController {
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                print("Profile error: \(error)")
+                debugLog("Profile error: \(error)")
                 await MainActor.run {
                     self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
                     self.largeProfileButton.tintColor = .secondaryLabel
@@ -451,6 +451,14 @@ class UploadScreen: UIViewController {
         uploadsStack.spacing = 10
         recentUploadsStack   = uploadsStack
         contentView.addArrangedSubview(uploadsStack)
+
+        let reportButton = UIButton(type: .system)
+        reportButton.setTitle("Report an Issue or Copyright Concern", for: .normal)
+        reportButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        reportButton.contentHorizontalAlignment = .left
+        reportButton.setTitleColor(BrandColors.brand, for: .normal)
+        reportButton.addTarget(self, action: #selector(reportIssueTapped), for: .touchUpInside)
+        contentView.addArrangedSubview(reportButton)
     }
 
     // MARK: - Load & Display Recent Uploads
@@ -464,7 +472,7 @@ class UploadScreen: UIViewController {
                 await MainActor.run { self.displayRecentUploads(uploads) }
             } catch {
                 guard !Task.isCancelled else { return }
-                print("[Uploads] load error: \(error)")
+                debugLog("[Uploads] load error: \(error)")
                 await MainActor.run { self.displayRecentUploads([]) }
             }
         }
@@ -620,7 +628,7 @@ class UploadScreen: UIViewController {
 
             guard let jobIdStr = jsonDict?["job_id"] as? String,
                   let jobId    = UUID(uuidString: jobIdStr) else {
-                print("[RowTap] ❌ No job_id in scan \(scan.id)")
+                debugLog("[RowTap] ❌ No job_id in scan \(scan.id)")
                 return
             }
 
@@ -629,7 +637,7 @@ class UploadScreen: UIViewController {
             let vc        = UploadPageNextViewController()
             vc.jobId      = jobId
             vc.resultURL  = outputURL
-            print("[RowTap] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
+            debugLog("[RowTap] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
             self.navigationController?.pushViewController(vc, animated: true)
         }, for: .touchUpInside)
 
@@ -689,9 +697,9 @@ class UploadScreen: UIViewController {
                 updatedAt:   ISO8601DateFormatter().string(from: Date())
             )
             try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
-            print("[Rename] scan \(scanId) → \(newTitle)")
+            debugLog("[Rename] scan \(scanId) → \(newTitle)")
         } catch {
-            print("[Rename] failed: \(error)")
+            debugLog("[Rename] failed: \(error)")
             await MainActor.run { self.loadRecentUploads() }
         }
     }
@@ -747,18 +755,18 @@ class UploadScreen: UIViewController {
     // MARK: - Auth Helpers
     private func currentUserId() async -> String? {
         do    { return try await SupabaseManager.shared.currentUserId() }
-        catch { print("[Auth] user ID retrieval failed"); return nil }
+        catch { debugLog("[Auth] user ID retrieval failed"); return nil }
     }
 
     private func authToken() async -> String? {
         do    { return try await SupabaseManager.shared.accessToken() }
-        catch { print("[Auth] auth retrieval failed"); return nil }
+        catch { debugLog("[Auth] auth retrieval failed"); return nil }
     }
 
     // MARK: - Upload Pipeline
     private func saveUploadToDatabase(imageData: Data, fileName: String,
                                        fileType: String, popup: UploadQuizPopup) async throws {
-        print("[Upload] size=\(imageData.count) bytes")
+        debugLog("[Upload] size=\(imageData.count) bytes")
 
         guard let uidStr = await currentUserId(), let userId = UUID(uuidString: uidStr) else {
             throw UploadError.invalidUser
@@ -825,7 +833,7 @@ class UploadScreen: UIViewController {
             vc.onDataReady = {
                 popup.notifyUploadComplete()
             }
-            print("[Navigate] jobId=\(jobId.uuidString)")
+            debugLog("[Navigate] jobId=\(jobId.uuidString)")
             self.navigationController?.pushViewController(vc, animated: true)
         }
     }
@@ -840,7 +848,9 @@ class UploadScreen: UIViewController {
         var req      = URLRequest(url: url)
         req.httpMethod  = "POST"
         req.timeoutInterval = 60
-        req.assumesHTTP3Capable = false   // force HTTP/1.1 — avoids QUIC sendmsg failures
+        if #available(iOS 14.5, *) {
+            req.assumesHTTP3Capable = false   // force HTTP/1.1 — avoids QUIC sendmsg failures
+        }
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -893,11 +903,22 @@ class UploadScreen: UIViewController {
     }
 
     private func presentUploadCamera() {
-        let cameraVC = UploadCameraCaptureViewController()
-        cameraVC.delegate = self
-        cameraVC.modalPresentationStyle = .fullScreen
-        activeCameraController = cameraVC
-        present(cameraVC, animated: true)
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showUploadCamera()
+        case .notDetermined:
+            presentCameraAccessRationale()
+        case .denied, .restricted:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to capture sheet music pages for upload."
+            )
+        @unknown default:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to capture sheet music pages for upload."
+            )
+        }
     }
 
     private func presentPhotoLibraryPicker() {
@@ -910,6 +931,58 @@ class UploadScreen: UIViewController {
         picker.delegate = self
         activePhotoPicker = picker
         present(picker, animated: true)
+    }
+
+    private func showUploadCamera() {
+        let cameraVC = UploadCameraCaptureViewController()
+        cameraVC.delegate = self
+        cameraVC.modalPresentationStyle = .fullScreen
+        activeCameraController = cameraVC
+        present(cameraVC, animated: true)
+    }
+
+    private func presentCameraAccessRationale() {
+        let alert = UIAlertController(
+            title: "Capture Sheet Music",
+            message: "Re-Hearse uses the camera only when you choose Camera so you can photograph sheet music pages for upload and analysis.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    granted ? self.showUploadCamera() : self.presentSettingsRedirectAlert(
+                        title: "Camera Access Needed",
+                        message: "Allow camera access in Settings to capture sheet music pages for upload."
+                    )
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentSettingsRedirectAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
+    @objc private func reportIssueTapped() {
+        let subject = "Re-Hearse Upload Support"
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Re-Hearse%20Upload%20Support"
+        if let mailURL = URL(string: "mailto:support@rehearse.app?subject=\(subject)") {
+            UIApplication.shared.open(mailURL)
+        } else {
+            presentAlert(
+                title: "Support",
+                message: "Email support@rehearse.app to report an upload issue, infringement concern, or takedown request."
+            )
+        }
     }
 
     private func createPDF(from images: [UIImage]) -> Data? {

@@ -471,7 +471,7 @@ class LessonMapViewController: UIViewController {
                 }
 
             } catch {
-                print("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
+                debugLog("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
                 // Fall back to chapter 1 being active so the UI isn't empty
                 await MainActor.run {
                     self.chapters = applyProgress(currentChapter: 1)
