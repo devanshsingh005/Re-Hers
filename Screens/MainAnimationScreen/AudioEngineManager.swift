@@ -11,21 +11,19 @@ final class AudioEngineManager {
 
     // MARK: - Instrument Types
     enum InstrumentType: CaseIterable {
-        case grandPiano, electricPiano, organ
+        case grandPiano, electricPiano
 
         var displayName: String {
             switch self {
             case .grandPiano:    return "Grand Piano"
             case .electricPiano: return "Electric Piano"
-            case .organ:         return "Organ"
             }
         }
 
         var sfName: String {
             switch self {
-            case .grandPiano:    return "GrandPiano"
+            case .grandPiano:    return "SteinGrandPiano"
             case .electricPiano: return "Wurlitzer210"
-            case .organ:         return "Organ"
             }
         }
 
@@ -34,7 +32,6 @@ final class AudioEngineManager {
             switch self {
             case .grandPiano:    return 0
             case .electricPiano: return 4
-            case .organ:         return 16
             }
         }
     }
@@ -197,7 +194,8 @@ final class AudioEngineManager {
         // 2. System General MIDI DLS
         let sysPaths = [
             "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls",
-            "/Library/Audio/Sounds/Banks/gs_instruments.dls"
+            "/Library/Audio/Sounds/Banks/gs_instruments.dls",
+            "/System/Library/Audio/UISounds/New/Classic/NewsFlash.caf" // Just a test to see if system library is readable, though not a DLS
         ]
         for path in sysPaths {
             let url = URL(fileURLWithPath: path)

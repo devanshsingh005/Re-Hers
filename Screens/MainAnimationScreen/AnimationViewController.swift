@@ -709,7 +709,6 @@ private final class SettingsMenuView: UIView {
         switch type {
         case .grandPiano: return "Grand Piano"
         case .electricPiano: return "Electric Piano"
-        case .organ: return "Pipe Organ"
         }
     }
 
@@ -717,7 +716,6 @@ private final class SettingsMenuView: UIView {
         switch type {
         case .grandPiano: return "pianokeys"
         case .electricPiano: return "bolt.fill"
-        case .organ: return "music.note.list"
         }
     }
 

@@ -9,6 +9,28 @@ public protocol PitchDetectorDelegate: AnyObject {
 
 /// A reusable real-time FFT pitch detector based on the logic from ChordRecognitionViewController.
 public final class PitchDetector {
+    enum StartFailure: LocalizedError {
+        case microphonePermissionMissing
+        case noInputRouteAvailable
+        case fftInitializationFailed
+        case audioSessionConfigurationFailed(Error)
+        case engineStartFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .microphonePermissionMissing:
+                return "Microphone access is required before listening can begin."
+            case .noInputRouteAvailable:
+                return "No microphone input route is currently available."
+            case .fftInitializationFailed:
+                return "The audio analysis engine could not be initialized."
+            case .audioSessionConfigurationFailed(let error):
+                return "The audio session could not be configured: \(error.localizedDescription)"
+            case .engineStartFailed(let error):
+                return "The microphone engine could not start: \(error.localizedDescription)"
+            }
+        }
+    }
     
     // MARK: - Properties
     weak var delegate: PitchDetectorDelegate?
@@ -17,7 +39,9 @@ public final class PitchDetector {
     private var fftSetup: FFTSetup?
     private var bufferSize: Int = 4096
     private var sampleRate: Double = 44100
+    private var hasInstalledTap = false
     private(set) var isListening = false
+    private(set) var lastStartFailure: StartFailure?
     
     // Audio processing
     private let minMagnitudeThreshold: Float = 0.001
@@ -54,27 +78,34 @@ public final class PitchDetector {
     }
 
     /// Starts the audio engine once permission has already been granted.
-    func startListening() {
+    @discardableResult
+    func startListening() -> Bool {
         let audioSession = AVAudioSession.sharedInstance()
+        lastStartFailure = nil
 
         if audioSession.recordPermission != .granted {
-            return
+            lastStartFailure = .microphonePermissionMissing
+            return false
         }
 
-        self.startEngine()
+        return self.startEngine()
     }
     
     /// Stops the audio engine and removes the tap.
     func stopListening() {
-        guard isListening else { return }
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if hasInstalledTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledTap = false
+        }
         audioEngine.stop()
+        audioEngine.reset()
         
         if let setup = fftSetup {
             vDSP_destroy_fftsetup(setup)
         }
         fftSetup = nil
         isListening = false
+        frequencyHistory.removeAll()
         debugLog("🛑 [PitchDetector] Stopped listening")
     }
     
@@ -82,22 +113,48 @@ public final class PitchDetector {
     
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothHFP, .mixWithOthers])
         try session.setActive(true)
     }
     
-    private func startEngine() {
-        guard !isListening else { return }
+    private func startEngine() -> Bool {
+        guard !isListening else { return true }
         
         do {
             try configureAudioSession()
-            
+        } catch {
+            lastStartFailure = .audioSessionConfigurationFailed(error)
+            debugLog("❌ [PitchDetector] Audio session configuration failed:", error)
+            return false
+        }
+
+        audioEngine.stop()
+        audioEngine.reset()
+
+        if hasInstalledTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledTap = false
+        }
+
+        do {
             let input = audioEngine.inputNode
-            let format = input.outputFormat(forBus: 0)
+            let format = input.inputFormat(forBus: 0)
+
+            guard format.channelCount > 0 else {
+                lastStartFailure = .noInputRouteAvailable
+                debugLog("❌ [PitchDetector] No microphone input route available")
+                return false
+            }
+            
             sampleRate = format.sampleRate
             
             let log2n = vDSP_Length(log2(Float(bufferSize)))
             fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
+            guard fftSetup != nil else {
+                lastStartFailure = .fftInitializationFailed
+                debugLog("❌ [PitchDetector] FFT setup failed")
+                return false
+            }
             
             var window = [Float](repeating: 0, count: bufferSize)
             vDSP_hann_window(&window, vDSP_Length(bufferSize), Int32(vDSP_HANN_NORM))
@@ -105,12 +162,25 @@ public final class PitchDetector {
             input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(bufferSize), format: format) { [weak self] buffer, _ in
                 self?.process(buffer: buffer, window: window)
             }
+            hasInstalledTap = true
             
+            audioEngine.prepare()
             try audioEngine.start()
             isListening = true
             debugLog("🎙️ [PitchDetector] Started listening")
+            return true
         } catch {
+            if hasInstalledTap {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                hasInstalledTap = false
+            }
+            if let setup = fftSetup {
+                vDSP_destroy_fftsetup(setup)
+            }
+            fftSetup = nil
+            lastStartFailure = .engineStartFailed(error)
             debugLog("❌ [PitchDetector] Engine start error:", error)
+            return false
         }
     }
     
@@ -129,7 +199,7 @@ public final class PitchDetector {
             if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
                 let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                 if options.contains(.shouldResume) {
-                    startListening()
+                    _ = startListening()
                 }
             }
         }

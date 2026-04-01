@@ -2,8 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>BACKEND_API_URL</key>
+	<string>$(BACKEND_API_URL)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rehearse</string>
+			</array>
+		</dict>
+	</array>
+	<key>PUBLIC_LEGAL_BASE_URL</key>
+	<string>https://rehearse.app</string>
+	<key>SUPABASE_KEY</key>
+	<string>$(SUPABASE_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -21,26 +38,5 @@
 			</array>
 		</dict>
 	</dict>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>rehearse</string>
-			</array>
-		</dict>
-	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Re-Hearse uses your microphone to listen to you play and provide real-time chord recognition and feedback.</string>
-	<key>SUPABASE_KEY</key>
-	<string>$(SUPABASE_KEY)</string>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>PUBLIC_LEGAL_BASE_URL</key>
-	<string>https://rehearse.app</string>
-	<key>BACKEND_API_URL</key>
-	<string>$(BACKEND_API_URL)</string>
 </dict>
 </plist>

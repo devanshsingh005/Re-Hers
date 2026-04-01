@@ -197,7 +197,7 @@ class DiscoverSongDetailViewController: UIViewController {
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(artistLabel)
 
-        sheetToggle.selectedSegmentIndex = 1
+        sheetToggle.selectedSegmentIndex = 0
         sheetToggle.translatesAutoresizingMaskIntoConstraints = false
         sheetToggle.addTarget(self, action: #selector(sheetToggleChanged), for: .valueChanged)
         contentView.addSubview(sheetToggle)
@@ -303,6 +303,11 @@ class DiscoverSongDetailViewController: UIViewController {
             pdfErrorLabel.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
             pdfErrorLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
             pdfErrorLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+
+            pdfView.topAnchor.constraint(equalTo: sheetContainer.topAnchor),
+            pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor),
 
             bottomSpacer.topAnchor.constraint(equalTo: buttonStack.bottomAnchor),
             bottomSpacer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -424,16 +429,20 @@ class DiscoverSongDetailViewController: UIViewController {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
+        // If it's already a full URL, use it
         if let url = URL(string: trimmed), url.scheme != nil {
             return url
         }
 
-        if trimmed.hasPrefix("/") {
-            return ReHersAPI.url(path: trimmed)
-        } else {
-            // Assume it's a relative backend path even without a leading slash
-            return ReHersAPI.url(path: "/" + trimmed)
-        }
+        // For the Discover page, root-relative paths like "/labeled/song.pdf" 
+        // are stored in the 'public-sheets' bucket in Supabase.
+        let bucket = "public-sheets"
+        let path = trimmed.hasPrefix("/") ? String(trimmed.dropFirst()) : trimmed
+        
+        let supabaseURL = SupabaseManager.shared.supabaseURL
+        let storageURLString = "\(supabaseURL)/storage/v1/object/public/\(bucket)/\(path)"
+        
+        return URL(string: storageURLString)
     }
 
     private func fetchRemoteData(from rawValue: String) async throws -> Data {
@@ -444,13 +453,21 @@ class DiscoverSongDetailViewController: UIViewController {
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
 
-        let isBackendURL = rawValue.hasPrefix("/") || url.absoluteString.hasPrefix(ReHersAPI.baseURLString)
-        if isBackendURL, let token = try? await SupabaseManager.shared.accessToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // If it's a Supabase URL, we might need the API key even for authenticated public reads
+        // or a Bearer token if the bucket policy requires it.
+        let isSupabase = url.absoluteString.hasPrefix(SupabaseManager.shared.supabaseURL)
+        if isSupabase {
+            // Always include the API key for Supabase requests
+            let rawKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_KEY") as? String ?? ""
+            let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            request.setValue(key, forHTTPHeaderField: "apikey")
+            
+            if let token = try? await SupabaseManager.shared.accessToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
         }
 
-        let session: URLSession = isBackendURL ? ReHersPinnedSession.shared : URLSession.shared
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard (200...299).contains(statusCode) else {
             throw AssetError.remoteFetchFailed(statusCode)
@@ -459,14 +476,22 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     private func loadOriginalPDF() async {
-        let originalURL = song?.originalPdfPath
-        guard let originalURL, !originalURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let originalPath = song?.originalPdfPath
+        guard let originalPath, !originalPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            print("[DiscoverDetail] ℹ️ No original PDF path")
             return
         }
 
+        let url = resolvedURL(from: originalPath)
+        print("[DiscoverDetail] 🌐 Fetching Original PDF: \(url?.absoluteString ?? "nil")")
+
         do {
-            let data = try await fetchRemoteData(from: originalURL)
-            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else { return }
+            let data = try await fetchRemoteData(from: originalPath)
+            print("[DiscoverDetail] ✅ Fetched Original PDF: \(data.count) bytes")
+            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+                print("[DiscoverDetail] ❌ Failed to create PDFDocument from data")
+                return
+            }
             await MainActor.run {
                 self.originalPDFDocument = doc
                 if self.sheetToggle.selectedSegmentIndex == 0 {
@@ -474,20 +499,26 @@ class DiscoverSongDetailViewController: UIViewController {
                 }
             }
         } catch {
-            print("[DiscoverDetail] Original PDF fetch error: \(error)")
+            print("[DiscoverDetail] ❌ Original PDF fetch error: \(error)")
         }
     }
 
     private func loadConvertedPDF() async {
         let sheetURL = song?.labeledPdfPath ?? song?.sheetUrl
-        guard let sheetURL, !sheetURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let urlString = sheetURL, !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            print("[DiscoverDetail] ℹ️ No converted PDF path")
             await MainActor.run { self.showPDFError() }
             return
         }
 
+        let url = resolvedURL(from: urlString)
+        print("[DiscoverDetail] 🌐 Fetching Converted PDF: \(url?.absoluteString ?? "nil")")
+
         do {
-            let data = try await fetchRemoteData(from: sheetURL)
+            let data = try await fetchRemoteData(from: urlString)
+            print("[DiscoverDetail] ✅ Fetched Converted PDF: \(data.count) bytes")
             guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+                print("[DiscoverDetail] ❌ Failed to create PDFDocument from converted data")
                 await MainActor.run { self.showPDFError() }
                 return
             }
@@ -498,7 +529,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 }
             }
         } catch {
-            print("[DiscoverDetail] PDF fetch error: \(error)")
+            print("[DiscoverDetail] ❌ PDF fetch error: \(error)")
             await MainActor.run {
                 if self.sheetToggle.selectedSegmentIndex == 1 {
                     self.showPDFError()
@@ -509,18 +540,24 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func loadConvertedJSON() async {
         let jsonURL = song?.outputJsonPath ?? song?.jsonUrl
-        guard let jsonURL, !jsonURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let urlString = jsonURL, !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            print("[DiscoverDetail] ℹ️ No JSON path")
             return
         }
 
+        let url = resolvedURL(from: urlString)
+        print("[DiscoverDetail] 🌐 Fetching JSON: \(url?.absoluteString ?? "nil")")
+
         do {
-            let data = try await fetchRemoteData(from: jsonURL)
+            let data = try await fetchRemoteData(from: urlString)
+            print("[DiscoverDetail] ✅ Fetched JSON: \(data.count) bytes")
             guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                print("[DiscoverDetail] ❌ Failed to parse JSON data")
                 return
             }
             await MainActor.run { self.sheetMusicJSON = parsed }
         } catch {
-            print("[DiscoverDetail] JSON fetch error: \(error)")
+            print("[DiscoverDetail] ❌ JSON fetch error: \(error)")
         }
     }
 

@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 final class PlayAlongViewController: UIViewController {
 
@@ -51,6 +52,7 @@ final class PlayAlongViewController: UIViewController {
         pitchDetector.delegate = self
         
         pianoKeyboard.mode = .playAlong
+        navBar.setMicActive(false)
         
         loadSheetData()
     }
@@ -70,7 +72,7 @@ final class PlayAlongViewController: UIViewController {
         super.viewWillAppear(animated)
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = true
         acquireAudioPlaybackSessionIfNeeded()
-        pitchDetector.startListening()
+        beginListeningFlow()
         forceLandscape()
     }
 
@@ -169,10 +171,85 @@ final class PlayAlongViewController: UIViewController {
     
     @objc private func micIndicatorTapped() {
         debugLog("🎙️ Manual Mic Reset requested")
-        pitchDetector.stopListening()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.pitchDetector.startListening()
+        beginListeningFlow(forceRestart: true)
+    }
+
+    private func beginListeningFlow(forceRestart: Bool = false) {
+        switch pitchDetector.recordPermissionStatus() {
+        case .granted:
+            startListening(forceRestart: forceRestart)
+        case .undetermined:
+            presentMicrophoneRationale()
+        case .denied:
+            navBar.setMicActive(false)
+            presentMicrophoneSettingsAlert()
+        @unknown default:
+            navBar.setMicActive(false)
+            presentMicrophoneSettingsAlert()
         }
+    }
+
+    private func startListening(forceRestart: Bool = false) {
+        if forceRestart {
+            pitchDetector.stopListening()
+        }
+
+        guard pitchDetector.startListening() else {
+            navBar.setMicActive(false)
+            presentMicrophoneUnavailableAlert()
+            return
+        }
+    }
+
+    private func presentMicrophoneRationale() {
+        guard presentedViewController == nil else { return }
+
+        let alert = UIAlertController(
+            title: "Use Microphone for Play Along",
+            message: "Re-Hearse listens only while Play Along is open so it can detect the notes you play in real time.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel) { [weak self] _ in
+            self?.navBar.setMicActive(false)
+        })
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            self?.pitchDetector.requestMicrophonePermission { granted in
+                guard let self else { return }
+                granted ? self.startListening() : self.presentMicrophoneSettingsAlert()
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentMicrophoneSettingsAlert() {
+        guard presentedViewController == nil else { return }
+
+        let alert = UIAlertController(
+            title: "Microphone Access Needed",
+            message: "Turn on microphone access in Settings so Play Along can hear the notes you play.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentMicrophoneUnavailableAlert() {
+        guard presentedViewController == nil else { return }
+
+        let message = pitchDetector.lastStartFailure?.errorDescription
+            ?? "Re-Hearse could not start microphone capture right now. Please try again."
+
+        let alert = UIAlertController(
+            title: "Microphone Unavailable",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     private func wireCallbacks() {
