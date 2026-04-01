@@ -143,6 +143,7 @@ final class LessonNavBarView: UIView {
         let img = UIGraphicsGetImageFromCurrentImageContext()!
         UIGraphicsEndImageContext()
         return img
+    }
 
     @objc private func didBack() {
         NavigationBarHelper.animateButtonPress(backBtn) { [weak self] in

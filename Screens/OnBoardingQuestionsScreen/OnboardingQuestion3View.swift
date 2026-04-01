@@ -81,8 +81,6 @@ struct OnboardingQuestion3View: View {
                             .accentColor(Color(SemanticColors.DataViz.progressFill))
                             .onChange(of: sliderIndex) { _ in
                                 viewModel.practiceMins = currentMins
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
                             }
 
                             HStack {

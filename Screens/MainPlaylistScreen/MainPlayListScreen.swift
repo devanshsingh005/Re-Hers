@@ -690,7 +690,6 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
             let velocity = recognizer.velocity(in: contentView).x
             let currentX = containerView.transform.tx
             if currentX < -80 || (velocity < -500 && currentX < -30) {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 UIView.animate(withDuration: 0.25, animations: {
                     self.containerView.transform = CGAffineTransform(
                         translationX: -self.bounds.width, y: 0)

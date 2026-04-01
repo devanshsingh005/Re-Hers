@@ -214,10 +214,6 @@ public final class NavigationBarHelper {
 
     /// Performs a gentle, calming "shrink and grow" animation on a button with haptic feedback.
     public static func animateButtonPress(_ button: UIView, completion: (() -> Void)? = nil) {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
-
         // Match UploadScreen's snappy feel (0.96 scale)
         UIView.animate(withDuration: 0.10, delay: 0, options: .curveEaseOut, animations: {
             button.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)

@@ -1478,7 +1478,6 @@ class LessonDetailViewController: UIViewController {
                        usingSpringWithDamping: 0.62, initialSpringVelocity: 0.5) {
             popup.alpha = 1; popup.transform = .identity; dim.alpha = 1
         }
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
 
         popup.onContinue = { [weak self] in
             Task {
@@ -1570,7 +1569,6 @@ class LessonDetailViewController: UIViewController {
                 }
             }
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func updateEnglishLabel(with variant: String) {
@@ -1612,7 +1610,6 @@ class LessonDetailViewController: UIViewController {
         }
 
         present(sheet, animated: true)
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     @objc private func didTapEarTrainingPlay() {
@@ -1628,7 +1625,6 @@ class LessonDetailViewController: UIViewController {
             AudioEngineManager.shared.stopAllNotes()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: stopWorkItem)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     @objc private func didTapEarTrainingOption(_ sender: UIButton) {
@@ -1654,7 +1650,6 @@ class LessonDetailViewController: UIViewController {
         if isCorrect {
             recordVariantPracticed(variantIndex: variantIdx, attempts: attempts)
         } else {
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         }
     }
     
@@ -2167,7 +2162,6 @@ class TryYourselfViewController: UIViewController {
 
     @objc private func toggleListening() {
         isListening.toggle()
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
         if isListening {
             attemptCount += 1
@@ -2218,7 +2212,6 @@ class TryYourselfViewController: UIViewController {
     }
 
     @objc private func didTapDone() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         UIView.animate(withDuration: 0.1, animations: {
             self.doneButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
         }) { _ in
@@ -2235,8 +2228,6 @@ class TryYourselfViewController: UIViewController {
     private func flashCorrect() {
         guard !alreadyMarkedCorrect else { return }
         alreadyMarkedCorrect = true
-
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
         stopPulseAnimation()
 
         // Flash mic button green

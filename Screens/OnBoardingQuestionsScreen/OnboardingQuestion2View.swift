@@ -111,9 +111,6 @@ struct OnboardingQuestion2View: View {
                                 subtitle: item.subtitle,
                                 isSelected: viewModel.selectedGenres.contains(item.title),
                                 action: {
-                                    let impact = UIImpactFeedbackGenerator(style: .light)
-                                    impact.impactOccurred()
-                                    
                                     if viewModel.selectedGenres.contains(item.title) {
                                         viewModel.selectedGenres.remove(item.title)
                                     } else {

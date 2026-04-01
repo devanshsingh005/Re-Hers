@@ -17,7 +17,6 @@ extension HomeViewController {
 
         sectionStack.addArrangedSubview(makeSectionHeader("Your Playlist", action: { [weak self] in
             guard let self = self else { return }
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             let vc = PlaylistViewController()
             vc.hidesBottomBarWhenPushed = true
             self.navigationController?.pushViewController(vc, animated: true)
@@ -101,7 +100,6 @@ extension HomeViewController {
         
         wrapper.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             NavigationBarHelper.animateButtonPress(wrapper) { [weak self] in
                 guard let self = self else { return }
                 let vc = PlaylistDetailViewController()
@@ -186,7 +184,6 @@ extension HomeViewController {
 
         wrapper.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             NavigationBarHelper.animateButtonPress(wrapper) { [weak self] in
                 guard let self = self else { return }
                 let vc = PlaylistViewController()
@@ -209,7 +206,6 @@ extension HomeViewController {
 
         sectionStack.addArrangedSubview(makeSectionHeader("Recents", action: { [weak self] in
             guard let self = self else { return }
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             let vc = AllRecentsViewController()
             vc.hidesBottomBarWhenPushed = true
             self.navigationController?.pushViewController(vc, animated: true)
@@ -349,7 +345,6 @@ extension HomeViewController {
         // Tap: open song in DiscoverSongPreviewViewController (same flow as Discover screen)
         card.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             NavigationBarHelper.animateButtonPress(card) { [weak self] in
                 guard let self = self else { return }
                 let vc = DiscoverSongPreviewViewController()

@@ -99,7 +99,6 @@ struct SplashScreenView: View {
     
     var onGetStarted: () -> Void
     
-    private let impact = UIImpactFeedbackGenerator(style: .medium)
     private let brandOrange = Color(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0) // #EF9408
     
     private var baseColor: Color {
@@ -249,10 +248,6 @@ struct SplashScreenView: View {
         withAnimation(.easeIn(duration: 0.4)) {
             waveOpacity1 = colorScheme == .dark ? 0.6 : 0.8
         }
-        
-        // Synchronized Haptic at the peak of the reveal
-        impact.prepare()
-        impact.impactOccurred()
         
         // Global Atmosphere Reactivity
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {

@@ -8,16 +8,11 @@ final class PlayAlongViewController: UIViewController {
     private let navBar        = PlayAlongNavBar()
     private let reportView    = PlayAlongReportView()
 
-    // MARK: - Logic
+    // Logic
     private let engine = PlayAlongEngine()
     private let pitchDetector = PitchDetector()
     
-    // Dynamic Data
     var sheetMusicData: Data?
-    
-    // Haptics
-    private let hapticSuccess = UIImpactFeedbackGenerator(style: .light)
-    private let hapticPeak    = UIImpactFeedbackGenerator(style: .medium)
 
     private let kPianoH: CGFloat = 136
     private let kNavH:   CGFloat = 54
@@ -51,9 +46,6 @@ final class PlayAlongViewController: UIViewController {
         self.edgesForExtendedLayout = .all
         setupUI()
         wireCallbacks()
-        
-        hapticSuccess.prepare()
-        hapticPeak.prepare()
         
         engine.delegate = self
         pitchDetector.delegate = self
@@ -266,7 +258,6 @@ final class PlayAlongViewController: UIViewController {
             key.animatePress(color: feedbackColor)
             
             if isCorrect {
-                hapticSuccess.impactOccurred(intensity: 0.8)
             }
             
             // Re-release after a short delay to revert to the hint (Blue) or blank

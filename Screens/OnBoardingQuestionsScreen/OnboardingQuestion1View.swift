@@ -103,8 +103,6 @@ struct OnboardingQuestion1View: View {
                                 subtitle: item.subtitle,
                                 isSelected: viewModel.selectedLevel == item.title,
                                 action: {
-                                    let impact = UIImpactFeedbackGenerator(style: .light)
-                                    impact.impactOccurred()
                                     viewModel.selectedLevel = item.title
                                 }
                             )
