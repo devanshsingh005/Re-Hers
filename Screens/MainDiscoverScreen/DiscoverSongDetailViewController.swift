@@ -360,6 +360,10 @@ class DiscoverSongDetailViewController: UIViewController {
 
         guard !presentGuestPlayAlongGateIfNeeded() else { return }
 
+        if sheetMusicJSON == nil {
+            loadSheetData()
+        }
+
         guard let json = sheetMusicJSON,
               let data = try? JSONSerialization.data(withJSONObject: json) else {
             showConvertedJSONMissingError()
@@ -407,6 +411,10 @@ class DiscoverSongDetailViewController: UIViewController {
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
         playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
+
+        if sheetMusicJSON == nil {
+            loadSheetData()
+        }
 
         guard let json = sheetMusicJSON else {
             showConvertedJSONMissingError()

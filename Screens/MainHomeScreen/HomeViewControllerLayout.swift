@@ -251,7 +251,14 @@ extension HomeViewController {
 
     @objc func playAlongTapped() {
         guard !presentGuestPlayAlongGateIfNeeded() else { return }
-        navigationController?.pushViewController(PlayAlongViewController(), animated: true)
+
+        let alert = UIAlertController(
+            title: "Choose a Song First",
+            message: "Play Along needs processed sheet music for a specific song. Open a song detail page and start Play Along from there.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     @discardableResult

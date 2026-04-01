@@ -270,10 +270,13 @@ class PlayAlongSongDetailViewController: UIViewController {
 
         guard !presentGuestPlayAlongGateIfNeeded() else { return }
 
-        let vc = PlayAlongViewController()
-        let nav = LandscapeNavigationController(rootViewController: vc)
-        nav.modalPresentationStyle = .fullScreen
-        present(nav, animated: true)
+        let alert = UIAlertController(
+            title: "Play Along Unavailable",
+            message: "This screen does not have the converted sheet data needed for Play Along. Open the song from a page that has processed sheet music first.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     @objc private func openPianoAnimationVC() {
@@ -328,7 +331,6 @@ class PlayAlongSongDetailViewController: UIViewController {
     @objc private func handleProfile() {
         navigationController?.pushViewController(UserProfileViewController(), animated: true)
     }
-
     @discardableResult
     private func presentGuestPlayAlongGateIfNeeded() -> Bool {
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }

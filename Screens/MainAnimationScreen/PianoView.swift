@@ -12,7 +12,7 @@ final class AnimatedPianoKeyView: UIView {
     let keyType:  KeyType
     let midiNote: UInt8
     let noteName: String
-    var currentHand: HandType? = nil
+    var currentHand: HandType? = nil { didSet { updateAppearance() } }
 
     private var isPressed = false
     var isHinted  = false { didSet { updateAppearance() } }
@@ -109,13 +109,21 @@ final class AnimatedPianoKeyView: UIView {
 
     private func updateAppearance() {
         if isHinted {
-            // "Luminous" hint — glowing soft blue
-            backgroundColor = BrandColors.brand.withAlphaComponent(0.25)
-            layer.borderColor = BrandColors.brand.withAlphaComponent(0.5).cgColor
+            let hintColor: UIColor
+            switch currentHand {
+            case .left:
+                hintColor = AnimatedPianoKeyView.leftColor
+            case .right:
+                hintColor = AnimatedPianoKeyView.rightColor
+            case nil:
+                hintColor = BrandColors.brand
+            }
+
+            backgroundColor = hintColor.withAlphaComponent(0.25)
+            layer.borderColor = hintColor.withAlphaComponent(0.5).cgColor
             layer.borderWidth = 1.5
             
-            // Subtle glow even when not pressed
-            layer.shadowColor = BrandColors.brand.cgColor
+            layer.shadowColor = hintColor.cgColor
             layer.shadowOpacity = 0.3
             layer.shadowRadius = 4
         } else {
@@ -271,12 +279,34 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
 
     func showHints(for notes: [String]) {
         (whiteKeys + blackKeys).forEach { k in
+            k.currentHand = nil
             k.isHinted = notes.contains(k.noteName) || notes.contains(normalise(k.noteName))
+        }
+    }
+
+    func showHints(leftHand: [String], rightHand: [String]) {
+        let normalizedLeft = Set(leftHand.map(normalise))
+        let normalizedRight = Set(rightHand.map(normalise))
+
+        (whiteKeys + blackKeys).forEach { key in
+            let normalizedKey = normalise(key.noteName)
+
+            if normalizedLeft.contains(normalizedKey) {
+                key.currentHand = .left
+                key.isHinted = true
+            } else if normalizedRight.contains(normalizedKey) {
+                key.currentHand = .right
+                key.isHinted = true
+            } else {
+                key.currentHand = nil
+                key.isHinted = false
+            }
         }
     }
 
     func resetAllKeys() {
         (whiteKeys + blackKeys).forEach { 
+            $0.currentHand = nil
             $0.isHinted = false
             $0.animateRelease() 
         }

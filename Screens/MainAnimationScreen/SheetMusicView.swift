@@ -8,6 +8,14 @@ import UIKit
 // contentLayer.sublayers replaced atomically inside CATransaction.
 
 final class SheetMusicView: UIView {
+    private struct ParsedSheetState {
+        let isSingleStaff: Bool
+        let score: Score
+        let totalTicks: Int
+        let maxPixelsPerTick: CGFloat
+        let songPixelLength: CGFloat
+        let canvasW: CGFloat
+    }
 
     // MARK: Constants
     private let lineSpacing: CGFloat = 13   // between staff lines (wider for landscape)
@@ -23,6 +31,7 @@ final class SheetMusicView: UIView {
     // MARK: State
     private var canvasW:        CGFloat = 4000
     private var scrollFraction: CGFloat = 0
+    private var currentTickPosition: Double = 0
     private var isSingleStaff:  Bool    = false   // grand staff by default
     private var score:          Score?
     private var lastBounds      = CGRect.zero
@@ -31,6 +40,7 @@ final class SheetMusicView: UIView {
     // For perfect tick-based synchronization
     private var totalTicks:       Int = 1000
     private var maxPixelsPerTick: CGFloat = 1.0
+    private var loadGeneration: Int = 0
 
     // MARK: Permanent layers / views (added once, never removed)
     private let contentLayer = CALayer()   // all note/staff drawing lives here
@@ -48,14 +58,23 @@ final class SheetMusicView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setup()
-        #if DEBUG
-        loadJSON()
-        #endif
     }
 
     func loadData(_ data: Data) {
-        parseJSON(data)
-        setNeedsLayout()
+        loadGeneration += 1
+        let generation = loadGeneration
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let state = Self.parsedSheetState(from: data) else { return }
+
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard self.loadGeneration == generation else { return }
+
+                self.applyParsedSheetState(state)
+                self.setNeedsLayout()
+            }
+        }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -77,6 +96,8 @@ final class SheetMusicView: UIView {
     // MARK: One-time setup
     private func setup() {
         backgroundColor = UIColor(white: 0.97, alpha: 1)
+        clipsToBounds = true
+        layer.masksToBounds = true
         layer.addSublayer(contentLayer)
 
         // Fix: thin solid playhead line
@@ -105,7 +126,7 @@ final class SheetMusicView: UIView {
 
         let gt   = trebleTop
         let visH = totalStaffHeight
-        let phX  = bounds.width * 0.28
+        let phX  = bounds.width * 0.16
         let phW: CGFloat = 3
         playhead.frame    = CGRect(x: phX, y: gt - 12, width: phW, height: visH + 24)
         fadeOverlay.frame = CGRect(x: 0,   y: 0, width: phX, height: bounds.height)
@@ -121,32 +142,22 @@ final class SheetMusicView: UIView {
     func updatePlaybackProgress(_ p: CGFloat) {
         let p = max(0, min(1, p))
         scrollFraction = p
-        let targetX = clefW + p * songPixelLength + 16
-        let tx = playhead.frame.midX - targetX
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
-        CATransaction.commit()
+        currentTickPosition = Double(totalTicks) * Double(p)
+        applyCurrentTransform()
     }
 
     func updateToTick(_ tick: Double) {
         let maxTick = max(1.0, Double(totalTicks))
         let p = max(0, min(1, CGFloat(tick / maxTick)))
         scrollFraction = p
-        let targetX = clefW + CGFloat(tick) * maxPixelsPerTick + 16
-        let tx = playhead.frame.midX - targetX
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)
-        CATransaction.commit()
+        currentTickPosition = max(0, tick)
+        applyCurrentTransform()
     }
 
     func resetProgress() {
         scrollFraction = 0
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        contentLayer.transform = CATransform3DIdentity
-        CATransaction.commit()
+        currentTickPosition = 0
+        applyCurrentTransform()
         contentLayer.sublayers?.filter { $0.name == "WrongNoteMarker" }.forEach { $0.removeFromSuperlayer() }
     }
 
@@ -169,21 +180,31 @@ final class SheetMusicView: UIView {
         
         let marker = CALayer()
         marker.name = "WrongNoteMarker"
-        marker.backgroundColor = UIColor.systemRed.withAlphaComponent(0.8).cgColor
+        marker.backgroundColor = UIColor.systemRed.withAlphaComponent(0.55).cgColor
         marker.cornerRadius = 2
         
-        // Vertical line covering the staff area
-        let markerH = totalStaffHeight + 20
-        let markerY = trebleTop - 10
-        marker.frame = CGRect(x: nx - 1, y: markerY, width: 2, height: markerH)
+        let markerH = totalStaffHeight + 8
+        let markerY = trebleTop - 4
+        marker.frame = CGRect(x: nx - 1.25, y: markerY, width: 2.5, height: markerH)
         
         contentLayer.addSublayer(marker)
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = 1.1
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        marker.add(fade, forKey: "fadeOut")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            marker.removeFromSuperlayer()
+        }
     }
 
     // MARK: Geometry
     private var staffGap:         CGFloat { 30 }   // gap between treble and bass
     private var trebleTop:        CGFloat {
-        let pad: CGFloat = 8
+        let pad: CGFloat = 12
         let total = isSingleStaff ? staffH : totalStaffHeight
         return pad + max(0, (bounds.height - total - pad * 2)) / 2
     }
@@ -203,11 +224,25 @@ final class SheetMusicView: UIView {
     #endif
 
     private func parseJSON(_ data: Data) {
+        guard let state = Self.parsedSheetState(from: data) else { return }
+        applyParsedSheetState(state)
+    }
+
+    private func applyParsedSheetState(_ state: ParsedSheetState) {
+        isSingleStaff = state.isSingleStaff
+        score = state.score
+        totalTicks = state.totalTicks
+        maxPixelsPerTick = state.maxPixelsPerTick
+        songPixelLength = state.songPixelLength
+        canvasW = state.canvasW
+    }
+
+    private static func parsedSheetState(from data: Data) -> ParsedSheetState? {
         debugLog("📄 [SheetMusicView] parseJSON starting, data size: \(data.count) bytes")
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String:Any]
         else { 
             debugLog("❌ [SheetMusicView] parseJSON failed: Invalid JSON format")
-            return 
+            return nil
         }
         debugLog("🔍 [SheetMusicView] Root keys: \(root.keys.joined(separator: ", "))")
 
@@ -225,12 +260,12 @@ final class SheetMusicView: UIView {
         if raw == nil || raw!.isEmpty { raw = deepFind(root) }
         guard let arr = raw, !arr.isEmpty else {
             debugLog("❌ SheetMusicView: no measures found in JSON")
-            return
+            return nil
         }
 
         // Always show grand staff (treble + bass) regardless of clef count.
         // If the song only has right-hand notes, bass staff will simply be empty.
-        isSingleStaff = false
+        let isSingleStaff = false
 
         var measures: [Measure] = []
         var globalTick = 0
@@ -259,7 +294,7 @@ final class SheetMusicView: UIView {
         }
         // pixelsPerTick is now computed from actual beats × divisions per measure
         let ticksPerMeasure = defaultBeats * divisions
-        let pixelsPerTick: CGFloat = ticksPerMeasure > 0 ? msrW / CGFloat(ticksPerMeasure) : msrW / 24.0
+        let pixelsPerTick: CGFloat = ticksPerMeasure > 0 ? 260 / CGFloat(ticksPerMeasure) : 260 / 24.0
 
         for m in arr {
             if let att = m["attributes"] as? [String:Any] {
@@ -313,15 +348,21 @@ final class SheetMusicView: UIView {
             globalTick += defaultBeats * divisions
         }
 
-        score   = Score(measures: measures, pixelsPerTick: pixelsPerTick)
-        self.totalTicks = globalTick
-        self.maxPixelsPerTick = pixelsPerTick
-        songPixelLength = CGFloat(globalTick) * pixelsPerTick
-        canvasW = max(3000, clefW + songPixelLength + 400)
-        print("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(totalTicks)")
+        let score = Score(measures: measures, pixelsPerTick: pixelsPerTick)
+        let songPixelLength = CGFloat(globalTick) * pixelsPerTick
+        let canvasW = max(3000, 110 + songPixelLength + 400)
+        debugLog("✅ SheetMusicView: \(measures.count) msr  singleStaff=\(isSingleStaff)  canvasW=\(canvasW)  totalTicks=\(globalTick)")
+        return ParsedSheetState(
+            isSingleStaff: isSingleStaff,
+            score: score,
+            totalTicks: globalTick,
+            maxPixelsPerTick: pixelsPerTick,
+            songPixelLength: songPixelLength,
+            canvasW: canvasW
+        )
     }
 
-    private func noteFrom(_ d: [String:Any], tick: Int) -> SheetNote? {
+    private static func noteFrom(_ d: [String:Any], tick: Int) -> SheetNote? {
 
         let pitch = d["pitch"] as? [String:Any]
         let step  = pitch?["step"] as? String
@@ -342,11 +383,11 @@ final class SheetMusicView: UIView {
         return SheetNote(step:step,octave:oct,alter:alter,tick:tick,staff:staff,isRest:d["rest"] != nil)
     }
 
-    private func msrNum(_ d:[String:Any]) -> Int? {
+    private static func msrNum(_ d:[String:Any]) -> Int? {
         if let s = d["@number"] as? String { return Int(s) }
         return d["@number"] as? Int
     }
-    private func deepFind(_ d:[String:Any]) -> [[String:Any]]? {
+    private static func deepFind(_ d:[String:Any]) -> [[String:Any]]? {
         if let a = d["measure"] as? [[String:Any]], !a.isEmpty { return a }
         for (_,v) in d {
             if let s = v as? [String:Any], let f = deepFind(s) { return f }
@@ -391,10 +432,14 @@ final class SheetMusicView: UIView {
         contentLayer.frame     = build.frame
         CATransaction.commit()
 
-        // Re-apply scroll offset
-        let targetX = clefW + scrollFraction * songPixelLength + 16
+        applyCurrentTransform()
+    }
+
+    private func applyCurrentTransform() {
+        let clampedTick = max(0, min(CGFloat(currentTickPosition), CGFloat(totalTicks)))
+        let targetX = clefW + clampedTick * maxPixelsPerTick + 16
         let tx = playhead.frame.midX - targetX
-        
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         contentLayer.transform = CATransform3DMakeTranslation(tx, 0, 0)

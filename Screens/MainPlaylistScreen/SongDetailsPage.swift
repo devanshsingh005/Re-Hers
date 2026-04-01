@@ -20,7 +20,9 @@ class PlaylistSongDetailViewController: UIViewController {
     // MARK: - State
     private var labeledPDF: PDFDocument?
     private var originalPDF: PDFDocument?
-    private var sheetMusicJSON: [String: Any]?
+    private var sheetMusicJSON: [String: Any]? {
+        didSet { updateActionButtonState() }
+    }
     private var cachedPDFPath: String?
     private var cachedJobId: UUID?
 
@@ -139,6 +141,10 @@ class PlaylistSongDetailViewController: UIViewController {
 
         configure(playAlongButton, title: "Play Along", isPrimary: true)
         configure(animationButton,  title: "Animation",  isPrimary: false)
+        playAlongButton.isEnabled = false
+        animationButton.isEnabled = false
+        playAlongButton.alpha = 0.6
+        animationButton.alpha = 0.6
         playAlongButton.addTarget(self, action: #selector(openPlayAlong),  for: .touchUpInside)
         animationButton.addTarget(self,  action: #selector(openAnimation), for: .touchUpInside)
 
@@ -216,10 +222,14 @@ class PlaylistSongDetailViewController: UIViewController {
 
         guard !presentGuestPlayAlongGateIfNeeded() else { return }
 
+        if sheetMusicJSON == nil {
+            loadSheetData()
+        }
+
         guard let json = sheetMusicJSON,
               let data = try? JSONSerialization.data(withJSONObject: json) else {
             alert(sheetMusicJSON == nil
-                ? "Sheet music is still processing.\nPlease waitand try again."
+                ? "Sheet music is still loading.\nPlease wait a moment and try again."
                 : "Failed to prepare sheet music data.")
             return
         }
@@ -264,6 +274,11 @@ class PlaylistSongDetailViewController: UIViewController {
     @objc private func openAnimation() {
         configure(animationButton,  title: "Animation",  isPrimary: true)
         configure(playAlongButton, title: "Play Along", isPrimary: false)
+
+        if sheetMusicJSON == nil {
+            loadSheetData()
+        }
+
         guard let json = sheetMusicJSON,
               let data = try? JSONSerialization.data(withJSONObject: json) else {
             alert(sheetMusicJSON == nil
@@ -283,6 +298,14 @@ class PlaylistSongDetailViewController: UIViewController {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    private func updateActionButtonState() {
+        let hasJSON = sheetMusicJSON != nil
+        playAlongButton.isEnabled = hasJSON
+        animationButton.isEnabled = hasJSON
+        playAlongButton.alpha = hasJSON ? 1.0 : 0.6
+        animationButton.alpha = hasJSON ? 1.0 : 0.6
     }
 
     // MARK: - Segment

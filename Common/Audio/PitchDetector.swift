@@ -44,7 +44,7 @@ public final class PitchDetector {
     private(set) var lastStartFailure: StartFailure?
     
     // Audio processing
-    private let minMagnitudeThreshold: Float = 0.001
+    private let minMagnitudeThreshold: Float = 0.0025
     private var frequencyHistory: [Float] = []
     private let historySize = 5 // Increased from 3 for smoother note tracking
     
@@ -246,9 +246,9 @@ public final class PitchDetector {
                 // Convert complex array to magnitudes
                 vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
                 
-                let peaks = findSignificantPeaks(in: magnitudes)
+        let peaks = findSignificantPeaks(in: magnitudes)
                 DispatchQueue.main.async { [weak self] in
-                    self?.handleDetectedPeaks(peaks)
+                    self?.handleDetectedPeaks(peaks, rms: rms)
                 }
             }
         }
@@ -301,15 +301,60 @@ public final class PitchDetector {
         return interpolatedIndex * sampleRate / Float(fftSize)
     }
     
-    private func handleDetectedPeaks(_ peaks: [(frequency: Float, magnitude: Float)]) {
+    private func handleDetectedPeaks(_ peaks: [(frequency: Float, magnitude: Float)], rms: Float) {
         guard !peaks.isEmpty else { return }
-        
-        // Return top notes found
-        let foundNotes = peaks.prefix(3).map { PitchDetector.frequencyToNoteName($0.frequency) }
-        let strongest = peaks[0]
-        let amplitude = CGFloat(min(1.0, Double(strongest.magnitude) * 500))
-        
-        delegate?.pitchDetectorDidDetect(notes: foundNotes, frequency: strongest.frequency, amplitude: amplitude)
+
+        let primaryPeak = selectPrimaryPeak(from: peaks)
+        let stabilizedFrequency = stabilizedFrequency(from: primaryPeak.frequency)
+
+        var foundNotes: [String] = [PitchDetector.frequencyToNoteName(stabilizedFrequency)]
+        for peak in peaks {
+            let note = PitchDetector.frequencyToNoteName(peak.frequency)
+            if !foundNotes.contains(note) {
+                foundNotes.append(note)
+            }
+            if foundNotes.count == 3 {
+                break
+            }
+        }
+
+        let amplitude = CGFloat(min(1.0, max(Double(rms) * 10.0, Double(primaryPeak.magnitude) * 180.0)))
+
+        delegate?.pitchDetectorDidDetect(notes: foundNotes, frequency: stabilizedFrequency, amplitude: amplitude)
+    }
+
+    private func selectPrimaryPeak(from peaks: [(frequency: Float, magnitude: Float)]) -> (frequency: Float, magnitude: Float) {
+        guard let strongest = peaks.first else { return (0, 0) }
+
+        let candidateFloor = strongest.magnitude * 0.18
+        let candidates = peaks.filter { peak in
+            peak.magnitude >= candidateFloor &&
+            peak.frequency >= 60 &&
+            peak.frequency <= 1400
+        }
+
+        return candidates.min(by: { $0.frequency < $1.frequency }) ?? strongest
+    }
+
+    private func stabilizedFrequency(from frequency: Float) -> Float {
+        if let last = frequencyHistory.last, last > 0, frequency > 0 {
+            let semitoneJump = abs(12 * log2(frequency / last))
+            if semitoneJump > 2.5 {
+                frequencyHistory.removeAll()
+            }
+        }
+
+        frequencyHistory.append(frequency)
+        if frequencyHistory.count > historySize {
+            frequencyHistory.removeFirst(frequencyHistory.count - historySize)
+        }
+
+        let sorted = frequencyHistory.sorted()
+        let middle = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[middle - 1] + sorted[middle]) / 2
+        }
+        return sorted[middle]
     }
     
     // MARK: - Utilities

@@ -8,6 +8,9 @@ final class PlayAlongViewController: UIViewController {
     private let sheetMusic    = SheetMusicView()
     private let navBar        = PlayAlongNavBar()
     private let reportView    = PlayAlongReportView()
+    private let loadingView   = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    private let loadingLabel  = UILabel()
 
     // Logic
     private let engine = PlayAlongEngine()
@@ -16,9 +19,11 @@ final class PlayAlongViewController: UIViewController {
     var sheetMusicData: Data?
 
     private let kPianoH: CGFloat = 136
-    private let kNavH:   CGFloat = 54
-    private var navBarTopConstraint: NSLayoutConstraint?
     private var hasAudioPlaybackSession = false
+    private var hasStartedSessionForCurrentAppearance = false
+    private var sessionStartupWorkItem: DispatchWorkItem?
+    private var isPreparingScore = false
+    private var hasPreparedScore = false
 
     // MARK: - Initializer
     init() {
@@ -33,6 +38,7 @@ final class PlayAlongViewController: UIViewController {
     
     deinit {
         debugLog("🧹 Cleaning up PlayAlong session")
+        sessionStartupWorkItem?.cancel()
         pitchDetector.stopListening()
         AudioEngineManager.shared.stopAllNotes()
         releaseAudioPlaybackSession()
@@ -53,8 +59,7 @@ final class PlayAlongViewController: UIViewController {
         
         pianoKeyboard.mode = .playAlong
         navBar.setMicActive(false)
-        
-        loadSheetData()
+        setLoadingVisible(true, text: "Preparing Play Along...")
     }
 
     override func viewDidLayoutSubviews() {
@@ -65,31 +70,25 @@ final class PlayAlongViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Auto-simulation disabled to allow microphone testing
+        guard !hasStartedSessionForCurrentAppearance else { return }
+        hasStartedSessionForCurrentAppearance = true
+        loadSheetDataIfNeeded()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = true
-        acquireAudioPlaybackSessionIfNeeded()
-        beginListeningFlow()
-        forceLandscape()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        hasStartedSessionForCurrentAppearance = false
+        sessionStartupWorkItem?.cancel()
+        sessionStartupWorkItem = nil
         AudioEngineManager.shared.stopAllNotes()
         releaseAudioPlaybackSession()
         pitchDetector.stopListening()
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = false
-
-        // Force portrait on exit so the app doesn't stay stuck in landscape mode
-        if #available(iOS 16.0, *) {
-            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-            windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
-        } else {
-            UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
-        }
     }
 
     private func acquireAudioPlaybackSessionIfNeeded() {
@@ -111,47 +110,145 @@ final class PlayAlongViewController: UIViewController {
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
-    private func forceLandscape() {
-        if #available(iOS 16.0, *) {
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
+    private func scheduleSessionStartup() {
+        sessionStartupWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.isViewLoaded, self.view.window != nil else { return }
+            guard self.presentedViewController == nil else { return }
+
+            self.acquireAudioPlaybackSessionIfNeeded()
+            self.beginListeningFlow()
         }
-        UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+
+        sessionStartupWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: workItem)
+    }
+
+    private func loadSheetDataIfNeeded() {
+        guard !hasPreparedScore, !isPreparingScore else {
+            if hasPreparedScore {
+                scheduleSessionStartup()
+            }
+            return
+        }
+
+        isPreparingScore = true
+        setLoadingVisible(true, text: "Preparing Play Along...")
+
+        let inputData = sheetMusicData
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result: [SongChord]?
+            let rawData: Data?
+
+            if let data = inputData {
+                rawData = data
+                do {
+                    result = try MusicJSONLoader.loadSongChords(from: data)
+                } catch {
+                    debugLog("❌ [PlayAlong] FAILED to parse dynamic data: \(error)")
+                    result = nil
+                }
+            } else {
+                rawData = nil
+                result = nil
+            }
+
+            DispatchQueue.main.async {
+                self.isPreparingScore = false
+
+                guard self.isViewLoaded else { return }
+
+                if let data = rawData, let chords = result {
+                    self.hasPreparedScore = true
+                    self.navBar.resetForSession()
+                    self.reportView.isHidden = true
+                    self.reportView.alpha = 0
+                    self.sheetMusic.resetProgress()
+                    self.sheetMusic.loadData(data)
+                    self.sheetMusic.configure(with: chords)
+                    self.engine.start(with: chords)
+                    self.setLoadingVisible(false)
+                    self.scheduleSessionStartup()
+                } else {
+                    debugLog("❌ [PlayAlong] Failed to load any sheet data")
+                    self.setLoadingVisible(false)
+                    self.presentSheetDataUnavailableAlert()
+                }
+            }
+        }
+    }
+
+    private func setLoadingVisible(_ visible: Bool, text: String? = nil) {
+        if let text {
+            loadingLabel.text = text
+        }
+
+        loadingView.isHidden = !visible
+        loadingView.alpha = visible ? 1 : 0
+        if visible {
+            loadingIndicator.startAnimating()
+        } else {
+            loadingIndicator.stopAnimating()
+        }
     }
 
     // MARK: - UI Setup
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = ComponentColors.HomeScreen.background
         navigationController?.navigationBar.isHidden = true
 
-        [sheetMusic, pianoKeyboard, navBar, reportView].forEach {
+        [sheetMusic, pianoKeyboard, navBar, reportView, loadingView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
 
+        let loadingStack = UIStackView(arrangedSubviews: [loadingIndicator, loadingLabel])
+        loadingStack.axis = .vertical
+        loadingStack.alignment = .center
+        loadingStack.spacing = 12
+        loadingStack.translatesAutoresizingMaskIntoConstraints = false
+        loadingView.contentView.addSubview(loadingStack)
+        loadingLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        loadingLabel.textColor = .label
+        loadingLabel.textAlignment = .center
+
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.topAnchor),
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 0),
+            navBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            navBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             navBar.heightAnchor.constraint(equalToConstant: 64),
 
-            sheetMusic.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
-            sheetMusic.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            sheetMusic.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            sheetMusic.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -kPianoH),
+            sheetMusic.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
+            sheetMusic.leadingAnchor.constraint(equalTo: navBar.leadingAnchor),
+            sheetMusic.trailingAnchor.constraint(equalTo: navBar.trailingAnchor),
+            sheetMusic.bottomAnchor.constraint(equalTo: pianoKeyboard.topAnchor, constant: -10),
 
             pianoKeyboard.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             pianoKeyboard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             pianoKeyboard.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            pianoKeyboard.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -kPianoH),
+            pianoKeyboard.heightAnchor.constraint(equalToConstant: kPianoH),
 
             reportView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             reportView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             reportView.widthAnchor.constraint(equalToConstant: 450),
-            reportView.heightAnchor.constraint(equalToConstant: 320)
+            reportView.heightAnchor.constraint(equalToConstant: 320),
+
+            loadingView.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loadingView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            loadingStack.centerXAnchor.constraint(equalTo: loadingView.contentView.centerXAnchor),
+            loadingStack.centerYAnchor.constraint(equalTo: loadingView.contentView.centerYAnchor)
         ])
 
         reportView.alpha = 0
         reportView.isHidden = true
+        loadingView.alpha = 0
+        loadingView.isHidden = true
+        loadingView.contentView.backgroundColor = ComponentColors.HomeScreen.background.withAlphaComponent(0.55)
         
         sheetMusic.setProgressBarHidden(true)
 
@@ -159,10 +256,11 @@ final class PlayAlongViewController: UIViewController {
     }
 
     private func setupGestures() {
-        // Only keep simulation tap on the chord label inside navBar
+        #if DEBUG
         navBar.chordDisplay.isUserInteractionEnabled = true
         let infoTap = UITapGestureRecognizer(target: self, action: #selector(simulateSession))
         navBar.chordDisplay.addGestureRecognizer(infoTap)
+        #endif
         
         let micTap = UITapGestureRecognizer(target: self, action: #selector(micIndicatorTapped))
         navBar.micIndicator.addGestureRecognizer(micTap)
@@ -278,56 +376,24 @@ final class PlayAlongViewController: UIViewController {
         }
     }
 
-    private func loadSheetData() {
-        let result: [SongChord]?
-        
-        if let data = sheetMusicData {
-            debugLog("📄 [PlayAlong] RECEIVED DYNAMIC DATA: \(data.count) bytes")
-            
-            // Fix: Tell SheetMusicView to parse the raw data directly
-            sheetMusic.loadData(data)
-            
-            do {
-                result = try MusicJSONLoader.loadSongChords(from: data)
-                if let count = result?.count {
-                    debugLog("✅ [PlayAlong] Successfully parsed \(count) chords from dynamic data")
-                }
-            } catch {
-                debugLog("❌ [PlayAlong] FAILED to parse dynamic data: \(error)")
-                result = nil
-            }
-        } else {
-            #if DEBUG
-            debugLog("📄 [PlayAlong] No dynamic data, falling back to sheet_test")
-            result = MusicJSONLoader().loadJSON(from: "sheet_test")
-            #else
-            debugLog("⚠️ [PlayAlong] No sheet data provided")
-            result = nil
-            #endif
-        }
-        
-        if let st = result {
-            sheetMusic.configure(with: st)
-            engine.start(with: st)
-        } else {
-            debugLog("❌ [PlayAlong] Failed to load any sheet data")
-        }
-    }
-    
     private func restartSession() {
-        let block = {
+        engine.resetRealtimeState()
+        hasPreparedScore = false
+        acquireAudioPlaybackSessionIfNeeded()
+        pitchDetector.stopListening()
+
+        UIView.animate(withDuration: 0.25, animations: {
             self.reportView.alpha = 0
-            self.reportView.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        }
-        UIView.animate(withDuration: 0.3, animations: block) { _ in
+            self.reportView.transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
+        }) { _ in
             self.reportView.isHidden = true
             self.reportView.transform = .identity
-            self.sheetMusic.resetProgress()
-            self.loadSheetData()
+            self.loadSheetDataIfNeeded()
         }
     }
 
     private func handleInput(note: String) {
+        guard engine.isSessionActive else { return }
         let isCorrect = engine.processNote(note)
         
         if let key = pianoKeyboard.findKey(note) {
@@ -349,6 +415,24 @@ final class PlayAlongViewController: UIViewController {
             // Add a permanent marker on the sheet music for where the mistake happened
             sheetMusic.addWrongNoteMarker(at: Double(engine.currentTick))
         }
+    }
+
+    private func presentSheetDataUnavailableAlert() {
+        guard presentedViewController == nil else { return }
+
+        let alert = UIAlertController(
+            title: "Play Along Unavailable",
+            message: "This song could not be prepared for Play Along. Please try another song or reopen this one.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            if let nc = self?.navigationController, nc.viewControllers.count > 1 {
+                nc.popViewController(animated: true)
+            } else {
+                self?.dismiss(animated: true)
+            }
+        })
+        present(alert, animated: true)
     }
 
     @objc private func simulateSession() {
@@ -375,25 +459,28 @@ final class PlayAlongViewController: UIViewController {
 
 // MARK: - Engine Delegate
 extension PlayAlongViewController: PlayAlongEngineDelegate {
-    func engineDidUpdateNotes(expected: [String]) {
+    func engineDidUpdateNotes(left: [String], right: [String], expected: [String]) {
         navBar.setExpectedNotes(expected)
-        pianoKeyboard.showHints(for: expected)
-        pianoKeyboard.centerOn(note: expected.first ?? "C4")
+        pianoKeyboard.showHints(leftHand: left, rightHand: right)
+        pianoKeyboard.centerOn(note: expected.first ?? right.first ?? left.first ?? "C4")
     }
     
     func engineDidUpdateTempo(actualBPM: Int) {
         navBar.setActualTempo(actualBPM)
     }
     
-    func engineDidUpdateProgress(tick: Int) {
+    func engineDidUpdateProgress(tick: Int, progress: CGFloat) {
         sheetMusic.updateProgress(to: tick)
-        // Update NavBar progress bar safely
-        let total = max(1, engine.totalExpectedTicks)
-        let progress = Double(tick) / Double(total)
-        navBar.setProgress(CGFloat(progress))
+        navBar.setProgress(progress)
     }
     
     func engineDidFinish(correct: Int, mistakes: Int, expected: Int) {
+        pitchDetector.stopListening()
+        navBar.setMicActive(false)
+        AudioEngineManager.shared.stopAllNotes()
+        releaseAudioPlaybackSession()
+        navBar.setProgress(1)
+
         let acc = expected > 0 ? (correct * 100 / expected) : 100
         reportView.configure(accuracy: acc, correct: correct, mistakes: mistakes)
         
@@ -412,24 +499,19 @@ extension PlayAlongViewController: PlayAlongEngineDelegate {
 extension PlayAlongViewController: PitchDetectorDelegate {
     func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
         // Guard against low amplitude background noise
-        guard !notes.isEmpty && amplitude > 0.08 else { 
+        guard !notes.isEmpty && amplitude > 0.045 else {
             navBar.setMicActive(false)
             return 
+        }
+        guard engine.isSessionActive else {
+            navBar.setMicActive(false)
+            return
         }
         navBar.setMicActive(true)
         
         let now = Date()
-        
-        // Handle all detected notes (chord support)
-        for note in notes {
-            if note == engine.lastDetectedNote {
-                if now.timeIntervalSince(engine.lastDetectedTime) < 0.3 { continue }
-            } else {
-                if now.timeIntervalSince(engine.lastDetectedTime) < 0.15 { continue }
-            }
-            
-            engine.lastDetectedNote = note
-            engine.lastDetectedTime = now
+
+        for note in engine.filterAcceptedNotes(from: notes, at: now) {
             handleInput(note: note)
         }
     }
@@ -437,8 +519,8 @@ extension PlayAlongViewController: PitchDetectorDelegate {
 
 // MARK: - PlayAlongEngine
 protocol PlayAlongEngineDelegate: AnyObject {
-    func engineDidUpdateNotes(expected: [String])
-    func engineDidUpdateProgress(tick: Int)
+    func engineDidUpdateNotes(left: [String], right: [String], expected: [String])
+    func engineDidUpdateProgress(tick: Int, progress: CGFloat)
     func engineDidUpdateTempo(actualBPM: Int)
     func engineDidFinish(correct: Int, mistakes: Int, expected: Int)
 }
@@ -447,41 +529,65 @@ final class PlayAlongEngine {
     weak var delegate: PlayAlongEngineDelegate?
     
     private var dataManager: PianoDataManager?
+    private var playableGroups: [PianoDataManager.NoteGroup] = []
+    private var currentGroupIndex = 0
+    private var completedGroupCount = 0
     var currentTick: Int = 0 // Changed from private to allow access from ViewController
+    private var currentLeftNotes: [String] = []
+    private var currentRightNotes: [String] = []
     private var expectedNotes: [String] = []
+    private(set) var isSessionActive = false
     
     private var totalCorrect = 0
     private var totalMistakes = 0
     private var totalExpected = 0
     var totalExpectedTicks: Int = 1
+    var progressFraction: CGFloat {
+        guard !playableGroups.isEmpty else { return 0 }
+        return CGFloat(completedGroupCount) / CGFloat(playableGroups.count)
+    }
     
     private var groupStartTime: Date?
     var requiredBPM: Int = 90 // Default
-    
-    // Antigravity Fix: Pitch Detection Debouncing State
-    var lastDetectedNote: String?
-    var lastDetectedTime: Date = Date.distantPast
+    private var recentDetections: [String: Date] = [:]
+    private let noteDebounceInterval: TimeInterval = 0.22
     
     func start(with musicData: [SongChord]) {
         dataManager = PianoDataManager(scoreData: musicData)
+        playableGroups = dataManager?.allGroups().filter { !$0.leftNotes.isEmpty || !$0.rightNotes.isEmpty } ?? []
+        currentGroupIndex = 0
+        completedGroupCount = 0
+        currentLeftNotes = []
+        currentRightNotes = []
         totalCorrect = 0
         totalMistakes = 0
-        totalExpected = 0
+        totalExpected = playableGroups.reduce(0) { $0 + $1.leftNotes.count + $1.rightNotes.count }
         currentTick = 0
         totalExpectedTicks = musicData.last?.globalTick ?? 1
+        recentDetections.removeAll()
+        isSessionActive = true
         advance()
+    }
+
+    func resetRealtimeState() {
+        recentDetections.removeAll()
+        isSessionActive = true
     }
     
     func processNote(_ note: String) -> Bool {
-        guard !expectedNotes.isEmpty else { return false }
-        
-        if expectedNotes.contains(note) {
+        guard isSessionActive, !expectedNotes.isEmpty else { return false }
+
+        let normalizedInput = Self.canonicalNoteName(note)
+
+        if let matchedIndex = expectedNotes.firstIndex(where: { Self.canonicalNoteName($0) == normalizedInput }) {
             totalCorrect += 1
-            expectedNotes.removeAll { $0 == note }
+            expectedNotes.remove(at: matchedIndex)
+            removeMatchedNote(normalizedInput)
             
-            // Advance if chord is fully cleared OR if it's taking too long (Auto-advance for partial hits in production)
             if expectedNotes.isEmpty {
                 completeGroup()
+            } else {
+                delegate?.engineDidUpdateNotes(left: currentLeftNotes, right: currentRightNotes, expected: expectedNotes)
             }
             return true
         } else {
@@ -489,56 +595,67 @@ final class PlayAlongEngine {
             return false
         }
     }
-    
-    // Antigravity: Multi-note support for chords
-    func processNotes(_ notes: [String]) {
-        for note in notes {
-            if expectedNotes.contains(note) {
-                _ = processNote(note)
+
+    func filterAcceptedNotes(from notes: [String], at time: Date) -> [String] {
+        guard isSessionActive else { return [] }
+
+        var accepted: [String] = []
+
+        for note in Array(Set(notes.map(Self.canonicalNoteName))) {
+            if let lastTime = recentDetections[note], time.timeIntervalSince(lastTime) < noteDebounceInterval {
+                continue
             }
+
+            recentDetections[note] = time
+            accepted.append(note)
         }
+
+        return accepted
     }
     
     private func completeGroup() {
         calculateTempoPulse()
-        currentTick += 50
+        completedGroupCount = min(completedGroupCount + 1, playableGroups.count)
+        currentGroupIndex += 1
         advance()
     }
     
     func seek(to p: Double) {
-        guard let dm = dataManager else { return }
-        let groups = dm.allGroups()
-        guard let lastTick = groups.last?.tick, lastTick > 0 else { return }
+        guard !playableGroups.isEmpty else { return }
+        guard let lastTick = playableGroups.last?.tick, lastTick > 0 else { return }
         
         let target = Int(Double(lastTick) * p)
-        currentTick = target
-        
-        if let idx = groups.firstIndex(where: { $0.tick >= currentTick }) {
-            let g = groups[idx]
-            currentTick = g.tick
-            expectedNotes = g.leftNotes + g.rightNotes
-            groupStartTime = Date()
-            delegate?.engineDidUpdateNotes(expected: expectedNotes)
-            delegate?.engineDidUpdateProgress(tick: currentTick)
-        }
+        guard let idx = playableGroups.firstIndex(where: { $0.tick >= target }) else { return }
+
+        currentGroupIndex = idx
+        completedGroupCount = idx
+        let group = playableGroups[idx]
+        currentTick = group.tick
+        currentLeftNotes = group.leftNotes
+        currentRightNotes = group.rightNotes
+        expectedNotes = currentLeftNotes + currentRightNotes
+        groupStartTime = Date()
+        recentDetections.removeAll()
+        delegate?.engineDidUpdateNotes(left: currentLeftNotes, right: currentRightNotes, expected: expectedNotes)
+        delegate?.engineDidUpdateProgress(tick: currentTick, progress: progressFraction)
     }
     
     private func advance() {
-        guard let dm = dataManager else { return }
-        let groups = dm.allGroups()
-        
-        if let idx = groups.firstIndex(where: { $0.tick >= currentTick && (!$0.leftNotes.isEmpty || !$0.rightNotes.isEmpty) }) {
-            let g = groups[idx]
-            currentTick = g.tick
-            expectedNotes = g.leftNotes + g.rightNotes
-            totalExpected += expectedNotes.count
-            
-            groupStartTime = Date()
-            delegate?.engineDidUpdateNotes(expected: expectedNotes)
-            delegate?.engineDidUpdateProgress(tick: currentTick)
-        } else {
+        guard currentGroupIndex < playableGroups.count else {
+            isSessionActive = false
             delegate?.engineDidFinish(correct: totalCorrect, mistakes: totalMistakes, expected: totalExpected)
+            return
         }
+
+        let group = playableGroups[currentGroupIndex]
+        currentTick = group.tick
+        currentLeftNotes = group.leftNotes
+        currentRightNotes = group.rightNotes
+        expectedNotes = currentLeftNotes + currentRightNotes
+        groupStartTime = Date()
+        recentDetections.removeAll()
+        delegate?.engineDidUpdateNotes(left: currentLeftNotes, right: currentRightNotes, expected: expectedNotes)
+        delegate?.engineDidUpdateProgress(tick: currentTick, progress: progressFraction)
     }
     
     private func calculateTempoPulse() {
@@ -549,6 +666,47 @@ final class PlayAlongEngine {
             delegate?.engineDidUpdateTempo(actualBPM: min(actual, 300))
         }
     }
+
+    private func removeMatchedNote(_ normalizedInput: String) {
+        if let leftIndex = currentLeftNotes.firstIndex(where: { Self.canonicalNoteName($0) == normalizedInput }) {
+            currentLeftNotes.remove(at: leftIndex)
+            return
+        }
+
+        if let rightIndex = currentRightNotes.firstIndex(where: { Self.canonicalNoteName($0) == normalizedInput }) {
+            currentRightNotes.remove(at: rightIndex)
+        }
+    }
+
+    private static func canonicalNoteName(_ note: String) -> String {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmed.isEmpty else { return note }
+
+        let flatsToSharps: [String: String] = [
+            "CB": "B", "DB": "C#", "EB": "D#", "FB": "E",
+            "GB": "F#", "AB": "G#", "BB": "A#", "E#": "F", "B#": "C"
+        ]
+
+        var octaveStart = trimmed.endIndex
+        while octaveStart > trimmed.startIndex {
+            let previous = trimmed.index(before: octaveStart)
+            let character = trimmed[previous]
+            if character.isNumber || character == "-" {
+                octaveStart = previous
+            } else {
+                break
+            }
+        }
+
+        let octave = String(trimmed[octaveStart...])
+        let pitch = String(trimmed[..<octaveStart])
+
+        if let normalizedPitch = flatsToSharps[pitch] {
+            return normalizedPitch + octave
+        }
+
+        return trimmed
+    }
 }
 
 // MARK: - PlayAlongNavBar
@@ -557,17 +715,19 @@ final class PlayAlongNavBar: UIView {
     
     private let brandOrange = ComponentColors.HomeScreen.actionButtonFill
     
-    private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-    private lazy var backButton = NavigationBarHelper.makeCircularBackButton()
+    private let backButton = UIButton(type: .system)
     let chordDisplay = UILabel()
-    
-    private let rightStack = UIStackView()
-    
+    private let backPill = UIView()
+    private let chordPill = UIView()
+    private let statusPill = UIView()
+
     // Progress
     private let progressTrack = UIView()
     private let progressGradient = CAGradientLayer()
     private let progressBar = UIView()
     private let progressLabel = UILabel()
+    private var progressWidthConstraint: NSLayoutConstraint?
+    private let progressContainer = UIStackView()
     
     // Tempo
     private let tempoContainer = UIView()
@@ -577,7 +737,7 @@ final class PlayAlongNavBar: UIView {
     
     // Mic Status
     let micIndicator = UIView()
-    private let micBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+    private let statusStack = UIStackView()
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -591,19 +751,24 @@ final class PlayAlongNavBar: UIView {
     }
     
     private func setupUI() {
-        addSubview(blurView)
-        
-        // Back button — circular global style
+        backgroundColor = .clear
+
+        let backConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+        backButton.setImage(UIImage(systemName: "chevron.left", withConfiguration: backConfig), for: .normal)
+        backButton.tintColor = .label
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         
-        chordDisplay.font = .systemFont(ofSize: 22, weight: .black)
+        chordDisplay.font = .systemFont(ofSize: 21, weight: .black)
         chordDisplay.textColor = .label
         chordDisplay.textAlignment = .center
-        chordDisplay.text = "🎹 Ready"
+        chordDisplay.lineBreakMode = .byTruncatingTail
+        chordDisplay.adjustsFontSizeToFitWidth = true
+        chordDisplay.minimumScaleFactor = 0.75
+        chordDisplay.text = "Play Along Ready"
         
         // Progress UI
-        progressTrack.backgroundColor = UIColor.label.withAlphaComponent(0.05)
-        progressTrack.layer.cornerRadius = 6
+        progressTrack.backgroundColor = UIColor.label.withAlphaComponent(0.06)
+        progressTrack.layer.cornerRadius = 7
         progressTrack.clipsToBounds = true
         progressTrack.layer.borderWidth = 1
         progressTrack.layer.borderColor = UIColor.label.withAlphaComponent(0.1).cgColor
@@ -612,16 +777,21 @@ final class PlayAlongNavBar: UIView {
         progressGradient.startPoint = CGPoint(x: 0, y: 0.5)
         progressGradient.endPoint = CGPoint(x: 1, y: 0.5)
         progressBar.layer.addSublayer(progressGradient)
-        progressBar.layer.cornerRadius = 6
+        progressBar.layer.cornerRadius = 7
         progressBar.clipsToBounds = true
         
         progressLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .bold)
         progressLabel.textColor = brandOrange
         progressLabel.text = "0%"
+        progressLabel.textAlignment = .center
+        
+        progressContainer.axis = .vertical
+        progressContainer.alignment = .fill
+        progressContainer.spacing = 4
         
         // Tempo UI
-        tempoContainer.backgroundColor = UIColor.label.withAlphaComponent(0.05)
-        tempoContainer.layer.cornerRadius = 8
+        tempoContainer.backgroundColor = UIColor.label.withAlphaComponent(0.06)
+        tempoContainer.layer.cornerRadius = 12
         
         tempoLabel.font = .systemFont(ofSize: 9, weight: .bold)
         tempoLabel.textColor = .secondaryLabel
@@ -638,14 +808,28 @@ final class PlayAlongNavBar: UIView {
         tempoStack.axis = .vertical
         tempoStack.alignment = .center
         tempoStack.spacing = -2
+
+        statusStack.axis = .horizontal
+        statusStack.alignment = .center
+        statusStack.spacing = 12
         
-        [blurView, backButton, chordDisplay, progressTrack, progressLabel, tempoContainer, tempoIndicator, micIndicator].forEach {
+        [backPill, chordPill, statusPill].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
+        [backButton, chordDisplay, statusStack].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        [progressTrack, progressLabel, tempoContainer, tempoIndicator, micIndicator].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        backPill.addSubview(backButton)
+        chordPill.addSubview(chordDisplay)
+        statusPill.addSubview(statusStack)
         
-        micIndicator.backgroundColor = .systemRed.withAlphaComponent(0.3)
-        micIndicator.layer.cornerRadius = 4
+        micIndicator.backgroundColor = .systemRed.withAlphaComponent(0.18)
+        micIndicator.layer.cornerRadius = 10
         micIndicator.layer.borderWidth = 1
         micIndicator.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.5).cgColor
         
@@ -663,57 +847,98 @@ final class PlayAlongNavBar: UIView {
         
         tempoContainer.addSubview(tempoStack)
         tempoStack.translatesAutoresizingMaskIntoConstraints = false
+        tempoContainer.addSubview(tempoIndicator)
         
         progressTrack.addSubview(progressBar)
         progressBar.translatesAutoresizingMaskIntoConstraints = false
+        progressContainer.translatesAutoresizingMaskIntoConstraints = false
+        progressContainer.addArrangedSubview(progressTrack)
+        progressContainer.addArrangedSubview(progressLabel)
+        statusStack.addArrangedSubview(progressContainer)
+        statusStack.addArrangedSubview(micIndicator)
+        statusStack.addArrangedSubview(tempoContainer)
+        progressWidthConstraint = progressBar.widthAnchor.constraint(equalToConstant: 0)
+
+        stylePill(backPill, cornerRadius: 22)
+        stylePill(chordPill, cornerRadius: 22)
+        stylePill(statusPill, cornerRadius: 22)
         
         NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: topAnchor),
-            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            backPill.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            backPill.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backPill.widthAnchor.constraint(equalToConstant: 44),
+            backPill.heightAnchor.constraint(equalToConstant: 44),
             
-            backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
-            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backButton.centerXAnchor.constraint(equalTo: backPill.centerXAnchor),
+            backButton.centerYAnchor.constraint(equalTo: backPill.centerYAnchor),
             backButton.widthAnchor.constraint(equalToConstant: 44),
             backButton.heightAnchor.constraint(equalToConstant: 44),
             
-            chordDisplay.centerXAnchor.constraint(equalTo: centerXAnchor),
-            chordDisplay.centerYAnchor.constraint(equalTo: centerYAnchor),
+            statusPill.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            statusPill.centerYAnchor.constraint(equalTo: centerYAnchor),
+            statusPill.heightAnchor.constraint(equalToConstant: 54),
             
-            // Progress position
-            progressTrack.trailingAnchor.constraint(equalTo: tempoContainer.leadingAnchor, constant: -25),
-            progressTrack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            progressTrack.widthAnchor.constraint(equalToConstant: 160),
-            progressTrack.heightAnchor.constraint(equalToConstant: 12),
+            statusStack.topAnchor.constraint(equalTo: statusPill.topAnchor, constant: 7),
+            statusStack.bottomAnchor.constraint(equalTo: statusPill.bottomAnchor, constant: -7),
+            statusStack.leadingAnchor.constraint(equalTo: statusPill.leadingAnchor, constant: 12),
+            statusStack.trailingAnchor.constraint(equalTo: statusPill.trailingAnchor, constant: -12),
+            
+            chordPill.centerYAnchor.constraint(equalTo: centerYAnchor),
+            chordPill.leadingAnchor.constraint(equalTo: backPill.trailingAnchor, constant: 16),
+            chordPill.trailingAnchor.constraint(equalTo: statusPill.leadingAnchor, constant: -16),
+            chordPill.heightAnchor.constraint(equalToConstant: 44),
+            
+            chordDisplay.leadingAnchor.constraint(equalTo: chordPill.leadingAnchor, constant: 20),
+            chordDisplay.trailingAnchor.constraint(equalTo: chordPill.trailingAnchor, constant: -20),
+            chordDisplay.centerYAnchor.constraint(equalTo: chordPill.centerYAnchor),
+            
+            progressTrack.widthAnchor.constraint(equalToConstant: 132),
+            progressTrack.heightAnchor.constraint(equalToConstant: 14),
             
             progressBar.topAnchor.constraint(equalTo: progressTrack.topAnchor),
             progressBar.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
             progressBar.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
-            progressBar.widthAnchor.constraint(equalToConstant: 0),
+            progressContainer.widthAnchor.constraint(equalToConstant: 132),
             
-            progressLabel.centerXAnchor.constraint(equalTo: progressTrack.centerXAnchor),
-            progressLabel.topAnchor.constraint(equalTo: progressTrack.bottomAnchor, constant: 2),
-            
-            // Tempo position
-            tempoContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -32),
-            tempoContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
-            tempoContainer.widthAnchor.constraint(equalToConstant: 60),
-            tempoContainer.heightAnchor.constraint(equalToConstant: 44),
+            tempoContainer.widthAnchor.constraint(equalToConstant: 70),
+            tempoContainer.heightAnchor.constraint(equalToConstant: 40),
             
             tempoStack.centerXAnchor.constraint(equalTo: tempoContainer.centerXAnchor),
             tempoStack.centerYAnchor.constraint(equalTo: tempoContainer.centerYAnchor),
             
-            tempoIndicator.topAnchor.constraint(equalTo: tempoContainer.topAnchor, constant: -4),
-            tempoIndicator.centerXAnchor.constraint(equalTo: tempoContainer.centerXAnchor),
+            tempoIndicator.topAnchor.constraint(equalTo: tempoContainer.topAnchor, constant: 5),
+            tempoIndicator.trailingAnchor.constraint(equalTo: tempoContainer.trailingAnchor, constant: -6),
             tempoIndicator.widthAnchor.constraint(equalToConstant: 6),
             tempoIndicator.heightAnchor.constraint(equalToConstant: 6),
             
-            // Mic Indicator Position (Added breathing space)
-            micIndicator.trailingAnchor.constraint(equalTo: progressTrack.leadingAnchor, constant: -40),
-            micIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
-            micIndicator.widthAnchor.constraint(equalToConstant: 16),
-            micIndicator.heightAnchor.constraint(equalToConstant: 16)
+            micIndicator.widthAnchor.constraint(equalToConstant: 20),
+            micIndicator.heightAnchor.constraint(equalToConstant: 20)
+        ])
+
+        progressWidthConstraint?.isActive = true
+    }
+
+    private func stylePill(_ view: UIView, cornerRadius: CGFloat) {
+        view.backgroundColor = .clear
+        view.layer.cornerRadius = cornerRadius
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.12
+        view.layer.shadowOffset = CGSize(width: 0, height: 4)
+        view.layer.shadowRadius = 10
+
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+        blur.translatesAutoresizingMaskIntoConstraints = false
+        blur.layer.cornerRadius = cornerRadius
+        blur.layer.borderWidth = 0.5
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
+        blur.clipsToBounds = true
+        view.insertSubview(blur, at: 0)
+
+        NSLayoutConstraint.activate([
+            blur.topAnchor.constraint(equalTo: view.topAnchor),
+            blur.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            blur.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            blur.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
     
@@ -754,11 +979,23 @@ final class PlayAlongNavBar: UIView {
         progressLabel.text = "\(Int(clamped * 100))%"
         
         UIView.animate(withDuration: 0.4, delay: 0, options: .curveEaseOut) {
-            self.progressBar.constraints.forEach { if $0.firstAttribute == .width { self.progressTrack.removeConstraint($0) } }
-            self.progressBar.widthAnchor.constraint(equalTo: self.progressTrack.widthAnchor, multiplier: clamped).isActive = true
+            self.progressWidthConstraint?.constant = self.progressTrack.bounds.width * clamped
             self.layoutIfNeeded()
             self.updateGradientFrame()
         }
+    }
+
+    func resetForSession() {
+        chordDisplay.text = "Play Along Ready"
+        tempoValueLabel.text = "0"
+        tempoValueLabel.textColor = .label
+        tempoIndicator.backgroundColor = .systemGreen
+        tempoIndicator.transform = .identity
+        progressLabel.text = "0%"
+        progressWidthConstraint?.constant = 0
+        layoutIfNeeded()
+        updateGradientFrame()
+        setMicActive(false)
     }
     
     func setMicActive(_ active: Bool) {
