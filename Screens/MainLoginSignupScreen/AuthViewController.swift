@@ -517,11 +517,11 @@ private extension AuthViewController {
         }
 
         if let termsRange = attributed.string.range(of: "Terms of Service") {
-            attributed.addAttribute(.link, value: "rehearse://legal/terms", range: NSRange(termsRange, in: attributed.string))
+            attributed.addAttribute(.link, value: "https://letsrehearse.studio/terms-of-service/", range: NSRange(termsRange, in: attributed.string))
         }
 
         if let privacyRange = attributed.string.range(of: "Privacy Policy") {
-            attributed.addAttribute(.link, value: "rehearse://legal/privacy", range: NSRange(privacyRange, in: attributed.string))
+            attributed.addAttribute(.link, value: "https://letsrehearse.studio/privacy-policy/", range: NSRange(privacyRange, in: attributed.string))
         }
 
         return attributed
@@ -685,13 +685,19 @@ extension AuthViewController {
             do {
                 if isLoginMode {
                     try await login(email: email, password: password)
+                    await MainActor.run {
+                        self.activityIndicator.stopAnimating()
+                        self.primaryButton.isEnabled = true
+                        self.routeAfterLogin()
+                    }
                 } else {
-                    try await signUp(email: email, password: password)
-                }
-                await MainActor.run {
-                    self.activityIndicator.stopAnimating()
-                    self.primaryButton.isEnabled = true
-                    self.routeAfterLogin()
+                    try await requestSignupOTP(email: email)
+                    await MainActor.run {
+                        self.activityIndicator.stopAnimating()
+                        self.primaryButton.isEnabled = true
+                        let otpViewController = OTPVerificationViewController(email: email, password: password)
+                        self.navigationController?.pushViewController(otpViewController, animated: true)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -707,16 +713,6 @@ extension AuthViewController {
 
 extension AuthViewController: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldInteractWith url: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
-        if url.absoluteString == "rehearse://legal/terms" {
-            presentLegalScreen(initialTab: .terms)
-            return false
-        }
-
-        if url.absoluteString == "rehearse://legal/privacy" {
-            presentLegalScreen(initialTab: .privacy)
-            return false
-        }
-
         return true
     }
 }
@@ -737,37 +733,12 @@ extension AuthViewController {
         }
     }
     
-    func signUp(email: String, password: String) async throws {
+    func requestSignupOTP(email: String) async throws {
         let client = SupabaseManager.shared.client
-        
-        let fullName = fullNameTextField.text ?? ""
-        let username = usernameTextField.text ?? ""
-        
-        guard !fullName.isEmpty, !username.isEmpty else {
-            await MainActor.run {
-                self.showError("Please enter full name and username.")
-            }
-            return
-        }
-        
-        let result = try await client.auth.signUp(
+        try await client.auth.signInWithOTP(
             email: email,
-            password: password,
-            data: [
-                "full_name": .string(fullName),
-                "username": .string(username)
-            ]
+            shouldCreateUser: false
         )
-        
-        if result.session != nil {
-            await MainActor.run {
-                self.routeAfterLogin()
-            }
-        } else {
-            await MainActor.run {
-                self.showError("Account created. Please check your email to verify.")
-            }
-        }
     }
 
     @MainActor
