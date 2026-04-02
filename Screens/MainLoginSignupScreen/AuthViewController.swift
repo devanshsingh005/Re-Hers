@@ -691,12 +691,11 @@ extension AuthViewController {
                         self.routeAfterLogin()
                     }
                 } else {
-                    try await requestSignupOTP(email: email)
+                    try await requestSignupOTP(email: email, password: password)
                     await MainActor.run {
                         self.activityIndicator.stopAnimating()
                         self.primaryButton.isEnabled = true
-                        let otpViewController = OTPVerificationViewController(email: email, password: password)
-                        self.navigationController?.pushViewController(otpViewController, animated: true)
+                        self.showOTPVerificationScreen(email: email, password: password)
                     }
                 }
             } catch {
@@ -733,12 +732,31 @@ extension AuthViewController {
         }
     }
     
-    func requestSignupOTP(email: String) async throws {
+    /// Creates the Supabase account and triggers the confirmation email.
+    /// The OTP code the user receives comes from Supabase's "Confirm signup"
+    /// email template — set that template to use {{ .Token }} (not {{ .ConfirmationURL }})
+    /// in the Supabase dashboard so a 6-digit code is sent instead of a magic link.
+    func requestSignupOTP(email: String, password: String) async throws {
         let client = SupabaseManager.shared.client
-        try await client.auth.signInWithOTP(
+        try await client.auth.signUp(
             email: email,
-            shouldCreateUser: false
+            password: password
         )
+    }
+
+    @MainActor
+    private func showOTPVerificationScreen(email: String, password: String) {
+        let otpViewController = OTPVerificationViewController(email: email, password: password)
+
+        if let navigationController = navigationController {
+            navigationController.setNavigationBarHidden(false, animated: false)
+            navigationController.pushViewController(otpViewController, animated: true)
+            return
+        }
+
+        let navigationController = UINavigationController(rootViewController: otpViewController)
+        navigationController.modalPresentationStyle = .fullScreen
+        present(navigationController, animated: true)
     }
 
     @MainActor

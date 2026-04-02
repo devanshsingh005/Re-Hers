@@ -9,11 +9,14 @@ import Supabase
 import Auth
 
 private final class OTPDigitTextField: UITextField {
-    var onDeleteBackward: (() -> Void)?
+    var onBackspaceWhenEmpty: (() -> Void)?
 
     override func deleteBackward() {
-        onDeleteBackward?()
+        let wasEmpty = (text ?? "").isEmpty
         super.deleteBackward()
+        if wasEmpty {
+            onBackspaceWhenEmpty?()
+        }
     }
 }
 
@@ -23,11 +26,12 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
-    private let boxesStackView = UIStackView()
     private let errorLabel = UILabel()
     private let verifyButton = UIButton(type: .system)
     private let resendButton = UIButton(type: .system)
+    private let boxesStackView = UIStackView()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
+
     private var digitFields: [OTPDigitTextField] = []
     private var resendTimer: Timer?
     private var resendSecondsRemaining = 30
@@ -53,7 +57,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         title = "Verify email"
         setupNavigation()
         setupUI()
-        startResendTimer()
+        startResendCountdown()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -86,36 +90,40 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         subtitleLabel.numberOfLines = 0
 
         boxesStackView.axis = .horizontal
-        boxesStackView.spacing = 10
-        boxesStackView.distribution = .fillEqually
         boxesStackView.alignment = .fill
+        boxesStackView.distribution = .fillEqually
+        boxesStackView.spacing = 10
+        boxesStackView.translatesAutoresizingMaskIntoConstraints = false
 
         for index in 0..<6 {
-            let box = OTPDigitTextField()
-            box.translatesAutoresizingMaskIntoConstraints = false
-            box.delegate = self
-            box.tag = index
-            box.textAlignment = .center
-            box.font = .monospacedDigitSystemFont(ofSize: 24, weight: .semibold)
-            box.textColor = ComponentColors.AuthScreen.inputText
-            box.tintColor = ComponentColors.AuthScreen.linkText
-            box.keyboardType = .numberPad
-            box.backgroundColor = ComponentColors.AuthScreen.inputFill
-            box.layer.cornerRadius = 14
-            box.layer.borderWidth = 1
-            box.layer.borderColor = ComponentColors.AuthScreen.inputBorder.cgColor
-            box.onDeleteBackward = { [weak self, weak box] in
-                guard let self, let box, (box.text ?? "").isEmpty, box.tag > 0 else { return }
-                let previousField = self.digitFields[box.tag - 1]
+            let field = OTPDigitTextField()
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.delegate = self
+            field.tag = index
+            field.keyboardType = .numberPad
+            field.textAlignment = .center
+            field.font = .monospacedDigitSystemFont(ofSize: 24, weight: .semibold)
+            field.textColor = ComponentColors.AuthScreen.inputText
+            field.tintColor = ComponentColors.AuthScreen.linkText
+            field.backgroundColor = ComponentColors.AuthScreen.inputFill
+            field.layer.cornerRadius = 14
+            field.layer.borderWidth = 1
+            field.layer.borderColor = ComponentColors.AuthScreen.inputBorder.cgColor
+            field.onBackspaceWhenEmpty = { [weak self, weak field] in
+                guard let self, let field else { return }
+                guard field.tag > 0 else { return }
+                let previousField = self.digitFields[field.tag - 1]
                 previousField.text = ""
                 previousField.becomeFirstResponder()
             }
+
             NSLayoutConstraint.activate([
-                box.heightAnchor.constraint(equalToConstant: 56),
-                box.widthAnchor.constraint(equalToConstant: 48)
+                field.heightAnchor.constraint(equalToConstant: 56),
+                field.widthAnchor.constraint(equalToConstant: 48)
             ])
-            digitFields.append(box)
-            boxesStackView.addArrangedSubview(box)
+
+            digitFields.append(field)
+            boxesStackView.addArrangedSubview(field)
         }
 
         errorLabel.font = .systemFont(ofSize: 13, weight: .medium)
@@ -153,9 +161,9 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         view.addSubview(activityIndicator)
 
         NSLayoutConstraint.activate([
+            contentStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
             contentStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             contentStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            contentStack.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
 
             verifyButton.heightAnchor.constraint(equalToConstant: 56),
             resendButton.heightAnchor.constraint(equalToConstant: 24),
@@ -182,13 +190,16 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         Task {
             do {
+                // Verify the 6-digit code from the
+                // "Confirm signup" email template.
+                // type: .signup matches the confirm signup flow.
+                // The account was already created by signUp()
+                // in AuthViewController — do NOT call signUp again.
                 try await SupabaseManager.shared.client.auth.verifyOTP(
                     email: email,
                     token: code,
-                    type: .email
+                    type: .signup
                 )
-
-                try await signUp(email: email, password: password)
 
                 await MainActor.run {
                     setLoading(false)
@@ -202,35 +213,33 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
             }
         }
     }
-
+    
     @objc private func resendTapped() {
         guard resendSecondsRemaining == 0 else { return }
 
         setResendEnabled(false)
+        errorLabel.isHidden = true
 
         Task {
             do {
-                try await SupabaseManager.shared.client.auth.signInWithOTP(
+                // auth.resend re-sends the "Confirm signup" OTP for an
+                // account that was already created — correct for this flow.
+                try await SupabaseManager.shared.client.auth.resend(
                     email: email,
-                    shouldCreateUser: false
+                    type: .signup
                 )
 
                 await MainActor.run {
-                    startResendTimer()
+                    startResendCountdown()
                     showToast(message: "Code resent")
                 }
             } catch {
                 await MainActor.run {
                     setResendEnabled(true)
-                    showError(error.localizedDescription)
+                    showError("Could not resend. Please try again.")
                 }
             }
         }
-    }
-
-    private func signUp(email: String, password: String) async throws {
-        let client = SupabaseManager.shared.client
-        _ = try await client.auth.signUp(email: email, password: password)
     }
 
     @MainActor
@@ -249,8 +258,6 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         } else if message.contains("invalid") || message.contains("token") || message.contains("otp") {
             showError("Invalid code. Please try again.")
             shakeBoxes()
-        } else if message.contains("account") || message.contains("signup") || message.contains("user already") {
-            showError("Account creation failed. Please try again.")
         } else {
             showError("Account creation failed. Please try again.")
         }
@@ -266,11 +273,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
     private func setLoading(_ isLoading: Bool) {
         verifyButton.isEnabled = !isLoading
         verifyButton.setTitle(isLoading ? nil : "Verify", for: .normal)
-        if isLoading {
-            activityIndicator.startAnimating()
-        } else {
-            activityIndicator.stopAnimating()
-        }
+        isLoading ? activityIndicator.startAnimating() : activityIndicator.stopAnimating()
     }
 
     @MainActor
@@ -282,23 +285,26 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
     }
 
     @MainActor
-    private func startResendTimer() {
+    private func startResendCountdown() {
         resendTimer?.invalidate()
         resendSecondsRemaining = 30
-        setResendEnabled(false)
         updateResendTitle()
 
         resendTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.resendSecondsRemaining -= 1
-            self.updateResendTitle()
+            Task { @MainActor in
+                self.resendSecondsRemaining -= 1
+                self.updateResendTitle()
 
-            if self.resendSecondsRemaining <= 0 {
-                self.resendTimer?.invalidate()
-                self.resendTimer = nil
-                self.setResendEnabled(true)
+                if self.resendSecondsRemaining <= 0 {
+                    self.resendTimer?.invalidate()
+                    self.resendTimer = nil
+                    self.setResendEnabled(true)
+                }
             }
         }
+
+        setResendEnabled(false)
     }
 
     @MainActor

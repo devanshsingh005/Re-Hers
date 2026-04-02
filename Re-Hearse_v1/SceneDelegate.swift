@@ -167,14 +167,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
     }
-
-    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        // ASWebAuthenticationSession handles its own callbacks directly.
-        // We do NOT call SupabaseManager.shared.client.auth.handle(url) here
-        // as it causes a race condition and "Auth session missing" error
-        // when both attempt to consume the single-use OAuth callback.
-    }
-
 }
 
 private struct RehearsalInfoCardWrapper: View {

@@ -4,17 +4,6 @@
 <dict>
 	<key>BACKEND_API_URL</key>
 	<string>$(BACKEND_API_URL)</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>rehearse</string>
-			</array>
-		</dict>
-	</array>
 	<key>PUBLIC_LEGAL_BASE_URL</key>
 	<string>https://rehearse.app</string>
 	<key>SUPABASE_KEY</key>
