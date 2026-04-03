@@ -78,11 +78,30 @@ private struct ExistingProfileProgress: Codable, Sendable {
     let total_study_seconds: Int?
 }
 
+struct GuestLessonEvent: Codable, Sendable {
+    let chapterIndex: Int
+    let partIndex: Int
+    let eventType: String
+    let stars: Int?
+    let attempts: Int?
+    let durationSeconds: Int?
+    let scorePoints: Int
+    let occurredAt: String
+}
+
+struct GuestProgressSnapshot: Codable, Sendable {
+    let currentChapter: Int
+    let currentPart: Int
+    let totalStudySeconds: Int
+}
+
 // MARK: - Manager
 
 final class SupabaseProgressManager: Sendable {
     
     private static var db: SupabaseClient { SupabaseManager.shared.client }
+    private static let guestLessonEventsKey = "guestLessonEvents"
+    private static let guestProgressSnapshotKey = "guestProgressSnapshot"
     
     // MARK: - Public API
     
@@ -93,6 +112,16 @@ final class SupabaseProgressManager: Sendable {
         attempts:     Int,
         scorePoints:  Int
     ) async {
+        if GuestSessionManager.shared.isGuest() {
+            saveGuestPartCompleted(
+                chapterIndex: chapterIndex,
+                partIndex: partIndex,
+                attempts: attempts,
+                scorePoints: scorePoints
+            )
+            return
+        }
+
         guard let userID = await currentUserID() else {
             debugLog("[SupabaseProgressManager] recordPartCompleted: no logged-in user")
             return
@@ -155,6 +184,16 @@ final class SupabaseProgressManager: Sendable {
         durationSeconds: Int,
         scorePoints:     Int
     ) async {
+        if GuestSessionManager.shared.isGuest() {
+            saveGuestLessonCompleted(
+                chapterIndex: chapterIndex,
+                stars: stars,
+                durationSeconds: durationSeconds,
+                scorePoints: scorePoints
+            )
+            return
+        }
+
         guard let userID = await currentUserID() else {
             debugLog("[SupabaseProgressManager] recordLessonCompleted: no logged-in user")
             return
@@ -222,6 +261,131 @@ final class SupabaseProgressManager: Sendable {
             .execute()
             .value
         return response.first
+    }
+
+    static func guestProgressSnapshot() -> GuestProgressSnapshot {
+        if let data = UserDefaults.standard.data(forKey: guestProgressSnapshotKey),
+           let snapshot = try? JSONDecoder().decode(GuestProgressSnapshot.self, from: data) {
+            return snapshot
+        }
+
+        return GuestProgressSnapshot(currentChapter: 1, currentPart: 0, totalStudySeconds: 0)
+    }
+
+    static func guestLessonEvents() -> [GuestLessonEvent] {
+        guard let data = UserDefaults.standard.data(forKey: guestLessonEventsKey),
+              let events = try? JSONDecoder().decode([GuestLessonEvent].self, from: data) else {
+            return []
+        }
+
+        return events
+    }
+
+    static func guestCompletedPartIndexes(for chapterIndex: Int) -> Set<Int> {
+        Set(
+            guestLessonEvents()
+                .filter { $0.chapterIndex == chapterIndex && $0.eventType == "part_completed" && $0.partIndex >= 0 }
+                .map(\.partIndex)
+        )
+    }
+
+    static func guestChapterStars() -> [Int: Int] {
+        var starsMap: [Int: Int] = [:]
+        for event in guestLessonEvents() where event.eventType == "lesson_completed" {
+            let stars = event.stars ?? 1
+            starsMap[event.chapterIndex] = max(starsMap[event.chapterIndex] ?? 0, stars)
+        }
+        return starsMap
+    }
+
+    static func clearGuestProgressData() {
+        UserDefaults.standard.removeObject(forKey: guestLessonEventsKey)
+        UserDefaults.standard.removeObject(forKey: guestProgressSnapshotKey)
+    }
+
+    private static func saveGuestPartCompleted(
+        chapterIndex: Int,
+        partIndex: Int,
+        attempts: Int,
+        scorePoints: Int
+    ) {
+        let event = GuestLessonEvent(
+            chapterIndex: chapterIndex,
+            partIndex: partIndex,
+            eventType: "part_completed",
+            stars: nil,
+            attempts: attempts,
+            durationSeconds: nil,
+            scorePoints: scorePoints,
+            occurredAt: iso8601Now()
+        )
+        appendGuestLessonEvent(event)
+
+        let existingSnapshot = guestProgressSnapshot()
+        let mergedChapter = max(existingSnapshot.currentChapter, chapterIndex)
+        let mergedPart: Int
+
+        if mergedChapter > chapterIndex {
+            mergedPart = existingSnapshot.currentPart
+        } else if mergedChapter > existingSnapshot.currentChapter {
+            mergedPart = partIndex
+        } else {
+            mergedPart = max(existingSnapshot.currentPart, partIndex)
+        }
+
+        saveGuestProgressSnapshot(
+            GuestProgressSnapshot(
+                currentChapter: mergedChapter,
+                currentPart: mergedPart,
+                totalStudySeconds: existingSnapshot.totalStudySeconds
+            )
+        )
+    }
+
+    private static func saveGuestLessonCompleted(
+        chapterIndex: Int,
+        stars: Int,
+        durationSeconds: Int,
+        scorePoints: Int
+    ) {
+        let event = GuestLessonEvent(
+            chapterIndex: chapterIndex,
+            partIndex: -1,
+            eventType: "lesson_completed",
+            stars: stars,
+            attempts: nil,
+            durationSeconds: durationSeconds,
+            scorePoints: scorePoints,
+            occurredAt: iso8601Now()
+        )
+        appendGuestLessonEvent(event)
+
+        let existingSnapshot = guestProgressSnapshot()
+        let completedChapter = chapterIndex + 1
+        let mergedChapter = max(existingSnapshot.currentChapter, completedChapter)
+        let mergedPart = mergedChapter == completedChapter ? 0 : existingSnapshot.currentPart
+
+        saveGuestProgressSnapshot(
+            GuestProgressSnapshot(
+                currentChapter: mergedChapter,
+                currentPart: mergedPart,
+                totalStudySeconds: existingSnapshot.totalStudySeconds + durationSeconds
+            )
+        )
+    }
+
+    private static func appendGuestLessonEvent(_ event: GuestLessonEvent) {
+        var events = guestLessonEvents()
+        events.append(event)
+        if let data = try? JSONEncoder().encode(events) {
+            UserDefaults.standard.set(data, forKey: guestLessonEventsKey)
+        }
+    }
+
+    private static func saveGuestProgressSnapshot(_ snapshot: GuestProgressSnapshot) {
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: guestProgressSnapshotKey)
+        }
     }
     
     // MARK: - Auth helper

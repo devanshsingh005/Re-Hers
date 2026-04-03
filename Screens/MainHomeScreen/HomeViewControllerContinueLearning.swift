@@ -342,14 +342,15 @@ extension HomeViewController {
             playBtn.heightAnchor.constraint(equalToConstant: 32)
         ])
         
-        // Tap: open song in DiscoverSongPreviewViewController (same flow as Discover screen)
+        // Tap: open the final song detail directly from Home recents.
         card.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
             NavigationBarHelper.animateButtonPress(card) { [weak self] in
                 guard let self = self else { return }
-                let vc = DiscoverSongPreviewViewController()
+                let vc = DiscoverSongDetailViewController()
                 vc.hidesBottomBarWhenPushed = true
                 vc.song = song
+                vc.passedImage = imageView.image
                 self.navigationController?.pushViewController(vc, animated: true)
             }
         }, for: .touchUpInside)

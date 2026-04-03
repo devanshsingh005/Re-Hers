@@ -96,6 +96,26 @@ extension HomeViewController {
 
     func fetchProfileData() {
         Task {
+            if GuestSessionManager.shared.isGuest() {
+                let guestName = GuestSessionManager.shared.guestDisplayName() ?? "Guest"
+                let guestAvatar = GuestSessionManager.shared.guestAvatarIdentifier()
+
+                await MainActor.run {
+                    largeSubtitleLabel.text = "Welcome back, \(guestName)"
+                    inlineSubtitleLabel?.text = "Welcome back, \(guestName)"
+                }
+
+                if let guestAvatar, !guestAvatar.isEmpty {
+                    await loadAndSetProfileImage(from: guestAvatar)
+                } else {
+                    await MainActor.run {
+                        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                        largeProfileButton.tintColor = .secondaryLabel
+                    }
+                }
+                return
+            }
+
             guard let user = SupabaseManager.shared.client.auth.currentUser else {
                 await MainActor.run {
                     largeSubtitleLabel.text = "Welcome back, User"

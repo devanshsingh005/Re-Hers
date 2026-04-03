@@ -61,6 +61,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         updateNavBackgroundAppearance()
         syncNavBarAlpha()
         startPracticeTimer()
+        fetchPlaylists()
         fetchRecents()
         fetchTopSong()
     }

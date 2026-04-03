@@ -10,12 +10,8 @@ final class GuestSessionManager {
     let kHasSeenInfoCard = "hasSeenInfoCard"
     let kHasCompletedOnboarding = "hasCompletedOnboarding"
     let kGuestOnboardingData = "guestOnboardingData"
-
-    enum InitialScreen {
-        case infoCard
-        case onboarding
-        case home
-    }
+    let kGuestDisplayName = "guestDisplayName"
+    let kGuestUsername = "guestUsername"
 
     private struct GuestOnboardingPayload: Encodable {
         let id: String
@@ -40,6 +36,11 @@ final class GuestSessionManager {
         return guestID
     }
 
+    var hasSeenInfoCard: Bool {
+        get { UserDefaults.standard.bool(forKey: kHasSeenInfoCard) }
+        set { UserDefaults.standard.set(newValue, forKey: kHasSeenInfoCard) }
+    }
+
     func isAuthenticated() -> Bool {
         SupabaseManager.shared.client.auth.currentSession != nil
     }
@@ -56,21 +57,86 @@ final class GuestSessionManager {
         UserDefaults.standard.dictionary(forKey: kGuestOnboardingData)
     }
 
-    func migrateGuestIfNeeded() async {
+    func guestDisplayName() -> String? {
+        if let storedName = UserDefaults.standard.string(forKey: kGuestDisplayName)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !storedName.isEmpty {
+            return storedName
+        }
+
+        if let onboardingName = loadGuestOnboardingData()?["full_name"] as? String {
+            let trimmedName = onboardingName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedName.isEmpty ? nil : trimmedName
+        }
+
+        return nil
+    }
+
+    func saveGuestDisplayName(_ name: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty {
+            UserDefaults.standard.removeObject(forKey: kGuestDisplayName)
+        } else {
+            UserDefaults.standard.set(trimmedName, forKey: kGuestDisplayName)
+        }
+
+        var onboardingData = loadGuestOnboardingData() ?? [:]
+        onboardingData["full_name"] = trimmedName
+        saveGuestOnboardingData(onboardingData)
+    }
+
+    func guestUsername() -> String? {
+        if let storedUsername = UserDefaults.standard.string(forKey: kGuestUsername)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !storedUsername.isEmpty {
+            return storedUsername
+        }
+
+        if let onboardingUsername = loadGuestOnboardingData()?["username"] as? String {
+            let trimmedUsername = onboardingUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedUsername.isEmpty ? nil : trimmedUsername
+        }
+
+        return nil
+    }
+
+    func saveGuestUsername(_ username: String) {
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedUsername.isEmpty {
+            UserDefaults.standard.removeObject(forKey: kGuestUsername)
+        } else {
+            UserDefaults.standard.set(trimmedUsername, forKey: kGuestUsername)
+        }
+
+        var onboardingData = loadGuestOnboardingData() ?? [:]
+        onboardingData["username"] = trimmedUsername
+        saveGuestOnboardingData(onboardingData)
+    }
+
+    func guestAvatarIdentifier() -> String? {
+        loadGuestOnboardingData()?["avatar_url"] as? String
+    }
+
+    func guestPracticeGoalMinutes() -> Int? {
+        loadGuestOnboardingData()?["practice_mins"] as? Int
+    }
+
+    @discardableResult
+    func migrateGuestIfNeeded() async -> Bool {
         guard let onboardingData = loadGuestOnboardingData() else {
-            return
+            return false
         }
 
         guard let session = try? await SupabaseManager.shared.client.auth.session else {
             debugLog("[GuestSessionManager] Missing auth session during guest migration")
-            return
+            return false
         }
 
         guard let level = onboardingData["level"] as? String,
               let genres = onboardingData["genres"] as? [String],
               let practiceMins = onboardingData["practice_mins"] as? Int else {
             debugLog("[GuestSessionManager] Guest onboarding payload was incomplete")
-            return
+            return false
         }
 
         let userId = session.user.id.uuidString
@@ -93,7 +159,7 @@ final class GuestSessionManager {
 
             if existingOnboarding != nil {
                 clearGuestState()
-                return
+                return false
             }
 
             try await SupabaseManager.shared.client
@@ -107,30 +173,19 @@ final class GuestSessionManager {
                 .execute()
 
             clearGuestState()
+            return true
         } catch {
             debugLog("[GuestSessionManager] Guest migration failed: \(error.localizedDescription)")
+            return false
         }
-    }
-
-    func resolveInitialScreen() -> InitialScreen {
-        if isAuthenticated() {
-            return .home
-        }
-
-        if !UserDefaults.standard.bool(forKey: kHasSeenInfoCard) {
-            return .infoCard
-        }
-
-        if !UserDefaults.standard.bool(forKey: kHasCompletedOnboarding) {
-            return .onboarding
-        }
-
-        return .home
     }
 
     func clearGuestState() {
         UserDefaults.standard.removeObject(forKey: kGuestID)
         UserDefaults.standard.removeObject(forKey: kHasCompletedOnboarding)
         UserDefaults.standard.removeObject(forKey: kGuestOnboardingData)
+        UserDefaults.standard.removeObject(forKey: kGuestDisplayName)
+        UserDefaults.standard.removeObject(forKey: kGuestUsername)
+        SupabaseProgressManager.clearGuestProgressData()
     }
 }

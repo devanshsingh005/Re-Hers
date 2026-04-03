@@ -155,8 +155,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				Views/GuestFeatureGateModal.swift,
 				Services/GuestSessionManager.swift,
+				Views/GuestFeatureGateModal.swift,
 			);
 			target = 842B083A2EBA0465001AC579 /* Re-Hearse_v1 */;
 		};

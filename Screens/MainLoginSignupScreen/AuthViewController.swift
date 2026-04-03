@@ -12,10 +12,21 @@ import Auth
 import SwiftUI
 
 
-final class AuthViewController: UIViewController {
+final class AuthViewController: UIViewController, UITextFieldDelegate {
     enum AuthMode {
         case logIn
         case signUp
+    }
+
+    enum AuthError: LocalizedError {
+        case emailAlreadyRegistered
+
+        var errorDescription: String? {
+            switch self {
+            case .emailAlreadyRegistered:
+                return "This email is already registered. Please log in instead."
+            }
+        }
     }
     
     // MARK: - Constraint Storage
@@ -212,7 +223,22 @@ private extension AuthViewController {
          passwordTextField,
          fullNameTextField,
          usernameTextField,
-         confirmPasswordTextField].forEach { addLeftPadding(to: $0) }
+         confirmPasswordTextField].forEach {
+            addLeftPadding(to: $0)
+            $0.delegate = self
+            $0.addTarget(self, action: #selector(textFieldEditingChanged(_:)), for: .editingChanged)
+            $0.addTarget(self, action: #selector(textFieldEditingDidEnd(_:)), for: .editingDidEnd)
+        }
+
+        emailTextField.textContentType = .emailAddress
+        emailTextField.returnKeyType = .next
+        fullNameTextField.textContentType = .name
+        fullNameTextField.autocapitalizationType = .words
+        fullNameTextField.returnKeyType = .next
+        usernameTextField.textContentType = .username
+        usernameTextField.returnKeyType = .next
+        passwordTextField.textContentType = .password
+        confirmPasswordTextField.textContentType = .newPassword
         
         // Eye button for password
         passwordToggleButton.setImage(UIImage(systemName: "eye"), for: .normal)
@@ -584,6 +610,7 @@ private extension AuthViewController {
         switchModeButton.setTitle(isLoginMode ? "Create a Account" : "Already have an account? Sign In", for: .normal)
         
         errorLabel.isHidden = true
+        updatePrimaryButtonState()
         
         // Animate layout change
     }
@@ -597,6 +624,7 @@ extension AuthViewController {
         let imageName = hasAcceptedSignupLegal ? "checkmark.square.fill" : "square"
         legalAgreementButton.setImage(UIImage(systemName: imageName), for: .normal)
         legalAgreementButton.tintColor = hasAcceptedSignupLegal ? ComponentColors.AuthScreen.linkText : ComponentColors.AuthScreen.bodyText
+        updatePrimaryButtonState()
     }
     
     @objc func openTermsOfService() {
@@ -630,8 +658,11 @@ extension AuthViewController {
     }
     
     @objc func forgotPasswordTapped() {
-        guard let email = emailTextField.text, !email.isEmpty else {
-            showError("Please enter your email first.")
+        let email = InputValidator.trimOnSubmit(emailTextField.text ?? "")
+        emailTextField.text = InputValidator.limit(email, maxLength: InputValidator.singleLineMaxLength)
+
+        if let emailError = InputValidator.validateEmail(email) {
+            showError(emailError)
             return
         }
         
@@ -643,7 +674,7 @@ extension AuthViewController {
                 }
             } catch {
                 await MainActor.run {
-                    self.showError("Failed to send reset email: \(error.localizedDescription)")
+                    self.showError("We couldn't send the reset email right now. Please try again.")
                 }
             }
         }
@@ -652,31 +683,7 @@ extension AuthViewController {
     @objc func primaryButtonTapped() {
         view.endEditing(true)
         errorLabel.isHidden = true
-        
-        guard let email = emailTextField.text, !email.isEmpty,
-              let password = passwordTextField.text, !password.isEmpty else {
-            showError("Please enter both email and password.")
-            return
-        }
-        
-        if !isLoginMode {
-            // extra validations for sign up
-            guard let fullName = fullNameTextField.text, !fullName.isEmpty,
-                  let username = usernameTextField.text, !username.isEmpty else {
-                showError("Please enter full name and username.")
-                return
-            }
-            
-            guard let confirm = confirmPasswordTextField.text, confirm == password else {
-                showError("Passwords do not match.")
-                return
-            }
-            
-            guard hasAcceptedSignupLegal else {
-                showError("Please accept the Terms of Service and Privacy Policy to sign up.")
-                return
-            }
-        }
+        guard let payload = validatedAuthPayload(showErrors: true) else { return }
         
         primaryButton.isEnabled = false
         activityIndicator.startAnimating()
@@ -684,25 +691,30 @@ extension AuthViewController {
         Task {
             do {
                 if isLoginMode {
-                    try await login(email: email, password: password)
+                    try await login(email: payload.email, password: payload.password)
                     await MainActor.run {
                         self.activityIndicator.stopAnimating()
-                        self.primaryButton.isEnabled = true
+                        self.updatePrimaryButtonState()
                         self.routeAfterLogin()
                     }
                 } else {
-                    try await requestSignupOTP(email: email, password: password)
+                    try await requestSignupOTP(
+                        email: payload.email,
+                        password: payload.password,
+                        fullName: payload.fullName,
+                        username: payload.username
+                    )
                     await MainActor.run {
                         self.activityIndicator.stopAnimating()
-                        self.primaryButton.isEnabled = true
-                        self.showOTPVerificationScreen(email: email, password: password)
+                        self.updatePrimaryButtonState()
+                        self.showOTPVerificationScreen(email: payload.email, password: payload.password)
                     }
                 }
             } catch {
                 await MainActor.run {
-                    self.showError(error.localizedDescription)
+                    self.showError(self.userFacingAuthErrorMessage(error, mode: self.isLoginMode ? .logIn : .signUp))
                     self.activityIndicator.stopAnimating()
-                    self.primaryButton.isEnabled = true
+                    self.updatePrimaryButtonState()
                 }
             }
         }
@@ -712,6 +724,151 @@ extension AuthViewController {
 
 extension AuthViewController: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldInteractWith url: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
+        return true
+    }
+}
+
+private extension AuthViewController {
+    struct AuthPayload {
+        let email: String
+        let password: String
+        let fullName: String
+        let username: String
+    }
+
+    func maxLength(for textField: UITextField) -> Int {
+        switch textField {
+        case fullNameTextField:
+            return InputValidator.nameMaxLength
+        case emailTextField, usernameTextField, passwordTextField, confirmPasswordTextField:
+            return InputValidator.singleLineMaxLength
+        default:
+            return InputValidator.singleLineMaxLength
+        }
+    }
+
+    @objc func textFieldEditingChanged(_ textField: UITextField) {
+        let limited = InputValidator.limit(textField.text ?? "", maxLength: maxLength(for: textField))
+        if textField === usernameTextField {
+            textField.text = limited.replacingOccurrences(of: " ", with: "")
+        } else {
+            textField.text = limited
+        }
+
+        if !errorLabel.isHidden, validatedAuthPayload(showErrors: false) != nil {
+            errorLabel.isHidden = true
+        }
+        updatePrimaryButtonState()
+    }
+
+    @objc func textFieldEditingDidEnd(_ textField: UITextField) {
+        let trimmed = InputValidator.trimOnSubmit(textField.text ?? "")
+        let limited = InputValidator.limit(trimmed, maxLength: maxLength(for: textField))
+        textField.text = textField === usernameTextField ? limited.replacingOccurrences(of: " ", with: "") : limited
+        updatePrimaryButtonState()
+    }
+
+    func validatedAuthPayload(showErrors: Bool) -> AuthPayload? {
+        let email = InputValidator.limit(InputValidator.trimOnSubmit(emailTextField.text ?? ""), maxLength: InputValidator.singleLineMaxLength)
+        let password = InputValidator.limit(passwordTextField.text ?? "", maxLength: InputValidator.singleLineMaxLength)
+        emailTextField.text = email
+        passwordTextField.text = password
+
+        if let emailError = InputValidator.validateEmail(email) {
+            if showErrors { showError(emailError) }
+            return nil
+        }
+
+        guard !InputValidator.trimOnSubmit(password).isEmpty else {
+            if showErrors { showError("Password is required.") }
+            return nil
+        }
+
+        guard !isLoginMode else {
+            return AuthPayload(email: email, password: password, fullName: "", username: "")
+        }
+
+        let fullName = InputValidator.limit(InputValidator.trimOnSubmit(fullNameTextField.text ?? ""), maxLength: InputValidator.nameMaxLength)
+        let username = InputValidator.limit(InputValidator.trimOnSubmit(usernameTextField.text ?? "").replacingOccurrences(of: " ", with: ""), maxLength: InputValidator.singleLineMaxLength)
+        let confirmPassword = InputValidator.limit(confirmPasswordTextField.text ?? "", maxLength: InputValidator.singleLineMaxLength)
+
+        fullNameTextField.text = fullName
+        usernameTextField.text = username
+        confirmPasswordTextField.text = confirmPassword
+
+        if let nameError = InputValidator.validateRequired(fullName, message: "Full name is required.") {
+            if showErrors { showError(nameError) }
+            return nil
+        }
+
+        if let usernameError = InputValidator.validateRequired(username, message: "Username is required.") {
+            if showErrors { showError(usernameError) }
+            return nil
+        }
+
+        guard !confirmPassword.isEmpty else {
+            if showErrors { showError("Please confirm your password.") }
+            return nil
+        }
+
+        guard confirmPassword == password else {
+            if showErrors { showError("Passwords do not match.") }
+            return nil
+        }
+
+        guard hasAcceptedSignupLegal else {
+            if showErrors { showError("Please accept the Terms of Service and Privacy Policy to sign up.") }
+            return nil
+        }
+
+        if showErrors, let passwordError = InputValidator.validatePassword(password) {
+            showError(passwordError)
+            return nil
+        }
+
+        return AuthPayload(email: email, password: password, fullName: fullName, username: username)
+    }
+
+    func updatePrimaryButtonState() {
+        guard !activityIndicator.isAnimating else { return }
+        primaryButton.isEnabled = validatedAuthPayload(showErrors: false) != nil
+        primaryButton.alpha = primaryButton.isEnabled ? 1.0 : 0.55
+    }
+
+    func userFacingAuthErrorMessage(_ error: Error, mode: AuthMode) -> String {
+        if let authError = error as? AuthError, let message = authError.errorDescription {
+            return message
+        }
+
+        switch mode {
+        case .logIn:
+            return "We couldn't sign you in. Check your details and try again."
+        case .signUp:
+            return "We couldn't start sign up right now. Please try again."
+        }
+    }
+}
+
+extension AuthViewController {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        switch textField {
+        case fullNameTextField:
+            usernameTextField.becomeFirstResponder()
+        case emailTextField:
+            (isLoginMode ? passwordTextField : usernameTextField).becomeFirstResponder()
+        case usernameTextField:
+            passwordTextField.becomeFirstResponder()
+        case passwordTextField:
+            if isLoginMode {
+                primaryButtonTapped()
+            } else {
+                confirmPasswordTextField.becomeFirstResponder()
+            }
+        case confirmPasswordTextField:
+            primaryButtonTapped()
+        default:
+            textField.resignFirstResponder()
+        }
         return true
     }
 }
@@ -736,12 +893,44 @@ extension AuthViewController {
     /// The OTP code the user receives comes from Supabase's "Confirm signup"
     /// email template — set that template to use {{ .Token }} (not {{ .ConfirmationURL }})
     /// in the Supabase dashboard so a 6-digit code is sent instead of a magic link.
-    func requestSignupOTP(email: String, password: String) async throws {
+    func requestSignupOTP(
+        email: String,
+        password: String,
+        fullName: String,
+        username: String
+    ) async throws {
         let client = SupabaseManager.shared.client
-        try await client.auth.signUp(
-            email: email,
-            password: password
-        )
+        let metadata: [String: AnyJSON] = [
+            "full_name": .string(fullName),
+            "username": .string(username)
+        ]
+
+        do {
+            try await client.auth.signUp(
+                email: email,
+                password: password,
+                data: metadata
+            )
+        } catch {
+            if isEmailAlreadyRegisteredError(error) {
+                throw AuthError.emailAlreadyRegistered
+            }
+            throw error
+        }
+    }
+
+    private func isEmailAlreadyRegisteredError(_ error: Error) -> Bool {
+        let message = "\(error.localizedDescription) \(String(describing: error))".lowercased()
+        let existingAccountMarkers = [
+            "already registered",
+            "user already registered",
+            "already been registered",
+            "user already exists",
+            "email address is already",
+            "already exists"
+        ]
+
+        return existingAccountMarkers.contains { message.contains($0) }
     }
 
     @MainActor
@@ -775,7 +964,13 @@ extension AuthViewController {
     func routeAfterLogin() {
         Task {
             do {
-                await GuestSessionManager.shared.migrateGuestIfNeeded()
+                let migrated = await GuestSessionManager.shared.migrateGuestIfNeeded()
+
+                if migrated {
+                    await MainActor.run {
+                        self.showProgressSavedToast()
+                    }
+                }
 
                 let client = SupabaseManager.shared.client
                 let session = try await client.auth.session
@@ -818,6 +1013,43 @@ extension AuthViewController {
     func showOnboardingFlow() {
         let onboardingVC = UIHostingController(rootView: OnboardingFlowRoot())
         replaceRootViewController(with: onboardingVC)
+    }
+
+    @MainActor
+    private func showProgressSavedToast() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first,
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }) else { return }
+
+        let toast = UILabel()
+        toast.text = "Your progress has been saved"
+        toast.font = .systemFont(ofSize: 14, weight: .medium)
+        toast.textColor = ComponentColors.AuthScreen.ctaText
+        toast.backgroundColor = ComponentColors.AuthScreen.ctaFill
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 20
+        toast.clipsToBounds = true
+        toast.alpha = 0
+        toast.translatesAutoresizingMaskIntoConstraints = false
+
+        window.addSubview(toast)
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: window.centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: window.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            toast.heightAnchor.constraint(equalToConstant: 40),
+            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        ])
+
+        UIView.animate(withDuration: 0.25, animations: {
+            toast.alpha = 1
+        }) { _ in
+            UIView.animate(withDuration: 0.3, delay: 2.0, options: [], animations: {
+                toast.alpha = 0
+            }) { _ in
+                toast.removeFromSuperview()
+            }
+        }
     }
 
     /// Replaces the window's root view controller with a smooth cross-dissolve.

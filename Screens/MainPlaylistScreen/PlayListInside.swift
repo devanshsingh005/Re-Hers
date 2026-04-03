@@ -245,10 +245,23 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     @objc private func handlePlaylistRename() {
         let alert = UIAlertController(title: "Rename Playlist", message: "Enter new name", preferredStyle: .alert)
-        alert.addTextField { $0.text = self.playlistTitleLabel.text }
+        alert.addTextField {
+            $0.text = self.playlistTitleLabel.text
+            $0.placeholder = "Enter new name"
+            $0.clearButtonMode = .whileEditing
+            $0.autocapitalizationType = .words
+        }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Rename", style: .default) { _ in
-            guard let newName = alert.textFields?.first?.text, !newName.isEmpty else { return }
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let newName = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert?.textFields?.first?.text ?? ""),
+                maxLength: InputValidator.nameMaxLength
+            )
+            guard InputValidator.validateRequired(newName, message: "Playlist name is required.") == nil else {
+                self.showInputError(message: "Playlist name is required.")
+                return
+            }
             self.updatePlaylistName(newName)
         })
         present(alert, animated: true)
@@ -266,6 +279,9 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                 }
             } catch {
                 debugLog("❌ Rename error: \(error)")
+                await MainActor.run {
+                    self.showInputError(message: "We couldn't rename that playlist right now. Please try again.")
+                }
             }
         }
     }
@@ -346,7 +362,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                 DispatchQueue.main.async { [weak self] in
                     self?.activityIndicator.stopAnimating()
                     let alert = UIAlertController(title: "Error",
-                                                  message: "Failed to add track: \(error.localizedDescription)",
+                                                  message: "We couldn't add that track right now. Please try again.",
                                                   preferredStyle: .alert)
                     alert.addAction(UIAlertAction(title: "OK", style: .default))
                     self?.present(alert, animated: true)
@@ -407,10 +423,23 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     private func handleTrackRename(at index: Int) {
         let track = trackList[index]
         let alert = UIAlertController(title: "Rename Track", message: "Enter new title", preferredStyle: .alert)
-        alert.addTextField { $0.text = track.title }
+        alert.addTextField {
+            $0.text = track.title
+            $0.placeholder = "Enter new title"
+            $0.clearButtonMode = .whileEditing
+            $0.autocapitalizationType = .words
+        }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Rename", style: .default) { _ in
-            guard let newTitle = alert.textFields?.first?.text, !newTitle.isEmpty else { return }
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let newTitle = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert?.textFields?.first?.text ?? ""),
+                maxLength: InputValidator.nameMaxLength
+            )
+            guard InputValidator.validateRequired(newTitle, message: "Track title is required.") == nil else {
+                self.showInputError(message: "Track title is required.")
+                return
+            }
             self.updateTrackTitle(at: index, newTitle: newTitle)
         })
         present(alert, animated: true)
@@ -426,8 +455,17 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                 }
             } catch {
                 debugLog("❌ Track rename error: \(error)")
+                await MainActor.run {
+                    self.showInputError(message: "We couldn't rename that track right now. Please try again.")
+                }
             }
         }
+    }
+
+    private func showInputError(message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
     
     // MARK: - UITableViewDelegate

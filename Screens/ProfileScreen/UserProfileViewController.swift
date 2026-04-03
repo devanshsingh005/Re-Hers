@@ -40,8 +40,6 @@ final class UserProfileViewController: UIViewController {
     private let profileImageView = UIImageView()
     private let nameLabel = UILabel()
     private let usernameLabel = UILabel()
-    private let titleLabel = UILabel()
-    private let editProfileButton = UIButton(type: .system)
 
     // Stat cards
     private let practiceLabel = UILabel()
@@ -57,7 +55,6 @@ final class UserProfileViewController: UIViewController {
 
     // Sign out
     private let signOutButton = UIButton(type: .system)
-    private let deleteAccountButton = UIButton(type: .system)
 
     // Data
     private var currentProfile: Profile?
@@ -81,8 +78,7 @@ final class UserProfileViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.ProfileScreen.background
         
-        // Match the uniform "Practice" style
-        title = "Profile"
+        title = ""
         navigationController?.setNavigationBarHidden(false, animated: false)
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationItem.largeTitleDisplayMode = .never
@@ -93,6 +89,10 @@ final class UserProfileViewController: UIViewController {
             .font: UIFont.systemFont(ofSize: 17, weight: .bold)
         ]
         navBar?.tintColor = .white
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis"),
+            menu: buildProfileMenu()
+        )
         
         setupUI()
         loadData()
@@ -102,6 +102,8 @@ final class UserProfileViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationItem.rightBarButtonItem?.menu = buildProfileMenu()
+        updateSignInOutButton()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -129,13 +131,13 @@ final class UserProfileViewController: UIViewController {
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
 
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
 
         buildHeaderSection()
@@ -145,7 +147,7 @@ final class UserProfileViewController: UIViewController {
         buildSignOutSection()
     }
 
-    // MARK: - HEADER (avatar + name + username + edit)
+    // MARK: - HEADER (avatar + name + username)
     private func buildHeaderSection() {
         // Avatar ring
         let ringSize: CGFloat = 110
@@ -191,13 +193,6 @@ final class UserProfileViewController: UIViewController {
         usernameLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(usernameLabel)
 
-        editProfileButton.setTitle("Profile", for: .normal)
-        editProfileButton.setTitleColor(ComponentColors.ProfileScreen.editProfileText, for: .normal)
-        editProfileButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        editProfileButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
-        editProfileButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(editProfileButton)
-
         NSLayoutConstraint.activate([
             ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
             ringView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -214,9 +209,6 @@ final class UserProfileViewController: UIViewController {
 
             usernameLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
             usernameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-
-            editProfileButton.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 8),
-            editProfileButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
         ])
 
         DispatchQueue.main.async {
@@ -230,7 +222,6 @@ final class UserProfileViewController: UIViewController {
         statsContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(statsContainer)
 
-        // Find editProfileButton to anchor below it
         let brandColor = ComponentColors.ProfileScreen.editProfileText // #EF9408
         let cards = [
             makeStatCard(iconName: "clock", iconColor: brandColor,
@@ -255,9 +246,8 @@ final class UserProfileViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: statsContainer.bottomAnchor),
         ])
 
-        // Anchor statsContainer below editProfileButton
         NSLayoutConstraint.activate([
-            statsContainer.topAnchor.constraint(equalTo: editProfileButton.bottomAnchor, constant: 28),
+            statsContainer.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 28),
             statsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             statsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             statsContainer.heightAnchor.constraint(equalToConstant: 100),
@@ -413,40 +403,24 @@ final class UserProfileViewController: UIViewController {
 
     // MARK: - SIGN OUT SECTION
     private func buildSignOutSection() {
-        signOutButton.setTitle("Sign Out", for: .normal)
         signOutButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
-        signOutButton.setTitleColor(ComponentColors.ProfileScreen.destructiveText, for: .normal)
-        signOutButton.backgroundColor = ComponentColors.DestructiveButton.fill
         signOutButton.layer.cornerRadius = 28
-        signOutButton.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
         signOutButton.translatesAutoresizingMaskIntoConstraints = false
+        updateSignInOutButton()
 
-        deleteAccountButton.setTitle("Delete Account", for: .normal)
-        deleteAccountButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
-        deleteAccountButton.setTitleColor(ComponentColors.ProfileScreen.destructiveText, for: .normal)
-        deleteAccountButton.backgroundColor = UIColor.systemRed.withAlphaComponent(0.14)
-        deleteAccountButton.layer.cornerRadius = 28
-        deleteAccountButton.layer.borderWidth = 1
-        deleteAccountButton.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.3).cgColor
-        deleteAccountButton.addTarget(self, action: #selector(deleteAccountTapped), for: .touchUpInside)
-        deleteAccountButton.translatesAutoresizingMaskIntoConstraints = false
+        guard GuestSessionManager.shared.isGuest() else { return }
 
-        let actionsStack = UIStackView(arrangedSubviews: [signOutButton, deleteAccountButton])
-        actionsStack.axis = .vertical
-        actionsStack.spacing = 12
-        actionsStack.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(actionsStack)
+        contentView.addSubview(signOutButton)
 
         // Anchor below practice progress card
-        let practiceCard = contentView.subviews.last(where: { $0 != actionsStack })!
+        let practiceCard = contentView.subviews.last(where: { $0 != signOutButton })!
 
         NSLayoutConstraint.activate([
-            actionsStack.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
-            actionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            actionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            actionsStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
+            signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
+            signOutButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            signOutButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
             signOutButton.heightAnchor.constraint(equalToConstant: 56),
-            deleteAccountButton.heightAnchor.constraint(equalToConstant: 56),
         ])
     }
 
@@ -500,6 +474,10 @@ final class UserProfileViewController: UIViewController {
             privacyButton.heightAnchor.constraint(equalToConstant: 50),
             divider.heightAnchor.constraint(equalToConstant: 0.5)
         ])
+
+        if !GuestSessionManager.shared.isGuest() {
+            card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -72).isActive = true
+        }
     }
 
     private func makeLegalRowButton(title: String, action: Selector) -> UIButton {
@@ -525,6 +503,63 @@ final class UserProfileViewController: UIViewController {
         return button
     }
 
+    private func buildProfileMenu() -> UIMenu {
+        let editName = UIAction(title: "Edit Name", image: UIImage(systemName: "person")) { [weak self] _ in
+            self?.showNameEditor()
+        }
+        let editUsername = UIAction(title: "Edit Username", image: UIImage(systemName: "at")) { [weak self] _ in
+            self?.showUsernameEditor()
+        }
+        let editPassword = UIAction(title: "Edit Password", image: UIImage(systemName: "key")) { [weak self] _ in
+            self?.showPasswordEditor()
+        }
+        let changePhoto = UIAction(title: "Change Photo", image: UIImage(systemName: "camera")) { [weak self] _ in
+            self?.changeAvatarTapped()
+        }
+
+        let editSection = UIMenu(
+            title: "Edit Profile",
+            options: .displayInline,
+            children: [editName, editUsername, editPassword, changePhoto]
+        )
+
+        if GuestSessionManager.shared.isGuest() {
+            let signInAction = UIAction(title: "Sign In", image: UIImage(systemName: "person.crop.circle.badge.plus")) { [weak self] _ in
+                self?.presentAuthScreen(mode: .logIn)
+            }
+            return UIMenu(title: "", children: [
+                editSection,
+                UIMenu(title: "Account", options: .displayInline, children: [signInAction])
+            ])
+        }
+
+        let signOutAction = UIAction(title: "Sign Out", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
+            self?.signOutTapped()
+        }
+        let deleteAccountAction = UIAction(title: "Delete Account", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+            self?.deleteAccountTapped()
+        }
+
+        return UIMenu(title: "", children: [
+            editSection,
+            UIMenu(title: "Account", options: .displayInline, children: [signOutAction, deleteAccountAction])
+        ])
+    }
+
+    private func updateSignInOutButton() {
+        signOutButton.removeTarget(nil, action: nil, for: .touchUpInside)
+
+        if GuestSessionManager.shared.isGuest() {
+            signOutButton.setTitle("Sign In", for: .normal)
+            signOutButton.setTitleColor(ComponentColors.AuthScreen.ctaText, for: .normal)
+            signOutButton.backgroundColor = ComponentColors.AuthScreen.ctaFill
+            signOutButton.addTarget(self, action: #selector(signInTapped), for: .touchUpInside)
+        } else {
+            signOutButton.setTitle(nil, for: .normal)
+            signOutButton.backgroundColor = .clear
+        }
+    }
+
     // MARK: - Load Data
     private func loadData() {
         Task {
@@ -534,6 +569,27 @@ final class UserProfileViewController: UIViewController {
     }
 
     private func loadProfile() async {
+        if GuestSessionManager.shared.isGuest() {
+            await MainActor.run {
+                self.nameLabel.text = GuestSessionManager.shared.guestDisplayName() ?? "Guest"
+                if let guestUsername = GuestSessionManager.shared.guestUsername(), !guestUsername.isEmpty {
+                    self.usernameLabel.text = "@\(guestUsername)"
+                } else {
+                    self.usernameLabel.text = "@guest"
+                }
+                self.updateAvatar(with: GuestSessionManager.shared.guestAvatarIdentifier())
+                if let goalMins = GuestSessionManager.shared.guestPracticeGoalMinutes() {
+                    let goalHours = Double(goalMins) / 60.0
+                    self.goalBadgeLabel.text = goalHours == goalHours.rounded() ?
+                        "Goal: \(Int(goalHours))h" : String(format: "Goal: %.1fh", goalHours)
+                    DailyGoalManager.shared.dailyGoalMinutes = goalMins
+                }
+                self.navigationItem.rightBarButtonItem?.menu = self.buildProfileMenu()
+                self.updateSignInOutButton()
+            }
+            return
+        }
+
         guard let user = SupabaseManager.shared.client.auth.currentUser else {
             await MainActor.run { nameLabel.text = "Not logged in" }
             return
@@ -583,6 +639,62 @@ final class UserProfileViewController: UIViewController {
     }
 
     private func loadStats() async {
+        if GuestSessionManager.shared.isGuest() {
+            let guestEvents = SupabaseProgressManager.guestLessonEvents()
+            let totalSeconds = guestEvents.compactMap(\.durationSeconds).reduce(0, +)
+            let lessonEvents = guestEvents.filter { $0.eventType == "lesson_completed" }
+            let totalLessons = lessonEvents.count
+
+            var weeklySeconds = [Double](repeating: 0, count: 7)
+            let calendar = Calendar.current
+            let now = Date()
+            let weekday = calendar.component(.weekday, from: now)
+            let daysSinceMonday = (weekday + 5) % 7
+            guard let monday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: calendar.startOfDay(for: now)) else { return }
+
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            for event in guestEvents {
+                guard let date = formatter.date(from: event.occurredAt) else { continue }
+                let dayStart = calendar.startOfDay(for: date)
+                let diff = calendar.dateComponents([.day], from: monday, to: dayStart).day ?? -1
+                if diff >= 0 && diff < 7 {
+                    weeklySeconds[diff] += Double(event.durationSeconds ?? 0)
+                }
+            }
+
+            let weeklyHours = weeklySeconds.map { $0 / 3600.0 }
+            let thisWeekHours = weeklyHours.reduce(0, +)
+            let practicedDays = Set(guestEvents.compactMap { event -> Date? in
+                guard let date = formatter.date(from: event.occurredAt) else { return nil }
+                return calendar.startOfDay(for: date)
+            })
+
+            var streak = 0
+            var checkDate = calendar.startOfDay(for: now)
+            while practicedDays.contains(checkDate) {
+                streak += 1
+                checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate) ?? checkDate
+            }
+
+            await MainActor.run {
+                let totalHours = Double(totalSeconds) / 3600.0
+                self.practiceLabel.text = totalHours < 10 ?
+                    String(format: "%.1fh", totalHours) : "\(Int(totalHours))h"
+                self.lessonsLabel.text = "\(totalLessons)"
+                self.streakLabel.text = "\(streak)"
+                self.weeklyHoursLabel.text = thisWeekHours < 10 ?
+                    String(format: "%.1fh", thisWeekHours) : "\(Int(thisWeekHours))h"
+
+                if let chart = self.contentView.viewWithTag(9901) as? PracticeChartView {
+                    chart.weeklyData = weeklyHours.map { CGFloat($0) }
+                    chart.setNeedsDisplay()
+                }
+            }
+            return
+        }
+
         guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
 
         do {
@@ -684,13 +796,18 @@ final class UserProfileViewController: UIViewController {
         showDeleteAccountPasswordPrompt()
     }
 
+    @objc private func signInTapped() {
+        presentAuthScreen(mode: .logIn)
+    }
+
     private func performSignOut() {
         Task {
             do {
                 try await SupabaseManager.shared.client.auth.signOut()
                 await MainActor.run {
+                    GuestSessionManager.shared.clearGuestState()
                     if let sceneDelegate = self.view.window?.windowScene?.delegate as? SceneDelegate {
-                        sceneDelegate.showSplashAndRoute()
+                        sceneDelegate.showLoginScreen()
                     }
                 }
             } catch {
@@ -719,15 +836,25 @@ final class UserProfileViewController: UIViewController {
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self, weak alert] _ in
-            let password = alert?.textFields?.first?.text ?? ""
+            let password = InputValidator.limit(
+                alert?.textFields?.first?.text ?? "",
+                maxLength: InputValidator.singleLineMaxLength
+            )
             self?.reauthenticateBeforeDeletion(currentPassword: password)
         })
         present(alert, animated: true)
     }
 
     private func reauthenticateBeforeDeletion(currentPassword: String) {
-        guard !currentPassword.isEmpty else {
+        let password = InputValidator.trimOnSubmit(currentPassword)
+
+        guard !password.isEmpty else {
             showAlert(title: "Password Required", message: "Enter your current password to delete your account.")
+            return
+        }
+
+        if let passwordError = InputValidator.validatePassword(password) {
+            showAlert(title: "Invalid Password", message: passwordError)
             return
         }
 
@@ -742,7 +869,7 @@ final class UserProfileViewController: UIViewController {
 
             do {
                 let tempClient = SupabaseManager.shared.makeEphemeralClient()
-                _ = try await tempClient.auth.signIn(email: email, password: currentPassword)
+                _ = try await tempClient.auth.signIn(email: email, password: password)
                 let reauthenticatedSession = try await tempClient.auth.session
                 await MainActor.run {
                     self.pendingDeleteAccountBearerToken = reauthenticatedSession.accessToken
@@ -750,7 +877,7 @@ final class UserProfileViewController: UIViewController {
                 }
             } catch {
                 await MainActor.run {
-                    self.showAlert(title: "Delete Account Failed", message: error.localizedDescription)
+                    self.showAlert(title: "Delete Account Failed", message: "We couldn't verify your password. Please try again.")
                 }
             }
         }
@@ -792,7 +919,7 @@ final class UserProfileViewController: UIViewController {
             } catch {
                 await MainActor.run {
                     self.pendingDeleteAccountBearerToken = nil
-                    self.showAlert(title: "Delete Account Failed", message: error.localizedDescription)
+                    self.showAlert(title: "Delete Account Failed", message: "We couldn't delete your account right now. Please try again.")
                 }
             }
         }
@@ -842,49 +969,81 @@ final class UserProfileViewController: UIViewController {
     }
 
     // MARK: - Edit Profile
-    @objc func editProfileTapped() {
-        let alert = UIAlertController(title: "Edit Profile", message: nil, preferredStyle: .actionSheet)
-        alert.addAction(UIAlertAction(title: "Update Name & Username", style: .default) { _ in
-            self.showNameUsernameEditor()
-        })
-        alert.addAction(UIAlertAction(title: "Change Password", style: .default) { _ in
-            self.showPasswordChangeDialog()
-        })
-        alert.addAction(UIAlertAction(title: "Change Profile Photo", style: .default) { _ in
-            self.changeAvatarTapped()
-        })
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let pop = alert.popoverPresentationController {
-            pop.sourceView = editProfileButton
-            pop.sourceRect = editProfileButton.bounds
-        }
-        present(alert, animated: true)
+    private func presentAuthScreen(mode: AuthViewController.AuthMode) {
+        guard presentedViewController == nil else { return }
+        let authVC = AuthViewController(initialMode: mode)
+        let nav = UINavigationController(rootViewController: authVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
-    private func showNameUsernameEditor() {
-        let alert = UIAlertController(title: "Update Profile", message: nil, preferredStyle: .alert)
-        alert.addTextField { $0.placeholder = "Full Name"; $0.text = self.currentProfile?.full_name }
-        alert.addTextField { $0.placeholder = "Username"; $0.text = self.currentProfile?.username }
+    private func showNameEditor() {
+        let currentName = GuestSessionManager.shared.isGuest()
+            ? GuestSessionManager.shared.guestDisplayName()
+            : currentProfile?.full_name
+        let alert = UIAlertController(title: "Edit Name", message: nil, preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = "Full Name"
+            field.text = currentName
+            field.textContentType = .name
+        }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
-            let name = alert.textFields?[0].text ?? ""
-            let user = alert.textFields?[1].text ?? ""
-            self.updateProfile(fullName: name, username: user)
+            let name = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert.textFields?.first?.text ?? ""),
+                maxLength: InputValidator.nameMaxLength
+            )
+            guard InputValidator.validateRequired(name, message: "Name cannot be blank.") == nil else {
+                self.showAlert(title: "Error", message: "Name cannot be blank.")
+                return
+            }
+            self.updateProfileName(name)
         })
         present(alert, animated: true)
     }
 
-    private func showPasswordChangeDialog() {
-        let alert = UIAlertController(title: "Change Password", message: nil, preferredStyle: .alert)
+    private func showUsernameEditor() {
+        let currentUsername = GuestSessionManager.shared.isGuest()
+            ? GuestSessionManager.shared.guestUsername()
+            : currentProfile?.username
+        let alert = UIAlertController(title: "Edit Username", message: nil, preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = "Username"
+            field.text = currentUsername
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            let username = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert.textFields?.first?.text ?? "").replacingOccurrences(of: " ", with: ""),
+                maxLength: InputValidator.singleLineMaxLength
+            )
+            guard InputValidator.validateRequired(username, message: "Username cannot be blank.") == nil else {
+                self.showAlert(title: "Error", message: "Username cannot be blank.")
+                return
+            }
+            self.updateProfileUsername(username)
+        })
+        present(alert, animated: true)
+    }
+
+    private func showPasswordEditor() {
+        guard !GuestSessionManager.shared.isGuest() else {
+            presentAuthScreen(mode: .logIn)
+            return
+        }
+
+        let alert = UIAlertController(title: "Edit Password", message: nil, preferredStyle: .alert)
         alert.addTextField { $0.placeholder = "New Password"; $0.isSecureTextEntry = true }
         alert.addTextField { $0.placeholder = "Confirm Password"; $0.isSecureTextEntry = true }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Change", style: .default) { _ in
-            let pw = alert.textFields?[0].text ?? ""
-            let pw2 = alert.textFields?[1].text ?? ""
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            let pw = InputValidator.limit(alert.textFields?[0].text ?? "", maxLength: InputValidator.singleLineMaxLength)
+            let pw2 = InputValidator.limit(alert.textFields?[1].text ?? "", maxLength: InputValidator.singleLineMaxLength)
             if pw.isEmpty { self.showAlert(title: "Error", message: "Password cannot be empty") }
             else if pw != pw2 { self.showAlert(title: "Error", message: "Passwords don't match") }
-            else if pw.count < 6 { self.showAlert(title: "Error", message: "Min 6 characters") }
+            else if let passwordError = InputValidator.validatePassword(pw) { self.showAlert(title: "Error", message: passwordError) }
             else { self.updatePassword(newPassword: pw) }
         })
         present(alert, animated: true)
@@ -911,6 +1070,16 @@ final class UserProfileViewController: UIViewController {
     }
 
     private func updateDailyGoal(minutes: Int) {
+        if GuestSessionManager.shared.isGuest() {
+            var onboardingData = GuestSessionManager.shared.loadGuestOnboardingData() ?? [:]
+            onboardingData["practice_mins"] = minutes
+            GuestSessionManager.shared.saveGuestOnboardingData(onboardingData)
+            goalBadgeLabel.text = "Goal: \(minutes)m"
+            DailyGoalManager.shared.dailyGoalMinutes = minutes
+            showAlert(title: "Success", message: "Daily goal updated!")
+            return
+        }
+
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
             do {
@@ -927,30 +1096,62 @@ final class UserProfileViewController: UIViewController {
                     self.showAlert(title: "Success", message: "Daily goal updated!")
                 }
             } catch {
-                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
+                await MainActor.run { showAlert(title: "Error", message: "We couldn't update your daily goal right now. Please try again.") }
             }
         }
     }
 
-    func updateProfile(fullName: String, username: String) {
+    func updateProfileName(_ fullName: String) {
+        if GuestSessionManager.shared.isGuest() {
+            let trimmedName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            GuestSessionManager.shared.saveGuestDisplayName(trimmedName)
+            nameLabel.text = trimmedName.isEmpty ? "Guest" : trimmedName
+            NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
+            return
+        }
+
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
-            var updates: [String: String] = [:]
-            if !fullName.isEmpty { updates["full_name"] = fullName }
-            if !username.isEmpty { updates["username"] = username }
             do {
                 _ = try await SupabaseManager.shared.client
-                    .from("profiles").update(updates)
+                    .from("profiles").update(["full_name": fullName])
                     .eq("id", value: user.id.uuidString)
                     .select()
                     .execute()
                 await MainActor.run {
                     nameLabel.text = fullName.isEmpty ? "No Name" : fullName
-                    usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
+                    self.currentProfile?.full_name = fullName
                     NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
                 }
             } catch {
-                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
+                await MainActor.run { showAlert(title: "Error", message: "We couldn't update your name right now. Please try again.") }
+            }
+        }
+    }
+
+    func updateProfileUsername(_ username: String) {
+        if GuestSessionManager.shared.isGuest() {
+            let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+            GuestSessionManager.shared.saveGuestUsername(trimmedUsername)
+            usernameLabel.text = trimmedUsername.isEmpty ? "@guest" : "@\(trimmedUsername)"
+            return
+        }
+
+        Task {
+            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("profiles").update(["username": username])
+                    .eq("id", value: user.id.uuidString)
+                    .select()
+                    .execute()
+                await MainActor.run {
+                    self.usernameLabel.text = username.isEmpty ? "@username" : "@\(username)"
+                    self.currentProfile?.username = username
+                    NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
+                }
+            } catch {
+                await MainActor.run { showAlert(title: "Error", message: "We couldn't update your username right now. Please try again.") }
             }
         }
     }
@@ -961,7 +1162,7 @@ final class UserProfileViewController: UIViewController {
                 try await SupabaseManager.shared.client.auth.update(user: .init(password: newPassword))
                 await MainActor.run { showAlert(title: "Success", message: "Password updated!") }
             } catch {
-                await MainActor.run { showAlert(title: "Error", message: error.localizedDescription) }
+                await MainActor.run { showAlert(title: "Error", message: "We couldn't update your password right now. Please try again.") }
             }
         }
     }
@@ -971,6 +1172,11 @@ final class UserProfileViewController: UIViewController {
 extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
 
     @objc func changeAvatarTapped() {
+        guard !GuestSessionManager.shared.isGuest() else {
+            presentAuthScreen(mode: .signUp)
+            return
+        }
+
         let alert = UIAlertController(title: "Change Photo", message: nil, preferredStyle: .actionSheet)
         alert.addAction(UIAlertAction(title: "Photo Library", style: .default) { _ in self.openPhotoLibrary() })
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -987,6 +1193,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     private func openPhotoLibrary() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.image"]
         picker.allowsEditing = false
         picker.delegate = self
         activeImagePicker = picker
@@ -1022,6 +1229,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     private func presentProfileCameraPicker() {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
+        picker.mediaTypes = ["public.image"]
         picker.allowsEditing = false
         picker.delegate = self
         activeImagePicker = picker
@@ -1057,24 +1265,51 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
         let selectedImage = (info[.editedImage] ?? info[.originalImage]) as? UIImage
         dismissImagePicker(picker) { [weak self] in
             guard let self, let image = selectedImage else { return }
-            self.profileImageView.image = image
-            self.profileImageView.contentMode = .scaleAspectFill
-            self.uploadAvatarImage(image)
+            switch self.prepareUserSelectedImage(image) {
+            case .success(let preparedImage):
+                self.profileImageView.image = preparedImage
+                self.profileImageView.contentMode = .scaleAspectFill
+                self.uploadAvatarImage(preparedImage)
+            case .failure(let error):
+                self.showAlert(title: "Upload Error", message: error.userMessage)
+            }
         }
     }
 
-    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        dismissImagePicker(picker)
+    private func prepareUserSelectedImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
+        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+            return .failure(.processingFailed)
+        }
+
+        switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+        case .success(let prepared):
+            guard let preparedImage = UIImage(data: prepared.data) else {
+                return .failure(.processingFailed)
+            }
+            return .success(preparedImage)
+        case .failure(let error):
+            return .failure(error)
+        }
     }
 
     func uploadAvatarImage(_ image: UIImage) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser,
-                  let jpegData = image.jpegData(compressionQuality: 0.85) else { return }
+                  let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else { return }
+
+            let prepared: PreparedImage
+            switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+            case .success(let result):
+                prepared = result
+            case .failure(let error):
+                await MainActor.run { showAlert(title: "Upload Error", message: error.userMessage) }
+                return
+            }
+
             let client = SupabaseManager.shared.client
-            let fileName = "avatar_\(user.id.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
+            let fileName = "avatar_\(user.id.uuidString)_\(Int(Date().timeIntervalSince1970)).\(prepared.fileExtension)"
             do {
-                try await client.storage.from("useprofile").upload(fileName, data: jpegData)
+                try await client.storage.from("useprofile").upload(fileName, data: prepared.data)
                 let signedURL = try await client.storage.from("useprofile")
                     .createSignedURL(path: fileName, expiresIn: 3600)
                 _ = try await client.from("profiles")
@@ -1096,9 +1331,13 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                 }
             } catch {
                 debugLog("Profile upload error: \(error)")
-                await MainActor.run { showAlert(title: "Upload Error", message: error.localizedDescription) }
+                await MainActor.run { showAlert(title: "Upload Error", message: "We couldn't upload that photo right now. Please try again.") }
             }
         }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        dismissImagePicker(picker)
     }
 
     func updateAvatar(with urlString: String?) {

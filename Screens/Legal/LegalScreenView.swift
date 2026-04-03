@@ -3,22 +3,14 @@ import SafariServices
 
 private enum LegalSupportInfo {
     static let operatorName = "Re-Hearse"
-    static let supportEmail = "support@rehearse.app"
-    static var publicSiteBaseURL: URL {
-        if let raw = Bundle.main.object(forInfoDictionaryKey: "PUBLIC_LEGAL_BASE_URL") as? String,
-           let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
-           !raw.isEmpty {
-            return url
-        }
-        return URL(string: "https://rehearse.app")!
-    }
+    static let supportEmail = "devansh.singh20045@gmail.com"
 
     static var privacyPolicyURL: URL? {
-        publicSiteBaseURL.appendingPathComponent("privacy-policy")
+        URL(string: "https://letsrehearse.studio/privacy-policy/")
     }
 
     static var termsURL: URL? {
-        publicSiteBaseURL.appendingPathComponent("terms-of-service")
+        URL(string: "https://letsrehearse.studio/terms-of-service/")
     }
 
     static var supportMailURL: URL? {

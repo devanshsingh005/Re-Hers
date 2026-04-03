@@ -44,28 +44,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         _ = guestSessionManager.getOrCreateGuestID()
+        showMainApp()
 
-        routeGuest(to: guestSessionManager.resolveInitialScreen())
-    }
-
-    private func routeGuest(to screen: GuestSessionManager.InitialScreen) {
-        switch screen {
-        case .infoCard:
-            showInfoCard()
-        case .onboarding:
-            showOnboarding()
-        case .home:
-            showMainApp()
-        }
-    }
-
-    private func handleInfoCardDismissal() {
-        UserDefaults.standard.set(true, forKey: GuestSessionManager.shared.kHasSeenInfoCard)
-
-        if UserDefaults.standard.bool(forKey: GuestSessionManager.shared.kHasCompletedOnboarding) {
-            showMainApp()
-        } else {
-            showOnboarding()
+        if !guestSessionManager.hasSeenInfoCard {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.showInfoCardOverlay()
+            }
         }
     }
 
@@ -86,21 +70,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         setRootViewController(tabBar)
     }
 
-    func showInfoCard() {
-        guard let presenter = window?.rootViewController,
-              presenter.presentedViewController == nil else { return }
+    private func showInfoCardOverlay() {
+        guard let root = window?.rootViewController,
+              root.presentedViewController == nil else { return }
 
         let hostingController = UIHostingController(
-            rootView: RehearsalInfoCardWrapper { [weak self, weak presenter] in
-                presenter?.dismiss(animated: false) {
-                    self?.handleInfoCardDismissal()
-                }
+            rootView: RehearsalInfoCardWrapper { [weak root] in
+                GuestSessionManager.shared.hasSeenInfoCard = true
+                root?.dismiss(animated: true)
             }
         )
         hostingController.modalPresentationStyle = .overFullScreen
-        hostingController.view.backgroundColor = .clear
+        hostingController.view.backgroundColor = UIColor.black.withAlphaComponent(0.5)
 
-        presenter.present(hostingController, animated: false)
+        root.present(hostingController, animated: true)
     }
 
     func showOnboarding() {

@@ -24,6 +24,8 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
     private let email: String
     private let password: String
 
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let errorLabel = UILabel()
@@ -77,17 +79,26 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
     }
 
     private func setupUI() {
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+
         titleLabel.text = "Verify your email"
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         titleLabel.textColor = ComponentColors.AuthScreen.headlineText
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 0
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.isHidden = false
 
         subtitleLabel.text = "We sent a 6-digit code to \(email)"
         subtitleLabel.font = .systemFont(ofSize: 15, weight: .regular)
         subtitleLabel.textColor = ComponentColors.AuthScreen.bodyText
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.isHidden = false
 
         boxesStackView.axis = .horizontal
         boxesStackView.alignment = .fill
@@ -131,6 +142,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         errorLabel.textAlignment = .center
         errorLabel.numberOfLines = 0
         errorLabel.isHidden = true
+        errorLabel.translatesAutoresizingMaskIntoConstraints = false
 
         verifyButton.setTitle("Verify", for: .normal)
         verifyButton.backgroundColor = ComponentColors.AuthScreen.ctaFill
@@ -138,12 +150,19 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         verifyButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
         verifyButton.layer.cornerRadius = 28
         verifyButton.addTarget(self, action: #selector(verifyTapped), for: .touchUpInside)
+        verifyButton.translatesAutoresizingMaskIntoConstraints = false
+        verifyButton.isHidden = false
+        verifyButton.isEnabled = false
+        verifyButton.alpha = 0.55
 
         resendButton.setTitleColor(ComponentColors.AuthScreen.linkText, for: .normal)
         resendButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
         resendButton.addTarget(self, action: #selector(resendTapped), for: .touchUpInside)
+        resendButton.translatesAutoresizingMaskIntoConstraints = false
+        resendButton.isHidden = false
 
         activityIndicator.hidesWhenStopped = true
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
 
         let contentStack = UIStackView(arrangedSubviews: [
             titleLabel,
@@ -154,16 +173,31 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
             resendButton
         ])
         contentStack.axis = .vertical
-        contentStack.spacing = 18
+        contentStack.alignment = .fill
+        contentStack.spacing = 12
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
-        view.addSubview(contentStack)
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+        contentView.addSubview(contentStack)
         view.addSubview(activityIndicator)
 
         NSLayoutConstraint.activate([
-            contentStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
-            contentStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            contentStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            contentStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 32),
+            contentStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            contentStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -24),
 
             verifyButton.heightAnchor.constraint(equalToConstant: 56),
             resendButton.heightAnchor.constraint(equalToConstant: 24),
@@ -190,11 +224,6 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         Task {
             do {
-                // Verify the 6-digit code from the
-                // "Confirm signup" email template.
-                // type: .signup matches the confirm signup flow.
-                // The account was already created by signUp()
-                // in AuthViewController — do NOT call signUp again.
                 try await SupabaseManager.shared.client.auth.verifyOTP(
                     email: email,
                     token: code,
@@ -222,8 +251,6 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         Task {
             do {
-                // auth.resend re-sends the "Confirm signup" OTP for an
-                // account that was already created — correct for this flow.
                 try await SupabaseManager.shared.client.auth.resend(
                     email: email,
                     type: .signup
@@ -271,9 +298,21 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
     @MainActor
     private func setLoading(_ isLoading: Bool) {
-        verifyButton.isEnabled = !isLoading
+        verifyButton.isEnabled = !isLoading && currentCode.count == 6
+        verifyButton.alpha = verifyButton.isEnabled ? 1.0 : 0.55
         verifyButton.setTitle(isLoading ? nil : "Verify", for: .normal)
         isLoading ? activityIndicator.startAnimating() : activityIndicator.stopAnimating()
+    }
+
+    private var currentCode: String {
+        digitFields.compactMap(\.text).joined()
+    }
+
+    @MainActor
+    private func updateVerifyButtonState() {
+        guard !activityIndicator.isAnimating else { return }
+        verifyButton.isEnabled = currentCode.count == 6
+        verifyButton.alpha = verifyButton.isEnabled ? 1.0 : 0.55
     }
 
     @MainActor
@@ -354,6 +393,9 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         if string.isEmpty {
             digitField.text = ""
+            Task { @MainActor in
+                self.updateVerifyButtonState()
+            }
             return false
         }
 
@@ -366,6 +408,10 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
             digitFields[digitField.tag + 1].becomeFirstResponder()
         } else {
             digitField.resignFirstResponder()
+        }
+
+        Task { @MainActor in
+            self.updateVerifyButtonState()
         }
 
         return false

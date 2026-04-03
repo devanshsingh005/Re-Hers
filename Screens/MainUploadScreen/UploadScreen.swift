@@ -24,6 +24,7 @@ class UploadScreen: UIViewController {
         static let cornerRadius:      CGFloat = 20
         static let buttonHeight:      CGFloat = 52
         static let pdfPageSize = CGSize(width: 612, height: 792)
+        static let maxUploadSizeBytes = 10 * 1024 * 1024
     }
 
     // MARK: - State
@@ -359,9 +360,9 @@ class UploadScreen: UIViewController {
             scrollView.topAnchor.constraint(equalTo: view.topAnchor), // Overlap for blur
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 90), // Space for status bar offset
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -56),
             contentView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor,
                                                   constant: Constants.horizontalPadding),
             contentView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor,
@@ -530,9 +531,9 @@ class UploadScreen: UIViewController {
         contentView.addArrangedSubview(uploadsStack)
 
         let reportButton = UIButton(type: .system)
-        reportButton.setTitle("Report an Issue or Copyright Concern", for: .normal)
+        reportButton.setTitle("Report a Copyright Issue", for: .normal)
         reportButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        reportButton.contentHorizontalAlignment = .left
+        reportButton.contentHorizontalAlignment = .center
         reportButton.setTitleColor(BrandColors.brand, for: .normal)
         reportButton.addTarget(self, action: #selector(reportIssueTapped), for: .touchUpInside)
         contentView.addArrangedSubview(reportButton)
@@ -746,9 +747,15 @@ class UploadScreen: UIViewController {
             tf.autocapitalizationType = .words
         }
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
-            guard let self,
-                  let name = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !name.isEmpty else { return }
+            guard let self else { return }
+            let name = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert.textFields?.first?.text ?? ""),
+                maxLength: InputValidator.nameMaxLength
+            )
+            guard InputValidator.validateRequired(name, message: "File name is required.") == nil else {
+                self.presentAlert(title: "Error", message: "File name is required.")
+                return
+            }
             titleLabel?.text = name
             self.renameTask?.cancel()
             self.renameTask = Task { [weak self] in
@@ -761,12 +768,23 @@ class UploadScreen: UIViewController {
     }
 
     private func renameScan(id scanId: Int64, newTitle: String) async {
+        let sanitizedTitle = InputValidator.limit(
+            InputValidator.trimOnSubmit(newTitle),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(sanitizedTitle, message: "File name is required.") == nil else {
+            await MainActor.run {
+                self.presentAlert(title: "Error", message: "File name is required.")
+            }
+            return
+        }
+
         do {
             let scans: [Scan] = try await supabase.from("scans").select()
                 .eq("id", value: Int(scanId)).limit(1).execute().value
             guard let scan = scans.first else { return }
             var dict = (scan.jsonData?.value as? [String: Any]) ?? [:]
-            dict["title"] = newTitle
+            dict["title"] = sanitizedTitle
             let upd = ScanUpdate(
                 jsonData:    AnyCodable(dict),
                 status:      scan.status ?? "completed",
@@ -774,10 +792,13 @@ class UploadScreen: UIViewController {
                 updatedAt:   ISO8601DateFormatter().string(from: Date())
             )
             try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
-            debugLog("[Rename] scan \(scanId) → \(newTitle)")
+            debugLog("[Rename] scan \(scanId) → \(sanitizedTitle)")
         } catch {
             debugLog("[Rename] failed: \(error)")
-            await MainActor.run { self.loadRecentUploads() }
+            await MainActor.run {
+                self.loadRecentUploads()
+                self.presentAlert(title: "Error", message: "We couldn't rename that file right now. Please try again.")
+            }
         }
     }
 
@@ -1047,14 +1068,14 @@ class UploadScreen: UIViewController {
     }
 
     @objc private func reportIssueTapped() {
-        let subject = "Re-Hearse Upload Support"
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Re-Hearse%20Upload%20Support"
-        if let mailURL = URL(string: "mailto:support@rehearse.app?subject=\(subject)") {
+        let subject = "Re-Hearse Copyright Issue Report"
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Re-Hearse%20Copyright%20Issue%20Report"
+        if let mailURL = URL(string: "mailto:devansh.singh20045@gmail.com?subject=\(subject)") {
             UIApplication.shared.open(mailURL)
         } else {
             presentAlert(
-                title: "Support",
-                message: "Email support@rehearse.app to report an upload issue, infringement concern, or takedown request."
+                title: "Report a Copyright Issue",
+                message: "Email devansh.singh20045@gmail.com to report a copyright issue or takedown request."
             )
         }
     }
@@ -1121,8 +1142,16 @@ class UploadScreen: UIViewController {
         clearUploadState()
         activeQuizPopup = nil
         popup.dismiss(animated: true) { [weak self] in
-            self?.presentAlert(title: "Upload Failed", message: error.localizedDescription)
+            self?.presentAlert(title: "Upload Failed", message: "We couldn't process that upload. Please try again.")
         }
+    }
+
+    private func validateUploadSize(_ data: Data, title: String = "Upload Too Large") -> Bool {
+        guard data.count <= Constants.maxUploadSizeBytes else {
+            presentAlert(title: title, message: "Files must be under 10 MB.")
+            return false
+        }
+        return true
     }
 
     private func clearUploadState() {
@@ -1183,28 +1212,51 @@ class UploadScreen: UIViewController {
     }
 
     private func beginUpload(with image: UIImage) {
-        guard let pdfData = createPDF(from: [image]) else {
-            presentAlert(title: "Scan Failed", message: "Could not prepare the captured image for upload.")
+        switch validateAndPrepareImage(image) {
+        case .failure(let error):
+            presentAlert(title: "Scan Failed", message: error.userMessage)
             return
+        case .success(let preparedImage):
+            guard let pdfData = createPDF(from: [preparedImage]) else {
+                presentAlert(title: "Scan Failed", message: "Could not prepare the captured image for upload.")
+                return
+            }
+            guard validateUploadSize(pdfData) else { return }
+
+            currentUploadData = pdfData
+            currentFileName = generateTimestampFilename()
+            currentFileType = "application/pdf"
+
+            let popup = showQuizPopup()
+            uploadTask?.cancel()
+            uploadTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.saveUploadToDatabase(imageData: pdfData,
+                                                        fileName: self.currentFileName,
+                                                        fileType: self.currentFileType,
+                                                        popup: popup)
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { self.handleUploadError(error, popup: popup) }
+                }
+            }
+        }
+    }
+
+    private func validateAndPrepareImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
+        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+            return .failure(.processingFailed)
         }
 
-        currentUploadData = pdfData
-        currentFileName = generateTimestampFilename()
-        currentFileType = "application/pdf"
-
-        let popup = showQuizPopup()
-        uploadTask?.cancel()
-        uploadTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.saveUploadToDatabase(imageData: pdfData,
-                                                    fileName: self.currentFileName,
-                                                    fileType: self.currentFileType,
-                                                    popup: popup)
-            } catch {
-                guard !Task.isCancelled else { return }
-                await MainActor.run { self.handleUploadError(error, popup: popup) }
+        switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+        case .success(let prepared):
+            guard let preparedImage = UIImage(data: prepared.data) else {
+                return .failure(.processingFailed)
             }
+            return .success(preparedImage)
+        case .failure(let error):
+            return .failure(error)
         }
     }
 
@@ -1564,8 +1616,9 @@ extension UploadCameraCaptureViewController: AVCapturePhotoCaptureDelegate {
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
         if let error {
+            debugLog("[UploadCamera] capture failed: \(error)")
             DispatchQueue.main.async { [weak self] in
-                self?.presentAlert(message: error.localizedDescription)
+                self?.presentAlert(message: "We couldn't capture that photo. Please try again.")
             }
             return
         }
@@ -1604,7 +1657,10 @@ extension UploadScreen: VNDocumentCameraViewControllerDelegate {
             for index in 0 ..< scan.pageCount {
                 autoreleasepool {
                     let raw = scan.imageOfPage(at: index)
-                    pages.append(raw.applyDocumentStyle())
+                    let styled = raw.applyDocumentStyle()
+                    if case let .success(preparedPage) = self.validateAndPrepareImage(styled) {
+                        pages.append(preparedPage)
+                    }
                 }
             }
             guard !pages.isEmpty else {
@@ -1645,7 +1701,7 @@ extension UploadScreen: VNDocumentCameraViewControllerDelegate {
     func documentCameraViewController(_ controller: VNDocumentCameraViewController,
                                       didFailWithError error: Error) {
         dismissDocumentScanner(controller) { [weak self] in
-            self?.presentAlert(title: "Scan Failed", message: error.localizedDescription)
+            self?.presentAlert(title: "Scan Failed", message: "We couldn't scan that document. Please try again.")
         }
     }
 }
@@ -1671,17 +1727,26 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
         dismissDocumentPicker(controller) { [weak self] in
             guard let self else { return }
 
-            // ── Layer 1: extension check ──────────────────────────────────────
-            guard fileURL.pathExtension.lowercased() == "pdf" else {
+            let validatedFile: ValidatedFile
+            switch FileValidator.validateDocument(at: fileURL) {
+            case .success(let file):
+                validatedFile = file
+            case .failure(let error):
                 self.presentAlert(
                     title: "Invalid File",
-                    message: "Only PDF files are supported. Please select a .pdf file."
+                    message: error.userMessage
                 )
                 return
             }
 
             do {
-                let data = try Data(contentsOf: fileURL)
+                guard validatedFile.sizeInBytes <= Int64(Constants.maxUploadSizeBytes) else {
+                    self.presentAlert(title: "Upload Too Large", message: "Files must be under 10 MB.")
+                    return
+                }
+
+                let data = try Data(contentsOf: validatedFile.url)
+                guard self.validateUploadSize(data) else { return }
 
                 // ── Layer 2: magic-byte check (%PDF) ─────────────────────────
                 let pdfMagic: [UInt8] = [0x25, 0x50, 0x44, 0x46]   // %PDF
@@ -1712,7 +1777,7 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                     }
                 }
             } catch {
-                self.presentAlert(title: "Error", message: "Failed to read file: \(error.localizedDescription)")
+                self.presentAlert(title: "Error", message: "We couldn't read that file. Please try another PDF.")
             }
         }
     }
@@ -1725,29 +1790,38 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
         dismissPhotoPicker(picker) { [weak self] in
             guard let self else { return }
             guard let result = results.first else { return }
-            guard result.itemProvider.canLoadObject(ofClass: UIImage.self) else {
+            let itemProvider = result.itemProvider
+            let typeIdentifier = ImageValidator.preferredSupportedTypeIdentifier(from: itemProvider.registeredTypeIdentifiers)
+            guard let typeIdentifier else {
                 self.presentAlert(title: "Import Failed", message: "The selected item is not a supported image.")
                 return
             }
 
-            result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
+            itemProvider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, _ in
                 guard let self else { return }
-                if let error {
+                guard let data else {
                     DispatchQueue.main.async {
-                        self.presentAlert(title: "Import Failed", message: error.localizedDescription)
+                        self.presentAlert(title: "Import Failed", message: "We couldn't import that image. Please try another one.")
                     }
                     return
                 }
 
-                guard let image = object as? UIImage else {
+                switch ImageValidator.validateAndPrepareImageData(data, typeIdentifier: typeIdentifier) {
+                case .failure(let error):
                     DispatchQueue.main.async {
-                        self.presentAlert(title: "Import Failed", message: "Could not decode the selected image.")
+                        self.presentAlert(title: "Import Failed", message: error.userMessage)
                     }
-                    return
-                }
+                case .success(let prepared):
+                    guard let image = UIImage(data: prepared.data) else {
+                        DispatchQueue.main.async {
+                            self.presentAlert(title: "Import Failed", message: "We couldn't prepare that image. Please try another one.")
+                        }
+                        return
+                    }
 
-                DispatchQueue.main.async {
-                    self.beginUpload(with: image)
+                    DispatchQueue.main.async {
+                        self.beginUpload(with: image)
+                    }
                 }
             }
         }

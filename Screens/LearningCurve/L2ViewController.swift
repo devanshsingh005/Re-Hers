@@ -1661,6 +1661,32 @@ class LessonDetailViewController: UIViewController {
     
     private func loadCompletedVariantsFromSupabase() {
         Task {
+            if GuestSessionManager.shared.isGuest() {
+                let completedPartIndexes = SupabaseProgressManager.guestCompletedPartIndexes(for: chapterIndex)
+
+                await MainActor.run {
+                    for idx in completedPartIndexes where idx < self.lesson.variants.count {
+                        self.variantsDone.insert(idx)
+                        if self.isEarTrainingLesson {
+                            self.chipButtons[idx].updateLabel(self.earTrainingChipLabel(for: idx))
+                        }
+                        self.chipButtons[idx].markDone()
+                        self.dotsStack.arrangedSubviews[idx].backgroundColor = .systemGreen
+                    }
+
+                    self.refreshProgressRowLabel()
+                    self.progressPercentLabel.text = "\(Int(self.lessonProgress * 100))% complete"
+
+                    if self.progressFillConstraint != nil {
+                        self.progressFillConstraint.constant = 130 * CGFloat(self.lessonProgress)
+                        UIView.animate(withDuration: 0.3) {
+                            self.view.layoutIfNeeded()
+                        }
+                    }
+                }
+                return
+            }
+
             do {
                 let db = SupabaseManager.shared.client
                 let userID = try await db.auth.session.user.id

@@ -424,6 +424,20 @@ class LessonMapViewController: UIViewController {
 
     private func loadProgressFromSupabase() {
         Task {
+            if GuestSessionManager.shared.isGuest() {
+                let snapshot = SupabaseProgressManager.guestProgressSnapshot()
+                let starsMap = SupabaseProgressManager.guestChapterStars()
+
+                await MainActor.run {
+                    self.chapters = applyProgress(
+                        currentChapter: snapshot.currentChapter,
+                        chapterStars: starsMap
+                    )
+                    self.rebuildPath()
+                }
+                return
+            }
+
             do {
                 let db = SupabaseManager.shared.client
 

@@ -242,6 +242,9 @@ class PlaylistViewController: UIViewController {
             confirmDeletion()
             return
         }
+
+        guard !presentGuestPlaylistCreationGateIfNeeded() else { return }
+
         let addVC = AddPlaylistViewController()
         addVC.onSave = { [weak self] name, pickedImage in
             self?.addPlaylist(name: name, image: pickedImage)
@@ -338,6 +341,8 @@ class PlaylistViewController: UIViewController {
     }
 
     private func addPlaylist(name: String, image: UIImage?) {
+        guard !presentGuestPlaylistCreationGateIfNeeded() else { return }
+
         showLoading(true)
         Task {
             do {
@@ -351,7 +356,7 @@ class PlaylistViewController: UIViewController {
                     self?.showLoading(false)
                     let alert = UIAlertController(
                         title: "Error",
-                        message: "Failed to add playlist: \(error.localizedDescription)",
+                        message: "We couldn't create that playlist right now. Please check the details and try again.",
                         preferredStyle: .alert
                     )
                     alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -373,6 +378,34 @@ class PlaylistViewController: UIViewController {
                              .first!.appendingPathComponent(identifier)
         if let data = try? Data(contentsOf: url) { return UIImage(data: data) }
         return nil
+    }
+
+    @discardableResult
+    private func presentGuestPlaylistCreationGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let alert = UIAlertController(
+            title: "Sign in to create playlists",
+            message: "Create a free account to save and manage your playlists.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Sign up", style: .default) { [weak self] _ in
+            self?.presentAuthScreen(mode: .signUp)
+        })
+        alert.addAction(UIAlertAction(title: "Log in", style: .default) { [weak self] _ in
+            self?.presentAuthScreen(mode: .logIn)
+        })
+        alert.addAction(UIAlertAction(title: "Maybe later", style: .cancel))
+        present(alert, animated: true)
+        return true
+    }
+
+    private func presentAuthScreen(mode: AuthViewController.AuthMode) {
+        guard presentedViewController == nil else { return }
+        let authVC = AuthViewController(initialMode: mode)
+        let nav = UINavigationController(rootViewController: authVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 }
 
@@ -785,7 +818,8 @@ class CreatePlaylistFooterView: UICollectionReusableView {
 // MARK: - AddPlaylistViewController
 class AddPlaylistViewController: UIViewController,
                                   UIImagePickerControllerDelegate,
-                                  UINavigationControllerDelegate {
+                                  UINavigationControllerDelegate,
+                                  UITextFieldDelegate {
 
     var onSave: ((_ name: String, _ image: UIImage?) -> Void)?
     private let isPad = UIDevice.current.userInterfaceIdiom == .pad
@@ -823,6 +857,15 @@ class AddPlaylistViewController: UIViewController,
             ? .systemFont(ofSize: 18)
             : .systemFont(ofSize: 16)
         return tf
+    }()
+
+    private let nameErrorLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = ComponentColors.AuthScreen.inputErrorText
+        label.numberOfLines = 0
+        label.isHidden = true
+        return label
     }()
 
     private let imageViewPreview: UIImageView = {
@@ -866,9 +909,13 @@ class AddPlaylistViewController: UIViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        nameField.delegate = self
+        nameField.addTarget(self, action: #selector(nameFieldChanged), for: .editingChanged)
+        nameField.addTarget(self, action: #selector(nameFieldDidEndEditing), for: .editingDidEnd)
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissSelf))
         dimView.addGestureRecognizer(tap)
         setRandomAlbumPlaceholder()
+        updateSaveButtonState()
     }
 
     private func setRandomAlbumPlaceholder() {
@@ -886,7 +933,7 @@ class AddPlaylistViewController: UIViewController,
         dimView.translatesAutoresizingMaskIntoConstraints = false
         cardView.translatesAutoresizingMaskIntoConstraints = false
 
-        [titleLabel, nameField, imageViewPreview,
+        [titleLabel, nameField, nameErrorLabel, imageViewPreview,
          pickImageButton, saveButton, cancelButton].forEach {
             cardView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -919,7 +966,11 @@ class AddPlaylistViewController: UIViewController,
             nameField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
             nameField.heightAnchor.constraint(equalToConstant: fieldH),
 
-            imageViewPreview.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: spacing),
+            nameErrorLabel.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 6),
+            nameErrorLabel.leadingAnchor.constraint(equalTo: nameField.leadingAnchor, constant: 4),
+            nameErrorLabel.trailingAnchor.constraint(equalTo: nameField.trailingAnchor, constant: -4),
+
+            imageViewPreview.topAnchor.constraint(equalTo: nameErrorLabel.bottomAnchor, constant: spacing),
             imageViewPreview.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: hPad),
             imageViewPreview.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
             imageViewPreview.heightAnchor.constraint(equalToConstant: imgH),
@@ -947,6 +998,7 @@ class AddPlaylistViewController: UIViewController,
     @objc private func pickImage() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.image"]
         picker.allowsEditing = false
         picker.delegate = self
         activeImagePicker = picker
@@ -969,17 +1021,37 @@ class AddPlaylistViewController: UIViewController,
     }
 
     @objc private func saveTapped() {
-        guard let name = nameField.text,
-              !name.trimmingCharacters(in: .whitespaces).isEmpty else {
-            let alert = UIAlertController(title: "Name Required",
-                                          message: "Please enter a playlist name.",
-                                          preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
+        let name = InputValidator.limit(InputValidator.trimOnSubmit(nameField.text ?? ""), maxLength: InputValidator.nameMaxLength)
+        nameField.text = name
+        if let error = InputValidator.validateRequired(name, message: "Playlist name is required.") {
+            nameErrorLabel.text = error
+            nameErrorLabel.isHidden = false
+            updateSaveButtonState()
             return
         }
+        nameErrorLabel.isHidden = true
         onSave?(name, pickedImage)
         dismiss(animated: true)
+    }
+
+    @objc private func nameFieldChanged() {
+        nameField.text = InputValidator.limit(nameField.text ?? "", maxLength: InputValidator.nameMaxLength)
+        if !nameErrorLabel.isHidden,
+           InputValidator.validateRequired(InputValidator.trimOnSubmit(nameField.text ?? ""), message: "Playlist name is required.") == nil {
+            nameErrorLabel.isHidden = true
+        }
+        updateSaveButtonState()
+    }
+
+    @objc private func nameFieldDidEndEditing() {
+        nameField.text = InputValidator.limit(InputValidator.trimOnSubmit(nameField.text ?? ""), maxLength: InputValidator.nameMaxLength)
+        updateSaveButtonState()
+    }
+
+    private func updateSaveButtonState() {
+        let isValid = InputValidator.validateRequired(InputValidator.trimOnSubmit(nameField.text ?? ""), message: "Playlist name is required.") == nil
+        saveButton.isEnabled = isValid
+        saveButton.alpha = isValid ? 1.0 : 0.55
     }
 
     @objc private func dismissSelf() { dismiss(animated: true) }
@@ -988,12 +1060,45 @@ class AddPlaylistViewController: UIViewController,
                                didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         let selectedImage = (info[.editedImage] ?? info[.originalImage]) as? UIImage
         dismissImagePicker(picker) { [weak self] in
-            self?.pickedImage = selectedImage
-            self?.imageViewPreview.image = selectedImage
+            guard let self else { return }
+            guard let selectedImage else { return }
+            switch self.prepareUserSelectedImage(selectedImage) {
+            case .success(let preparedImage):
+                self.pickedImage = preparedImage
+                self.imageViewPreview.image = preparedImage
+            case .failure(let error):
+                self.pickedImage = nil
+                let alert = UIAlertController(title: "Image Not Supported", message: error.userMessage, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
         }
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         dismissImagePicker(picker)
+    }
+
+    private func prepareUserSelectedImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
+        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+            return .failure(.processingFailed)
+        }
+
+        switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+        case .success(let prepared):
+            guard let preparedImage = UIImage(data: prepared.data) else {
+                return .failure(.processingFailed)
+            }
+            return .success(preparedImage)
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === nameField {
+            saveTapped()
+        }
+        return true
     }
 }

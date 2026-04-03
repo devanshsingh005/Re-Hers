@@ -451,18 +451,11 @@ class UploadQuizPopup: UIViewController {
             btn.layer.cornerRadius = 22
             btn.clipsToBounds = true
             btn.tag = i
-            
-            if i == q.correctIndex {
-                // Pre-mark correct answer button with orange style
-                btn.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
-                btn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
-                btn.layer.borderWidth = 1.5
-                btn.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.3).cgColor
-            } else {
-                btn.setTitleColor(.label, for: .normal)
-                btn.backgroundColor = UIColor.systemGray6
-                btn.layer.borderWidth = 0
-            }
+
+            btn.setTitleColor(.label, for: .normal)
+            btn.backgroundColor = UIColor.systemGray6
+            btn.layer.borderWidth = 0
+            btn.layer.borderColor = nil
             
             btn.addTarget(self, action: #selector(answerButtonTapped(_:)), for: .touchUpInside)
             

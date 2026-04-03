@@ -142,10 +142,7 @@ class DiscoverSongDetailViewController: UIViewController {
         let addToPlaylist = UIAction(title: "Add To Playlist", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
             self?.presentPlaylistPicker()
         }
-        let saveForLater = UIAction(title: "Save For Later", image: UIImage(systemName: "bookmark")) { [weak self] _ in
-            self?.presentInfoAlert(title: "Saved", message: "This song was added to your saved list.")
-        }
-        return UIMenu(title: "", children: [addToPlaylist, saveForLater])
+        return UIMenu(title: "", children: [addToPlaylist])
     }
 
     @objc private func backAction() {
@@ -204,7 +201,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        playAlongButton.layer.cornerRadius = 12
+        playAlongButton.layer.cornerRadius = 25
         playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
         playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
         playAlongButton.layer.shadowOpacity = 0.15
@@ -214,7 +211,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
         animationButton.setTitle("Animation", for: .normal)
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        animationButton.layer.cornerRadius = 12
+        animationButton.layer.cornerRadius = 25
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
         animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
@@ -239,7 +236,7 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfView.layer.cornerRadius  = 12
         pdfView.clipsToBounds       = true
         pdfView.autoScales          = true
-        pdfView.displayMode         = .singlePageContinuous
+        pdfView.displayMode         = .singlePage
         pdfView.displayDirection    = .vertical
         pdfView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
         pdfView.isHidden            = true
@@ -289,12 +286,12 @@ class DiscoverSongDetailViewController: UIViewController {
             sheetContainer.topAnchor.constraint(equalTo: sheetToggle.bottomAnchor, constant: 20),
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            sheetContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 560),
+            sheetContainer.heightAnchor.constraint(equalToConstant: 430),
 
             buttonStack.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 24),
             buttonStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             buttonStack.widthAnchor.constraint(equalToConstant: 320),
-            buttonStack.heightAnchor.constraint(equalToConstant: 46),
+            buttonStack.heightAnchor.constraint(equalToConstant: 56),
 
             pdfLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             pdfLoadingIndicator.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),

@@ -8,6 +8,7 @@ public enum PlaylistError: Error {
     case invalidData
     case uploadFailed
     case missingDefaultArtwork
+    case invalidName
 }
 
 public final class PlaylistsManager {
@@ -397,23 +398,39 @@ public final class PlaylistsManager {
     // MARK: - Update Methods
     
     public func updatePlaylistName(id: UUID, newName: String) async throws {
+        let validatedName = InputValidator.limit(
+            InputValidator.trimOnSubmit(newName),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(validatedName, message: "Playlist name is required.") == nil else {
+            throw PlaylistError.invalidName
+        }
+
         try await SupabaseManager.shared.client
             .from("playlists")
-            .update(["name": newName])
+            .update(["name": validatedName])
             .eq("id", value: id.uuidString)
             .execute()
         
-        debugLog("✅ Updated playlist \(id) name to: \(newName)")
+        debugLog("✅ Updated playlist \(id) name to: \(validatedName)")
     }
     
     public func updateTrackName(playlistItemId: Int64, newTitle: String) async throws {
+        let validatedTitle = InputValidator.limit(
+            InputValidator.trimOnSubmit(newTitle),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(validatedTitle, message: "Track title is required.") == nil else {
+            throw PlaylistError.invalidName
+        }
+
         try await SupabaseManager.shared.client
             .from("playlist_items")
-            .update(["track_title": newTitle])
+            .update(["track_title": validatedTitle])
             .eq("id", value: Int(playlistItemId))
             .execute()
         
-        debugLog("✅ Updated track \(playlistItemId) title to: \(newTitle)")
+        debugLog("✅ Updated track \(playlistItemId) title to: \(validatedTitle)")
     }
     
     // MARK: - Delete Playlist
@@ -445,6 +462,14 @@ public final class PlaylistsManager {
         let session = try await SupabaseManager.shared.client.auth.session
         let userId = session.user.id
 
+        let sanitizedName = InputValidator.limit(
+            InputValidator.trimOnSubmit(name),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(sanitizedName, message: "Playlist name is required.") == nil else {
+            throw PlaylistError.invalidName
+        }
+
         
         var coverImageUrl: String? = nil
         
@@ -474,7 +499,7 @@ public final class PlaylistsManager {
         let newPlaylist = DBPlaylist(
             id: UUID(),
             userId: userId,
-            name: name,
+            name: sanitizedName,
             description: "Custom Playlist",
             coverImageUrl: coverImageUrl,
             isPublic: false,
@@ -497,22 +522,30 @@ public final class PlaylistsManager {
     // MARK: - Image Upload
     
     private func uploadImageToStorage(image: UIImage) async throws -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+            throw PlaylistError.invalidData
+        }
+
+        let prepared: PreparedImage
+        switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+        case .success(let result):
+            prepared = result
+        case .failure:
             throw PlaylistError.invalidData
         }
         
-        let fileName = "\(UUID().uuidString).jpg"
+        let fileName = "\(UUID().uuidString).\(prepared.fileExtension)"
         
         let client = SupabaseManager.shared.client.storage.from("PlayListCover")
-        let options = FileOptions(contentType: "image/jpeg")
+        let options = FileOptions(contentType: prepared.mimeType)
         
         do {
-            try await client.upload(fileName, data: imageData, options: options)
+            try await client.upload(fileName, data: prepared.data, options: options)
         } catch let nsError as NSError where nsError.domain == NSURLErrorDomain && nsError.code == -1005 {
             // Known iOS Simulator networking bug: "Network connection lost."
             debugLog("⚠️ Re-attempting upload due to Simulator HTTP -1005 bug...")
             try await Task.sleep(nanoseconds: 1_000_000_000)
-            try await client.upload(fileName, data: imageData, options: options)
+            try await client.upload(fileName, data: prepared.data, options: options)
         }
         
         // Return the fileName (path) instead of a signed URL.

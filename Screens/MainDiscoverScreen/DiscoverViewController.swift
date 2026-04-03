@@ -306,7 +306,7 @@ final class DiscoverViewController: UIViewController {
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
 
             // Content view
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 90),
@@ -430,10 +430,11 @@ final class DiscoverViewController: UIViewController {
 
         updateBtn(levelButton,
                   active: selectedLevel != nil,
-                  label: levelOptions.first { $0.value == selectedLevel }?.label ?? "Level")
+                  label: levelOptions.first { $0.value == selectedLevel }?.label ?? levelOptions[0].label)
         updateBtn(skillButton,
                   active: selectedSkill != nil,
-                  label: skillOptions.first { $0.value == selectedSkill }?.label ?? "Skill")
+                  label: skillOptions.first { $0.value == selectedSkill }?.label ?? skillOptions[0].label)
+        buildFilterMenus()
         rebuildChips()
         applyFilters()
     }
@@ -475,7 +476,7 @@ final class DiscoverViewController: UIViewController {
             } catch {
                 await MainActor.run {
                     self.spinner.stopAnimating()
-                    self.showError(error.localizedDescription)
+                    self.showError("We couldn't load songs right now. Please try again.")
                 }
             }
         }
@@ -642,8 +643,19 @@ final class DiscoverViewController: UIViewController {
 // MARK: - UISearchBarDelegate
 
 extension DiscoverViewController: UISearchBarDelegate {
-    func searchBar(_ searchBar: UISearchBar, textDidChange _: String) { applyFilters() }
-    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) { searchBar.resignFirstResponder() }
+    func searchBar(_ searchBar: UISearchBar, textDidChange _: String) {
+        let limited = InputValidator.limit(searchBar.text ?? "", maxLength: InputValidator.searchMaxLength)
+        if limited != searchBar.text {
+            searchBar.text = limited
+        }
+        applyFilters()
+    }
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.text = InputValidator.trimOnSubmit(searchBar.text ?? "")
+        searchBar.resignFirstResponder()
+        applyFilters()
+    }
 }
 
 // MARK: - Table DataSource + Delegate
