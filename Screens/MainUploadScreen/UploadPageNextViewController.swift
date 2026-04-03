@@ -46,7 +46,7 @@ final class UploadPageNextViewController: UIViewController {
     private let previewButton    = UIButton(type: .system)
 
     // Sheet display
-    private let sheetImageView        = UIImageView()
+    private let sheetPDFView          = PDFView()
     private let sheetLoadingIndicator = UIActivityIndicatorView(style: .medium)
 
     // Status
@@ -231,7 +231,7 @@ final class UploadPageNextViewController: UIViewController {
         debugLog("[PDF] 🔄 Loading: \(urlString)")
         releasePreviewResources()
         sheetLoadingIndicator.startAnimating()
-        sheetImageView.isHidden = true
+        sheetPDFView.isHidden = true
 
         pdfLoadTask?.cancel()
         pdfLoadTask = Task { [weak self] in
@@ -255,10 +255,9 @@ final class UploadPageNextViewController: UIViewController {
                     return
                 }
 
-                let previewImage = Self.renderPDFPreviewImage(from: data)
                 await MainActor.run {
                     self.sheetLoadingIndicator.stopAnimating()
-                    self.handlePDFData(data, previewImage: previewImage)
+                    self.handlePDFData(data)
                 }
             } catch {
                 debugLog("[PDF] ❌ Network error: \(error.localizedDescription)")
@@ -272,19 +271,20 @@ final class UploadPageNextViewController: UIViewController {
         }
     }
 
-    private func handlePDFData(_ data: Data, previewImage: UIImage?) {
-        guard let previewImage else {
-            debugLog("[PDF] ❌ Not a valid PDF preview")
+    private func handlePDFData(_ data: Data) {
+        guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+            debugLog("[PDF] ❌ Not a valid PDF")
             statusLabel.text       = "Could not display sheet. Tap Refresh to retry."
             statusLabel.isHidden   = false
             refreshButton.isHidden = false
             return
         }
 
-        debugLog("[PDF] ✅ Prepared inline preview image")
-        loadedPDFData         = data
-        sheetImageView.image  = previewImage
-        sheetImageView.isHidden = false
+        debugLog("[PDF] ✅ Rendering PDF inline")
+        loadedPDFData          = data
+        sheetPDFView.document  = doc
+        if let p = doc.page(at: 0) { sheetPDFView.go(to: p) }
+        sheetPDFView.isHidden  = false
     }
 
     // MARK: - Job Status Polling
@@ -971,13 +971,15 @@ final class UploadPageNextViewController: UIViewController {
         previewButton.clipsToBounds      = true
         previewButton.translatesAutoresizingMaskIntoConstraints = false
 
-        sheetImageView.contentMode       = .scaleAspectFit
-        sheetImageView.clipsToBounds     = true
-        sheetImageView.layer.cornerRadius = 14
-        sheetImageView.backgroundColor   = ComponentColors.SongDetailScreen.sheetMusicBackground
-        sheetImageView.isHidden          = true
-        sheetImageView.isUserInteractionEnabled = false
-        sheetImageView.translatesAutoresizingMaskIntoConstraints = false
+        sheetPDFView.autoScales          = true
+        sheetPDFView.displayMode         = .singlePageContinuous
+        sheetPDFView.displayDirection    = .vertical
+        sheetPDFView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
+        sheetPDFView.layer.cornerRadius  = 14
+        sheetPDFView.clipsToBounds       = true
+        sheetPDFView.isHidden            = true
+        sheetPDFView.isUserInteractionEnabled = true
+        sheetPDFView.translatesAutoresizingMaskIntoConstraints = false
 
         sheetLoadingIndicator.color             = ComponentColors.HomeScreen.actionButtonFill
         sheetLoadingIndicator.hidesWhenStopped  = true
@@ -1065,7 +1067,7 @@ final class UploadPageNextViewController: UIViewController {
         view.addSubview(scrollView); scrollView.addSubview(contentView)
         contentView.addSubview(sheetContainer)
         sheetContainer.addSubview(sheetHeaderLabel); sheetContainer.addSubview(previewButton)
-        sheetContainer.addSubview(sheetImageView)
+        sheetContainer.addSubview(sheetPDFView)
         sheetContainer.addSubview(sheetLoadingIndicator)
         sheetContainer.addSubview(progressView);     sheetContainer.addSubview(statusLabel)
         sheetContainer.addSubview(refreshButton);    sheetContainer.addSubview(infoStackView)
@@ -1077,52 +1079,12 @@ final class UploadPageNextViewController: UIViewController {
 
     private func releasePreviewResources() {
         loadedPDFData = nil
-        sheetImageView.image = nil
-        sheetImageView.isHidden = true
+        sheetPDFView.document = nil
+        sheetPDFView.isHidden = true
         statusLabel.isHidden = true
         sheetLoadingIndicator.stopAnimating()
     }
 
-    private static func renderPDFPreviewImage(from data: Data, maxDimension: CGFloat = 1024) -> UIImage? {
-        autoreleasepool {
-            guard let provider = CGDataProvider(data: data as CFData),
-                  let document = CGPDFDocument(provider),
-                  let page = document.page(at: 1) else {
-                return nil
-            }
-
-            let pageRect = page.getBoxRect(.mediaBox)
-            guard pageRect.width > 0, pageRect.height > 0 else { return nil }
-
-            let scale = min(maxDimension / max(pageRect.width, pageRect.height), 2.0)
-            let width = max(Int(pageRect.width * scale), 1)
-            let height = max(Int(pageRect.height * scale), 1)
-            let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
-
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            guard let context = CGContext(
-                    data: nil,
-                    width: width,
-                    height: height,
-                    bitsPerComponent: 8,
-                    bytesPerRow: 0,
-                    space: colorSpace,
-                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                  ) else {
-                return nil
-            }
-
-            context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
-            context.fill(targetRect)
-            context.saveGState()
-            context.concatenate(page.getDrawingTransform(.mediaBox, rect: targetRect, rotate: 0, preserveAspectRatio: true))
-            context.drawPDFPage(page)
-            context.restoreGState()
-
-            guard let cgImage = context.makeImage() else { return nil }
-            return UIImage(cgImage: cgImage)
-        }
-    }
 
     private func applyConstraints() {
         NSLayoutConstraint.activate([
@@ -1147,16 +1109,16 @@ final class UploadPageNextViewController: UIViewController {
             previewButton.centerYAnchor.constraint(equalTo: sheetHeaderLabel.centerYAnchor),
             previewButton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
 
-            sheetImageView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 14),
-            sheetImageView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 12),
-            sheetImageView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -12),
-            sheetImageView.heightAnchor.constraint(equalToConstant: 400),
+            sheetPDFView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 14),
+            sheetPDFView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 12),
+            sheetPDFView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -12),
+            sheetPDFView.heightAnchor.constraint(equalToConstant: 400),
 
             sheetLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             sheetLoadingIndicator.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 200),
 
             // Processing views sit between PDF and info labels (spacing collapses with content)
-            progressView.topAnchor.constraint(equalTo: sheetImageView.bottomAnchor, constant: 0),
+            progressView.topAnchor.constraint(equalTo: sheetPDFView.bottomAnchor, constant: 0),
             progressView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
             progressView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
             {
