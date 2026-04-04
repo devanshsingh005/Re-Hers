@@ -42,7 +42,10 @@ class AllUploadsViewController: UIViewController {
             subtitle: "Recent uploads",
             backAction: #selector(handleBack)
         )
-        navigationItem.rightBarButtonItems = nil
+        navigationItem.rightBarButtonItems = NavigationBarHelper.createNativeRightBarButtonItems(
+            target: self,
+            profileAction: #selector(handleProfile)
+        )
     }
 
     // MARK: - Scroll
@@ -279,15 +282,9 @@ class AllUploadsViewController: UIViewController {
             tf.clearButtonMode = .whileEditing; tf.autocapitalizationType = .words
         }
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
-            guard let self else { return }
-            let name = InputValidator.limit(
-                InputValidator.trimOnSubmit(alert.textFields?.first?.text ?? ""),
-                maxLength: InputValidator.nameMaxLength
-            )
-            guard InputValidator.validateRequired(name, message: "File name is required.") == nil else {
-                self.showErrorAlert(message: "File name is required.")
-                return
-            }
+            guard let self,
+                  let name = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else { return }
             titleLabel?.text = name
             Task { await self.renameScan(id: scanId, newTitle: name) }
         })
@@ -296,33 +293,19 @@ class AllUploadsViewController: UIViewController {
     }
 
     private func renameScan(id scanId: Int64, newTitle: String) async {
-        let sanitizedTitle = InputValidator.limit(
-            InputValidator.trimOnSubmit(newTitle),
-            maxLength: InputValidator.nameMaxLength
-        )
-        guard InputValidator.validateRequired(sanitizedTitle, message: "File name is required.") == nil else {
-            await MainActor.run {
-                self.showErrorAlert(message: "File name is required.")
-            }
-            return
-        }
-
         do {
             let scans: [Scan] = try await supabase.from("scans").select()
                 .eq("id", value: Int(scanId)).limit(1).execute().value
             guard let scan = scans.first else { return }
             var dict = (scan.jsonData?.value as? [String: Any]) ?? [:]
-            dict["title"] = sanitizedTitle
+            dict["title"] = newTitle
             let upd = ScanUpdate(jsonData: AnyCodable(dict), status: scan.status ?? "completed",
                                   processedAt: scan.processedAt ?? ISO8601DateFormatter().string(from: Date()),
                                   updatedAt: ISO8601DateFormatter().string(from: Date()))
             try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
         } catch {
             debugLog("[AllUploads] rename failed: \(error)")
-            await MainActor.run {
-                self.loadUploads()
-                self.showErrorAlert(message: "We couldn't rename that file right now. Please try again.")
-            }
+            await MainActor.run { self.loadUploads() }
         }
     }
 
@@ -438,6 +421,9 @@ class AllUploadsViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
 
+    @objc private func handleProfile() {
+        navigationController?.pushViewController(UserProfileViewController(), animated: true)
+    }
 }
 
 // MARK: - GradientView

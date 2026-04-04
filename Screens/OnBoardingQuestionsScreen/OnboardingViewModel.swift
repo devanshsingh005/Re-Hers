@@ -27,6 +27,14 @@ class OnboardingViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var errorMessage: String?
 
+    @Published var availableGenres: [String] = Array(genreDBMap.keys).sorted()
+    @Published var availableLevels: [String] = [
+        "Absolute beginner",
+        "Some basics",
+        "Intermediate",
+        "Advanced"
+    ]
+
     // MARK: - Genre display → DB value map
     static let genreDBMap: [String: String] = [
         "Classical":          "classical",
@@ -128,6 +136,29 @@ class OnboardingViewModel: ObservableObject {
         // (to not get the user stuck, though icon might be missing)
         await MainActor.run {
             self.navigateToHome()
+        }
+    }
+
+    func fetchOptions() {
+        Task {
+            do {
+                let songs = try await SongService.shared.fetchSongs()
+                await MainActor.run {
+                    // Update genres from song tags
+                    let tags = Set(songs.flatMap { $0.skillTags })
+                    if !tags.isEmpty {
+                        self.availableGenres = tags.map { $0.capitalized }.sorted()
+                    }
+                    
+                    // Update levels from song levels (optional, usually levels are fixed)
+                    let levels = Set(songs.map { $0.level }).sorted()
+                    if !levels.isEmpty {
+                        self.availableLevels = levels.map { "Level \($0)" }
+                    }
+                }
+            } catch {
+                debugLog("Failed to fetch onboarding options: \(error)")
+            }
         }
     }
     

@@ -90,7 +90,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         // Background color #F8F8F4
         view.backgroundColor = ComponentColors.App.screenBackground
         
-        title = passedTitle ?? "Playlist"
+        title = ""
         navigationController?.setNavigationBarHidden(false, animated: false)
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationController?.navigationBar.tintColor = .white
@@ -112,30 +112,24 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     // MARK: - Apply Passed Playlist Data
     private func applyPassedData() {
-        let placeholder = playlistId.map { albumPlaceholder(for: $0) } ?? UIImage(systemName: "music.note.list")
+        let placeholder = resolvePlaylistCoverImage(playlistId: playlistId, coverUrl: passedCoverUrl)
 
-        // 1. Use explicitly passed UIImage if available (e.g. from user-picked image via ImageLoader)
         if let img = passedImage {
             albumArtBackgroundView.image = img
             albumArtCardView.image = img
-        } else if let coverUrl = passedCoverUrl, !coverUrl.isEmpty {
-            // 2. Load from DB cover URL — local asset name or remote HTTP
-            albumArtBackgroundView.image = placeholder
-            albumArtCardView.image = placeholder
-            if coverUrl.hasPrefix("http") {
-                ImageLoader.shared.loadImage(from: coverUrl) { [weak self] img in
-                    let loaded = img ?? placeholder
-                    self?.albumArtBackgroundView.image = loaded
-                    self?.albumArtCardView.image = loaded
-                }
-            } else {
-                let local = UIImage(named: coverUrl) ?? placeholder
-                albumArtBackgroundView.image = local
-                albumArtCardView.image = local
-            }
         } else {
-            albumArtBackgroundView.image = placeholder
-            albumArtCardView.image = placeholder
+            loadPlaylistCoverImage(
+                into: albumArtBackgroundView,
+                playlistId: playlistId,
+                coverUrl: passedCoverUrl,
+                fallbackImage: placeholder
+            )
+            loadPlaylistCoverImage(
+                into: albumArtCardView,
+                playlistId: playlistId,
+                coverUrl: passedCoverUrl,
+                fallbackImage: placeholder
+            )
         }
 
         playlistTitleLabel.text = passedTitle ?? "Playlist"
@@ -353,7 +347,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     scan: scan
                 )
                 DispatchQueue.main.async { [weak self] in
-                    self?.trackList.append(newTrack)
+                    self?.trackList.insert(newTrack, at: 0)
                     self?.activityIndicator.stopAnimating()
                     self?.reloadTracksUI()
                 }

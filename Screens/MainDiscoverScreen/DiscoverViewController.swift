@@ -23,20 +23,11 @@ final class DiscoverViewController: UIViewController {
     private var selectedLevel: Int?    { didSet { refreshFilters() } }
     private var selectedSkill: String? { didSet { refreshFilters() } }
 
-    // Dynamic height constraint for the non-scrolling table
     private var tableHeightConstraint: NSLayoutConstraint?
-    // Collapses chips row when no filters are active
     private var chipsHeightConstraint: NSLayoutConstraint?
 
-    // MARK: Filter Options
-
-    private let levelOptions: [(label: String, value: Int?)] = [
-        ("All Levels", nil), ("Lv 1", 1), ("Lv 2", 2), ("Lv 3", 3), ("Lv 4", 4)
-    ]
-    private let skillOptions: [(label: String, value: String?)] = [
-        ("All Skills", nil), ("Melody", "melody"), ("Chords", "chords"),
-        ("Scales", "scales"), ("Arpeggios", "arpeggios")
-    ]
+    private var levelOptions: [(label: String, value: Int?)] = [("All Levels", nil)]
+    private var skillOptions: [(label: String, value: String?)] = [("All Skills", nil)]
 
     // MARK: UI
 
@@ -469,6 +460,7 @@ final class DiscoverViewController: UIViewController {
                 let songs = try await SongService.shared.fetchSongs()
                 await MainActor.run {
                     self.allSongs = songs
+                    self.updateDynamicFilters(from: songs)
                     self.applyFilters()
                     self.spinner.stopAnimating()
                     self.tableView.isHidden = false
@@ -500,6 +492,19 @@ final class DiscoverViewController: UIViewController {
 
         // Must update height AFTER reloadData so contentSize is fresh
         updateTableHeight()
+    }
+
+    private func updateDynamicFilters(from songs: [Song]) {
+        // Levels: unique integers
+        let levels = Set(songs.map { $0.level }).sorted()
+        levelOptions = [("All Levels", nil)] + levels.map { ("Lv \($0)", $0) }
+
+        // Skills: unique strings from the skillTags array
+        let skills = Set(songs.flatMap { $0.skillTags }).sorted()
+        skillOptions = [("All Skills", nil)] + skills.map { ($0.capitalized, $0) }
+        
+        // Rebuild menus with new options
+        buildFilterMenus()
     }
 
     // MARK: Helpers
@@ -572,17 +577,18 @@ final class DiscoverViewController: UIViewController {
     }
 
     private func fetchProfileData() {
-        Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else { 
+        Task { [weak self] in
+            guard let self = self,
+                  let user = SupabaseManager.shared.client.auth.currentUser else {
                 await MainActor.run {
-                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                    largeProfileButton.tintColor = .secondaryLabel
+                    self?.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    self?.largeProfileButton.tintColor = .secondaryLabel
                 }
-                return 
+                return
             }
             
             do {
-                let profile: Profile = try await SupabaseManager.shared.client
+                let profile: UserProfile = try await SupabaseManager.shared.client
                     .from("profiles")
                     .select()
                     .eq("id", value: user.id)
@@ -591,18 +597,18 @@ final class DiscoverViewController: UIViewController {
                     .value
                 
                 if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
-                    await loadAndSetProfileImage(from: avatarUrl)
+                    await self.loadAndSetProfileImage(from: avatarUrl)
                 } else {
                     await MainActor.run {
-                        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                        largeProfileButton.tintColor = .secondaryLabel
+                        self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                        self.largeProfileButton.tintColor = .secondaryLabel
                     }
                 }
             } catch {
                 debugLog("Error fetching profile: \(error)")
                 await MainActor.run {
-                    largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                    largeProfileButton.tintColor = .secondaryLabel
+                    self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
+                    self.largeProfileButton.tintColor = .secondaryLabel
                 }
             }
         }

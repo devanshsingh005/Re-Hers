@@ -71,7 +71,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             overrideUserInterfaceStyle = .light
         }
         self.edgesForExtendedLayout = .all
-        view.backgroundColor = UIColor.systemBackground
+        view.backgroundColor = ComponentColors.HomeScreen.background
         buildLayout()
         embedPiano()
         wireCallbacks()
@@ -156,15 +156,15 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         NSLayoutConstraint.activate([
             // Nav bar pinned to top safe area
             topC,
-            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            navBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             navBar.heightAnchor.constraint(equalToConstant: kNavH),
 
             // Sheet card starts under nar bar
             sheetCard.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
-            sheetCard.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            sheetCard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            sheetCard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -kPianoH),
+            sheetCard.leadingAnchor.constraint(equalTo: navBar.leadingAnchor),
+            sheetCard.trailingAnchor.constraint(equalTo: navBar.trailingAnchor),
+            sheetCard.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -(kPianoH + 10)),
 
             // Overlay = full screen
             overlay.topAnchor.constraint(equalTo: view.topAnchor),
@@ -205,11 +205,11 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         view.addSubview(pianoVC.view)
 
        NSLayoutConstraint.activate([
-    pianoVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-    pianoVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-    pianoVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-    pianoVC.view.topAnchor.constraint(equalTo: view.bottomAnchor, constant: -kPianoH)
-])
+            pianoVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pianoVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pianoVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            pianoVC.view.heightAnchor.constraint(equalToConstant: kPianoH)
+        ])
         pianoVC.didMove(toParent: self)
         pianoVC.setAnimationMode()
 

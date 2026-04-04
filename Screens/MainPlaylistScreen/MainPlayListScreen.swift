@@ -12,6 +12,46 @@ func albumPlaceholder(for id: UUID) -> UIImage {
     return UIImage(named: "album_\(index)") ?? UIImage()
 }
 
+func resolvePlaylistCoverImage(playlistId: UUID?, coverUrl: String?) -> UIImage? {
+    if let coverUrl, !coverUrl.isEmpty {
+        if coverUrl.hasPrefix("doc_") {
+            let docURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                .first?
+                .appendingPathComponent(coverUrl)
+            if let docURL, let data = try? Data(contentsOf: docURL), let image = UIImage(data: data) {
+                return image
+            }
+        }
+
+        if !coverUrl.hasPrefix("http"), let asset = UIImage(named: coverUrl) {
+            return asset
+        }
+    }
+
+    if let playlistId {
+        return albumPlaceholder(for: playlistId)
+    }
+
+    return UIImage(systemName: "music.note.list")
+}
+
+func loadPlaylistCoverImage(
+    into imageView: UIImageView,
+    playlistId: UUID?,
+    coverUrl: String?,
+    fallbackImage: UIImage? = nil
+) {
+    let placeholder = fallbackImage ?? resolvePlaylistCoverImage(playlistId: playlistId, coverUrl: coverUrl)
+    imageView.image = placeholder
+
+    guard let coverUrl, !coverUrl.isEmpty, coverUrl.hasPrefix("http") else { return }
+    ImageLoader.shared.loadImage(from: coverUrl) { [weak imageView] image in
+        DispatchQueue.main.async {
+            imageView?.image = image ?? placeholder
+        }
+    }
+}
+
 class PlaylistViewController: UIViewController {
 
     // MARK: - UI Components
@@ -672,21 +712,15 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
         subtitleLabel.text = "\(playlist.trackCount) Tracks · \(playlist.tags)"
 
         let placeholder = albumPlaceholder(for: playlist.id)
-        playlistImageView.image = placeholder
-
-        if let imageData = playlist.imageData {
-            playlistImageView.image = UIImage(data: imageData) ?? placeholder
-        } else if let imageUrl = playlist.imageUrl, !imageUrl.isEmpty {
-            if imageUrl.hasPrefix("http") {
-                ImageLoader.shared.loadImage(from: imageUrl) { [weak self] image in
-                    DispatchQueue.main.async {
-                        self?.playlistImageView.image = image ?? placeholder
-                    }
-                }
-            } else {
-                // Local asset name stored in DB (e.g. "trackimage_3")
-                playlistImageView.image = UIImage(named: imageUrl) ?? placeholder
-            }
+        if let imageData = playlist.imageData, let image = UIImage(data: imageData) {
+            playlistImageView.image = image
+        } else {
+            loadPlaylistCoverImage(
+                into: playlistImageView,
+                playlistId: playlist.id,
+                coverUrl: playlist.imageUrl,
+                fallbackImage: placeholder
+            )
         }
     }
 

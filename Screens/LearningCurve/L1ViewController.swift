@@ -10,16 +10,6 @@
 import UIKit
 import Supabase
 
-// MARK: - Profile response model
-
-private struct ProfileProgress: Decodable {
-    let current_chapter: Int
-}
-
-private struct LessonEventStars: Decodable {
-    let chapter_index: Int
-    let stars: Int?
-}
 
 // MARK: - Chapter Node View
 
@@ -439,43 +429,8 @@ class LessonMapViewController: UIViewController {
             }
 
             do {
-                let db = SupabaseManager.shared.client
-
-                // 1. Fetch current user
-                let userID = try await db.auth.session.user.id
-
-                // 2. Fetch current_chapter from profiles
-                let profiles: [ProfileProgress] = try await db
-                    .from("profiles")
-                    .select("current_chapter")
-                    .eq("id", value: userID.uuidString)
-                    .limit(1)
-                    .execute()
-                    .value
-
-                guard let profile = profiles.first else { return }
-                let profileChapter = profile.current_chapter
-
-                // 3. Fetch stars for completed chapters from lesson_events
-                let events: [LessonEventStars] = try await db
-                    .from("lesson_events")
-                    .select("chapter_index, stars")
-                    .eq("user_id", value: userID.uuidString)
-                    .eq("event_type", value: "lesson_completed")
-                    .execute()
-                    .value
-
-                // Build chapter → best stars dict
-                var starsMap: [Int: Int] = [:]
-                for event in events {
-                    let idx = event.chapter_index
-                    let s   = event.stars ?? 1
-                    starsMap[idx] = max(starsMap[idx] ?? 0, s)
-                }
-                let recoveredChapter = (events.map(\.chapter_index).max() ?? 0) + 1
-                let currentChapter = max(profileChapter, recoveredChapter)
-
-                // 4. Apply progress on main thread and refresh UI
+                let (currentChapter, starsMap) = try await ChapterService.shared.fetchUserProgress()
+                
                 await MainActor.run {
                     self.chapters = applyProgress(
                         currentChapter: currentChapter,
@@ -483,10 +438,8 @@ class LessonMapViewController: UIViewController {
                     )
                     self.rebuildPath()
                 }
-
             } catch {
                 debugLog("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
-                // Fall back to chapter 1 being active so the UI isn't empty
                 await MainActor.run {
                     self.chapters = applyProgress(currentChapter: 1)
                     self.rebuildPath()

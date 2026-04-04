@@ -38,7 +38,7 @@ public final class PlaylistsManager {
                 .from("playlist_items")
                 .select()
                 .eq("playlist_id", value: dbPlaylist.id.uuidString)
-                .order("position")
+                .order("position", ascending: false)
                 .execute()
                 .value
             
@@ -100,7 +100,7 @@ public final class PlaylistsManager {
             .from("playlist_items")
             .select()
             .eq("playlist_id", value: playlistId.uuidString)
-            .order("position")
+            .order("position", ascending: false)
             .execute()
             .value
         

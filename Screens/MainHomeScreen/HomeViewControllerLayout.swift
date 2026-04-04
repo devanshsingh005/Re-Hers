@@ -5,6 +5,8 @@
 
 import UIKit
 import Supabase
+import Auth
+internal import PostgREST
 
 extension HomeViewController {
 
@@ -125,12 +127,8 @@ extension HomeViewController {
                 }
                 return
             }
-            struct Profile: Decodable {
-                let full_name: String?
-                let avatar_url: String?
-            }
             do {
-                let profile: Profile = try await SupabaseManager.shared.client
+                let profile: UserProfile = try await SupabaseManager.shared.client
                     .from("profiles").select().eq("id", value: user.id).single().execute().value
                     
                 await MainActor.run {
@@ -264,9 +262,10 @@ extension HomeViewController {
 
     @objc func openPianoPage() {
         guard let song = self.topSong else { return }
-        let previewVC = DiscoverSongPreviewViewController()
-        previewVC.song = song
-        navigationController?.pushViewController(previewVC, animated: true)
+        let detailVC = DiscoverSongDetailViewController()
+        detailVC.song = song
+        detailVC.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(detailVC, animated: true)
     }
 
     @objc func playAlongTapped() {

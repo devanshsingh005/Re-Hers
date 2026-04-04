@@ -18,15 +18,16 @@ final class SheetMusicView: UIView {
     }
 
     // MARK: Constants
-    private let lineSpacing: CGFloat = 13   // between staff lines (wider for landscape)
-    private let noteRadius:  CGFloat = 4.5
-    private let clefW:       CGFloat = 110   // column for brace + clef symbols (increased)
-    private let msrW:        CGFloat = 260  // pixels per measure on canvas
+    private let lineSpacing: CGFloat = 12   // slightly reduced from 13 to avoid clipping in landscape
+    private let noteRadius:  CGFloat = 4.0   // slightly reduced to match line spacing
+    private let clefW:       CGFloat = 100
+    private let msrW:        CGFloat = 260
 
     // Brand Color
-    private let brandOrange = UIColor(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0, alpha: 1.0) // #EF9408
+    private let brandOrange = UIColor(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0, alpha: 1.0)
 
-    private var staffH: CGFloat { 4 * lineSpacing }   // 5 lines = 4 gaps
+    private var staffH:   CGFloat { 4 * lineSpacing }
+    private var staffGap: CGFloat { 22 } // reduced from 30 to grant more vertical space
 
     // MARK: State
     private var canvasW:        CGFloat = 4000
@@ -202,7 +203,6 @@ final class SheetMusicView: UIView {
     }
 
     // MARK: Geometry
-    private var staffGap:         CGFloat { 30 }   // gap between treble and bass
     private var trebleTop:        CGFloat {
         let pad: CGFloat = 12
         let total = isSingleStaff ? staffH : totalStaffHeight

@@ -9,14 +9,6 @@ import Auth
 import SwiftUI
 internal import PostgREST
 
-struct Profile: Decodable {
-    let id: UUID
-    var full_name: String?
-    var username: String?
-    var avatar_url: String?
-    var bio: String?
-    var total_study_seconds: Int?
-}
 
 struct OnboardingData: Codable {
     let practice_mins: Int
@@ -57,7 +49,7 @@ final class UserProfileViewController: UIViewController {
     private let signOutButton = UIButton(type: .system)
 
     // Data
-    private var currentProfile: Profile?
+    private var currentProfile: UserProfile?
     private var stats = ProfileStats()
     private weak var activeImagePicker: UIImagePickerController?
     private var pendingDeleteAccountBearerToken: String?
@@ -596,7 +588,7 @@ final class UserProfileViewController: UIViewController {
         }
 
         do {
-            let profile: Profile = try await SupabaseManager.shared.client
+            let profile: UserProfile = try await SupabaseManager.shared.client
                 .from("profiles")
                 .select()
                 .eq("id", value: user.id.uuidString)
@@ -1317,13 +1309,17 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                     .eq("id", value: user.id.uuidString)
                     .select()
                     .execute()
-                self.currentProfile = Profile(
+                self.currentProfile = UserProfile(
                     id: self.currentProfile?.id ?? user.id,
+                    avatar_url: signedURL.absoluteString,
                     full_name: self.currentProfile?.full_name,
                     username: self.currentProfile?.username,
-                    avatar_url: signedURL.absoluteString,
                     bio: self.currentProfile?.bio,
-                    total_study_seconds: self.currentProfile?.total_study_seconds
+                    total_study_seconds: self.currentProfile?.total_study_seconds,
+                    daily_goal_minutes: self.currentProfile?.daily_goal_minutes,
+                    practice_mins_today: self.currentProfile?.practice_mins_today,
+                    last_practice_date: self.currentProfile?.last_practice_date,
+                    current_chapter: self.currentProfile?.current_chapter
                 )
                 await MainActor.run {
                     NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)

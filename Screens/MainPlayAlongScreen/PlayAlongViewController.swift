@@ -18,7 +18,7 @@ final class PlayAlongViewController: UIViewController {
     
     var sheetMusicData: Data?
 
-    private let kPianoH: CGFloat = 136
+    private let kPianoH: CGFloat = 170
     private var hasAudioPlaybackSession = false
     private var hasStartedSessionForCurrentAppearance = false
     private var sessionStartupWorkItem: DispatchWorkItem?
@@ -215,12 +215,12 @@ final class PlayAlongViewController: UIViewController {
         loadingLabel.textAlignment = .center
 
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 0),
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             navBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
             navBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            navBar.heightAnchor.constraint(equalToConstant: 64),
+            navBar.heightAnchor.constraint(equalToConstant: 54),
 
-            sheetMusic.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 8),
+            sheetMusic.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
             sheetMusic.leadingAnchor.constraint(equalTo: navBar.leadingAnchor),
             sheetMusic.trailingAnchor.constraint(equalTo: navBar.trailingAnchor),
             sheetMusic.bottomAnchor.constraint(equalTo: pianoKeyboard.topAnchor, constant: -10),
@@ -753,12 +753,12 @@ final class PlayAlongNavBar: UIView {
     private func setupUI() {
         backgroundColor = .clear
 
-        let backConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+        let backConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
         backButton.setImage(UIImage(systemName: "chevron.left", withConfiguration: backConfig), for: .normal)
         backButton.tintColor = .label
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         
-        chordDisplay.font = .systemFont(ofSize: 21, weight: .black)
+        chordDisplay.font = .systemFont(ofSize: 20, weight: .black)
         chordDisplay.textColor = .label
         chordDisplay.textAlignment = .center
         chordDisplay.lineBreakMode = .byTruncatingTail
@@ -768,7 +768,7 @@ final class PlayAlongNavBar: UIView {
         
         // Progress UI
         progressTrack.backgroundColor = UIColor.label.withAlphaComponent(0.06)
-        progressTrack.layer.cornerRadius = 7
+        progressTrack.layer.cornerRadius = 5
         progressTrack.clipsToBounds = true
         progressTrack.layer.borderWidth = 1
         progressTrack.layer.borderColor = UIColor.label.withAlphaComponent(0.1).cgColor
@@ -777,27 +777,26 @@ final class PlayAlongNavBar: UIView {
         progressGradient.startPoint = CGPoint(x: 0, y: 0.5)
         progressGradient.endPoint = CGPoint(x: 1, y: 0.5)
         progressBar.layer.addSublayer(progressGradient)
-        progressBar.layer.cornerRadius = 7
+        progressBar.layer.cornerRadius = 5
         progressBar.clipsToBounds = true
         
-        progressLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .bold)
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .bold)
         progressLabel.textColor = brandOrange
         progressLabel.text = "0%"
         progressLabel.textAlignment = .center
         
         progressContainer.axis = .vertical
         progressContainer.alignment = .fill
-        progressContainer.spacing = 4
+        progressContainer.spacing = 2
         
         // Tempo UI
-        tempoContainer.backgroundColor = UIColor.label.withAlphaComponent(0.06)
-        tempoContainer.layer.cornerRadius = 12
+        tempoContainer.backgroundColor = .clear
         
-        tempoLabel.font = .systemFont(ofSize: 9, weight: .bold)
+        tempoLabel.font = .systemFont(ofSize: 8, weight: .bold)
         tempoLabel.textColor = .secondaryLabel
         tempoLabel.text = "TEMPO"
         
-        tempoValueLabel.font = .monospacedDigitSystemFont(ofSize: 16, weight: .black)
+        tempoValueLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .black)
         tempoValueLabel.textColor = .label
         tempoValueLabel.text = "0"
         
@@ -807,11 +806,11 @@ final class PlayAlongNavBar: UIView {
         let tempoStack = UIStackView(arrangedSubviews: [tempoLabel, tempoValueLabel])
         tempoStack.axis = .vertical
         tempoStack.alignment = .center
-        tempoStack.spacing = -2
+        tempoStack.spacing = -3
 
         statusStack.axis = .horizontal
         statusStack.alignment = .center
-        statusStack.spacing = 12
+        statusStack.spacing = 10
         
         [backPill, chordPill, statusPill].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -829,7 +828,7 @@ final class PlayAlongNavBar: UIView {
         statusPill.addSubview(statusStack)
         
         micIndicator.backgroundColor = .systemRed.withAlphaComponent(0.18)
-        micIndicator.layer.cornerRadius = 10
+        micIndicator.layer.cornerRadius = 8
         micIndicator.layer.borderWidth = 1
         micIndicator.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.5).cgColor
         
@@ -860,7 +859,7 @@ final class PlayAlongNavBar: UIView {
         progressWidthConstraint = progressBar.widthAnchor.constraint(equalToConstant: 0)
 
         stylePill(backPill, cornerRadius: 22)
-        stylePill(chordPill, cornerRadius: 22)
+        stylePill(chordPill, cornerRadius: 18)
         stylePill(statusPill, cornerRadius: 22)
         
         NSLayoutConstraint.activate([
@@ -876,12 +875,12 @@ final class PlayAlongNavBar: UIView {
             
             statusPill.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
             statusPill.centerYAnchor.constraint(equalTo: centerYAnchor),
-            statusPill.heightAnchor.constraint(equalToConstant: 54),
+            statusPill.heightAnchor.constraint(equalToConstant: 44),
             
-            statusStack.topAnchor.constraint(equalTo: statusPill.topAnchor, constant: 7),
-            statusStack.bottomAnchor.constraint(equalTo: statusPill.bottomAnchor, constant: -7),
-            statusStack.leadingAnchor.constraint(equalTo: statusPill.leadingAnchor, constant: 12),
-            statusStack.trailingAnchor.constraint(equalTo: statusPill.trailingAnchor, constant: -12),
+            statusStack.topAnchor.constraint(equalTo: statusPill.topAnchor, constant: 5),
+            statusStack.bottomAnchor.constraint(equalTo: statusPill.bottomAnchor, constant: -5),
+            statusStack.leadingAnchor.constraint(equalTo: statusPill.leadingAnchor, constant: 10),
+            statusStack.trailingAnchor.constraint(equalTo: statusPill.trailingAnchor, constant: -10),
             
             chordPill.centerYAnchor.constraint(equalTo: centerYAnchor),
             chordPill.leadingAnchor.constraint(equalTo: backPill.trailingAnchor, constant: 16),
@@ -892,27 +891,27 @@ final class PlayAlongNavBar: UIView {
             chordDisplay.trailingAnchor.constraint(equalTo: chordPill.trailingAnchor, constant: -20),
             chordDisplay.centerYAnchor.constraint(equalTo: chordPill.centerYAnchor),
             
-            progressTrack.widthAnchor.constraint(equalToConstant: 132),
-            progressTrack.heightAnchor.constraint(equalToConstant: 14),
+            progressTrack.widthAnchor.constraint(equalToConstant: 118),
+            progressTrack.heightAnchor.constraint(equalToConstant: 10),
             
             progressBar.topAnchor.constraint(equalTo: progressTrack.topAnchor),
             progressBar.bottomAnchor.constraint(equalTo: progressTrack.bottomAnchor),
             progressBar.leadingAnchor.constraint(equalTo: progressTrack.leadingAnchor),
-            progressContainer.widthAnchor.constraint(equalToConstant: 132),
+            progressContainer.widthAnchor.constraint(equalToConstant: 118),
             
-            tempoContainer.widthAnchor.constraint(equalToConstant: 70),
-            tempoContainer.heightAnchor.constraint(equalToConstant: 40),
+            tempoContainer.widthAnchor.constraint(equalToConstant: 58),
+            tempoContainer.heightAnchor.constraint(equalToConstant: 32),
             
             tempoStack.centerXAnchor.constraint(equalTo: tempoContainer.centerXAnchor),
             tempoStack.centerYAnchor.constraint(equalTo: tempoContainer.centerYAnchor),
             
-            tempoIndicator.topAnchor.constraint(equalTo: tempoContainer.topAnchor, constant: 5),
-            tempoIndicator.trailingAnchor.constraint(equalTo: tempoContainer.trailingAnchor, constant: -6),
+            tempoIndicator.topAnchor.constraint(equalTo: tempoContainer.topAnchor, constant: 2),
+            tempoIndicator.trailingAnchor.constraint(equalTo: tempoContainer.trailingAnchor, constant: -2),
             tempoIndicator.widthAnchor.constraint(equalToConstant: 6),
             tempoIndicator.heightAnchor.constraint(equalToConstant: 6),
             
-            micIndicator.widthAnchor.constraint(equalToConstant: 20),
-            micIndicator.heightAnchor.constraint(equalToConstant: 20)
+            micIndicator.widthAnchor.constraint(equalToConstant: 16),
+            micIndicator.heightAnchor.constraint(equalToConstant: 16)
         ])
 
         progressWidthConstraint?.isActive = true
@@ -922,15 +921,15 @@ final class PlayAlongNavBar: UIView {
         view.backgroundColor = .clear
         view.layer.cornerRadius = cornerRadius
         view.layer.shadowColor = UIColor.black.cgColor
-        view.layer.shadowOpacity = 0.12
+        view.layer.shadowOpacity = 0.15
         view.layer.shadowOffset = CGSize(width: 0, height: 4)
-        view.layer.shadowRadius = 10
+        view.layer.shadowRadius = 8
 
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
         blur.translatesAutoresizingMaskIntoConstraints = false
         blur.layer.cornerRadius = cornerRadius
         blur.layer.borderWidth = 0.5
-        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
         blur.clipsToBounds = true
         view.insertSubview(blur, at: 0)
 

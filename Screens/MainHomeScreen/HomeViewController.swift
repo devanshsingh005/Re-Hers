@@ -26,6 +26,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     var dailyGoalTimeLabel:    UILabel?
     var dailyGoalContainer:    UIView?
     var playlistStackView:     UIStackView?
+    var playlistSectionHeightConstraint: NSLayoutConstraint?
     var recentsStackView:      UIStackView?
     var topCardTitleLabel:     UILabel?
     var topCardTagLabel:       UILabel?
@@ -53,6 +54,12 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
             self,
             selector: #selector(handleProfileUpdate),
             name: NavigationBarHelper.profileDidUpdateNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRecentPlaysUpdated),
+            name: RecentPlayService.recentPlaysUpdatedNotification,
             object: nil
         )
     }
@@ -91,6 +98,11 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     
     @objc private func handleProfileUpdate() {
         fetchProfileData()
+    }
+
+    @objc private func handleRecentPlaysUpdated() {
+        fetchRecents()
+        fetchTopSong()
     }
 
     private func setupUI() {
@@ -281,10 +293,12 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         if playlists.isEmpty {
+            playlistSectionHeightConstraint?.constant = 128
             stack.addArrangedSubview(createEmptyPlaylistCard())
             return
         }
 
+        playlistSectionHeightConstraint?.constant = 200
         let images = ["trackimage_1", "trackimage_2", "trackimage_3"]
         for (i, p) in playlists.enumerated() {
             stack.addArrangedSubview(createPlaylistCard(playlist: p, imageName: images[i % images.count]))
@@ -308,12 +322,14 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         guard let stack = recentsStackView else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         
-        if recents.count <= 1 {
+        guard !recents.isEmpty else {
             stack.addArrangedSubview(createEmptyRecentsView())
             return
         }
+
+        let visibleRecents = recents.count > 1 ? Array(recents.dropFirst()) : recents
         
-        for recent in recents.dropFirst(1) {
+        for recent in visibleRecents {
             // Stable image from title hash so it doesn't flicker on refresh
             let hash = abs(recent.songs.title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
             let imgName = "trackimage_\((hash % 16) + 1)"

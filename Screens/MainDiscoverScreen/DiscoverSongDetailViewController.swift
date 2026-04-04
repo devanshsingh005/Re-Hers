@@ -29,9 +29,11 @@ class DiscoverSongDetailViewController: UIViewController {
     private let contentView    = UIView()
 
     // MARK: - UI Elements
+    private let albumArt         = UIImageView()
     private let songTitleLabel  = UILabel()
     private let artistLabel     = UILabel()
     private let sheetToggle     = UISegmentedControl(items: ["Original", "Labeled"])
+    private let pageLabel       = UILabel()
 
     private let playAlongButton = UIButton(type: .system)
     private let animationButton = UIButton(type: .system)
@@ -73,10 +75,10 @@ class DiscoverSongDetailViewController: UIViewController {
         loadSheetData()
 
         // Record this song as recently played
-        if let songId = song?.id {
+        if let song {
             recentPlayTask = Task { [weak self] in
                 do {
-                    try await RecentPlayService.shared.recordPlay(songId: songId)
+                    try await RecentPlayService.shared.recordPlay(song: song)
                 } catch {
                     debugLog("[DiscoverDetail] ❌ Failed to record play: \(error)")
                 }
@@ -125,6 +127,14 @@ class DiscoverSongDetailViewController: UIViewController {
     private func applyPassedData() {
         songTitleLabel.text = song?.title ?? "Unknown Song"
         artistLabel.text    = song?.composer ?? "Unknown Artist"
+        albumArt.image = passedImage ?? trackImagePlaceholder(for: song?.title ?? "")
+
+        if passedImage == nil, let coverUrl = song?.coverImageUrl, !coverUrl.isEmpty, coverUrl.hasPrefix("http") {
+            ImageLoader.shared.loadImage(from: coverUrl) { [weak self] image in
+                guard let image else { return }
+                self?.albumArt.image = image
+            }
+        }
     }
 
     // MARK: - NavBar
@@ -182,6 +192,12 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Content Setup
 
     private func setupContent() {
+        albumArt.layer.cornerRadius = 24
+        albumArt.contentMode = .scaleAspectFill
+        albumArt.clipsToBounds = true
+        albumArt.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(albumArt)
+
         songTitleLabel.textAlignment = .center
         songTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         songTitleLabel.textColor = ComponentColors.SongDetailScreen.songTitle
@@ -199,7 +215,16 @@ class DiscoverSongDetailViewController: UIViewController {
         sheetToggle.addTarget(self, action: #selector(sheetToggleChanged), for: .valueChanged)
         contentView.addSubview(sheetToggle)
 
+        pageLabel.text = "Sheet Music"
+        pageLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        pageLabel.textAlignment = .center
+        pageLabel.textColor = .label
+        pageLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(pageLabel)
+
         playAlongButton.setTitle("Play Along", for: .normal)
+        playAlongButton.setTitleColor(.white, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         playAlongButton.layer.cornerRadius = 23
         playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
@@ -210,6 +235,8 @@ class DiscoverSongDetailViewController: UIViewController {
         playAlongButton.isEnabled = false
 
         animationButton.setTitle("Animation", for: .normal)
+        animationButton.setTitleColor(.label, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         animationButton.layer.cornerRadius = 23
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
@@ -269,7 +296,12 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            songTitleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
+            albumArt.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            albumArt.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            albumArt.widthAnchor.constraint(equalToConstant: 200),
+            albumArt.heightAnchor.constraint(equalToConstant: 200),
+
+            songTitleLabel.topAnchor.constraint(equalTo: albumArt.bottomAnchor, constant: 18),
             songTitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             songTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             songTitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -283,7 +315,10 @@ class DiscoverSongDetailViewController: UIViewController {
             sheetToggle.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetToggle.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            sheetContainer.topAnchor.constraint(equalTo: sheetToggle.bottomAnchor, constant: 20),
+            pageLabel.topAnchor.constraint(equalTo: sheetToggle.bottomAnchor, constant: 16),
+            pageLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+
+            sheetContainer.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             sheetContainer.heightAnchor.constraint(equalToConstant: 430),
@@ -350,11 +385,6 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     @objc private func openPlayAlongVC() {
-        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
-        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
-        animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
-        animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
-
         guard !presentGuestPlayAlongGateIfNeeded() else { return }
 
         if sheetMusicJSON == nil {
@@ -404,11 +434,6 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     @objc private func didTapAnimation() {
-        animationButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
-        animationButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
-        playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
-        playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
-
         if sheetMusicJSON == nil {
             loadSheetData()
         }

@@ -54,7 +54,7 @@ class PlaylistSongDetailViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.SongDetailScreen.background
 
-        title = passedSongTitle ?? "Song Detail"
+        title = ""
         navigationController?.setNavigationBarHidden(false, animated: false)
         navigationController?.navigationBar.prefersLargeTitles = false
         navigationController?.navigationBar.tintColor = .white

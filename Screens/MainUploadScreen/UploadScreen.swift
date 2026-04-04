@@ -277,7 +277,7 @@ class UploadScreen: UIViewController {
                 return
             }
             do {
-                let profile: Profile = try await SupabaseManager.shared.client
+                let profile: UserProfile = try await SupabaseManager.shared.client
                     .from("profiles").select().eq("id", value: user.id).single().execute().value
                 if Task.isCancelled { return }
                 if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
@@ -676,7 +676,14 @@ class UploadScreen: UIViewController {
         let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self, weak titleLbl] _ in
             self?.showRenameAlert(for: scan.id, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
         }
-        moreBtn.menu = UIMenu(title: "", children: [rename])
+        let delete = UIAction(
+            title: "Delete Upload",
+            image: UIImage(systemName: "trash"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.confirmDeleteScan(id: scan.id, title: titleLbl.text ?? title)
+        }
+        moreBtn.menu = UIMenu(title: "", children: [rename, delete])
 
         card.addSubview(iconWrap); card.addSubview(textStack); card.addSubview(moreBtn)
         NSLayoutConstraint.activate([
@@ -728,6 +735,9 @@ class UploadScreen: UIViewController {
         let ac = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         ac.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
             self?.showRenameAlert(for: scanId, currentTitle: currentTitle, titleLabel: titleLabel)
+        })
+        ac.addAction(UIAlertAction(title: "Delete Upload", style: .destructive) { [weak self] _ in
+            self?.confirmDeleteScan(id: scanId, title: currentTitle)
         })
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let pop = ac.popoverPresentationController {
@@ -798,6 +808,48 @@ class UploadScreen: UIViewController {
             await MainActor.run {
                 self.loadRecentUploads()
                 self.presentAlert(title: "Error", message: "We couldn't rename that file right now. Please try again.")
+            }
+        }
+    }
+
+    private func confirmDeleteScan(id scanId: Int64, title: String) {
+        let alert = UIAlertController(
+            title: "Delete Upload?",
+            message: "This will remove \"\(title)\" from your uploads list.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.deleteScanTask(id: scanId)
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func deleteScanTask(id scanId: Int64) {
+        Task { [weak self] in
+            guard let self else { return }
+            await self.deleteScan(id: scanId)
+        }
+    }
+
+    private func deleteScan(id scanId: Int64) async {
+        do {
+            try await supabase
+                .from("scans")
+                .delete()
+                .eq("id", value: Int(scanId))
+                .execute()
+            await MainActor.run { self.loadRecentUploads() }
+        } catch {
+            debugLog("[Delete] failed: \(error)")
+            await MainActor.run {
+                let alert = UIAlertController(
+                    title: "Delete Failed",
+                    message: "We couldn't delete this upload. Please try again.",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
             }
         }
     }

@@ -21,7 +21,7 @@ final class ChordRecognitionViewController: UIViewController {
     // Main note display
     private let noteContainerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .white
+        view.backgroundColor = ComponentColors.HomeScreen.background
         view.layer.cornerRadius = 24
         view.layer.shadowColor = UIColor.black.cgColor
         view.layer.shadowOpacity = 0.1

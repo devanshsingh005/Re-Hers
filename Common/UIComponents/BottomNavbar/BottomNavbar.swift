@@ -8,6 +8,15 @@
 import Foundation
 import UIKit
 
+final class AppNavigationController: UINavigationController {
+    override func pushViewController(_ viewController: UIViewController, animated: Bool) {
+        if !viewControllers.isEmpty {
+            viewController.hidesBottomBarWhenPushed = true
+        }
+        super.pushViewController(viewController, animated: animated)
+    }
+}
+
 class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private weak var activeGuestGateModal: GuestFeatureGateModal?
     
@@ -24,7 +33,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func setupTabs() {
         // Home Tab
         let homeVC = HomeViewController()
-        let homeNav = UINavigationController(rootViewController: homeVC)
+        let homeNav = AppNavigationController(rootViewController: homeVC)
         homeNav.tabBarItem = UITabBarItem(
             title: "Home",
             image: UIImage(systemName: "house"),
@@ -33,7 +42,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         
         // Upload Tab
         let uploadVC = UploadScreen()
-        let uploadNav = UINavigationController(rootViewController: uploadVC)
+        let uploadNav = AppNavigationController(rootViewController: uploadVC)
         uploadNav.tabBarItem = UITabBarItem(
             title: "Upload",
             image: UIImage(systemName: "plus.square"),
@@ -42,7 +51,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         
         // Practice Tab
         let practiceVC = LessonMapViewController()
-        let practiceNav = UINavigationController(rootViewController: practiceVC)
+        let practiceNav = AppNavigationController(rootViewController: practiceVC)
         practiceNav.tabBarItem = UITabBarItem(
             title: "Practice",
             image: UIImage(systemName: "map"),
@@ -51,7 +60,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
 
         // Search Tab
         let searchVC = DiscoverViewController()
-        let searchNav = UINavigationController(rootViewController: searchVC)
+        let searchNav = AppNavigationController(rootViewController: searchVC)
         searchNav.tabBarItem = UITabBarItem(
             title: "Discover",
             image: UIImage(systemName: "magnifyingglass"),

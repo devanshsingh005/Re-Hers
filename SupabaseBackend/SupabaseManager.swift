@@ -8,6 +8,32 @@
 import Foundation
 import Supabase
 
+public struct UserProfile: Codable {
+    public let id: UUID
+    public var avatar_url: String?
+    public var full_name: String?
+    public var username: String?
+    public var bio: String?
+    public var total_study_seconds: Int?
+    public var daily_goal_minutes: Int?
+    public var practice_mins_today: Int?
+    public var last_practice_date: String?
+    public var current_chapter: Int?
+
+    public init(id: UUID, avatar_url: String? = nil, full_name: String? = nil, username: String? = nil, bio: String? = nil, total_study_seconds: Int? = nil, daily_goal_minutes: Int? = nil, practice_mins_today: Int? = nil, last_practice_date: String? = nil, current_chapter: Int? = nil) {
+        self.id = id
+        self.avatar_url = avatar_url
+        self.full_name = full_name
+        self.username = username
+        self.bio = bio
+        self.total_study_seconds = total_study_seconds
+        self.daily_goal_minutes = daily_goal_minutes
+        self.practice_mins_today = practice_mins_today
+        self.last_practice_date = last_practice_date
+        self.current_chapter = current_chapter
+    }
+}
+
 final class SupabaseManager {
     static let shared = SupabaseManager()
 

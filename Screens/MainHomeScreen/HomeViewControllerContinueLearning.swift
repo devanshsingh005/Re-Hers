@@ -26,7 +26,9 @@ extension HomeViewController {
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.clipsToBounds = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.heightAnchor.constraint(equalToConstant: 200).isActive = true
+        let heightConstraint = scrollView.heightAnchor.constraint(equalToConstant: 200)
+        heightConstraint.isActive = true
+        self.playlistSectionHeightConstraint = heightConstraint
         sectionStack.addArrangedSubview(scrollView)
 
         let stackView = UIStackView()
@@ -50,22 +52,14 @@ extension HomeViewController {
         let wrapper = UIButton(type: .custom)
         wrapper.translatesAutoresizingMaskIntoConstraints = false
 
-        let imageView = UIImageView(image: UIImage(named: imageName))
+        let imageView = UIImageView(image: resolvePlaylistCoverImage(playlistId: playlist.id, coverUrl: playlist.coverImageURL))
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 16
         // No border — clean card look per user request
         imageView.translatesAutoresizingMaskIntoConstraints = false
 
-        if let url = playlist.coverImageURL, !url.isEmpty {
-            if url.hasPrefix("http") {
-                ImageLoader.shared.loadImage(from: url) { [weak imageView] img in
-                    if let img = img { imageView?.image = img }
-                }
-            } else {
-                imageView.image = UIImage(named: url) ?? imageView.image
-            }
-        }
+        loadPlaylistCoverImage(into: imageView, playlistId: playlist.id, coverUrl: playlist.coverImageURL)
 
         let titleLabel = UILabel()
         titleLabel.text = playlist.name
@@ -108,9 +102,6 @@ extension HomeViewController {
                 vc.passedArtist  = playlist.description ?? "Custom Playlist"
                 vc.playlistId    = playlist.id
                 vc.passedCoverUrl = playlist.coverImageURL
-                if let url = playlist.coverImageURL, url.hasPrefix("http") {
-                    ImageLoader.shared.loadImage(from: url) { [weak vc] img in vc?.passedImage = img }
-                }
                 self.navigationController?.pushViewController(vc, animated: true)
             }
         }, for: .touchUpInside)
@@ -119,15 +110,16 @@ extension HomeViewController {
     }
 
     func createEmptyPlaylistCard() -> UIView {
-        let size: CGFloat = 136
+        let width = UIScreen.main.bounds.width - 40
+        let height: CGFloat = 120
         let wrapper = UIButton(type: .custom)
         wrapper.translatesAutoresizingMaskIntoConstraints = false
-        wrapper.widthAnchor.constraint(equalToConstant: size).isActive = true
+        wrapper.widthAnchor.constraint(equalToConstant: width).isActive = true
 
         let container = UIView()
         container.isUserInteractionEnabled = false
         container.backgroundColor = .clear
-        container.layer.cornerRadius = 16
+        container.layer.cornerRadius = 20
         container.translatesAutoresizingMaskIntoConstraints = false
         wrapper.addSubview(container)
 
@@ -135,51 +127,66 @@ extension HomeViewController {
         let dashedLayer = CAShapeLayer()
         dashedLayer.strokeColor = ComponentColors.SongCard.border.withAlphaComponent(0.4).cgColor
         dashedLayer.fillColor = nil
-        dashedLayer.lineWidth = 1.5
+        dashedLayer.lineWidth = 1.75
         dashedLayer.lineDashPattern = [4, 4]
-        dashedLayer.path = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: size, height: size), cornerRadius: 16).cgPath
+        dashedLayer.path = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: width, height: height), cornerRadius: 20).cgPath
         container.layer.addSublayer(dashedLayer)
 
         let plusCircle = UIView()
         plusCircle.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        plusCircle.layer.cornerRadius = 22
+        plusCircle.layer.cornerRadius = 26
         plusCircle.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(plusCircle)
 
         let plusIcon = UIImageView(image: UIImage(systemName: "plus"))
         plusIcon.tintColor = .white
         plusIcon.contentMode = .scaleAspectFit
-        plusIcon.preferredSymbolConfiguration = .init(pointSize: 18, weight: .bold)
+        plusIcon.preferredSymbolConfiguration = .init(pointSize: 22, weight: .bold)
         plusIcon.translatesAutoresizingMaskIntoConstraints = false
         plusCircle.addSubview(plusIcon)
 
         let titleLabel = UILabel()
-        titleLabel.text = "Create\nPlaylist"
+        titleLabel.text = "Create Your Playlist"
         titleLabel.textColor = ComponentColors.SongCard.titleText
-        titleLabel.font = .systemFont(ofSize: 13, weight: .bold)
-        titleLabel.numberOfLines = 2
-        titleLabel.textAlignment = .center
+        titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
+        titleLabel.numberOfLines = 1
+        titleLabel.textAlignment = .left
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(titleLabel)
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Start your first collection and keep favorite songs together."
+        subtitleLabel.textColor = ComponentColors.SongCard.metadataText
+        subtitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitleLabel.numberOfLines = 2
+        subtitleLabel.textAlignment = .left
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(subtitleLabel)
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.alignment = .fill
+        textStack.spacing = 4
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(textStack)
 
         NSLayoutConstraint.activate([
             container.topAnchor.constraint(equalTo: wrapper.topAnchor),
             container.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
-            container.heightAnchor.constraint(equalToConstant: size),
+            container.heightAnchor.constraint(equalToConstant: height),
 
-            plusCircle.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            plusCircle.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -15),
-            plusCircle.widthAnchor.constraint(equalToConstant: 44),
-            plusCircle.heightAnchor.constraint(equalToConstant: 44),
+            plusCircle.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 22),
+            plusCircle.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            plusCircle.widthAnchor.constraint(equalToConstant: 52),
+            plusCircle.heightAnchor.constraint(equalToConstant: 52),
 
             plusIcon.centerXAnchor.constraint(equalTo: plusCircle.centerXAnchor),
             plusIcon.centerYAnchor.constraint(equalTo: plusCircle.centerYAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: plusCircle.bottomAnchor, constant: 8),
-            titleLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
-            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4)
+            textStack.leadingAnchor.constraint(equalTo: plusCircle.trailingAnchor, constant: 16),
+            textStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
+            textStack.centerYAnchor.constraint(equalTo: container.centerYAnchor)
         ])
 
         wrapper.addAction(UIAction { [weak self] _ in
@@ -342,7 +349,7 @@ extension HomeViewController {
             playBtn.heightAnchor.constraint(equalToConstant: 32)
         ])
         
-        // Tap: open the final song detail directly from Home recents.
+        // Tap: jump straight to the converted song detail flow.
         card.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
             NavigationBarHelper.animateButtonPress(card) { [weak self] in
