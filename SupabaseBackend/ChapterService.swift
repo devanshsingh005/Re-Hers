@@ -34,7 +34,7 @@ class ChapterService {
         
         let profile: UserProfile = try await client
             .from("profiles")
-            .select("current_chapter")
+            .select("*")
             .eq("id", value: userURL)
             .single()
             .execute()

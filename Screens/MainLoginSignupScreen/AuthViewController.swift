@@ -975,35 +975,56 @@ extension AuthViewController {
                 let client = SupabaseManager.shared.client
                 let session = try await client.auth.session
                 let userId = session.user.id.uuidString
+                let metadata = session.user.userMetadata
 
-                // Query user_onboarding — check if the user has set their genre (completed onboarding)
+                // RACE CONDITION FIX: Ensure at least a profile stub exists for all users
+                // if they didn't come from guest migration.
+                if !migrated {
+                    let fullName = (metadata["full_name"]?.value as? String) ?? ""
+                    let username = (metadata["username"]?.value as? String) ?? ""
+                    let avatar = (metadata["avatar_url"]?.value as? String) ?? "icon_1"
+
+                    // Silent idempotent upsert
+                    let _ = try? await client
+                        .from("profiles")
+                        .upsert(["id": userId, "full_name": fullName, "username": username, "avatar_url": avatar])
+                        .execute()
+                }
+
+                // Query user_onboarding
                 struct OnboardingRow: Decodable {
+                    let level: Int?
                     let genres: [String]?
                 }
 
                 do {
                     let row: OnboardingRow = try await client
                         .from("user_onboarding")
-                        .select("genres")
+                        .select("level, genres")
                         .eq("id", value: userId)
                         .single()
                         .execute()
                         .value
                         
-                    if let genres = row.genres, !genres.isEmpty {
-                        // Returning user with completed onboarding → go to main app
+                    // If login mode (returning user), always skip onboarding
+                    // If signup mode, only show if they haven't finished it
+                    if isLoginMode {
+                        showHomeScreen()
+                    } else if let genres = row.genres, !genres.isEmpty {
                         showHomeScreen()
                     } else {
-                        // User record exists but onboarding not finished
                         showOnboardingFlow()
                     }
                 } catch {
                     debugLog("Email Auth Onboarding Check - no record found")
-                    // No onboarding record found at all → show onboarding
-                    showOnboardingFlow()
+                    // If login mode, bypass even if no record found
+                    if isLoginMode {
+                        showHomeScreen()
+                    } else {
+                        showOnboardingFlow()
+                    }
                 }
             } catch {
-                // Could not get session — stay on auth screen
                 showError("Login error. Please try again.")
             }
         }

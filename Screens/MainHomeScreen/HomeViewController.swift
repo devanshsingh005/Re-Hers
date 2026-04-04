@@ -62,6 +62,12 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
             name: RecentPlayService.recentPlaysUpdatedNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAuthStatusChanged),
+            name: SupabaseManager.authStatusChangedNotification,
+            object: nil
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -98,6 +104,16 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     
     @objc private func handleProfileUpdate() {
         fetchProfileData()
+    }
+
+    @objc private func handleAuthStatusChanged() {
+        // Only refresh if we now have a user
+        if SupabaseManager.shared.client.auth.currentUser != nil {
+            fetchPlaylists()
+            fetchRecents()
+            fetchTopSong()
+            fetchProfileData()
+        }
     }
 
     @objc private func handleRecentPlaysUpdated() {
@@ -172,8 +188,11 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                 }
                 
                 // 2. NEW USER Logic: Try levels from onboarding
-                if let user = SupabaseManager.shared.client.auth.currentUser {
-                    struct Onboarding: Decodable { let level: Int }
+                guard let user = SupabaseManager.shared.client.auth.currentUser else {
+                    return try await self.fallbackToDiscover()
+                }
+                
+                struct Onboarding: Decodable { let level: Int? }
                     let onboarding: Onboarding? = try? await SupabaseManager.shared.client
                         .from("user_onboarding")
                         .select("level")
@@ -182,43 +201,46 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                         .execute()
                         .value
                     
-                    if let onboarding = onboarding {
-                        // Query songs WHERE level = onboarding.level AND is_active = true
-                        let recommendedSongs: [Song] = try await SupabaseManager.shared.client
-                            .from("songs")
-                            .select()
-                            .eq("level", value: onboarding.level)
-                            .eq("is_active", value: true)
-                            .limit(1)
-                            .execute()
-                            .value
-                        
-                        if let song = recommendedSongs.first {
-                            await MainActor.run {
-                                self.topCardContainer?.isHidden = false
-                                self.updateHeroCard(with: song)
-                            }
-                            return
-                        }
-                    }
-                }
                 
-                // 3. Fallback to discover songs (fetched by SongService)
-                let songs = try await SongService.shared.fetchSongs()
-                if let song = songs.first {
+                let level = onboarding?.level ?? 1 // Default to 1 if skipped
+                
+                // Query songs WHERE level = onboarding.level AND is_active = true
+                let recommendedSongs: [Song] = try await SupabaseManager.shared.client
+                    .from("songs")
+                    .select()
+                    .eq("level", value: level)
+                    .eq("is_active", value: true)
+                    .limit(1)
+                    .execute()
+                    .value
+                
+                if let song = recommendedSongs.first {
                     await MainActor.run {
                         self.topCardContainer?.isHidden = false
                         self.updateHeroCard(with: song)
                     }
-                } else {
-                    // If absolutely nothing, hide the card
-                    await MainActor.run {
-                        self.topCardContainer?.isHidden = true
-                    }
+                    return
                 }
+
+                try await self.fallbackToDiscover()
             } catch {
                 debugLog("Error fetching top song: \(error)")
-                // Keep previous state if any
+            }
+        }
+    }
+
+    private func fallbackToDiscover() async throws {
+        // 3. Fallback to discover songs (fetched by SongService)
+        let songs = try await SongService.shared.fetchSongs()
+        if let song = songs.first {
+            await MainActor.run {
+                self.topCardContainer?.isHidden = false
+                self.updateHeroCard(with: song)
+            }
+        } else {
+            // If absolutely nothing, hide the card
+            await MainActor.run {
+                self.topCardContainer?.isHidden = true
             }
         }
     }

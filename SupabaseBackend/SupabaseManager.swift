@@ -64,6 +64,24 @@ final class SupabaseManager {
                 auth: .init(emitLocalSessionAsInitialSession: true)
             )
         )
+        setupAuthStateListener()
+    }
+
+    private var authListenerTask: Task<Void, Never>?
+    static let authStatusChangedNotification = Notification.Name("SupabaseAuthStatusChanged")
+
+    private func setupAuthStateListener() {
+        authListenerTask?.cancel()
+        authListenerTask = Task {
+            for await (event, session) in client.auth.authStateChanges {
+                debugLog("[Auth] Event: \(event), User: \(session?.user.id.uuidString ?? "none")")
+                NotificationCenter.default.post(
+                    name: Self.authStatusChangedNotification,
+                    object: nil,
+                    userInfo: ["event": event, "session": session as Any]
+                )
+            }
+        }
     }
 
     func makeEphemeralClient() -> SupabaseClient {

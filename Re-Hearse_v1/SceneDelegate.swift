@@ -32,12 +32,41 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// Decides where to go after the splash screen finishes
     private func performInitialRouting() {
+        // Observe auth changes globally to handle sign-outs or remote session ends
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAuthStatusChanged(_:)),
+            name: SupabaseManager.authStatusChangedNotification,
+            object: nil
+        )
+
+        // Give Supabase a tiny window (e.g. 100-200ms) to restore session from disk
+        // if the client.auth.session is nil but emitLocalSessionAsInitialSession is true.
+        // Or check current session immediately.
         performAuthRouting()
+    }
+
+    @objc private func handleAuthStatusChanged(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let event = userInfo["event"] as? AuthChangeEvent else { return }
+
+        Task { @MainActor in
+            switch event {
+            case .signedOut, .userDeleted:
+                // Force user back to login only if they aren't already there
+                if !(window?.rootViewController?.presentedViewController is AuthViewController) {
+                    showLoginScreen()
+                }
+            default:
+                break
+            }
+        }
     }
 
     private func performAuthRouting() {
         let guestSessionManager = GuestSessionManager.shared
-
+        
+        // Final sanity check before routing
         if guestSessionManager.isAuthenticated() {
             showMainApp()
             return
