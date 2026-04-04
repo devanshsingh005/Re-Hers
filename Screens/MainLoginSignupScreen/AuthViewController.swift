@@ -76,7 +76,7 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
     
     private let forgotPasswordButton = UIButton(type: .system)
     
-    private let primaryButton = UIButton(type: .system)   // "NEXT" / "Sign Up"
+    private let primaryButton = UIButton(type: .system)   // "LOGIN" / "Sign Up"
     
     // Bottom toggle ("Create a Account" / "Already have an account?")
     private let switchModeButton = UIButton(type: .system)
@@ -605,9 +605,9 @@ private extension AuthViewController {
             NSLayoutConstraint.deactivate(signupConstraints)
         }
         
-        screenTitleLabel.text = isLoginMode ? "Sign In" : "Sign Up"
-        primaryButton.setTitle(isLoginMode ? "NEXT" : "Sign Up", for: .normal)
-        switchModeButton.setTitle(isLoginMode ? "Create a Account" : "Already have an account? Sign In", for: .normal)
+        screenTitleLabel.text = isLoginMode ? "Login" : "Sign Up"
+        primaryButton.setTitle(isLoginMode ? "Login" : "Sign Up", for: .normal)
+        switchModeButton.setTitle(isLoginMode ? "Create a Account" : "Already have an account? Login", for: .normal)
         
         errorLabel.isHidden = true
         updatePrimaryButtonState()

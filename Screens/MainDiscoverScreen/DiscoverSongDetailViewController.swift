@@ -201,7 +201,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        playAlongButton.layer.cornerRadius = 25
+        playAlongButton.layer.cornerRadius = 23
         playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
         playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.primaryActionFill
         playAlongButton.layer.shadowOpacity = 0.15
@@ -211,14 +211,14 @@ class DiscoverSongDetailViewController: UIViewController {
 
         animationButton.setTitle("Animation", for: .normal)
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        animationButton.layer.cornerRadius = 25
+        animationButton.layer.cornerRadius = 23
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
         animationButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         animationButton.layer.shadowOffset = CGSize(width: 0, height: 3)
         animationButton.isEnabled = false
 
         buttonStack.axis         = .horizontal
-        buttonStack.spacing      = 26
+        buttonStack.spacing      = 12
         buttonStack.distribution = .fillEqually
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
         buttonStack.addArrangedSubview(playAlongButton)
@@ -291,7 +291,7 @@ class DiscoverSongDetailViewController: UIViewController {
             buttonStack.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 24),
             buttonStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             buttonStack.widthAnchor.constraint(equalToConstant: 320),
-            buttonStack.heightAnchor.constraint(equalToConstant: 56),
+            buttonStack.heightAnchor.constraint(equalToConstant: 46),
 
             pdfLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             pdfLoadingIndicator.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),

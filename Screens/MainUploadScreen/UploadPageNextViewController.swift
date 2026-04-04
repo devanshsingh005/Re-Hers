@@ -248,7 +248,7 @@ final class UploadPageNextViewController: UIViewController {
                     debugLog("[PDF] ❌ HTTP \(code): \(body)")
                     await MainActor.run {
                         self.sheetLoadingIndicator.stopAnimating()
-                        self.statusLabel.text      = "PDF unavailable (HTTP \(code))."
+                        self.statusLabel.text      = "Our servers are facing an issue. Please try uploading something else."
                         self.statusLabel.isHidden  = false
                         self.refreshButton.isHidden = false
                     }
@@ -263,7 +263,7 @@ final class UploadPageNextViewController: UIViewController {
                 debugLog("[PDF] ❌ Network error: \(error.localizedDescription)")
                 await MainActor.run {
                     self.sheetLoadingIndicator.stopAnimating()
-                    self.statusLabel.text      = "Network error. Tap Refresh to retry."
+                    self.statusLabel.text      = "Our servers are facing an issue. Please try uploading something else."
                     self.statusLabel.isHidden  = false
                     self.refreshButton.isHidden = false
                 }
@@ -274,7 +274,7 @@ final class UploadPageNextViewController: UIViewController {
     private func handlePDFData(_ data: Data) {
         guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
             debugLog("[PDF] ❌ Not a valid PDF")
-            statusLabel.text       = "Could not display sheet. Tap Refresh to retry."
+            statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
             statusLabel.isHidden   = false
             refreshButton.isHidden = false
             return
@@ -305,7 +305,7 @@ final class UploadPageNextViewController: UIViewController {
             if self.pollAttempts >= Self.maxPollAttempts {
                 self.pollingTimer?.invalidate(); self.pollingTimer = nil
                 DispatchQueue.main.async {
-                    self.statusLabel.text       = "Processing timed out. Tap Refresh to retry."
+                    self.statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
                     self.statusLabel.isHidden   = false
                     self.refreshButton.isHidden = false
                     self.progressView.isHidden  = true
@@ -348,7 +348,7 @@ final class UploadPageNextViewController: UIViewController {
             case "failed":
                 pollingTimer?.invalidate(); pollingTimer = nil
                 await MainActor.run {
-                    self.statusLabel.text       = "Processing failed. Tap Refresh to retry."
+                    self.statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
                     self.statusLabel.isHidden   = false
                     self.refreshButton.isHidden = false
                     self.progressView.isHidden  = true
@@ -499,9 +499,9 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     private func showErrorState() {
-        statusLabel.text       = "Something went wrong. Tap Refresh to retry."
-        statusLabel.isHidden   = false
-        refreshButton.isHidden = false
+        statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
+        statusLabel.isHidden   = true
+        refreshButton.isHidden = true
         progressView.isHidden  = true
     }
 
@@ -748,7 +748,7 @@ final class UploadPageNextViewController: UIViewController {
         metronomeLabel.text    = "Metronome: N/A"
         keyLabel.text = "Key: N/A"; timeLabel.text = "Time: N/A"; chordLabel.text = "Chords: N/A"
         progressView.isHidden  = true
-        statusLabel.text       = "Failed to load data"
+        statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
         statusLabel.isHidden   = false
         refreshButton.isHidden = false
     }
@@ -768,7 +768,7 @@ final class UploadPageNextViewController: UIViewController {
         chordLabel.text = "Chords: Unavailable"
         tipsBodyLabel.text = message
         progressView.isHidden = true
-        statusLabel.text = "Upload unavailable"
+        statusLabel.text = "Our servers are facing an issue. Please try uploading something else."
         statusLabel.isHidden = false
         refreshButton.isHidden = false
     }

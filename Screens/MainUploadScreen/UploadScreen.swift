@@ -1142,7 +1142,7 @@ class UploadScreen: UIViewController {
         clearUploadState()
         activeQuizPopup = nil
         popup.dismiss(animated: true) { [weak self] in
-            self?.presentAlert(title: "Upload Failed", message: "We couldn't process that upload. Please try again.")
+            self?.presentAlert(title: "Upload Failed", message: "Our servers are facing an issue. Please try uploading something else.")
         }
     }
 

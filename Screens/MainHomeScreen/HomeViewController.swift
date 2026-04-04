@@ -32,6 +32,7 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     var topCardTagsStack:      UIStackView?
     var topCardDetailsStack:   UIStackView?
     var topCardImageView:      UIImageView?
+    var topCardContainer:      UIView?
     
     // Store the top song for navigation
     var topSong: Song?
@@ -105,7 +106,10 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         setupScrollView()
         setupNavBackground()
         
-        mainStackView.addArrangedSubview(addTopPracticeCardView())
+        let card = addTopPracticeCardView()
+        self.topCardContainer = card
+        mainStackView.addArrangedSubview(card)
+
         mainStackView.addArrangedSubview(addUploadSectionView())
         mainStackView.addArrangedSubview(addPlaylistSectionView())
         mainStackView.addArrangedSubview(addRecentsSectionView())
@@ -145,20 +149,64 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     private func fetchTopSong() {
         Task {
             do {
-                // Try from recents first!
+                // 1. Try from recents first!
                 let recents = try await RecentPlayService.shared.fetchRecents(limit: 1)
                 if let mostRecent = recents.first {
-                    await MainActor.run { self.updateHeroCard(with: mostRecent.songs) }
+                    await MainActor.run {
+                        self.topCardContainer?.isHidden = false
+                        self.updateHeroCard(with: mostRecent.songs)
+                    }
                     return
                 }
                 
-                // Fallback to highest level song
+                // 2. NEW USER Logic: Try levels from onboarding
+                if let user = SupabaseManager.shared.client.auth.currentUser {
+                    struct Onboarding: Decodable { let level: Int }
+                    let onboarding: Onboarding? = try? await SupabaseManager.shared.client
+                        .from("user_onboarding")
+                        .select("level")
+                        .eq("id", value: user.id)
+                        .single()
+                        .execute()
+                        .value
+                    
+                    if let onboarding = onboarding {
+                        // Query songs WHERE level = onboarding.level AND is_active = true
+                        let recommendedSongs: [Song] = try await SupabaseManager.shared.client
+                            .from("songs")
+                            .select()
+                            .eq("level", value: onboarding.level)
+                            .eq("is_active", value: true)
+                            .limit(1)
+                            .execute()
+                            .value
+                        
+                        if let song = recommendedSongs.first {
+                            await MainActor.run {
+                                self.topCardContainer?.isHidden = false
+                                self.updateHeroCard(with: song)
+                            }
+                            return
+                        }
+                    }
+                }
+                
+                // 3. Fallback to discover songs (fetched by SongService)
                 let songs = try await SongService.shared.fetchSongs()
                 if let song = songs.first {
-                    await MainActor.run { self.updateHeroCard(with: song) }
+                    await MainActor.run {
+                        self.topCardContainer?.isHidden = false
+                        self.updateHeroCard(with: song)
+                    }
+                } else {
+                    // If absolutely nothing, hide the card
+                    await MainActor.run {
+                        self.topCardContainer?.isHidden = true
+                    }
                 }
             } catch {
                 debugLog("Error fetching top song: \(error)")
+                // Keep previous state if any
             }
         }
     }

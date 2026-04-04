@@ -150,7 +150,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
         let buttonStack = UIStackView(arrangedSubviews: [playAlongButton, animationButton])
         buttonStack.axis = .horizontal
-        buttonStack.spacing = 26
+        buttonStack.spacing = 12
         buttonStack.distribution = .fillEqually
 
         let views: [UIView] = [albumArt, titleLabel, artistLabel, segmentControl,
@@ -204,7 +204,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
     private func configure(_ btn: UIButton, title: String, isPrimary: Bool) {
         btn.setTitle(title, for: .normal)
-        btn.layer.cornerRadius = 25
+        btn.layer.cornerRadius = 23
         btn.layer.shadowOffset = CGSize(width: 0, height: 3)
         btn.backgroundColor = isPrimary
             ? ComponentColors.SongDetailScreen.primaryActionFill
