@@ -231,17 +231,126 @@ class AllUploadsViewController: UIViewController {
                 return
             }
             let outputURL = jsonDict?["output_url"] as? String
-            let vc        = UploadPageNextViewController()
-            vc.jobId      = jobId
-            vc.resultURL  = outputURL
-            debugLog("[AllUploads] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
-            self.navigationController?.pushViewController(vc, animated: true)
+            Task { [weak self] in
+                guard let self else { return }
+                if let statusMessage = await self.statusGateMessage(for: scan, jobId: jobId) {
+                    await MainActor.run {
+                        self.presentUploadStatusAlert(title: title, message: statusMessage)
+                    }
+                    return
+                }
+
+                await MainActor.run {
+                    let vc        = UploadPageNextViewController()
+                    vc.jobId      = jobId
+                    vc.resultURL  = outputURL
+                    debugLog("[AllUploads] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+            }
         }, for: .touchUpInside)
 
         card.addTarget(self, action: #selector(cardDown(_:)), for: .touchDown)
         card.addTarget(self, action: #selector(cardUp(_:)),
                        for: [.touchUpInside, .touchUpOutside, .touchCancel])
         return card
+    }
+
+    private func statusGateMessage(for scan: Scan, jobId: UUID) async -> String? {
+        await jobStatusGateMessage(jobId: jobId)
+    }
+
+    private func jobStatusGateMessage(jobId: UUID) async -> String? {
+        struct JobStatusRow: Decodable {
+            let status: String?
+            let errorMessage: String?
+            let labelStatus: String?
+            let labelWarning: String?
+            let resultUrl: String?
+            enum CodingKeys: String, CodingKey {
+                case status
+                case errorMessage = "error_message"
+                case labelStatus = "label_status"
+                case labelWarning = "label_warning"
+                case resultUrl = "result_url"
+            }
+        }
+
+        do {
+            let rows: [JobStatusRow] = try await supabase
+                .from("jobs")
+                .select("status, error_message, label_status, label_warning, result_url")
+                .eq("id", value: jobId)
+                .limit(1)
+                .execute()
+                .value
+
+            guard let row = rows.first else { return nil }
+            let status = row.status?.lowercased() ?? ""
+            let labelStatus = row.labelStatus?.lowercased() ?? ""
+            let hasResult = (row.resultUrl?.isEmpty == false)
+
+            if (status == "pending" || status == "processing") && !hasResult {
+                return "This sheet music is still being prepared. Please wait a little longer, then try again."
+            }
+
+            if status == "failed" {
+                if let message = userFriendlyUploadStatusMessage(
+                    rawMessage: row.errorMessage,
+                    fallback: "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete."
+                ) {
+                    return message
+                }
+                return "This upload could not be converted successfully. The sheet may be unclear, unsupported, or incomplete."
+            }
+
+            if labelStatus == "failed" {
+                if let message = userFriendlyUploadStatusMessage(
+                    rawMessage: row.labelWarning ?? row.errorMessage,
+                    fallback: "We processed this file, but couldn't prepare the practice sheet for it."
+                ) {
+                    return message
+                }
+                return "We processed this file, but couldn't prepare the practice sheet for it."
+            }
+
+            if hasResult && (labelStatus.isEmpty || labelStatus == "success") {
+                return nil
+            }
+
+            return nil
+        } catch {
+            debugLog("[AllUploads] job lookup failed: \(error)")
+            return nil
+        }
+    }
+
+    private func userFriendlyUploadStatusMessage(rawMessage: String?, fallback: String) -> String? {
+        let trimmed = rawMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return fallback }
+
+        let lowercased = trimmed.lowercased()
+        if lowercased.contains("note labeling pipeline failed") {
+            return "We processed this file, but couldn't recognize the notes clearly enough to build a practice sheet."
+        }
+        if lowercased.contains("timeout") {
+            return "The conversion took too long and couldn't be completed. Please try again with a clearer file."
+        }
+        if lowercased.contains("unsupported") {
+            return "This file format or sheet layout isn't supported yet. Please try a different file."
+        }
+
+        return trimmed
+    }
+
+    private func presentUploadStatusAlert(title: String, message: String) {
+        let alert = UIAlertController(
+            title: "Upload Not Ready",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     @objc private func cardDown(_ s: UIButton) {

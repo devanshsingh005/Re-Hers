@@ -25,6 +25,8 @@ final class UploadPageNextViewController: UIViewController {
     private var keySignature:     String       = "C Major"
     private var sheetMusicJSON:   [String: Any]?
     private var isProcessing      = true
+    private var unavailableReasonMessage: String?
+    private var hasPresentedUnavailableReason = false
     private var pollingTimer:     Timer?
     private var processingHeightConstraint: NSLayoutConstraint?
     private var statusHeightConstraint:     NSLayoutConstraint?
@@ -96,6 +98,7 @@ final class UploadPageNextViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        presentUnavailableReasonIfNeeded()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -348,10 +351,10 @@ final class UploadPageNextViewController: UIViewController {
             case "failed":
                 pollingTimer?.invalidate(); pollingTimer = nil
                 await MainActor.run {
-                    self.statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
-                    self.statusLabel.isHidden   = false
-                    self.refreshButton.isHidden = false
-                    self.progressView.isHidden  = true
+                    self.isProcessing = false
+                    self.showUnavailableState(
+                        message: "This upload could not be converted successfully. The sheet may be unclear, unsupported, or incomplete."
+                    )
                 }
             case "processing":
                 await MainActor.run { self.updateProcessingStatus(message: "Processing…") }
@@ -728,6 +731,8 @@ final class UploadPageNextViewController: UIViewController {
         sheetMusicText  = data.text;  extractedChords = data.chords
         timeSignature   = data.timeSignature; tempo = data.tempo
         keySignature    = data.keySignature;  sheetMusicJSON = data.jsonData
+        unavailableReasonMessage = nil
+        hasPresentedUnavailableReason = false
 
         let bpm = tempo.components(separatedBy: " ").first ?? "nil"
     metronomeLabel.text = "Metronome on \(bpm) BPM"
@@ -745,15 +750,18 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     private func showErrorState(error: String) {
+        unavailableReasonMessage = error
         metronomeLabel.text    = "Metronome: N/A"
         keyLabel.text = "Key: N/A"; timeLabel.text = "Time: N/A"; chordLabel.text = "Chords: N/A"
         progressView.isHidden  = true
         statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
         statusLabel.isHidden   = false
         refreshButton.isHidden = false
+        presentUnavailableReasonIfNeeded()
     }
 
     private func showUnavailableState(message: String) {
+        unavailableReasonMessage = message
         extractedChords = []
         timeSignature = "Unavailable"
         tempo = "Unavailable"
@@ -771,6 +779,25 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.text = "Our servers are facing an issue. Please try uploading something else."
         statusLabel.isHidden = false
         refreshButton.isHidden = false
+        presentUnavailableReasonIfNeeded()
+    }
+
+    private func presentUnavailableReasonIfNeeded() {
+        guard isViewLoaded,
+              view.window != nil,
+              !hasPresentedUnavailableReason,
+              presentedViewController == nil,
+              let message = unavailableReasonMessage,
+              !message.isEmpty else { return }
+
+        hasPresentedUnavailableReason = true
+        let alert = UIAlertController(
+            title: "Conversion Issue",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     #if DEBUG
@@ -829,19 +856,7 @@ final class UploadPageNextViewController: UIViewController {
         NavigationBarHelper.animateButtonPress(playAlongButton) { [weak self] in
             guard let self = self else { return }
             guard !self.presentGuestPlayAlongGateIfNeeded() else { return }
-            if self.isProcessing { 
-                let a = UIAlertController(title: "Processing", message: "Please wait for the analysis to complete.", preferredStyle: .alert)
-                a.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(a, animated: true)
-                return
-            }
-            
-            guard let json = self.sheetMusicJSON else {
-                let a = UIAlertController(title: "No Data", message: "No sheet music data available for this upload.", preferredStyle: .alert)
-                a.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(a, animated: true)
-                return
-            }
+            guard let json = self.validSheetMusicJSON(orPresentingFor: "Play Along") else { return }
             
             let a = UIAlertController(
                 title: "Play Along",
@@ -902,12 +917,43 @@ final class UploadPageNextViewController: UIViewController {
     @objc private func didTapAnimation() {
         NavigationBarHelper.animateButtonPress(animationButton) { [weak self] in
             guard let self = self else { return }
-            if self.isProcessing { self.showAnimationError("Still processing. Please wait."); return }
-            guard let json = self.sheetMusicJSON else {
-                self.showAnimationError("No sheet music data available."); return
-            }
+            guard let json = self.validSheetMusicJSON(orPresentingFor: "Animation") else { return }
             self.navigateToAnimation(withJSON: json)
         }
+    }
+
+    private func validSheetMusicJSON(orPresentingFor feature: String) -> [String: Any]? {
+        if isProcessing {
+            showFeatureUnavailableAlert(
+                title: "Processing",
+                message: "Please wait for the analysis to complete before opening \(feature)."
+            )
+            return nil
+        }
+
+        guard let json = sheetMusicJSON else {
+            showFeatureUnavailableAlert(
+                title: "No Data",
+                message: "This upload could not be converted properly, so \(feature) is unavailable for it."
+            )
+            return nil
+        }
+
+        if loadedPDFData == nil || sheetHeaderLabel.text == "Upload unavailable" || tempo == "Unavailable" {
+            showFeatureUnavailableAlert(
+                title: "Unavailable",
+                message: "This upload is missing converted sheet music data, so \(feature) can't be opened."
+            )
+            return nil
+        }
+
+        return json
+    }
+
+    private func showFeatureUnavailableAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     private func navigateToAnimation(withJSON json: [String: Any]) {

@@ -29,13 +29,55 @@ class UploadScreen: UIViewController {
 
     // MARK: - State
     private var uploadTitle: String = DateFormatter.shortDate.string(from: Date())
+    private let defaultUploadTitleBase = "Untitled Sheet"
 
     /// Unique filename per upload, e.g. "SheetMusic_2026-03-08_064025.pdf".
-    /// Stored in json_data so no two files can share a name.
+    /// Stored internally for the file payload so uploads always remain unique.
     private func generateTimestampFilename() -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd_HHmmss"
         return "SheetMusic_\(f.string(from: Date())).pdf"
+    }
+
+    private func generateUniqueUploadTitle(for userId: UUID) async throws -> String {
+        struct ScanTitleRow: Decodable {
+            let jsonData: AnyCodable?
+            let originalFilename: String?
+
+            enum CodingKeys: String, CodingKey {
+                case jsonData = "json_data"
+                case originalFilename = "original_filename"
+            }
+        }
+
+        let scans: [ScanTitleRow] = try await supabase
+            .from("scans")
+            .select("json_data, original_filename")
+            .eq("user_id", value: userId)
+            .limit(200)
+            .execute()
+            .value
+
+        let existingTitles: Set<String> = Set(scans.compactMap { scan in
+            if let jsonTitle = (scan.jsonData?.value as? [String: Any])?["title"] as? String,
+               !jsonTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return jsonTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            guard let fallbackName = scan.originalFilename?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !fallbackName.isEmpty else { return nil }
+            return fallbackName.hasSuffix(".pdf") ? String(fallbackName.dropLast(4)) : fallbackName
+        })
+
+        if !existingTitles.contains(defaultUploadTitleBase) {
+            return defaultUploadTitleBase
+        }
+
+        var suffix = 2
+        while existingTitles.contains("\(defaultUploadTitleBase) \(suffix)") {
+            suffix += 1
+        }
+        return "\(defaultUploadTitleBase) \(suffix)"
     }
     private var currentUploadData: Data?
     private var currentFileName  = ""
@@ -718,16 +760,124 @@ class UploadScreen: UIViewController {
             }
 
             let outputURL = jsonDict?["output_url"] as? String
+            Task { [weak self] in
+                guard let self else { return }
+                if let statusMessage = await self.statusGateMessage(for: scan, jobId: jobId) {
+                    await MainActor.run {
+                        self.presentUploadStatusAlert(title: title, message: statusMessage)
+                    }
+                    return
+                }
 
-            let vc        = UploadPageNextViewController()
-            vc.jobId      = jobId
-            vc.resultURL  = outputURL
-            debugLog("[RowTap] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
-            self.navigationController?.pushViewController(vc, animated: true)
+                await MainActor.run {
+                    let vc        = UploadPageNextViewController()
+                    vc.jobId      = jobId
+                    vc.resultURL  = outputURL
+                    debugLog("[RowTap] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+            }
         }, for: .touchUpInside)
 
         attachPressAnimations(to: card)
         return card
+    }
+
+    private func statusGateMessage(for scan: Scan, jobId: UUID) async -> String? {
+        await jobStatusGateMessage(jobId: jobId)
+    }
+
+    private func jobStatusGateMessage(jobId: UUID) async -> String? {
+        struct JobStatusRow: Decodable {
+            let status: String?
+            let errorMessage: String?
+            let labelStatus: String?
+            let labelWarning: String?
+            let resultUrl: String?
+            enum CodingKeys: String, CodingKey {
+                case status
+                case errorMessage = "error_message"
+                case labelStatus = "label_status"
+                case labelWarning = "label_warning"
+                case resultUrl = "result_url"
+            }
+        }
+
+        do {
+            let rows: [JobStatusRow] = try await supabase
+                .from("jobs")
+                .select("status, error_message, label_status, label_warning, result_url")
+                .eq("id", value: jobId)
+                .limit(1)
+                .execute()
+                .value
+
+            guard let row = rows.first else { return nil }
+            let status = row.status?.lowercased() ?? ""
+            let labelStatus = row.labelStatus?.lowercased() ?? ""
+            let hasResult = (row.resultUrl?.isEmpty == false)
+
+            if (status == "pending" || status == "processing") && !hasResult {
+                return "This sheet music is still being prepared. Please wait a little longer, then try again."
+            }
+
+            if status == "failed" {
+                if let message = userFriendlyUploadStatusMessage(
+                    rawMessage: row.errorMessage,
+                    fallback: "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete."
+                ) {
+                    return message
+                }
+                return "This upload could not be converted successfully. The sheet may be unclear, unsupported, or incomplete."
+            }
+
+            if labelStatus == "failed" {
+                if let message = userFriendlyUploadStatusMessage(
+                    rawMessage: row.labelWarning ?? row.errorMessage,
+                    fallback: "We processed this file, but couldn't prepare the practice sheet for it."
+                ) {
+                    return message
+                }
+                return "We processed this file, but couldn't prepare the practice sheet for it."
+            }
+
+            if hasResult && (labelStatus.isEmpty || labelStatus == "success") {
+                return nil
+            }
+
+            return nil
+        } catch {
+            debugLog("[UploadStatus] job lookup failed: \(error)")
+            return nil
+        }
+    }
+
+    private func userFriendlyUploadStatusMessage(rawMessage: String?, fallback: String) -> String? {
+        let trimmed = rawMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return fallback }
+
+        let lowercased = trimmed.lowercased()
+        if lowercased.contains("note labeling pipeline failed") {
+            return "We processed this file, but couldn't recognize the notes clearly enough to build a practice sheet."
+        }
+        if lowercased.contains("timeout") {
+            return "The conversion took too long and couldn't be completed. Please try again with a clearer file."
+        }
+        if lowercased.contains("unsupported") {
+            return "This file format or sheet layout isn't supported yet. Please try a different file."
+        }
+
+        return trimmed
+    }
+
+    private func presentUploadStatusAlert(title: String, message: String) {
+        let alert = UIAlertController(
+            title: "Upload Not Ready",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     // MARK: - Row Options
@@ -939,14 +1089,14 @@ class UploadScreen: UIViewController {
         let outputURL = "\(ReHersAPI.baseURLString)/sheets/\(jobIdStr.lowercased())"
 
         // ── Step 3: Build json_data (protect canonical keys from API overwrite) ───
-        // Generate a unique timestamp-based filename for this upload.
         let timestampFilename = generateTimestampFilename()
-        uploadTitle = String(timestampFilename.dropLast(4))  // strip .pdf for display title
+        let friendlyTitle = try await generateUniqueUploadTitle(for: userId)
+        uploadTitle = friendlyTitle
 
         var jsonDict: [String: Any] = [
             "uploaded_at":         ISO8601DateFormatter().string(from: Date()),
-            "title":               uploadTitle,           // e.g. "SheetMusic_2026-03-08_064025"
-            "original_filename":   timestampFilename,     // e.g. "SheetMusic_2026-03-08_064025.pdf"
+            "title":               friendlyTitle,
+            "original_filename":   timestampFilename,
             "job_id":              jobIdStr,
             "user_id":             apiUidStr,
             "output_url":          outputURL,
