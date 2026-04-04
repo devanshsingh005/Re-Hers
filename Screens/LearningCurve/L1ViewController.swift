@@ -323,8 +323,6 @@ class LessonMapViewController: UIViewController {
     /// Starts as all-locked; replaced on every viewWillAppear from Supabase.
     private var chapters: [MusicChapter] = allChapters.map { $0.with(status: .locked) }
     // ─────────────────────────────────────────────────────────────────────
-    private var hasLoadedOnce = false
-
     // Header progress refs
     private var headerProgressLabel:     UILabel?
     private var headerProgressFillWidth: NSLayoutConstraint?
@@ -659,9 +657,7 @@ class LessonMapViewController: UIViewController {
         nodeViews.removeAll()
         contentView.subviews.filter { $0 is PathCanvasView }.forEach { $0.removeFromSuperview() }
         setupPath()
-        let shouldAnimate = hasLoadedOnce
-        hasLoadedOnce = true
-        animateHeaderProgress(animated: shouldAnimate)
+        animateHeaderProgress(animated: false)
     }
 
     // MARK: - Popup
