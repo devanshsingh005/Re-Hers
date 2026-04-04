@@ -1,4 +1,5 @@
 import UIKit
+import Network
 import Supabase
 import Auth
 
@@ -525,5 +526,106 @@ public final class NavigationBarHelper {
         if offset <= fadeStart { return 0.0 }
         if offset >= fadeEnd { return 1.0 }
         return (offset - fadeStart) / (fadeEnd - fadeStart)
+    }
+}
+
+final class AppConnectivityMonitor {
+    static let shared = AppConnectivityMonitor()
+
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "com.rehearse.connectivity.monitor")
+    private let lock = NSLock()
+    private var latestStatus: NWPath.Status?
+
+    var isOnline: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        // Default to online until the first path update arrives so we don't
+        // block valid requests during app startup.
+        guard let latestStatus else { return true }
+        return latestStatus == .satisfied
+    }
+
+    private init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.lock.lock()
+            self?.latestStatus = path.status
+            self?.lock.unlock()
+        }
+        monitor.start(queue: queue)
+    }
+}
+
+enum AppUserFacingError {
+    static func isOffline(_ error: Error?) -> Bool {
+        if !AppConnectivityMonitor.shared.isOnline {
+            return true
+        }
+
+        guard let error else { return false }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            let code = URLError.Code(rawValue: nsError.code)
+            switch code {
+            case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
+                return true
+            default:
+                break
+            }
+        }
+
+        let lowercasedDescription = error.localizedDescription.lowercased()
+        return lowercasedDescription.contains("offline")
+            || lowercasedDescription.contains("internet connection appears to be offline")
+            || lowercasedDescription.contains("not connected to the internet")
+    }
+
+    static func isNetworkIssue(_ error: Error?) -> Bool {
+        if isOffline(error) {
+            return true
+        }
+
+        guard let error else { return false }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return true
+        }
+
+        let lowercasedDescription = error.localizedDescription.lowercased()
+        return lowercasedDescription.contains("network")
+            || lowercasedDescription.contains("connection")
+            || lowercasedDescription.contains("timed out")
+            || lowercasedDescription.contains("timeout")
+            || lowercasedDescription.contains("host")
+            || lowercasedDescription.contains("dns")
+    }
+
+    static func title(for error: Error?) -> String {
+        if isOffline(error) {
+            return "No Internet Connection"
+        }
+
+        if isNetworkIssue(error) {
+            return "Connection Issue"
+        }
+
+        return "Something Went Wrong"
+    }
+
+    static func message(
+        for action: String,
+        error: Error?,
+        fallback: String
+    ) -> String {
+        if isOffline(error) {
+            return "Your internet connection appears to be offline. Please reconnect and try again."
+        }
+
+        if isNetworkIssue(error) {
+            return "We couldn't \(action) because the connection was interrupted. Please try again."
+        }
+
+        return fallback
     }
 }

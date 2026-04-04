@@ -34,6 +34,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     // MARK: - Tracks (fetched from Supabase)
     private var trackList: [PlaylistTrack] = []
+    private var trackLoadErrorMessage: String?
     
     // Header View Components (will be placed in tableView.tableHeaderView)
     private let headerContainerView = UIView()
@@ -304,9 +305,11 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         activityIndicator.startAnimating()
         
         Task {
+            let existingTracks = self.trackList
             do {
                 let tracks = try await PlaylistsManager.shared.fetchPlaylistTracks(playlistId: playlistId)
                 DispatchQueue.main.async { [weak self] in
+                    self?.trackLoadErrorMessage = nil
                     self?.trackList = tracks
                     self?.activityIndicator.stopAnimating()
                     self?.reloadTracksUI()
@@ -314,6 +317,14 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
             } catch {
                 debugLog("❌ Error fetching tracks: \(error)")
                 DispatchQueue.main.async { [weak self] in
+                    self?.trackLoadErrorMessage = AppUserFacingError.message(
+                        for: "load this playlist",
+                        error: error,
+                        fallback: "We couldn't load this playlist right now. Please try again."
+                    )
+                    if !(self?.trackList.isEmpty ?? true) {
+                        self?.trackList = existingTracks
+                    }
                     self?.activityIndicator.stopAnimating()
                     self?.reloadTracksUI()
                 }
@@ -347,16 +358,22 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     scan: scan
                 )
                 DispatchQueue.main.async { [weak self] in
+                    self?.trackLoadErrorMessage = nil
                     self?.trackList.insert(newTrack, at: 0)
                     self?.activityIndicator.stopAnimating()
                     self?.reloadTracksUI()
                 }
             } catch {
                 debugLog("❌ Error adding scan to playlist: \(error)")
+                let message = AppUserFacingError.message(
+                    for: "add that upload to the playlist",
+                    error: error,
+                    fallback: "We couldn't add that track right now. Please try again."
+                )
                 DispatchQueue.main.async { [weak self] in
                     self?.activityIndicator.stopAnimating()
-                    let alert = UIAlertController(title: "Error",
-                                                  message: "We couldn't add that track right now. Please try again.",
+                    let alert = UIAlertController(title: AppUserFacingError.title(for: error),
+                                                  message: message,
                                                   preferredStyle: .alert)
                     alert.addAction(UIAlertAction(title: "OK", style: .default))
                     self?.present(alert, animated: true)
@@ -392,6 +409,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     // MARK: - Refresh UI
     private func reloadTracksUI() {
         tracksHeaderLabel.text = "Tracks - \(trackList.count)"
+        emptyStateLabel.text = trackLoadErrorMessage ?? "No tracks yet.\nTap + to add a track."
         emptyStateLabel.isHidden = !trackList.isEmpty
         tracksTableView.reloadData()
     }

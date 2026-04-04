@@ -466,9 +466,14 @@ final class DiscoverViewController: UIViewController {
                     self.tableView.isHidden = false
                 }
             } catch {
+                let message = AppUserFacingError.message(
+                    for: "load songs",
+                    error: error,
+                    fallback: "We couldn't load songs right now. Please try again."
+                )
                 await MainActor.run {
                     self.spinner.stopAnimating()
-                    self.showError("We couldn't load songs right now. Please try again.")
+                    self.showError(message)
                 }
             }
         }
@@ -571,7 +576,6 @@ final class DiscoverViewController: UIViewController {
 
     private func showError(_ msg: String) {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "OK", style: .default))
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }

@@ -92,6 +92,8 @@ class UploadScreen: UIViewController {
     private var recentUploadsTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
+    private var latestRecentUploads: [Scan] = []
+    private var recentUploadsErrorMessage: String?
     private var hasQueuedGuestGatePresentation = false
     private var isPresentingGuestGate = false
 
@@ -589,11 +591,28 @@ class UploadScreen: UIViewController {
             do {
                 let uploads = try await self.fetchRecentUploads()
                 guard !Task.isCancelled else { return }
-                await MainActor.run { self.displayRecentUploads(uploads) }
+                await MainActor.run {
+                    self.latestRecentUploads = uploads
+                    self.recentUploadsErrorMessage = nil
+                    self.displayRecentUploads(uploads)
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 debugLog("[Uploads] load error: \(error)")
-                await MainActor.run { self.displayRecentUploads([]) }
+                let message = AppUserFacingError.message(
+                    for: "load your recent uploads",
+                    error: error,
+                    fallback: "We couldn't load your recent uploads right now. Please try again."
+                )
+                await MainActor.run {
+                    if self.latestRecentUploads.isEmpty {
+                        self.recentUploadsErrorMessage = message
+                        self.displayRecentUploads([])
+                    } else {
+                        self.recentUploadsErrorMessage = nil
+                        self.displayRecentUploads(self.latestRecentUploads)
+                    }
+                }
             }
         }
     }
@@ -614,7 +633,10 @@ class UploadScreen: UIViewController {
         guard let stack = recentUploadsStack else { return }
         uploadTitle = DateFormatter.shortDate.string(from: Date())
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        if scans.isEmpty { stack.addArrangedSubview(makeEmptyState()); return }
+        if scans.isEmpty {
+            stack.addArrangedSubview(makeEmptyState(message: recentUploadsErrorMessage))
+            return
+        }
         for scan in scans {
             let title    = extractTitle(from: scan.jsonData)
                         ?? extractOriginalFilename(from: scan.jsonData)
@@ -629,15 +651,16 @@ class UploadScreen: UIViewController {
         }
     }
 
-    private func makeEmptyState() -> UIView {
+    private func makeEmptyState(message: String?) -> UIView {
         let container = UIView()
         container.backgroundColor  = .secondarySystemBackground
         container.layer.cornerRadius = 14
         let label = UILabel()
-        label.text          = "No recent uploads yet"
+        label.text          = message ?? "No recent uploads yet"
         label.textColor     = .tertiaryLabel
         label.font          = .systemFont(ofSize: 15)
         label.textAlignment = .center
+        label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
         NSLayoutConstraint.activate([
@@ -955,9 +978,14 @@ class UploadScreen: UIViewController {
             debugLog("[Rename] scan \(scanId) → \(sanitizedTitle)")
         } catch {
             debugLog("[Rename] failed: \(error)")
+            let message = AppUserFacingError.message(
+                for: "rename that upload",
+                error: error,
+                fallback: "We couldn't rename that file right now. Please try again."
+            )
             await MainActor.run {
                 self.loadRecentUploads()
-                self.presentAlert(title: "Error", message: "We couldn't rename that file right now. Please try again.")
+                self.presentAlert(title: AppUserFacingError.title(for: error), message: message)
             }
         }
     }
@@ -992,10 +1020,15 @@ class UploadScreen: UIViewController {
             await MainActor.run { self.loadRecentUploads() }
         } catch {
             debugLog("[Delete] failed: \(error)")
+            let message = AppUserFacingError.message(
+                for: "delete that upload",
+                error: error,
+                fallback: "We couldn't delete this upload. Please try again."
+            )
             await MainActor.run {
                 let alert = UIAlertController(
-                    title: "Delete Failed",
-                    message: "We couldn't delete this upload. Please try again.",
+                    title: AppUserFacingError.title(for: error),
+                    message: message,
                     preferredStyle: .alert
                 )
                 alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -1182,10 +1215,50 @@ class UploadScreen: UIViewController {
                          message: "Document scanning is not supported on this device.")
             return
         }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showDocumentScanner()
+        case .notDetermined:
+            presentScannerCameraAccessRationale()
+        case .denied, .restricted:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to scan sheet music pages for upload."
+            )
+        @unknown default:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to scan sheet music pages for upload."
+            )
+        }
+    }
+
+    private func showDocumentScanner() {
         let scanner = VNDocumentCameraViewController()
         scanner.delegate = self
         activeDocumentScanner = scanner
         present(scanner, animated: true)
+    }
+
+    private func presentScannerCameraAccessRationale() {
+        let alert = UIAlertController(
+            title: "Use Camera to Scan Sheet Music",
+            message: "Re-Hearse uses the camera only when you choose Scan so you can capture sheet music pages for upload and analysis.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    granted ? self.showDocumentScanner() : self.presentSettingsRedirectAlert(
+                        title: "Camera Access Needed",
+                        message: "Allow camera access in Settings to scan sheet music pages for upload."
+                    )
+                }
+            }
+        })
+        present(alert, animated: true)
     }
 
     private func dismissDocumentScanner(_ scanner: VNDocumentCameraViewController,
@@ -1343,9 +1416,26 @@ class UploadScreen: UIViewController {
     private func handleUploadError(_ error: Error, popup: UploadQuizPopup) {
         clearUploadState()
         activeQuizPopup = nil
+        let title = AppUserFacingError.title(for: error)
+        let message = AppUserFacingError.message(
+            for: "finish this upload",
+            error: error,
+            fallback: "Our servers are facing an issue. Please try uploading something else."
+        )
         popup.dismiss(animated: true) { [weak self] in
-            self?.presentAlert(title: "Upload Failed", message: "Our servers are facing an issue. Please try uploading something else.")
+            self?.presentAlert(title: title, message: message)
         }
+    }
+
+    private func canStartUploadRequest() -> Bool {
+        guard AppConnectivityMonitor.shared.isOnline else {
+            presentAlert(
+                title: "No Internet Connection",
+                message: "Your internet connection appears to be offline. Please reconnect before uploading."
+            )
+            return false
+        }
+        return true
     }
 
     private func validateUploadSize(_ data: Data, title: String = "Upload Too Large") -> Bool {
@@ -1424,6 +1514,7 @@ class UploadScreen: UIViewController {
                 return
             }
             guard validateUploadSize(pdfData) else { return }
+            guard canStartUploadRequest() else { return }
 
             currentUploadData = pdfData
             currentFileName = generateTimestampFilename()
@@ -1876,6 +1967,7 @@ extension UploadScreen: VNDocumentCameraViewControllerDelegate {
                                   message: "Could not create a PDF from the scanned pages.")
                 return
             }
+            guard self.canStartUploadRequest() else { return }
             self.currentUploadData = pdfData
             self.currentFileName   = self.generateTimestampFilename()
             self.currentFileType   = "application/pdf"
@@ -1964,6 +2056,7 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                 self.currentUploadData = data
                 self.currentFileName   = self.generateTimestampFilename()
                 self.currentFileType   = "application/pdf"
+                guard self.canStartUploadRequest() else { return }
                 let popup = self.showQuizPopup()
                 self.uploadTask?.cancel()
                 self.uploadTask = Task { [weak self] in

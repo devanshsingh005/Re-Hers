@@ -420,29 +420,42 @@ final class ChordRecognitionViewController: UIViewController {
         case .undetermined:
             presentMicrophoneRationale()
         case .denied:
+            showMicrophonePermissionNeededState()
             presentMicrophoneSettingsAlert()
         @unknown default:
+            showMicrophonePermissionNeededState()
             presentMicrophoneSettingsAlert()
         }
     }
 
     private func presentMicrophoneRationale() {
+        guard presentedViewController == nil else { return }
+
         let alert = UIAlertController(
             title: "Use Microphone for Chord Recognition",
             message: "Re-Hearse only uses the microphone after you tap Listen so it can identify the notes you are playing in real time.",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel) { [weak self] _ in
+            self?.showMicrophonePermissionNeededState()
+        })
         alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
             self?.pitchDetector.requestMicrophonePermission { granted in
                 guard let self else { return }
-                granted ? self.startListening() : self.presentMicrophoneSettingsAlert()
+                if granted {
+                    self.startListening()
+                } else {
+                    self.showMicrophonePermissionNeededState()
+                    self.presentMicrophoneSettingsAlert()
+                }
             }
         })
         present(alert, animated: true)
     }
 
     private func presentMicrophoneSettingsAlert() {
+        guard presentedViewController == nil else { return }
+
         let alert = UIAlertController(
             title: "Microphone Access Needed",
             message: "Turn on microphone access in Settings to use live chord recognition.",
@@ -457,10 +470,41 @@ final class ChordRecognitionViewController: UIViewController {
     }
 
     private func startListening() {
-        pitchDetector.startListening()
+        guard pitchDetector.startListening() else {
+            micButton.backgroundColor = .systemGreen
+            showStopButton(false)
+            statusLabel.text = "Microphone unavailable"
+            presentMicrophoneUnavailableAlert()
+            return
+        }
         micButton.backgroundColor = .systemYellow
         showStopButton(true)
         statusLabel.text = "Listening..."
+    }
+
+    private func presentMicrophoneUnavailableAlert() {
+        guard presentedViewController == nil else { return }
+
+        let message = pitchDetector.lastStartFailure?.errorDescription
+            ?? "Re-Hearse could not start microphone capture right now. Please try again."
+
+        let alert = UIAlertController(
+            title: "Microphone Unavailable",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func showMicrophonePermissionNeededState() {
+        pitchDetector.stopListening()
+        micButton.backgroundColor = .systemGreen
+        showStopButton(false)
+        noteLabel.text = "—"
+        frequencyLabel.text = "Frequency: — Hz"
+        statusLabel.text = "Microphone access needed"
+        waveLayer?.path = nil
     }
 
     private func stopListening() {

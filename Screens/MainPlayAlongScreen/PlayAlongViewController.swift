@@ -313,7 +313,12 @@ final class PlayAlongViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
             self?.pitchDetector.requestMicrophonePermission { granted in
                 guard let self else { return }
-                granted ? self.startListening() : self.presentMicrophoneSettingsAlert()
+                if granted {
+                    self.startListening()
+                } else {
+                    self.navBar.setMicActive(false)
+                    self.presentMicrophoneSettingsAlert()
+                }
             }
         })
         present(alert, animated: true)

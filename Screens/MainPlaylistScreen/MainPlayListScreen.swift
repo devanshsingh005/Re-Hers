@@ -4,6 +4,7 @@
 //
 
 import UIKit
+import Photos
 import PhotosUI
 
 // MARK: - Album Placeholder Helper
@@ -105,6 +106,7 @@ class PlaylistViewController: UIViewController {
     // MARK: - Data
     private let playlistsManager = PlaylistsManager.shared
     private var loadedPlaylists: [PlaylistData] = []
+    private var playlistLoadErrorMessage: String?
 
     // MARK: - State
     private var isSelectionMode = false {
@@ -353,11 +355,22 @@ class PlaylistViewController: UIViewController {
     private func fetchPlaylists() {
         activityIndicator.startAnimating()
         Task {
+            let existingPlaylists = self.loadedPlaylists
             do {
                 self.loadedPlaylists = try await playlistsManager.fetchRemotePlaylists()
+                self.playlistLoadErrorMessage = nil
             } catch {
                 debugLog("❌ Fetch error: \(error)")
-                self.loadedPlaylists = []
+                if existingPlaylists.isEmpty {
+                    self.loadedPlaylists = []
+                    self.playlistLoadErrorMessage = AppUserFacingError.message(
+                        for: "load your playlists",
+                        error: error,
+                        fallback: "We couldn't load your playlists right now. Please try again."
+                    )
+                } else {
+                    self.loadedPlaylists = existingPlaylists
+                }
             }
             DispatchQueue.main.async {
                 self.activityIndicator.stopAnimating()
@@ -377,7 +390,23 @@ class PlaylistViewController: UIViewController {
     }
 
     private func updateEmptyState() {
-        debugLog(loadedPlaylists.isEmpty ? "No playlists." : "Playlists loaded.")
+        guard let collectionView else { return }
+
+        if loadedPlaylists.isEmpty {
+            let message = playlistLoadErrorMessage ?? "No playlists yet.\nCreate one to get started."
+            let label = UILabel()
+            label.text = message
+            label.textColor = .secondaryLabel
+            label.font = .systemFont(ofSize: 16, weight: .medium)
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            collectionView.backgroundView = label
+            debugLog("No playlists.")
+            return
+        }
+
+        collectionView.backgroundView = nil
+        debugLog("Playlists loaded.")
     }
 
     private func addPlaylist(name: String, image: UIImage?) {
@@ -392,11 +421,16 @@ class PlaylistViewController: UIViewController {
                     self?.fetchPlaylists()
                 }
             } catch {
+                let message = AppUserFacingError.message(
+                    for: "create that playlist",
+                    error: error,
+                    fallback: "We couldn't create that playlist right now. Please check the details and try again."
+                )
                 DispatchQueue.main.async { [weak self] in
                     self?.showLoading(false)
                     let alert = UIAlertController(
-                        title: "Error",
-                        message: "We couldn't create that playlist right now. Please check the details and try again.",
+                        title: AppUserFacingError.title(for: error),
+                        message: message,
                         preferredStyle: .alert
                     )
                     alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -1030,6 +1064,46 @@ class AddPlaylistViewController: UIViewController,
     }
 
     @objc private func pickImage() {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            presentAlert(title: "Photo Library Unavailable", message: "Photo Library is not available on this device right now.")
+            return
+        }
+
+        switch photoLibraryAuthorizationStatus() {
+        case .authorized, .limited:
+            presentPhotoLibraryPicker()
+        case .notDetermined:
+            let alert = UIAlertController(
+                title: "Use Photo Library for Playlist Cover",
+                message: "Re-Hearse only accesses your photo library when you choose an image for a playlist cover.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+                self?.requestPhotoLibraryAccess { status in
+                    DispatchQueue.main.async {
+                        switch status {
+                        case .authorized, .limited:
+                            self?.presentPhotoLibraryPicker()
+                        case .denied, .restricted:
+                            self?.presentPhotoLibrarySettingsAlert()
+                        case .notDetermined:
+                            break
+                        @unknown default:
+                            self?.presentPhotoLibrarySettingsAlert()
+                        }
+                    }
+                }
+            })
+            present(alert, animated: true)
+        case .denied, .restricted:
+            presentPhotoLibrarySettingsAlert()
+        @unknown default:
+            presentPhotoLibrarySettingsAlert()
+        }
+    }
+
+    private func presentPhotoLibraryPicker() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.mediaTypes = ["public.image"]
@@ -1042,6 +1116,41 @@ class AddPlaylistViewController: UIViewController,
             picker.popoverPresentationController?.sourceRect = pickImageButton.bounds
         }
         present(picker, animated: true)
+    }
+
+    private func presentAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func presentPhotoLibrarySettingsAlert() {
+        let alert = UIAlertController(
+            title: "Photo Library Access Needed",
+            message: "Turn on Photo Library access in Settings to choose a playlist cover image.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
+    private func photoLibraryAuthorizationStatus() -> PHAuthorizationStatus {
+        if #available(iOS 14, *) {
+            return PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        }
+        return PHPhotoLibrary.authorizationStatus()
+    }
+
+    private func requestPhotoLibraryAccess(_ completion: @escaping (PHAuthorizationStatus) -> Void) {
+        if #available(iOS 14, *) {
+            PHPhotoLibrary.requestAuthorization(for: .readWrite, handler: completion)
+        } else {
+            PHPhotoLibrary.requestAuthorization(completion)
+        }
     }
 
     private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {

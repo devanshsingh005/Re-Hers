@@ -205,8 +205,13 @@ final class UploadPageNextViewController: UIViewController {
 
         } catch {
             debugLog("[Load] ❌ DB error: \(error)")
+            let message = AppUserFacingError.message(
+                for: "load this upload",
+                error: error,
+                fallback: "We hit a problem loading this upload. Please try again."
+            )
             await MainActor.run {
-                self.showUnavailableState(message: "We hit a problem loading this upload. Please try again.")
+                self.showUnavailableState(message: message)
             }
         }
     }
@@ -249,9 +254,14 @@ final class UploadPageNextViewController: UIViewController {
                 guard (200...299).contains(code) else {
                     let body = String(data: data, encoding: .utf8) ?? "<binary>"
                     debugLog("[PDF] ❌ HTTP \(code): \(body)")
+                    let message = AppUserFacingError.message(
+                        for: "load this sheet preview",
+                        error: nil,
+                        fallback: "We couldn't load this sheet preview right now. Please try again."
+                    )
                     await MainActor.run {
                         self.sheetLoadingIndicator.stopAnimating()
-                        self.statusLabel.text      = "Our servers are facing an issue. Please try uploading something else."
+                        self.statusLabel.text      = message
                         self.statusLabel.isHidden  = false
                         self.refreshButton.isHidden = false
                     }
@@ -264,9 +274,14 @@ final class UploadPageNextViewController: UIViewController {
                 }
             } catch {
                 debugLog("[PDF] ❌ Network error: \(error.localizedDescription)")
+                let message = AppUserFacingError.message(
+                    for: "load this sheet preview",
+                    error: error,
+                    fallback: "We couldn't load this sheet preview right now. Please try again."
+                )
                 await MainActor.run {
                     self.sheetLoadingIndicator.stopAnimating()
-                    self.statusLabel.text      = "Our servers are facing an issue. Please try uploading something else."
+                    self.statusLabel.text      = message
                     self.statusLabel.isHidden  = false
                     self.refreshButton.isHidden = false
                 }
@@ -277,7 +292,7 @@ final class UploadPageNextViewController: UIViewController {
     private func handlePDFData(_ data: Data) {
         guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
             debugLog("[PDF] ❌ Not a valid PDF")
-            statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
+            statusLabel.text       = "We couldn't render this sheet preview right now. Please try again."
             statusLabel.isHidden   = false
             refreshButton.isHidden = false
             return
@@ -307,8 +322,13 @@ final class UploadPageNextViewController: UIViewController {
             self.pollAttempts += 1
             if self.pollAttempts >= Self.maxPollAttempts {
                 self.pollingTimer?.invalidate(); self.pollingTimer = nil
+                let message = AppUserFacingError.message(
+                    for: "finish processing this upload",
+                    error: nil,
+                    fallback: "Processing is taking longer than expected. Please try again in a moment."
+                )
                 DispatchQueue.main.async {
-                    self.statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
+                    self.statusLabel.text       = message
                     self.statusLabel.isHidden   = false
                     self.refreshButton.isHidden = false
                     self.progressView.isHidden  = true
@@ -350,11 +370,14 @@ final class UploadPageNextViewController: UIViewController {
                 await handleJobCompleted(resultUrl: row.resultUrl)
             case "failed":
                 pollingTimer?.invalidate(); pollingTimer = nil
+                let message = AppUserFacingError.message(
+                    for: "finish processing this upload",
+                    error: nil,
+                    fallback: "We couldn't finish processing this upload. Please try again."
+                )
                 await MainActor.run {
                     self.isProcessing = false
-                    self.showUnavailableState(
-                        message: "This upload could not be converted successfully. The sheet may be unclear, unsupported, or incomplete."
-                    )
+                    self.showUnavailableState(message: message)
                 }
             case "processing":
                 await MainActor.run { self.updateProcessingStatus(message: "Processing…") }
@@ -364,7 +387,12 @@ final class UploadPageNextViewController: UIViewController {
         } catch {
             debugLog("[Poll] DB polling error")
             stopPolling()
-            DispatchQueue.main.async { self.showErrorState() }
+            let message = AppUserFacingError.message(
+                for: "check this upload",
+                error: error,
+                fallback: "We couldn't refresh this upload right now. Please try again."
+            )
+            DispatchQueue.main.async { self.showErrorState(error: message) }
         }
     }
 
@@ -502,10 +530,11 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     private func showErrorState() {
-        statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
-        statusLabel.isHidden   = true
-        refreshButton.isHidden = true
-        progressView.isHidden  = true
+        showErrorState(error: AppUserFacingError.message(
+            for: "load this upload",
+            error: nil,
+            fallback: "We couldn't load this upload right now. Please try again."
+        ))
     }
 
     /// Reads "staff" (or parts/clefs) from the JSON and returns a human-readable focus label.
@@ -754,7 +783,7 @@ final class UploadPageNextViewController: UIViewController {
         metronomeLabel.text    = "Metronome: N/A"
         keyLabel.text = "Key: N/A"; timeLabel.text = "Time: N/A"; chordLabel.text = "Chords: N/A"
         progressView.isHidden  = true
-        statusLabel.text       = "Our servers are facing an issue. Please try uploading something else."
+        statusLabel.text       = error
         statusLabel.isHidden   = false
         refreshButton.isHidden = false
         presentUnavailableReasonIfNeeded()
@@ -776,7 +805,7 @@ final class UploadPageNextViewController: UIViewController {
         chordLabel.text = "Chords: Unavailable"
         tipsBodyLabel.text = message
         progressView.isHidden = true
-        statusLabel.text = "Our servers are facing an issue. Please try uploading something else."
+        statusLabel.text = message
         statusLabel.isHidden = false
         refreshButton.isHidden = false
         presentUnavailableReasonIfNeeded()

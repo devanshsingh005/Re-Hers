@@ -64,6 +64,8 @@ class UploadPickerViewController: UIViewController {
         return a
     }()
 
+    private var uploadLoadErrorMessage: String?
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -132,12 +134,18 @@ class UploadPickerViewController: UIViewController {
             do {
                 let uploads = try await PlaylistsManager.shared.fetchUserUploads()
                 await MainActor.run {
+                    self.uploadLoadErrorMessage = nil
                     self.loadingIndicator.stopAnimating()
                     self.renderRows(uploads)
                 }
             } catch {
                 debugLog("[UploadPicker] fetch error: \(error)")
                 await MainActor.run {
+                    self.uploadLoadErrorMessage = AppUserFacingError.message(
+                        for: "load your uploads",
+                        error: error,
+                        fallback: "We couldn't load your uploads right now. Please try again."
+                    )
                     self.loadingIndicator.stopAnimating()
                     self.renderRows([])
                 }
@@ -150,7 +158,7 @@ class UploadPickerViewController: UIViewController {
     private func renderRows(_ uploads: [UploadScanItem]) {
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if uploads.isEmpty {
-            contentStack.addArrangedSubview(makeEmptyState())
+            contentStack.addArrangedSubview(makeEmptyState(message: uploadLoadErrorMessage))
             return
         }
         for upload in uploads {
@@ -259,18 +267,19 @@ class UploadPickerViewController: UIViewController {
         return card
     }
 
-    private func makeEmptyState() -> UIView {
+    private func makeEmptyState(message: String?) -> UIView {
         let v = UIView()
         v.backgroundColor = .secondarySystemBackground
         v.layer.cornerRadius = 14
 
-        let img = UIImageView(image: UIImage(systemName: "square.and.arrow.up"))
+        let isError = message != nil
+        let img = UIImageView(image: UIImage(systemName: isError ? "wifi.exclamationmark" : "square.and.arrow.up"))
         img.tintColor = .tertiaryLabel
         img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
 
         let lbl = UILabel()
-        lbl.text = "No uploads yet.\nUpload something first!"
+        lbl.text = message ?? "No uploads yet.\nUpload something first!"
         lbl.textColor = .secondaryLabel
         lbl.font = .systemFont(ofSize: 14)
         lbl.textAlignment = .center

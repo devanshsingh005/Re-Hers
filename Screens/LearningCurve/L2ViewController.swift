@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 internal import PostgREST
 import Auth
 import Supabase
@@ -2187,31 +2188,145 @@ class TryYourselfViewController: UIViewController {
     }
 
     @objc private func toggleListening() {
-        isListening.toggle()
-
         if isListening {
-            attemptCount += 1
-            correctStreak = 0
-            stableRootFrameCount = 0
-            lastDetectedRoot = nil
-            let starsHint = attemptCount == 1 ? "⭐⭐⭐" : attemptCount == 2 ? "⭐⭐" : "⭐"
-            attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
-            UIView.transition(with: attemptCounterLabel, duration: 0.2, options: .transitionCrossDissolve, animations: nil)
-
-            let activeMicConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
-            micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: activeMicConfig), for: .normal)
-            statusLabel.text = "Capturing audio... play the target note clearly."
-            statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
-            instructionLabel.text = "Avoid background noise. Hold the correct note steady for a moment."
-            UIView.animate(withDuration: 0.25) {
-                self.detectedNoteLabel.alpha = 1
-                self.micButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
-            }
-            pitchDetector.startListening()
-            startPulseAnimation()
-
-        } else {
             stopListeningAndReset()
+            return
+        }
+
+        beginListeningFlow()
+    }
+
+    private func beginListeningFlow() {
+        switch pitchDetector.recordPermissionStatus() {
+        case .granted:
+            startListeningSession()
+        case .undetermined:
+            presentMicrophoneRationale()
+        case .denied:
+            showMicrophonePermissionNeededState()
+            presentMicrophoneSettingsAlert()
+        @unknown default:
+            showMicrophonePermissionNeededState()
+            presentMicrophoneSettingsAlert()
+        }
+    }
+
+    private func startListeningSession() {
+        guard !isListening else { return }
+        guard pitchDetector.startListening() else {
+            showMicrophoneUnavailableState()
+            presentMicrophoneUnavailableAlert()
+            return
+        }
+
+        isListening = true
+        attemptCount += 1
+        correctStreak = 0
+        stableRootFrameCount = 0
+        lastDetectedRoot = nil
+        let starsHint = attemptCount == 1 ? "⭐⭐⭐" : attemptCount == 2 ? "⭐⭐" : "⭐"
+        attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
+        UIView.transition(with: attemptCounterLabel, duration: 0.2, options: .transitionCrossDissolve, animations: nil)
+
+        let activeMicConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: activeMicConfig), for: .normal)
+        statusLabel.text = "Capturing audio... play the target note clearly."
+        statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
+        instructionLabel.text = "Avoid background noise. Hold the correct note steady for a moment."
+        UIView.animate(withDuration: 0.25) {
+            self.detectedNoteLabel.alpha = 1
+            self.micButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+        }
+        startPulseAnimation()
+    }
+
+    private func presentMicrophoneRationale() {
+        guard presentedViewController == nil else { return }
+
+        let alert = UIAlertController(
+            title: "Use Microphone for Try Yourself",
+            message: "Re-Hearse only uses the microphone while this exercise is active so it can detect the note you play or sing.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel) { [weak self] _ in
+            self?.showMicrophonePermissionNeededState()
+        })
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            self?.pitchDetector.requestMicrophonePermission { granted in
+                guard let self else { return }
+                if granted {
+                    self.startListeningSession()
+                } else {
+                    self.showMicrophonePermissionNeededState()
+                    self.presentMicrophoneSettingsAlert()
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentMicrophoneSettingsAlert() {
+        guard presentedViewController == nil else { return }
+
+        let alert = UIAlertController(
+            title: "Microphone Access Needed",
+            message: "Turn on microphone access in Settings so this lesson can hear the note you play or sing.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentMicrophoneUnavailableAlert() {
+        guard presentedViewController == nil else { return }
+
+        let message = pitchDetector.lastStartFailure?.errorDescription
+            ?? "Re-Hearse could not start microphone capture right now. Please try again."
+
+        let alert = UIAlertController(
+            title: "Microphone Unavailable",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func showMicrophonePermissionNeededState() {
+        pitchDetector.stopListening()
+        isListening = false
+        correctStreak = 0
+        stableRootFrameCount = 0
+        lastDetectedRoot = nil
+        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
+        statusLabel.text = "Microphone access needed"
+        statusLabel.textColor = .systemRed
+        instructionLabel.text = "Allow microphone access in Settings, then tap capture audio again."
+        stopPulseAnimation()
+        UIView.animate(withDuration: 0.3) {
+            self.micButton.transform = .identity
+        }
+    }
+
+    private func showMicrophoneUnavailableState() {
+        pitchDetector.stopListening()
+        isListening = false
+        correctStreak = 0
+        stableRootFrameCount = 0
+        lastDetectedRoot = nil
+        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
+        statusLabel.text = "Microphone unavailable"
+        statusLabel.textColor = .systemRed
+        instructionLabel.text = "Please check your microphone setup and try again."
+        stopPulseAnimation()
+        UIView.animate(withDuration: 0.3) {
+            self.micButton.transform = .identity
         }
     }
 

@@ -4,6 +4,7 @@
 
 import UIKit
 import AVFoundation
+import Photos
 import Supabase
 import Auth
 import SwiftUI
@@ -1183,6 +1184,46 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     }
 
     private func openPhotoLibrary() {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            showAlert(title: "Photo Library Unavailable", message: "Photo Library is not available on this device right now.")
+            return
+        }
+
+        switch photoLibraryAuthorizationStatus() {
+        case .authorized, .limited:
+            presentProfilePhotoLibraryPicker()
+        case .notDetermined:
+            let alert = UIAlertController(
+                title: "Use Photo Library for Profile Photo",
+                message: "Re-Hearse only accesses your photo library when you choose Photo Library so you can select a profile picture.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+                self?.requestPhotoLibraryAccess { status in
+                    DispatchQueue.main.async {
+                        switch status {
+                        case .authorized, .limited:
+                            self?.presentProfilePhotoLibraryPicker()
+                        case .denied, .restricted:
+                            self?.showPhotoLibrarySettingsAlert()
+                        case .notDetermined:
+                            break
+                        @unknown default:
+                            self?.showPhotoLibrarySettingsAlert()
+                        }
+                    }
+                }
+            })
+            present(alert, animated: true)
+        case .denied, .restricted:
+            showPhotoLibrarySettingsAlert()
+        @unknown default:
+            showPhotoLibrarySettingsAlert()
+        }
+    }
+
+    private func presentProfilePhotoLibraryPicker() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
         picker.mediaTypes = ["public.image"]
@@ -1240,6 +1281,35 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
             UIApplication.shared.open(settingsURL)
         })
         present(alert, animated: true)
+    }
+
+    private func showPhotoLibrarySettingsAlert() {
+        let alert = UIAlertController(
+            title: "Photo Library Access Needed",
+            message: "Turn on Photo Library access in Settings to choose a profile photo.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
+    private func photoLibraryAuthorizationStatus() -> PHAuthorizationStatus {
+        if #available(iOS 14, *) {
+            return PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        }
+        return PHPhotoLibrary.authorizationStatus()
+    }
+
+    private func requestPhotoLibraryAccess(_ completion: @escaping (PHAuthorizationStatus) -> Void) {
+        if #available(iOS 14, *) {
+            PHPhotoLibrary.requestAuthorization(for: .readWrite, handler: completion)
+        } else {
+            PHPhotoLibrary.requestAuthorization(completion)
+        }
     }
 
     private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {
@@ -1327,7 +1397,14 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                 }
             } catch {
                 debugLog("Profile upload error: \(error)")
-                await MainActor.run { showAlert(title: "Upload Error", message: "We couldn't upload that photo right now. Please try again.") }
+                let message = AppUserFacingError.message(
+                    for: "upload that photo",
+                    error: error,
+                    fallback: "We couldn't upload that photo right now. Please try again."
+                )
+                await MainActor.run {
+                    showAlert(title: AppUserFacingError.title(for: error), message: message)
+                }
             }
         }
     }

@@ -14,6 +14,7 @@ class AllUploadsViewController: UIViewController {
     private let scrollView       = UIScrollView()
     private let contentStack     = UIStackView()
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
+    private var uploadLoadErrorMessage: String?
 
     // MARK: - Supabase
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
@@ -85,12 +86,18 @@ class AllUploadsViewController: UIViewController {
             do {
                 let scans = try await fetchScans()
                 await MainActor.run {
+                    self.uploadLoadErrorMessage = nil
                     self.loadingIndicator.stopAnimating()
                     self.renderRows(scans)
                 }
             } catch {
                 debugLog("[AllUploads] fetch error: \(error)")
                 await MainActor.run {
+                    self.uploadLoadErrorMessage = AppUserFacingError.message(
+                        for: "load your uploads",
+                        error: error,
+                        fallback: "We couldn't load your uploads right now. Please try again."
+                    )
                     self.loadingIndicator.stopAnimating()
                     self.renderRows([])
                 }
@@ -114,7 +121,10 @@ class AllUploadsViewController: UIViewController {
     // MARK: - Render
     private func renderRows(_ scans: [Scan]) {
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        if scans.isEmpty { contentStack.addArrangedSubview(makeEmptyState()); return }
+        if scans.isEmpty {
+            contentStack.addArrangedSubview(makeEmptyState(message: uploadLoadErrorMessage))
+            return
+        }
         for scan in scans { contentStack.addArrangedSubview(makeRow(for: scan)) }
     }
 
@@ -363,13 +373,15 @@ class AllUploadsViewController: UIViewController {
     }
 
     // MARK: - Empty State
-    private func makeEmptyState() -> UIView {
+    private func makeEmptyState(message: String?) -> UIView {
         let v = UIView()
         v.backgroundColor    = .secondarySystemBackground
         v.layer.cornerRadius = 14
         let lbl = UILabel()
-        lbl.text = "No uploads yet"; lbl.textColor = .tertiaryLabel
+        lbl.text = message ?? "No uploads yet"
+        lbl.textColor = .tertiaryLabel
         lbl.font = .systemFont(ofSize: 15); lbl.textAlignment = .center
+        lbl.numberOfLines = 0
         lbl.translatesAutoresizingMaskIntoConstraints = false
         v.addSubview(lbl)
         NSLayoutConstraint.activate([
@@ -428,9 +440,17 @@ class AllUploadsViewController: UIViewController {
             try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
         } catch {
             debugLog("[AllUploads] rename failed: \(error)")
+            let message = AppUserFacingError.message(
+                for: "rename that upload",
+                error: error,
+                fallback: "We couldn't rename that file right now. Please try again."
+            )
             await MainActor.run {
                 self.loadUploads()
-                self.showErrorAlert(message: "We couldn't rename that file right now. Please try again.")
+                self.showErrorAlert(
+                    title: AppUserFacingError.title(for: error),
+                    message: message
+                )
             }
         }
     }
@@ -465,12 +485,23 @@ class AllUploadsViewController: UIViewController {
             await MainActor.run { self.loadUploads() }
         } catch {
             debugLog("[AllUploads] delete failed: \(error)")
+            let message = AppUserFacingError.message(
+                for: "delete that upload",
+                error: error,
+                fallback: "We couldn't delete this upload right now. Please try again."
+            )
+            await MainActor.run {
+                self.showErrorAlert(
+                    title: AppUserFacingError.title(for: error),
+                    message: message
+                )
+            }
         }
     }
 
-    private func showErrorAlert(message: String) {
+    private func showErrorAlert(title: String = "Error", message: String) {
         let alert = UIAlertController(
-            title: "Error",
+            title: title,
             message: message,
             preferredStyle: .alert
         )
