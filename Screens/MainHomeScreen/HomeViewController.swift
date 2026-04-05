@@ -253,13 +253,18 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         if let coverImageView = view.viewWithTag(9910) as? UIImageView {
             let placeholder = UIImage(named: "trackimage_1")
             coverImageView.image = placeholder
-            if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
-                if coverUrl.hasPrefix("http") {
-                    ImageLoader.shared.loadImage(from: coverUrl) { [weak coverImageView] img in
+            Task { [weak coverImageView] in
+                if let url = try? await song.resolvedCoverImageURL() {
+                    ImageLoader.shared.loadImage(from: url.absoluteString) { [weak coverImageView] img in
                         if let img = img { coverImageView?.image = img }
                     }
-                } else {
-                    coverImageView.image = UIImage(named: coverUrl) ?? placeholder
+                    return
+                }
+
+                if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+                    await MainActor.run {
+                        coverImageView?.image = UIImage(named: coverUrl) ?? placeholder
+                    }
                 }
             }
         }

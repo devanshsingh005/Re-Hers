@@ -96,6 +96,7 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
     private let errorLabel = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let initialMode: AuthMode
+    var postLoginRouteHandler: (@MainActor () -> Void)?
     
     // Async form state
     private var isUsernameChecking = false
@@ -318,7 +319,7 @@ private extension AuthViewController {
                                 action: #selector(primaryButtonTapped),
                                 for: .touchUpInside)
         primaryButton.translatesAutoresizingMaskIntoConstraints = false
-        
+
         // MARK: - Bottom switch mode
         
         switchModeButton.setTitle("Create a Account", for: .normal)
@@ -538,7 +539,6 @@ private extension AuthViewController {
             primaryButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
             primaryButton.heightAnchor.constraint(equalToConstant: 56),
             
-            
             activityIndicator.topAnchor.constraint(equalTo: primaryButton.bottomAnchor, constant: 8),
             activityIndicator.centerXAnchor.constraint(equalTo: primaryButton.centerXAnchor),
             
@@ -730,8 +730,7 @@ extension AuthViewController {
                 if isLoginMode {
                     try await login(email: payload.email, password: payload.password)
                     await MainActor.run {
-                        self.activityIndicator.stopAnimating()
-                        self.updatePrimaryButtonState()
+                        self.handleSuccessfulLogin()
                     }
                 } else {
                     try await ensureUsernameAvailable(payload.username)
@@ -956,6 +955,26 @@ private extension AuthViewController {
         case .signUp:
             return "We couldn't start sign up right now. Please try again."
         }
+    }
+}
+
+struct ReviewAccessConfiguration {
+    let email: String
+    let password: String
+
+    init(dictionary: [String: Any]) {
+        self.email = (dictionary["REVIEW_ACCESS_EMAIL"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.password = (dictionary["REVIEW_ACCESS_PASSWORD"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    init(bundle: Bundle) {
+        self.init(dictionary: bundle.infoDictionary ?? [:])
+    }
+
+    var isConfigured: Bool {
+        !email.isEmpty && !password.isEmpty
     }
 }
 
@@ -1199,6 +1218,18 @@ extension AuthViewController {
     func showError(_ message: String) {
         errorLabel.text = message
         errorLabel.isHidden = false
+    }
+
+    @MainActor
+    func handleSuccessfulLogin() {
+        activityIndicator.stopAnimating()
+        updatePrimaryButtonState()
+
+        if let postLoginRouteHandler {
+            postLoginRouteHandler()
+        } else {
+            routeAfterLogin()
+        }
     }
 
     @MainActor

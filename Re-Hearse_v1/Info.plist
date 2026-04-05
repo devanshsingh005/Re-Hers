@@ -4,8 +4,14 @@
 <dict>
 	<key>BACKEND_API_URL</key>
 	<string>$(BACKEND_API_URL)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Re-Hearse uses the camera so you can capture sheet music pages for import and practice tools.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Re-Hearse uses the microphone to listen while you play and provide real-time chord recognition feedback.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Re-Hearse accesses your photo library so you can import sheet music images into the app.</string>
 	<key>PUBLIC_LEGAL_BASE_URL</key>
-	<string>https://rehearse.app</string>
+	<string>https://letsrehearse.studio</string>
 	<key>SUPABASE_KEY</key>
 	<string>$(SUPABASE_KEY)</string>
 	<key>SUPABASE_URL</key>

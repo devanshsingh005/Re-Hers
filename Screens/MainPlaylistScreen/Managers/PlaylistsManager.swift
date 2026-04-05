@@ -63,15 +63,14 @@ public final class PlaylistsManager {
                     let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
                         .first!.appendingPathComponent(path)
                     displayImageData = try? Data(contentsOf: url)
-                } else if path.contains(".") {
-                    // Remote Supabase storage
+                } else if path.contains(".") || path.contains("/") {
+                    // Remote Supabase private storage
                     do {
-                        let url = try SupabaseManager.shared.client.storage
-                            .from("PlayListCover")
-                            .getPublicURL(path: path)
-                        displayImageUrl = url.absoluteString
+                        displayImageUrl = try await SupabaseManager.shared.signedAssetResolver
+                            .maybeSignedURL(for: path, fallbackBucket: "PlayListCover")?
+                            .absoluteString
                     } catch {
-                        debugLog("❌ Failed to get public URL for path \(path):", error)
+                        debugLog("❌ Failed to sign cover image URL for path \(path):", error)
                     }
                 }
             }
@@ -544,7 +543,7 @@ public final class PlaylistsManager {
             try await client.upload(fileName, data: prepared.data, options: options)
         }
         // Always return relative path so the DB stores the filename.
-        // It will be resolved to a full public URL during fetch using getPublicURL().
+        // It will be resolved to a short-lived signed URL during fetch.
         return fileName
     }
     

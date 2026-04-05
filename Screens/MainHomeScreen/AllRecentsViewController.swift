@@ -117,13 +117,18 @@ final class AllRecentsViewController: UIViewController {
         let placeholder = UIImage(named: randomImg) ?? UIImage(named: "trackimage_1")
         let imageView = UIImageView(image: placeholder)
         
-        if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
-            if coverUrl.hasPrefix("http") {
-                ImageLoader.shared.loadImage(from: coverUrl) { [weak imageView] img in
+        Task { [weak imageView] in
+            if let url = try? await song.resolvedCoverImageURL() {
+                ImageLoader.shared.loadImage(from: url.absoluteString) { [weak imageView] img in
                     if let img = img { imageView?.image = img }
                 }
-            } else {
-                imageView.image = UIImage(named: coverUrl) ?? placeholder
+                return
+            }
+
+            if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+                await MainActor.run {
+                    imageView?.image = UIImage(named: coverUrl) ?? placeholder
+                }
             }
         }
         

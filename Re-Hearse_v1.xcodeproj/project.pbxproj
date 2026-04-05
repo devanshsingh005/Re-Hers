@@ -79,6 +79,16 @@
 		F1A15E19826CAB5F156D28C0 /* ChordRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3C0D13FC97FE0B50919FB24 /* ChordRecognition.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		8F1B6D879C20400100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 842B08332EBA0465001AC579 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 842B083A2EBA0465001AC579;
+			remoteInfo = "Re-Hearse_v1";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayListScreen.swift; sourceTree = "<group>"; };
 		238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongDetailsPage.swift; sourceTree = "<group>"; };
@@ -140,6 +150,7 @@
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
 		84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/Wurlitzer210.sf2; sourceTree = "<group>"; };
 		84CC1BDE2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/SteinGrandPiano.sf2; sourceTree = "<group>"; };
+		8F1B6D7F9C20400100000001 /* Re-Hearse_v1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Re-Hearse_v1Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D42F90000100000001 /* Re-Hearse_v1/Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Secrets.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Debug.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Release.xcconfig"; sourceTree = SOURCE_ROOT; };
@@ -196,6 +207,11 @@
 			path = "Re-Hearse_v1";
 			sourceTree = "<group>";
 		};
+		8F1B6D7E9C20400100000001 /* Re-Hearse_v1Tests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Re-Hearse_v1Tests";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -209,6 +225,13 @@
 				23542CBA2EE5D5600074B2A2 /* Auth in Frameworks */,
 				23542CC22EE5D64D0074B2A2 /* Storage in Frameworks */,
 				23542CBC2EE5D5660074B2A2 /* Realtime in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8F1B6D819C20400100000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -343,6 +366,7 @@
 				84CC1BDE2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 */,
 				84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
+				8F1B6D7E9C20400100000001 /* Re-Hearse_v1Tests */,
 				23FA2E8C2EE57CCC0028C205 /* SupabaseBackend */,
 				84DBA8592EBA72C7006DF51E /* Screens */,
 				842B085B2EBA09C6001AC579 /* Common */,
@@ -359,6 +383,7 @@
 			isa = PBXGroup;
 			children = (
 				842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */,
+				8F1B6D7F9C20400100000001 /* Re-Hearse_v1Tests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -531,6 +556,26 @@
 			productReference = 842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */;
 			productType = "com.apple.product-type.application";
 		};
+		8F1B6D829C20400100000001 /* Re-Hearse_v1Tests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8F1B6D859C20400100000001 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1Tests" */;
+			buildPhases = (
+				8F1B6D809C20400100000001 /* Sources */,
+				8F1B6D819C20400100000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8F1B6D869C20400100000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8F1B6D7E9C20400100000001 /* Re-Hearse_v1Tests */,
+			);
+			name = "Re-Hearse_v1Tests";
+			productName = "Re-Hearse_v1Tests";
+			productReference = 8F1B6D7F9C20400100000001 /* Re-Hearse_v1Tests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -543,6 +588,10 @@
 				TargetAttributes = {
 					842B083A2EBA0465001AC579 = {
 						CreatedOnToolsVersion = 26.0.1;
+					};
+					8F1B6D829C20400100000001 = {
+						CreatedOnToolsVersion = 26.0.1;
+						TestTargetID = 842B083A2EBA0465001AC579;
 					};
 				};
 			};
@@ -564,6 +613,7 @@
 			projectRoot = "";
 			targets = (
 				842B083A2EBA0465001AC579 /* Re-Hearse_v1 */,
+				8F1B6D829C20400100000001 /* Re-Hearse_v1Tests */,
 			);
 		};
 /* End PBXProject section */
@@ -650,7 +700,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8F1B6D809C20400100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8F1B6D869C20400100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 842B083A2EBA0465001AC579 /* Re-Hearse_v1 */;
+			targetProxy = 8F1B6D879C20400100000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		842B084F2EBA0466001AC579 /* Debug */ = {
@@ -665,9 +730,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Re-Hearse";
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to capture images for analysis and features.\n";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses your microphone to listen to you play and provide real-time chord recognition and feedback.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to select images.\n";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Re-Hearse uses the camera so you can capture sheet music pages for import and practice tools.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses the microphone to listen while you play and provide real-time chord recognition feedback.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Re-Hearse accesses your photo library so you can import sheet music images into the app.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -702,9 +767,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Re-Hearse";
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to capture images for analysis and features.\n";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses your microphone to listen to you play and provide real-time chord recognition and feedback.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to select images.\n";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Re-Hearse uses the camera so you can capture sheet music pages for import and practice tools.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses the microphone to listen while you play and provide real-time chord recognition feedback.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Re-Hearse accesses your photo library so you can import sheet music images into the app.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -846,6 +911,62 @@
 			};
 			name = Release;
 		};
+		8F1B6D839C20400100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Q82D6R25SN;
+				ENABLE_TESTING_SEARCH_PATHS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/Frameworks",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "MukulParashar.Re-Hearse-v1Tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Re-Hearse_v1.app/Re-Hearse_v1";
+			};
+			name = Debug;
+		};
+		8F1B6D849C20400100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = Q82D6R25SN;
+				ENABLE_TESTING_SEARCH_PATHS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/Frameworks",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "MukulParashar.Re-Hearse-v1Tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Re-Hearse_v1.app/Re-Hearse_v1";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -863,6 +984,15 @@
 			buildConfigurations = (
 				842B084F2EBA0466001AC579 /* Debug */,
 				842B08502EBA0466001AC579 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8F1B6D859C20400100000001 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1Tests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8F1B6D839C20400100000001 /* Debug */,
+				8F1B6D849C20400100000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

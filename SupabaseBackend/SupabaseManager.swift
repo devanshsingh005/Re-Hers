@@ -38,6 +38,7 @@ final class SupabaseManager {
     static let shared = SupabaseManager()
 
     let client: SupabaseClient
+    let signedAssetResolver: SignedAssetResolver
     private let supabaseKey: String
     private let resolvedSupabaseURL: URL
 
@@ -64,6 +65,11 @@ final class SupabaseManager {
                 auth: .init(emitLocalSessionAsInitialSession: true)
             )
         )
+        signedAssetResolver = SignedAssetResolver(
+            signer: SupabaseStorageSigner(client: client),
+            supabaseBaseURL: resolvedSupabaseURL
+        )
+        _ = try? signedAssetResolver.normalizeAssetReference("warmup.txt", fallbackBucket: "warmup")
         setupAuthStateListener()
     }
 
@@ -122,6 +128,23 @@ final class SupabaseManager {
         return rawURLString
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }
+}
+
+private final class SupabaseStorageSigner: SignedURLSigning {
+    private let client: SupabaseClient
+
+    override init() {
+        fatalError("init() is unavailable")
+    }
+
+    init(client: SupabaseClient) {
+        self.client = client
+        super.init()
+    }
+
+    override func createSignedURL(bucket: String, path: String, expiresIn: Int) async throws -> URL {
+        try await client.storage.from(bucket).createSignedURL(path: path, expiresIn: expiresIn)
     }
 }
 

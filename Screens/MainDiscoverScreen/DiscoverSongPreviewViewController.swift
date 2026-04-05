@@ -133,6 +133,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
         setupNavBar()
         setupLayout()
         applyData()
+        refreshSongImage()
         loadPDF()
     }
 
@@ -251,38 +252,40 @@ final class DiscoverSongPreviewViewController: UIViewController {
         songTitleLabel.text = song?.title ?? "Song name"
     }
 
-    // MARK: - Remote Asset Helpers
+    private func refreshSongImage() {
+        guard let song else { return }
 
-    private func resolvedURL(from rawValue: String) -> URL? {
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        if let url = URL(string: trimmed), url.scheme != nil {
-            return url
+        if let coverName = song.coverImageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !coverName.isEmpty,
+           let image = UIImage(named: coverName) {
+            songImage = image
+            return
         }
 
-        if trimmed.hasPrefix("/") {
-            return ReHersAPI.url(path: trimmed)
-        } else {
-            return ReHersAPI.url(path: "/" + trimmed)
+        Task { [weak self] in
+            guard let url = try? await song.resolvedCoverImageURL() else { return }
+            ImageLoader.shared.loadImage(from: url.absoluteString) { [weak self] image in
+                guard let image else { return }
+                self?.songImage = image
+            }
         }
     }
 
-    private func fetchRemoteData(from rawValue: String) async throws -> Data {
-        guard let url = resolvedURL(from: rawValue) else {
+    // MARK: - Remote Asset Helpers
+
+    private func fetchRemoteData(from rawValue: String, fallbackBucket: String) async throws -> Data {
+        let url = try await SupabaseManager.shared.signedAssetResolver.signedURL(
+            for: rawValue,
+            fallbackBucket: fallbackBucket
+        )
+
+        guard !url.absoluteString.isEmpty else {
             throw AssetError.missingPDF
         }
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-
-        let isBackendURL = rawValue.hasPrefix("/") || url.absoluteString.hasPrefix(ReHersAPI.baseURLString)
-        if isBackendURL, let token = try? await SupabaseManager.shared.accessToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        let session: URLSession = isBackendURL ? ReHersPinnedSession.shared : URLSession.shared
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard (200...299).contains(statusCode) else {
             throw AssetError.remoteFetchFailed(statusCode)
@@ -299,14 +302,13 @@ final class DiscoverSongPreviewViewController: UIViewController {
         pdfErrorLabel.isHidden = true
 
         pdfLoadTask = Task {
-            let sheetURL = song?.labeledPdfPath ?? song?.sheetUrl
-            guard let sheetURL, !sheetURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard let pdfSource = self.song?.discoverPDFSource else {
                 await MainActor.run { self.showPDFError() }
                 return
             }
 
             do {
-                let data = try await fetchRemoteData(from: sheetURL)
+                let data = try await fetchRemoteData(from: pdfSource.rawValue, fallbackBucket: pdfSource.fallbackBucket)
                 if let doc = PDFDocument(data: data), doc.pageCount > 0 {
                     await MainActor.run { self.renderPDF(doc) }
                 } else {

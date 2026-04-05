@@ -14,12 +14,14 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Passed Data
     var song: Song?
     var passedImage: UIImage?
+    var onUserBlocked: ((UUID) -> Void)?
 
     // MARK: - Private State
     private var originalPDFDocument: PDFDocument?
     private var labeledPDFDocument: PDFDocument?
     private var recentPlayTask: Task<Void, Never>?
     private var sheetLoadTask: Task<Void, Never>?
+    private let moderationService = DiscoverModerationService.shared
     private var sheetMusicJSON: [String: Any]? {
         didSet { updateActionButtonState() }
     }
@@ -152,7 +154,28 @@ class DiscoverSongDetailViewController: UIViewController {
         let addToPlaylist = UIAction(title: "Add To Playlist", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
             self?.presentPlaylistPicker()
         }
-        return UIMenu(title: "", children: [addToPlaylist])
+
+        var actions: [UIAction] = [addToPlaylist]
+
+        if song != nil {
+            let report = UIAction(title: "Report", image: UIImage(systemName: "flag")) { [weak self] _ in
+                self?.presentReportReasons()
+            }
+            actions.append(report)
+        }
+
+        if song?.userId != nil {
+            let block = UIAction(
+                title: "Block User",
+                image: UIImage(systemName: "hand.raised"),
+                attributes: .destructive
+            ) { [weak self] _ in
+                self?.confirmBlockUser()
+            }
+            actions.append(block)
+        }
+
+        return UIMenu(title: "", children: actions)
     }
 
     @objc private func backAction() {
@@ -486,47 +509,18 @@ class DiscoverSongDetailViewController: UIViewController {
         }
     }
 
-    private func resolvedURL(from rawValue: String) -> URL? {
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        // If it's already a full URL, use it
-        if let url = URL(string: trimmed), url.scheme != nil {
-            return url
-        }
-
-        // For the Discover page, root-relative paths like "/labeled/song.pdf" 
-        // are stored in the 'public-sheets' bucket in Supabase.
-        let bucket = "public-sheets"
-        let path = trimmed.hasPrefix("/") ? String(trimmed.dropFirst()) : trimmed
-        
-        let supabaseURL = SupabaseManager.shared.supabaseURL
-        let storageURLString = "\(supabaseURL)/storage/v1/object/public/\(bucket)/\(path)"
-        
-        return URL(string: storageURLString)
+    private func signedURL(from rawValue: String, fallbackBucket: String) async throws -> URL {
+        try await SupabaseManager.shared.signedAssetResolver.signedURL(
+            for: rawValue,
+            fallbackBucket: fallbackBucket
+        )
     }
 
-    private func fetchRemoteData(from rawValue: String) async throws -> Data {
-        guard let url = resolvedURL(from: rawValue) else {
-            throw AssetError.invalidURL
-        }
+    private func fetchRemoteData(from rawValue: String, fallbackBucket: String) async throws -> Data {
+        let url = try await signedURL(from: rawValue, fallbackBucket: fallbackBucket)
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-
-        // If it's a Supabase URL, we might need the API key even for authenticated public reads
-        // or a Bearer token if the bucket policy requires it.
-        let isSupabase = url.absoluteString.hasPrefix(SupabaseManager.shared.supabaseURL)
-        if isSupabase {
-            // Always include the API key for Supabase requests
-            let rawKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_KEY") as? String ?? ""
-            let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-            request.setValue(key, forHTTPHeaderField: "apikey")
-            
-            if let token = try? await SupabaseManager.shared.accessToken() {
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            }
-        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -543,11 +537,8 @@ class DiscoverSongDetailViewController: UIViewController {
             return
         }
 
-        let url = resolvedURL(from: originalPath)
-        print("[DiscoverDetail] 🌐 Fetching Original PDF: \(url?.absoluteString ?? "nil")")
-
         do {
-            let data = try await fetchRemoteData(from: originalPath)
+            let data = try await fetchRemoteData(from: originalPath, fallbackBucket: "pdf_uploads")
             print("[DiscoverDetail] ✅ Fetched Original PDF: \(data.count) bytes")
             guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
                 print("[DiscoverDetail] ❌ Failed to create PDFDocument from data")
@@ -565,18 +556,14 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     private func loadConvertedPDF() async {
-        let sheetURL = song?.labeledPdfPath ?? song?.sheetUrl
-        guard let urlString = sheetURL, !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let pdfSource = song?.discoverPDFSource else {
             print("[DiscoverDetail] ℹ️ No converted PDF path")
             await MainActor.run { self.showPDFError() }
             return
         }
 
-        let url = resolvedURL(from: urlString)
-        print("[DiscoverDetail] 🌐 Fetching Converted PDF: \(url?.absoluteString ?? "nil")")
-
         do {
-            let data = try await fetchRemoteData(from: urlString)
+            let data = try await fetchRemoteData(from: pdfSource.rawValue, fallbackBucket: pdfSource.fallbackBucket)
             print("[DiscoverDetail] ✅ Fetched Converted PDF: \(data.count) bytes")
             guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
                 print("[DiscoverDetail] ❌ Failed to create PDFDocument from converted data")
@@ -600,17 +587,13 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     private func loadConvertedJSON() async {
-        let jsonURL = song?.outputJsonPath ?? song?.jsonUrl
-        guard let urlString = jsonURL, !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let jsonSource = song?.discoverJSONSource else {
             print("[DiscoverDetail] ℹ️ No JSON path")
             return
         }
 
-        let url = resolvedURL(from: urlString)
-        print("[DiscoverDetail] 🌐 Fetching JSON: \(url?.absoluteString ?? "nil")")
-
         do {
-            let data = try await fetchRemoteData(from: urlString)
+            let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
             print("[DiscoverDetail] ✅ Fetched JSON: \(data.count) bytes")
             guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 print("[DiscoverDetail] ❌ Failed to parse JSON data")
@@ -711,5 +694,111 @@ class DiscoverSongDetailViewController: UIViewController {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+
+    private func presentReportReasons() {
+        guard song != nil else { return }
+
+        let alert = UIAlertController(
+            title: "Report Content",
+            message: "Choose the reason for this report.",
+            preferredStyle: .actionSheet
+        )
+
+        let reasons: [(title: String, value: String)] = [
+            ("Offensive Content", "offensive_content"),
+            ("Copyright Concern", "copyright_concern"),
+            ("Spam or Misleading", "spam_or_misleading")
+        ]
+
+        for reason in reasons {
+            alert.addAction(UIAlertAction(title: reason.title, style: .default) { [weak self] _ in
+                self?.submitReport(reason: reason)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func submitReport(reason: (title: String, value: String)) {
+        guard let song else { return }
+
+        Task {
+            do {
+                try await moderationService.submitReport(contentID: song.id, reason: reason.value)
+                await MainActor.run {
+                    self.presentInfoAlert(
+                        title: "Report Sent",
+                        message: "Thanks for the report. We’ll review this content."
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    self.presentInfoAlert(
+                        title: "Report Failed",
+                        message: "We couldn't send your report right now. Please try again."
+                    )
+                }
+            }
+        }
+    }
+
+    private func confirmBlockUser() {
+        guard let userID = song?.userId else { return }
+
+        let alert = UIAlertController(
+            title: "Block User",
+            message: "You won't see songs from this user in Discover anymore on this device.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Block", style: .destructive) { [weak self] _ in
+            self?.onUserBlocked?(userID)
+            self?.presentInfoAlert(
+                title: "User Blocked",
+                message: "This user's songs will now be hidden from Discover."
+            )
+        })
+        present(alert, animated: true)
+    }
+}
+
+struct DiscoverReportRequest: Encodable {
+    let reporterID: UUID
+    let contentID: UUID
+    let contentType: String
+    let reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case reporterID = "reporter_id"
+        case contentID = "content_id"
+        case contentType = "content_type"
+        case reason
+    }
+}
+
+final class DiscoverModerationService {
+    static let shared = DiscoverModerationService()
+
+    private let client: SupabaseClient
+
+    init(client: SupabaseClient = SupabaseManager.shared.client) {
+        self.client = client
+    }
+
+    func submitReport(contentID: UUID, reason: String) async throws {
+        let reporterID = try await client.auth.session.user.id
+        let payload = DiscoverReportRequest(
+            reporterID: reporterID,
+            contentID: contentID,
+            contentType: "song",
+            reason: reason
+        )
+
+        _ = try await client
+            .from("reports")
+            .insert(payload)
+            .execute()
     }
 }

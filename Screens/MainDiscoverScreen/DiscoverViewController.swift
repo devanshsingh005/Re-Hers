@@ -20,6 +20,7 @@ final class DiscoverViewController: UIViewController {
 
     private var allSongs:      [Song] = []
     private var filteredSongs: [Song] = []
+    private let blockedUserStore = BlockedUserStore.shared
     private var selectedLevel: Int?    { didSet { refreshFilters() } }
     private var selectedSkill: String? { didSet { refreshFilters() } }
 
@@ -480,20 +481,17 @@ final class DiscoverViewController: UIViewController {
     }
 
     private func applyFilters() {
-        var result = allSongs
-        if let lv = selectedLevel         { result = result.filter { $0.level == lv } }
-        if let sk = selectedSkill         { result = result.filter { $0.skillTags.contains(sk) } }
-        if let q = searchBar.text, !q.isEmpty {
-            let lq = q.lowercased()
-            result = result.filter {
-                $0.title.lowercased().contains(lq) || $0.composer.lowercased().contains(lq)
-            }
-        }
-        filteredSongs   = result
+        filteredSongs = DiscoverSongFilter.visibleSongs(
+            from: allSongs,
+            blockedUserIDs: blockedUserStore.blockedUserIDs(),
+            selectedLevel: selectedLevel,
+            selectedSkill: selectedSkill,
+            query: searchBar.text
+        )
 
         tableView.reloadData()
-        emptyLabel.isHidden = !result.isEmpty
-        tableView.isHidden  = result.isEmpty
+        emptyLabel.isHidden = !filteredSongs.isEmpty
+        tableView.isHidden  = filteredSongs.isEmpty
 
         // Must update height AFTER reloadData so contentSize is fresh
         updateTableHeight()
@@ -694,6 +692,10 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
         let detailVC        = DiscoverSongDetailViewController()
         detailVC.song       = song
         detailVC.passedImage = cell?.currentArtImage
+        detailVC.onUserBlocked = { [weak self] blockedUserID in
+            self?.blockedUserStore.block(blockedUserID)
+            self?.applyFilters()
+        }
         push(detailVC)
     }
     
@@ -705,12 +707,82 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
 
 }
 
+protocol BlockedUserKeyValueStore {
+    func stringArray(forKey defaultName: String) -> [String]?
+    func set(_ value: Any?, forKey defaultName: String)
+}
+
+extension UserDefaults: BlockedUserKeyValueStore {}
+
+final class BlockedUserStore {
+    static let shared = BlockedUserStore()
+
+    private let defaults: BlockedUserKeyValueStore
+    private let storageKey: String
+
+    init(defaults: BlockedUserKeyValueStore = UserDefaults.standard, storageKey: String = "discover.blocked-user-ids") {
+        self.defaults = defaults
+        self.storageKey = storageKey
+    }
+
+    func blockedUserIDs() -> Set<UUID> {
+        let rawValues = defaults.stringArray(forKey: storageKey) ?? []
+        return Set(rawValues.compactMap(UUID.init(uuidString:)))
+    }
+
+    func isBlocked(_ userID: UUID?) -> Bool {
+        guard let userID else { return false }
+        return blockedUserIDs().contains(userID)
+    }
+
+    func block(_ userID: UUID) {
+        var updated = blockedUserIDs()
+        updated.insert(userID)
+        defaults.set(updated.map(\.uuidString).sorted(), forKey: storageKey)
+    }
+}
+
+enum DiscoverSongFilter {
+    static func visibleSongs(
+        from songs: [Song],
+        blockedUserIDs: Set<UUID>,
+        selectedLevel: Int?,
+        selectedSkill: String?,
+        query: String?
+    ) -> [Song] {
+        var result = songs.filter { song in
+            guard let userID = song.userId else { return true }
+            return !blockedUserIDs.contains(userID)
+        }
+
+        if let selectedLevel {
+            result = result.filter { $0.level == selectedLevel }
+        }
+
+        if let selectedSkill {
+            result = result.filter { $0.skillTags.contains(selectedSkill) }
+        }
+
+        if let query = query?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !query.isEmpty {
+            let normalizedQuery = query.lowercased()
+            result = result.filter {
+                $0.title.lowercased().contains(normalizedQuery)
+                    || $0.composer.lowercased().contains(normalizedQuery)
+            }
+        }
+
+        return result
+    }
+}
+
 // MARK: - SongCell
 
 final class SongCell: UITableViewCell {
     static let reuseID = "SongCell"
 
     private let orange = ComponentColors.HomeScreen.actionButtonFill
+    private var coverImageTask: Task<Void, Never>?
 
     // Pool of track images from Assets/track_images/
     private static let trackImages: [UIImage] = (1...16).compactMap {
@@ -783,17 +855,32 @@ final class SongCell: UITableViewCell {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        coverImageTask?.cancel()
+        coverImageTask = nil
+        artImageView.image = SongCell.trackImages.randomElement()
+    }
+
     func configure(with song: Song) {
         let placeholder = SongCell.trackImages.randomElement()
         artImageView.image = placeholder
-        
-        if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
-            if coverUrl.hasPrefix("http") {
-                ImageLoader.shared.loadImage(from: coverUrl) { [weak self] img in
+
+        coverImageTask?.cancel()
+        coverImageTask = Task { [weak self] in
+            guard let self else { return }
+
+            if let url = try? await song.resolvedCoverImageURL() {
+                ImageLoader.shared.loadImage(from: url.absoluteString) { [weak self] img in
                     if let img = img { self?.artImageView.image = img }
                 }
-            } else {
-                artImageView.image = UIImage(named: coverUrl) ?? placeholder
+                return
+            }
+
+            if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
+                await MainActor.run {
+                    self.artImageView.image = UIImage(named: coverUrl) ?? placeholder
+                }
             }
         }
 

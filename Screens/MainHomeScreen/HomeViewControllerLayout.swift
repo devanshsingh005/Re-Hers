@@ -166,11 +166,8 @@ extension HomeViewController {
             }
             return
         }
-        var finalURL = urlString
-        if urlString.contains("supabase.co/storage/v1/object/useprofile/") && !urlString.contains("/public/") {
-            finalURL = urlString.replacingOccurrences(of: "/object/useprofile/", with: "/object/public/useprofile/")
-        }
-        guard let url = URL(string: finalURL) else { return }
+        guard let finalURL = await NavigationBarHelper.signedProfileURLString(from: urlString),
+              let url = URL(string: finalURL) else { return }
         do {
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 30))
             if let img = UIImage(data: data) {
