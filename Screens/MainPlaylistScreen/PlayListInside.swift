@@ -361,6 +361,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                     self?.trackLoadErrorMessage = nil
                     self?.trackList.insert(newTrack, at: 0)
                     self?.activityIndicator.stopAnimating()
+                    AnalyticsManager.logTrackAddedToPlaylist(playlistId: playlistId)
                     self?.reloadTracksUI()
                 }
             } catch {

@@ -728,11 +728,13 @@ extension AuthViewController {
         Task {
             do {
                 if isLoginMode {
+                    AnalyticsManager.logAuthStarted(mode: "login")
                     try await login(email: payload.email, password: payload.password)
                     await MainActor.run {
                         self.handleSuccessfulLogin()
                     }
                 } else {
+                    AnalyticsManager.logAuthStarted(mode: "signup")
                     try await ensureUsernameAvailable(payload.username)
                     try await requestSignupOTP(
                         email: payload.email,
@@ -743,12 +745,17 @@ extension AuthViewController {
                     await MainActor.run {
                         self.activityIndicator.stopAnimating()
                         self.updatePrimaryButtonState()
+                        AnalyticsManager.logOTPSent()
                         self.showOTPVerificationScreen(email: payload.email, password: payload.password)
                     }
                 }
             } catch {
                 await MainActor.run {
                     let message = self.userFacingAuthErrorMessage(error, mode: self.isLoginMode ? .logIn : .signUp)
+                    AnalyticsManager.logAuthFailed(
+                        mode: self.isLoginMode ? "login" : "signup",
+                        reason: message
+                    )
                     self.showError(message)
                     if case .usernameAlreadyTaken = (error as? AuthError) {
                         self.showUsernameTakenAlert(message: message)
@@ -1012,6 +1019,7 @@ extension AuthViewController {
             email: email,
             password: password
         )
+        AnalyticsManager.logLoginSuccess()
     }
     
     /// Creates the Supabase account and triggers the confirmation email.

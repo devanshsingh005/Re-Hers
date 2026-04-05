@@ -232,6 +232,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
                 await MainActor.run {
                     setLoading(false)
+                    AnalyticsManager.logOTPVerified()
                     routeAfterLogin()
                 }
             } catch {
@@ -257,6 +258,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
                 )
 
                 await MainActor.run {
+                    AnalyticsManager.logOTPResent()
                     startResendCountdown()
                     showToast(message: "Code resent")
                 }

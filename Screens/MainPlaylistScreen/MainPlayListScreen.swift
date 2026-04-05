@@ -423,6 +423,7 @@ class PlaylistViewController: UIViewController {
             do {
                 let _ = try await PlaylistsManager.shared.createPlaylist(name: name, image: image)
                 DispatchQueue.main.async { [weak self] in
+                    AnalyticsManager.logPlaylistCreated()
                     self?.showLoading(false)
                     self?.fetchPlaylists()
                 }
@@ -525,6 +526,7 @@ extension PlaylistViewController: UICollectionViewDelegate,
             }
         } else {
             let playlist = loadedPlaylists[indexPath.item]
+            AnalyticsManager.logPlaylistOpened(playlistId: playlist.id)
             let vc = PlaylistDetailViewController()
             vc.playlistId    = playlist.id
             vc.passedTitle   = playlist.title

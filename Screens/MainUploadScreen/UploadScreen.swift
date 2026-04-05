@@ -92,6 +92,7 @@ class UploadScreen: UIViewController {
     private var recentUploadsTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
+    private var currentUploadSource = "unknown"
     private var latestRecentUploads: [Scan] = []
     private var recentUploadsErrorMessage: String?
     private var hasQueuedGuestGatePresentation = false
@@ -1159,6 +1160,11 @@ class UploadScreen: UIViewController {
 
         // ── Navigate ──────────────────────────────────────────────────────────────
         await MainActor.run {
+            AnalyticsManager.logUploadCompleted(
+                source: self.currentUploadSource,
+                fileType: fileType,
+                fileSizeBytes: imageData.count
+            )
             self.loadRecentUploads()
             self.clearUploadState()
             let vc       = UploadPageNextViewController()
@@ -1414,6 +1420,10 @@ class UploadScreen: UIViewController {
     }
 
     private func handleUploadError(_ error: Error, popup: UploadQuizPopup) {
+        AnalyticsManager.logUploadFailed(
+            source: currentUploadSource,
+            reason: error.localizedDescription
+        )
         clearUploadState()
         activeQuizPopup = nil
         let title = AppUserFacingError.title(for: error)
@@ -1450,6 +1460,7 @@ class UploadScreen: UIViewController {
         currentUploadData = nil
         currentFileName = ""
         currentFileType = ""
+        currentUploadSource = "unknown"
     }
 
     private func cancelPendingTasks() {
@@ -1519,8 +1530,10 @@ class UploadScreen: UIViewController {
             currentUploadData = pdfData
             currentFileName = generateTimestampFilename()
             currentFileType = "application/pdf"
+            currentUploadSource = "image_capture"
 
             let popup = showQuizPopup()
+            AnalyticsManager.logUploadStarted(source: currentUploadSource, fileType: currentFileType)
             uploadTask?.cancel()
             uploadTask = Task { [weak self] in
                 guard let self else { return }
@@ -1971,7 +1984,9 @@ extension UploadScreen: VNDocumentCameraViewControllerDelegate {
             self.currentUploadData = pdfData
             self.currentFileName   = self.generateTimestampFilename()
             self.currentFileType   = "application/pdf"
+            self.currentUploadSource = "document_scanner"
             let popup = self.showQuizPopup()
+            AnalyticsManager.logUploadStarted(source: self.currentUploadSource, fileType: self.currentFileType)
             self.uploadTask?.cancel()
             self.uploadTask = Task { [weak self] in
                 guard let self else { return }
@@ -2056,8 +2071,10 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                 self.currentUploadData = data
                 self.currentFileName   = self.generateTimestampFilename()
                 self.currentFileType   = "application/pdf"
+                self.currentUploadSource = "document_picker"
                 guard self.canStartUploadRequest() else { return }
                 let popup = self.showQuizPopup()
+                AnalyticsManager.logUploadStarted(source: self.currentUploadSource, fileType: self.currentFileType)
                 self.uploadTask?.cancel()
                 self.uploadTask = Task { [weak self] in
                     guard let self else { return }
@@ -2115,6 +2132,7 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                     }
 
                     DispatchQueue.main.async {
+                        self.currentUploadSource = "photo_picker"
                         self.beginUpload(with: image)
                     }
                 }
@@ -2125,6 +2143,7 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
     func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
                                            didCapture image: UIImage) {
         dismissUploadCamera(controller) { [weak self] in
+            self?.currentUploadSource = "camera_capture"
             self?.beginUpload(with: image)
         }
     }
