@@ -818,8 +818,8 @@ private extension AuthViewController {
                         self.checkedUsername = uname
                         self.isCheckedUsernameTaken = taken
                         if taken {
-                            self.showError(AuthError.usernameTaken.errorDescription!)
-                        } else if !self.errorLabel.isHidden && self.errorLabel.text == AuthError.usernameTaken.errorDescription {
+                            self.showError(AuthError.usernameAlreadyTaken.errorDescription!)
+                        } else if !self.errorLabel.isHidden && self.errorLabel.text == AuthError.usernameAlreadyTaken.errorDescription {
                             self.errorLabel.isHidden = true
                         }
                         self.updatePrimaryButtonState()
@@ -908,7 +908,7 @@ private extension AuthViewController {
         }
 
         if isCheckedUsernameTaken && username == checkedUsername {
-            if showErrors { showError(AuthError.usernameTaken.errorDescription!) }
+            if showErrors { showError(AuthError.usernameAlreadyTaken.errorDescription!) }
             return nil
         }
 
@@ -947,15 +947,14 @@ private extension AuthViewController {
         
         let errorString = "\(error.localizedDescription) \(String(describing: error))".lowercased()
         if errorString.contains("username") || errorString.contains("duplicate") || errorString.contains("unique") || errorString.contains("already exists") || errorString.contains("database error saving new user") {
-            return AuthError.usernameTaken.errorDescription!
+            return AuthError.usernameAlreadyTaken.errorDescription!
         }
 
         switch mode {
         case .logIn:
             return "We couldn't sign you in. Check your details and try again."
         case .signUp:
-            // Temporarily surfacing the real error for debugging
-            return "We couldn't start sign up: \(error.localizedDescription)"
+            return "We couldn't start sign up right now. Please try again."
         }
     }
 }
@@ -1020,6 +1019,18 @@ extension AuthViewController {
         }
     }
 
+    func isUsernameTaken(_ username: String) async -> Bool {
+        do {
+            try await ensureUsernameAvailable(username)
+            return false
+        } catch {
+            if case .usernameAlreadyTaken = (error as? AuthError) {
+                return true
+            }
+            return false
+        }
+    }
+
     func requestSignupOTP(
         email: String,
         password: String,
@@ -1043,7 +1054,6 @@ extension AuthViewController {
                 throw AuthError.emailAlreadyRegistered
             }
         } catch {
-            let errorString = "\(error.localizedDescription) \(String(describing: error))".lowercased()
             if isEmailAlreadyRegisteredError(error) {
                 throw AuthError.emailAlreadyRegistered
             }
