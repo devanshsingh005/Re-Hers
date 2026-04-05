@@ -77,6 +77,22 @@ public struct DBPlaylist: Codable {
     }
 }
 
+public struct DBPlaylistInsert: Codable {
+    public let userId: UUID
+    public let name: String
+    public let description: String?
+    public let coverImageUrl: String?
+    public let isPublic: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case name
+        case description
+        case coverImageUrl = "cover_image_url"
+        case isPublic = "is_public"
+    }
+}
+
 public struct DBPlaylistItem: Codable {
     public let id: Int64
     public let playlistId: UUID

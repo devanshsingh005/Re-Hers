@@ -63,16 +63,15 @@ public final class PlaylistsManager {
                     let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
                         .first!.appendingPathComponent(path)
                     displayImageData = try? Data(contentsOf: url)
-                } else {
+                } else if path.contains(".") {
                     // Remote Supabase storage
                     do {
-                        if let signedUrl = try? await SupabaseManager.shared.client.storage
+                        let url = try SupabaseManager.shared.client.storage
                             .from("PlayListCover")
-                            .createSignedURL(path: path, expiresIn: 60 * 60 * 24 * 7) { // 7 days
-                            displayImageUrl = signedUrl.absoluteString
-                        }
+                            .getPublicURL(path: path)
+                        displayImageUrl = url.absoluteString
                     } catch {
-                        debugLog("❌ Failed to sign URL for path \(path):", error)
+                        debugLog("❌ Failed to get public URL for path \(path):", error)
                     }
                 }
             }
@@ -496,15 +495,12 @@ public final class PlaylistsManager {
                     }
                 }
 
-        let newPlaylist = DBPlaylist(
-            id: UUID(),
+        let newPlaylist = DBPlaylistInsert(
             userId: userId,
             name: sanitizedName,
             description: "Custom Playlist",
             coverImageUrl: coverImageUrl,
-            isPublic: false,
-            createdAt: Date(),
-            updatedAt: Date()
+            isPublic: false
         )
 
         let inserted: DBPlaylist = try await SupabaseManager.shared.client
@@ -522,7 +518,7 @@ public final class PlaylistsManager {
     // MARK: - Image Upload
     
     private func uploadImageToStorage(image: UIImage) async throws -> String {
-        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
             throw PlaylistError.invalidData
         }
 
@@ -547,14 +543,13 @@ public final class PlaylistsManager {
             try await Task.sleep(nanoseconds: 1_000_000_000)
             try await client.upload(fileName, data: prepared.data, options: options)
         }
-        
-        // Return the fileName (path) instead of a signed URL.
-        // This ensures we store the persistent path in the database.
+        // Always return relative path so the DB stores the filename.
+        // It will be resolved to a full public URL during fetch using getPublicURL().
         return fileName
     }
     
     private func saveImageToDocuments(image: UIImage) -> String? {
-        guard let data = image.pngData() else { return nil }
+        guard let data = image.normalized().pngData() else { return nil }
         let filename = "doc_\(UUID().uuidString).png"
         let url = FileManager.default.urls(for: .documentDirectory,
                                            in: .userDomainMask).first!.appendingPathComponent(filename)

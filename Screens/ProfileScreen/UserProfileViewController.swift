@@ -1339,7 +1339,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     }
 
     private func prepareUserSelectedImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
-        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
             return .failure(.processingFailed)
         }
 
@@ -1357,7 +1357,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     func uploadAvatarImage(_ image: UIImage) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser,
-                  let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else { return }
+                  let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else { return }
 
             let prepared: PreparedImage
             switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {

@@ -49,10 +49,23 @@ final class PlaylistService {
     private init() {}
 
     func fetchPlaylists() async throws -> [Playlist] {
-        try await SupabaseManager.shared.client
+        let dbPlaylists: [Playlist] = try await SupabaseManager.shared.client
             .from("playlists")
             .select()
             .order("created_at", ascending: false)
             .execute().value
+            
+        return dbPlaylists.map { p in
+            var updated = p
+            if let path = updated.coverImageURL, !path.contains("://"), !path.hasPrefix("doc_"), path.contains(".") {
+                do {
+                    let url = try SupabaseManager.shared.client.storage.from("PlayListCover").getPublicURL(path: path)
+                    updated.coverImageURL = url.absoluteString
+                } catch {
+                    // Ignore and keep original path if error
+                }
+            }
+            return updated
+        }
     }
 }

@@ -20,11 +20,14 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
 
     enum AuthError: LocalizedError {
         case emailAlreadyRegistered
+        case usernameTaken
 
         var errorDescription: String? {
             switch self {
             case .emailAlreadyRegistered:
                 return "This email is already registered. Please log in instead."
+            case .usernameTaken:
+                return "This username is already taken. Please choose another one."
             }
         }
     }
@@ -84,6 +87,12 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
     private let errorLabel = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let initialMode: AuthMode
+    
+    // Async form state
+    private var isUsernameChecking = false
+    private var checkedUsername = ""
+    private var isCheckedUsernameTaken = false
+    private var usernameCheckTask: Task<Void, Never>?
     
     private var isLoginMode: Bool {
         modeSegment.selectedSegmentIndex == 0
@@ -755,6 +764,40 @@ private extension AuthViewController {
             textField.text = limited
         }
 
+        if textField === usernameTextField && !isLoginMode {
+            let uname = textField.text ?? ""
+            checkedUsername = ""
+            isCheckedUsernameTaken = false
+            usernameCheckTask?.cancel()
+            
+            if !uname.isEmpty {
+                isUsernameChecking = true
+                updatePrimaryButtonState() // Disable button while checking
+                
+                usernameCheckTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    guard !Task.isCancelled, let self = self else { return }
+                    
+                    let taken = await self.isUsernameTaken(uname)
+                    guard !Task.isCancelled else { return }
+                    
+                    await MainActor.run {
+                        self.isUsernameChecking = false
+                        self.checkedUsername = uname
+                        self.isCheckedUsernameTaken = taken
+                        if taken {
+                            self.showError(AuthError.usernameTaken.errorDescription!)
+                        } else if !self.errorLabel.isHidden && self.errorLabel.text == AuthError.usernameTaken.errorDescription {
+                            self.errorLabel.isHidden = true
+                        }
+                        self.updatePrimaryButtonState()
+                    }
+                }
+            } else {
+                isUsernameChecking = false
+            }
+        }
+
         if !errorLabel.isHidden, validatedAuthPayload(showErrors: false) != nil {
             errorLabel.isHidden = true
         }
@@ -766,6 +809,21 @@ private extension AuthViewController {
         let limited = InputValidator.limit(trimmed, maxLength: maxLength(for: textField))
         textField.text = textField === usernameTextField ? limited.replacingOccurrences(of: " ", with: "") : limited
         updatePrimaryButtonState()
+        
+        // Inline error reporting on field exit
+        if !isLoginMode {
+            if textField == emailTextField, let err = InputValidator.validateEmail(textField.text ?? "") {
+                showError(err)
+            } else if textField == passwordTextField, let err = InputValidator.validatePassword(textField.text ?? "") {
+                showError(err)
+            } else if textField == confirmPasswordTextField, textField.text != passwordTextField.text {
+                showError("Passwords do not match.")
+            }
+        } else {
+             if textField == emailTextField, let err = InputValidator.validateEmail(textField.text ?? "") {
+                 showError(err)
+             }
+        }
     }
 
     func validatedAuthPayload(showErrors: Bool) -> AuthPayload? {
@@ -782,6 +840,13 @@ private extension AuthViewController {
         guard !InputValidator.trimOnSubmit(password).isEmpty else {
             if showErrors { showError("Password is required.") }
             return nil
+        }
+
+        if !isLoginMode {
+            if let passwordError = InputValidator.validatePassword(password) {
+                if showErrors { showError(passwordError) }
+                return nil
+            }
         }
 
         guard !isLoginMode else {
@@ -806,6 +871,19 @@ private extension AuthViewController {
             return nil
         }
 
+        if isUsernameChecking {
+            return nil // Disable while verifying username
+        }
+
+        if isCheckedUsernameTaken && username == checkedUsername {
+            if showErrors { showError(AuthError.usernameTaken.errorDescription!) }
+            return nil
+        }
+
+        guard username == checkedUsername, !isCheckedUsernameTaken else {
+            return nil // Wait for check task to flip state
+        }
+
         guard !confirmPassword.isEmpty else {
             if showErrors { showError("Please confirm your password.") }
             return nil
@@ -818,11 +896,6 @@ private extension AuthViewController {
 
         guard hasAcceptedSignupLegal else {
             if showErrors { showError("Please accept the Terms of Service and Privacy Policy to sign up.") }
-            return nil
-        }
-
-        if showErrors, let passwordError = InputValidator.validatePassword(password) {
-            showError(passwordError)
             return nil
         }
 
@@ -839,12 +912,18 @@ private extension AuthViewController {
         if let authError = error as? AuthError, let message = authError.errorDescription {
             return message
         }
+        
+        let errorString = "\(error.localizedDescription) \(String(describing: error))".lowercased()
+        if errorString.contains("username") || errorString.contains("duplicate") || errorString.contains("unique") || errorString.contains("already exists") || errorString.contains("database error saving new user") {
+            return AuthError.usernameTaken.errorDescription!
+        }
 
         switch mode {
         case .logIn:
             return "We couldn't sign you in. Check your details and try again."
         case .signUp:
-            return "We couldn't start sign up right now. Please try again."
+            // Temporarily surfacing the real error for debugging
+            return "We couldn't start sign up: \(error.localizedDescription)"
         }
     }
 }
@@ -900,6 +979,12 @@ extension AuthViewController {
         username: String
     ) async throws {
         let client = SupabaseManager.shared.client
+        
+        let isTaken = await isUsernameTaken(username)
+        if isTaken {
+            throw AuthError.usernameTaken
+        }
+        
         let metadata: [String: AnyJSON] = [
             "full_name": .string(fullName),
             "username": .string(username)
@@ -912,8 +997,12 @@ extension AuthViewController {
                 data: metadata
             )
         } catch {
+            let errorString = "\(error.localizedDescription) \(String(describing: error))".lowercased()
             if isEmailAlreadyRegisteredError(error) {
                 throw AuthError.emailAlreadyRegistered
+            }
+            if errorString.contains("database error saving new user") || errorString.contains("duplicate") || errorString.contains("unique constraint") {
+                throw AuthError.usernameTaken
             }
             throw error
         }
@@ -931,6 +1020,23 @@ extension AuthViewController {
         ]
 
         return existingAccountMarkers.contains { message.contains($0) }
+    }
+
+    private func isUsernameTaken(_ username: String) async -> Bool {
+        let client = SupabaseManager.shared.client
+        do {
+            let rows: [AnyJSON] = try await client
+                .from("profiles")
+                .select("id")
+                .eq("username", value: username)
+                .limit(1)
+                .execute()
+                .value
+            return !rows.isEmpty
+        } catch {
+            print("isUsernameTaken error: \(error)")
+            return false
+        }
     }
 
     @MainActor

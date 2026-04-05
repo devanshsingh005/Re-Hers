@@ -1538,7 +1538,7 @@ class UploadScreen: UIViewController {
     }
 
     private func validateAndPrepareImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
-        guard let sourceData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
             return .failure(.processingFailed)
         }
 

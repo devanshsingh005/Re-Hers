@@ -46,8 +46,6 @@ public class ImageLoader {
                     
                     guard let httpResponse = response as? HTTPURLResponse,
                           httpResponse.statusCode == 200,
-                          let mimeType = httpResponse.mimeType,
-                          mimeType.hasPrefix("image/"),
                           let data = data,
                           let image = UIImage(data: data),
                           error == nil else {
@@ -78,5 +76,23 @@ public class ImageLoader {
             self.loadingTasks[urlString]?.cancel()
             self.loadingTasks.removeValue(forKey: urlString)
         }
+    }
+}
+
+public extension UIImage {
+    /// Normalizes the image's orientation to `.up` by redrawing it.
+    /// This fixes issues where EXIF orientation is stripped during `jpegData` or `pngData` extraction, 
+    /// which commonly causes uploaded images to appear rotated by 90 degrees.
+    func normalized() -> UIImage {
+        if self.imageOrientation == .up {
+            return self
+        }
+
+        UIGraphicsBeginImageContextWithOptions(self.size, false, self.scale)
+        self.draw(in: CGRect(origin: .zero, size: self.size))
+        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        return normalizedImage ?? self
     }
 }
