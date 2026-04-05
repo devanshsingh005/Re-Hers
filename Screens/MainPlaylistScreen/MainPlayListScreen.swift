@@ -353,7 +353,11 @@ class PlaylistViewController: UIViewController {
     @objc private func refreshPlaylists() { fetchPlaylists() }
 
     private func fetchPlaylists() {
-        activityIndicator.startAnimating()
+        let shouldShowOverlayLoader = loadedPlaylists.isEmpty && !refreshControl.isRefreshing
+        if shouldShowOverlayLoader {
+            activityIndicator.startAnimating()
+        }
+
         Task {
             let existingPlaylists = self.loadedPlaylists
             do {
@@ -373,7 +377,9 @@ class PlaylistViewController: UIViewController {
                 }
             }
             DispatchQueue.main.async {
-                self.activityIndicator.stopAnimating()
+                if shouldShowOverlayLoader {
+                    self.activityIndicator.stopAnimating()
+                }
                 self.collectionView.reloadData()
                 self.updateEmptyState()
                 self.refreshControl.endRefreshing()

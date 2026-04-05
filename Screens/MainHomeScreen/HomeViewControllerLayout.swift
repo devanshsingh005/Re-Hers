@@ -22,7 +22,7 @@ extension HomeViewController {
         inlineSubtitleLabel = NavigationBarHelper.configureInlineNavigationBar(
             for: self,
             title: "Home",
-            subtitle: "Welcome back, User"
+            subtitle: "Welcome , User"
         )
         
         navigationItem.rightBarButtonItems = nil
@@ -51,7 +51,7 @@ extension HomeViewController {
         titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
         titleLabel.textColor = ComponentColors.NavBar.title
         
-        largeSubtitleLabel.text = "Welcome back, admin"
+        largeSubtitleLabel.text = "Welcome , admin"
         largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
         largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
         
@@ -103,8 +103,8 @@ extension HomeViewController {
                 let guestAvatar = GuestSessionManager.shared.guestAvatarIdentifier()
 
                 await MainActor.run {
-                    largeSubtitleLabel.text = "Welcome back, \(guestName)"
-                    inlineSubtitleLabel?.text = "Welcome back, \(guestName)"
+                    largeSubtitleLabel.text = "Welcome , \(guestName)"
+                    inlineSubtitleLabel?.text = "Welcome , \(guestName)"
                 }
 
                 if let guestAvatar, !guestAvatar.isEmpty {
@@ -120,8 +120,8 @@ extension HomeViewController {
 
             guard let user = SupabaseManager.shared.client.auth.currentUser else {
                 await MainActor.run {
-                    largeSubtitleLabel.text = "Welcome back, User"
-                    inlineSubtitleLabel?.text = "Welcome back, User"
+                    largeSubtitleLabel.text = "Welcome , User"
+                    inlineSubtitleLabel?.text = "Welcome , User"
                     largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
                     largeProfileButton.tintColor = .secondaryLabel
                 }
@@ -133,8 +133,8 @@ extension HomeViewController {
                     
                 await MainActor.run {
                     let name = profile.full_name?.isEmpty == false ? profile.full_name! : "User"
-                    largeSubtitleLabel.text = "Welcome back, \(name)"
-                    inlineSubtitleLabel?.text = "Welcome back, \(name)"
+                    largeSubtitleLabel.text = "Welcome , \(name)"
+                    inlineSubtitleLabel?.text = "Welcome , \(name)"
                 }
                 
                 if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
@@ -147,8 +147,8 @@ extension HomeViewController {
                 }
             } catch {
                 await MainActor.run {
-                    largeSubtitleLabel.text = "Welcome back, User"
-                    inlineSubtitleLabel?.text = "Welcome back, User"
+                    largeSubtitleLabel.text = "Welcome , User"
+                    inlineSubtitleLabel?.text = "Welcome , User"
                     largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
                     largeProfileButton.tintColor = .secondaryLabel
                 }

@@ -20,14 +20,23 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
 
     enum AuthError: LocalizedError {
         case emailAlreadyRegistered
-        case usernameTaken
+        case usernameAlreadyTaken
+        case signUpRateLimited
+        case signUpUnavailable
+        case networkUnavailable
 
         var errorDescription: String? {
             switch self {
             case .emailAlreadyRegistered:
                 return "This email is already registered. Please log in instead."
-            case .usernameTaken:
-                return "This username is already taken. Please choose another one."
+            case .usernameAlreadyTaken:
+                return "That username is already taken. Please choose another one."
+            case .signUpRateLimited:
+                return "Too many sign up attempts right now. Please wait a moment and try again."
+            case .signUpUnavailable:
+                return "Sign up is temporarily unavailable. Please try again shortly."
+            case .networkUnavailable:
+                return "We couldn't reach the server. Check your internet connection and try again."
             }
         }
     }
@@ -129,6 +138,23 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
         
         setupViews()
         updateTextsForMode()
+        
+        setupKeyboardDismiss()
+    }
+    
+    private func setupKeyboardDismiss() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+    }
+    
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: animated)
     }
 }
 
@@ -317,6 +343,8 @@ private extension AuthViewController {
         // Setup scroll view
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.keyboardDismissMode = .interactive
+        scrollView.alwaysBounceVertical = true
         view.addSubview(scrollView)
         
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -704,9 +732,9 @@ extension AuthViewController {
                     await MainActor.run {
                         self.activityIndicator.stopAnimating()
                         self.updatePrimaryButtonState()
-                        self.routeAfterLogin()
                     }
                 } else {
+                    try await ensureUsernameAvailable(payload.username)
                     try await requestSignupOTP(
                         email: payload.email,
                         password: payload.password,
@@ -721,7 +749,11 @@ extension AuthViewController {
                 }
             } catch {
                 await MainActor.run {
-                    self.showError(self.userFacingAuthErrorMessage(error, mode: self.isLoginMode ? .logIn : .signUp))
+                    let message = self.userFacingAuthErrorMessage(error, mode: self.isLoginMode ? .logIn : .signUp)
+                    self.showError(message)
+                    if case .usernameAlreadyTaken = (error as? AuthError) {
+                        self.showUsernameTakenAlert(message: message)
+                    }
                     self.activityIndicator.stopAnimating()
                     self.updatePrimaryButtonState()
                 }
@@ -934,7 +966,7 @@ extension AuthViewController {
         case fullNameTextField:
             usernameTextField.becomeFirstResponder()
         case emailTextField:
-            (isLoginMode ? passwordTextField : usernameTextField).becomeFirstResponder()
+            (isLoginMode ? passwordTextField : fullNameTextField).becomeFirstResponder()
         case usernameTextField:
             passwordTextField.becomeFirstResponder()
         case passwordTextField:
@@ -962,47 +994,67 @@ extension AuthViewController {
             email: email,
             password: password
         )
-        
-        await MainActor.run {
-            self.routeAfterLogin()
-        }
     }
     
     /// Creates the Supabase account and triggers the confirmation email.
     /// The OTP code the user receives comes from Supabase's "Confirm signup"
     /// email template — set that template to use {{ .Token }} (not {{ .ConfirmationURL }})
     /// in the Supabase dashboard so a 6-digit code is sent instead of a magic link.
+    func ensureUsernameAvailable(_ username: String) async throws {
+        struct UsernameRow: Decodable {
+            let id: String
+        }
+
+        let normalizedUsername = InputValidator.trimOnSubmit(username)
+
+        let matches: [UsernameRow] = try await SupabaseManager.shared.client
+            .from("profiles")
+            .select("id")
+            .eq("username", value: normalizedUsername)
+            .limit(1)
+            .execute()
+            .value
+
+        if !matches.isEmpty {
+            throw AuthError.usernameAlreadyTaken
+        }
+    }
+
     func requestSignupOTP(
         email: String,
         password: String,
         fullName: String,
         username: String
     ) async throws {
-        let client = SupabaseManager.shared.client
-        
-        let isTaken = await isUsernameTaken(username)
-        if isTaken {
-            throw AuthError.usernameTaken
-        }
-        
+        let client = SupabaseManager.shared.makeEphemeralClient()
         let metadata: [String: AnyJSON] = [
             "full_name": .string(fullName),
             "username": .string(username)
         ]
 
         do {
-            try await client.auth.signUp(
+            let response = try await client.auth.signUp(
                 email: email,
                 password: password,
                 data: metadata
             )
+
+            if isExistingUserSignupResponse(response) {
+                throw AuthError.emailAlreadyRegistered
+            }
         } catch {
             let errorString = "\(error.localizedDescription) \(String(describing: error))".lowercased()
             if isEmailAlreadyRegisteredError(error) {
                 throw AuthError.emailAlreadyRegistered
             }
-            if errorString.contains("database error saving new user") || errorString.contains("duplicate") || errorString.contains("unique constraint") {
-                throw AuthError.usernameTaken
+            if isSignupRateLimitedError(error) {
+                throw AuthError.signUpRateLimited
+            }
+            if isNetworkError(error) {
+                throw AuthError.networkUnavailable
+            }
+            if isSignupUnavailableError(error) {
+                throw AuthError.signUpUnavailable
             }
             throw error
         }
@@ -1016,25 +1068,98 @@ extension AuthViewController {
             "already been registered",
             "user already exists",
             "email address is already",
-            "already exists"
+            "already exists",
+            "email_exists",
+            "user_exists",
+            "email already in use",
+            "duplicate key value"
         ]
 
         return existingAccountMarkers.contains { message.contains($0) }
     }
 
-    private func isUsernameTaken(_ username: String) async -> Bool {
-        let client = SupabaseManager.shared.client
-        do {
-            let rows: [AnyJSON] = try await client
-                .from("profiles")
-                .select("id")
-                .eq("username", value: username)
-                .limit(1)
-                .execute()
-                .value
-            return !rows.isEmpty
-        } catch {
-            print("isUsernameTaken error: \(error)")
+    private func isSignupRateLimitedError(_ error: Error) -> Bool {
+        let message = "\(error.localizedDescription) \(String(describing: error))".lowercased()
+        let rateLimitMarkers = [
+            "rate limit",
+            "too many requests",
+            "over_email_send_rate_limit",
+            "security purposes",
+            "try again later"
+        ]
+
+        return rateLimitMarkers.contains { message.contains($0) }
+    }
+
+    private func isNetworkError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .timedOut, .dnsLookupFailed:
+                return true
+            default:
+                break
+            }
+        }
+
+        let message = "\(error.localizedDescription) \(String(describing: error))".lowercased()
+        let networkMarkers = [
+            "not connected to internet",
+            "internet connection appears to be offline",
+            "network connection was lost",
+            "could not connect to the server",
+            "timed out",
+            "dns"
+        ]
+
+        return networkMarkers.contains { message.contains($0) }
+    }
+
+    private func isSignupUnavailableError(_ error: Error) -> Bool {
+        let message = "\(error.localizedDescription) \(String(describing: error))".lowercased()
+        let unavailableMarkers = [
+            "signups not allowed",
+            "signup is disabled",
+            "email provider is disabled",
+            "unsupported provider"
+        ]
+
+        return unavailableMarkers.contains { message.contains($0) }
+    }
+
+    private func isExistingUserSignupResponse(_ response: Any) -> Bool {
+        guard let user = unwrapMirrorValue(valueForLabel("user", in: response)) else {
+            return false
+        }
+
+        let session = unwrapMirrorValue(valueForLabel("session", in: response))
+        let identities = unwrapMirrorValue(valueForLabel("identities", in: user))
+
+        return session == nil && isEmptyCollectionLikeValue(identities)
+    }
+
+    private func valueForLabel(_ label: String, in value: Any) -> Any? {
+        Mirror(reflecting: value).children.first(where: { $0.label == label })?.value
+    }
+
+    private func unwrapMirrorValue(_ value: Any?) -> Any? {
+        guard let value else { return nil }
+
+        let mirror = Mirror(reflecting: value)
+        guard mirror.displayStyle == .optional else {
+            return value
+        }
+
+        return mirror.children.first?.value
+    }
+
+    private func isEmptyCollectionLikeValue(_ value: Any?) -> Bool {
+        guard let value else { return false }
+
+        let mirror = Mirror(reflecting: value)
+        switch mirror.displayStyle {
+        case .collection, .set:
+            return mirror.children.isEmpty
+        default:
             return false
         }
     }
@@ -1064,6 +1189,19 @@ extension AuthViewController {
     func showError(_ message: String) {
         errorLabel.text = message
         errorLabel.isHidden = false
+    }
+
+    @MainActor
+    private func showUsernameTakenAlert(message: String) {
+        let alert = UIAlertController(
+            title: "Username Unavailable",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            self?.usernameTextField.becomeFirstResponder()
+        })
+        present(alert, animated: true)
     }
 
     @MainActor
