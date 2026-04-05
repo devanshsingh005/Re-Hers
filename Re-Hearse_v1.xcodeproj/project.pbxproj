@@ -55,8 +55,6 @@
 		842B08572EBA061B001AC579 /* AnimatedKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */; };
 		842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B08582EBA0712001AC579 /* PianoKeyView.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
-		848B013F2F82D4A400ED9F27 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 848B013E2F82D4A400ED9F27 /* FirebaseAnalytics */; };
-		848B01412F82D4A400ED9F27 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 848B01402F82D4A400ED9F27 /* FirebaseCrashlytics */; };
 		84ADF6952F5EAABA009F3D7D /* AnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6882F5EAABA009F3D7D /* AnimationViewController.swift */; };
 		84ADF6962F5EAABA009F3D7D /* PlayPauseOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68F2F5EAABA009F3D7D /* PlayPauseOverlayView.swift */; };
 		84ADF6972F5EAABA009F3D7D /* AudioEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6892F5EAABA009F3D7D /* AudioEngineManager.swift */; };
@@ -221,12 +219,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				848B013F2F82D4A400ED9F27 /* FirebaseAnalytics in Frameworks */,
 				23542CC02EE5D5750074B2A2 /* PostgREST in Frameworks */,
 				23542CBE2EE5D56E0074B2A2 /* Functions in Frameworks */,
 				23542CC42EE5D6530074B2A2 /* Supabase in Frameworks */,
 				23542CBA2EE5D5600074B2A2 /* Auth in Frameworks */,
-				848B01412F82D4A400ED9F27 /* FirebaseCrashlytics in Frameworks */,
 				23542CC22EE5D64D0074B2A2 /* Storage in Frameworks */,
 				23542CBC2EE5D5660074B2A2 /* Realtime in Frameworks */,
 			);
@@ -555,8 +551,6 @@
 				23542CBF2EE5D5750074B2A2 /* PostgREST */,
 				23542CC12EE5D64D0074B2A2 /* Storage */,
 				23542CC32EE5D6530074B2A2 /* Supabase */,
-				848B013E2F82D4A400ED9F27 /* FirebaseAnalytics */,
-				848B01402F82D4A400ED9F27 /* FirebaseCrashlytics */,
 			);
 			productName = "Re-Hearse_v1";
 			productReference = 842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */;
@@ -612,7 +606,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				23FA2E8D2EE5986D0028C205 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				848B013D2F82D4A400ED9F27 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 842B083C2EBA0465001AC579 /* Products */;
@@ -1015,14 +1008,6 @@
 				minimumVersion = 2.5.1;
 			};
 		};
-		848B013D2F82D4A400ED9F27 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 12.11.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1055,16 +1040,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 23FA2E8D2EE5986D0028C205 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
-		};
-		848B013E2F82D4A400ED9F27 /* FirebaseAnalytics */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 848B013D2F82D4A400ED9F27 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAnalytics;
-		};
-		848B01402F82D4A400ED9F27 /* FirebaseCrashlytics */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 848B013D2F82D4A400ED9F27 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCrashlytics;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
