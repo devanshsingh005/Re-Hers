@@ -192,23 +192,30 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                     return try await self.fallbackToDiscover()
                 }
                 
-                struct Onboarding: Decodable { let level: Int? }
-                    let onboarding: Onboarding? = try? await SupabaseManager.shared.client
-                        .from("user_onboarding")
-                        .select("level")
-                        .eq("id", value: user.id)
-                        .single()
-                        .execute()
-                        .value
+                struct Onboarding: Decodable { let level: String? }
+                let onboarding: Onboarding? = try? await SupabaseManager.shared.client
+                    .from("user_onboarding")
+                    .select("level")
+                    .eq("id", value: user.id)
+                    .single()
+                    .execute()
+                    .value
                     
+                let textLevel = onboarding?.level ?? "beginner"
+                var targetLevel: Int = 1
+                switch textLevel {
+                case "beginner": targetLevel = 1
+                case "some_basics": targetLevel = 2
+                case "intermediate": targetLevel = 3
+                case "advanced": targetLevel = 4
+                default: targetLevel = 1
+                }
                 
-                let level = onboarding?.level ?? 1 // Default to 1 if skipped
-                
-                // Query songs WHERE level = onboarding.level AND is_active = true
+                // Query songs WHERE level = targetLevel AND is_active = true
                 let recommendedSongs: [Song] = try await SupabaseManager.shared.client
                     .from("songs")
                     .select()
-                    .eq("level", value: level)
+                    .eq("level", value: targetLevel)
                     .eq("is_active", value: true)
                     .limit(1)
                     .execute()
