@@ -59,13 +59,15 @@ final class PlaylistService {
 
         for p in dbPlaylists {
             var updated = p
-            do {
-                updated.coverImageURL = try await SupabaseManager.shared.signedAssetResolver
-                    .maybeSignedURL(for: updated.coverImageURL, fallbackBucket: "PlayListCover")?
-                    .absoluteString
-                    ?? updated.coverImageURL
-            } catch {
-                // Ignore and keep original path if error
+            if let urlStr = updated.coverImageURL, !urlStr.contains("://"), !urlStr.hasPrefix("doc_"), (urlStr.contains(".") || urlStr.contains("/")) {
+                do {
+                    updated.coverImageURL = try SupabaseManager.shared.client.storage
+                        .from("PlayListCover")
+                        .getPublicURL(path: urlStr)
+                        .absoluteString
+                } catch {
+                    // Ignore and keep original path if error
+                }
             }
             resolvedPlaylists.append(updated)
         }
