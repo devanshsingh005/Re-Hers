@@ -405,8 +405,8 @@ class UploadScreen: UIViewController {
             scrollView.topAnchor.constraint(equalTo: view.topAnchor), // Overlap for blur
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 90), // Space for status bar offset
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 96), // Match Home so content flows behind the navbar consistently
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -56),
             contentView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor,
                                                   constant: Constants.horizontalPadding),
@@ -575,13 +575,6 @@ class UploadScreen: UIViewController {
         recentUploadsStack   = uploadsStack
         contentView.addArrangedSubview(uploadsStack)
 
-        let reportButton = UIButton(type: .system)
-        reportButton.setTitle("Report a Copyright Issue", for: .normal)
-        reportButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        reportButton.contentHorizontalAlignment = .center
-        reportButton.setTitleColor(BrandColors.brand, for: .normal)
-        reportButton.addTarget(self, action: #selector(reportIssueTapped), for: .touchUpInside)
-        contentView.addArrangedSubview(reportButton)
     }
 
     // MARK: - Load & Display Recent Uploads
@@ -1346,19 +1339,6 @@ class UploadScreen: UIViewController {
             UIApplication.shared.open(settingsURL)
         })
         present(alert, animated: true)
-    }
-
-    @objc private func reportIssueTapped() {
-        let subject = "Re-Hearse Copyright Issue Report"
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Re-Hearse%20Copyright%20Issue%20Report"
-        if let mailURL = URL(string: "mailto:devansh.singh20045@gmail.com?subject=\(subject)") {
-            UIApplication.shared.open(mailURL)
-        } else {
-            presentAlert(
-                title: "Report a Copyright Issue",
-                message: "Email devansh.singh20045@gmail.com to report a copyright issue or takedown request."
-            )
-        }
     }
 
     private func createPDF(from images: [UIImage]) -> Data? {

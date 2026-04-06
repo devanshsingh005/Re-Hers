@@ -1125,7 +1125,7 @@ final class UploadPageNextViewController: UIViewController {
         playAlongButton.setTitleColor(.white, for: .normal)
         playAlongButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        playAlongButton.layer.cornerRadius = 23
+        playAlongButton.layer.cornerRadius = 20
         playAlongButton.clipsToBounds = true
         playAlongButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1133,7 +1133,7 @@ final class UploadPageNextViewController: UIViewController {
         animationButton.setTitleColor(.label, for: .normal)
         animationButton.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
         animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        animationButton.layer.cornerRadius = 23
+        animationButton.layer.cornerRadius = 20
         animationButton.clipsToBounds = true
         animationButton.translatesAutoresizingMaskIntoConstraints = false
     }
