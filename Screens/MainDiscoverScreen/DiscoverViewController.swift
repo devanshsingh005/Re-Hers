@@ -178,6 +178,11 @@ final class DiscoverViewController: UIViewController {
         syncNavBarAlpha()
     }
 
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        updateScrollInsets()
+    }
+
     @objc private func handleProfileUpdate() {
         fetchProfileData()
     }
@@ -362,6 +367,7 @@ final class DiscoverViewController: UIViewController {
         chipsHeightConstraint?.isActive = true
 
         applyAdaptiveWidth(for: view.bounds.width)
+        updateScrollInsets()
     }
 
     private func setupKeyboardDismissal() {
@@ -380,6 +386,14 @@ final class DiscoverViewController: UIViewController {
         let h = tableView.contentSize.height
         tableHeightConstraint?.constant = max(h, 1)   // never zero — layout engine needs > 0
         scrollView.layoutIfNeeded()
+    }
+
+    private func updateScrollInsets() {
+        let bottomInset = DiscoverLayoutMetrics.scrollBottomInset(
+            safeAreaBottom: view.safeAreaInsets.bottom
+        )
+        scrollView.contentInset.bottom = bottomInset
+        scrollView.verticalScrollIndicatorInsets.bottom = bottomInset
     }
 
     // MARK: iPad Adaptive Width
@@ -721,6 +735,12 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
         }
     }
 
+}
+
+enum DiscoverLayoutMetrics {
+    static func scrollBottomInset(safeAreaBottom: CGFloat) -> CGFloat {
+        safeAreaBottom + 24
+    }
 }
 
 protocol BlockedUserKeyValueStore {

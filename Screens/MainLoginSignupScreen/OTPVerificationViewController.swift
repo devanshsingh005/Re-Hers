@@ -8,6 +8,34 @@ import UIKit
 import Supabase
 import Auth
 
+struct OTPInputDistribution {
+    let digits: [String]
+    let nextIndex: Int
+
+    static func distribute(
+        replacement: String,
+        currentDigits: [String],
+        startingAt startIndex: Int
+    ) -> OTPInputDistribution {
+        var updatedDigits = currentDigits
+        let numericDigits = replacement.filter(\.isNumber).map { String($0) }
+
+        guard !numericDigits.isEmpty else {
+            return OTPInputDistribution(digits: updatedDigits, nextIndex: startIndex)
+        }
+
+        var nextIndex = startIndex
+        for (offset, digit) in numericDigits.enumerated() {
+            let targetIndex = startIndex + offset
+            guard updatedDigits.indices.contains(targetIndex) else { break }
+            updatedDigits[targetIndex] = digit
+            nextIndex = targetIndex
+        }
+
+        return OTPInputDistribution(digits: updatedDigits, nextIndex: nextIndex)
+    }
+}
+
 private final class OTPDigitTextField: UITextField {
     var onBackspaceWhenEmpty: (() -> Void)?
 
@@ -21,8 +49,15 @@ private final class OTPDigitTextField: UITextField {
 }
 
 final class OTPVerificationViewController: UIViewController, UITextFieldDelegate {
+    enum Flow {
+        case signup
+        case recovery
+    }
+
     private let email: String
     private let password: String
+    private let flow: Flow
+    private let passwordRecoveryService: PasswordRecoveryService
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -38,9 +73,16 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
     private var resendTimer: Timer?
     private var resendSecondsRemaining = 30
 
-    init(email: String, password: String) {
+    init(
+        email: String,
+        password: String = "",
+        flow: Flow = .signup,
+        passwordRecoveryService: PasswordRecoveryService = PasswordRecoveryService()
+    ) {
         self.email = email
         self.password = password
+        self.flow = flow
+        self.passwordRecoveryService = passwordRecoveryService
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -56,7 +98,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.AuthScreen.background
-        title = "Verify email"
+        title = flow == .signup ? "Verify email" : "Reset password"
         setupNavigation()
         setupUI()
         startResendCountdown()
@@ -84,7 +126,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.text = "Verify your email"
+        titleLabel.text = flow == .signup ? "Verify your email" : "Verify recovery code"
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         titleLabel.textColor = ComponentColors.AuthScreen.headlineText
         titleLabel.textAlignment = .center
@@ -92,7 +134,9 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.isHidden = false
 
-        subtitleLabel.text = "We sent a 6-digit code to \(email)"
+        subtitleLabel.text = flow == .signup
+            ? "We sent a 6-digit code to \(email)"
+            : "We sent a recovery code to \(email)"
         subtitleLabel.font = .systemFont(ofSize: 15, weight: .regular)
         subtitleLabel.textColor = ComponentColors.AuthScreen.bodyText
         subtitleLabel.textAlignment = .center
@@ -224,16 +268,24 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         Task {
             do {
-                try await SupabaseManager.shared.client.auth.verifyOTP(
-                    email: email,
-                    token: code,
-                    type: .signup
-                )
+                if flow == .signup {
+                    _ = try await SupabaseManager.shared.client.auth.verifyOTP(
+                        email: email,
+                        token: code,
+                        type: .signup
+                    )
+                } else {
+                    try await passwordRecoveryService.verifyOTP(email: email, token: code)
+                }
 
                 await MainActor.run {
                     setLoading(false)
-                    AnalyticsManager.logOTPVerified()
-                    routeAfterLogin()
+                    if flow == .signup {
+                        AnalyticsManager.logOTPVerified()
+                        routeAfterLogin()
+                    } else {
+                        showResetPasswordScreen()
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -252,20 +304,26 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
 
         Task {
             do {
-                try await SupabaseManager.shared.client.auth.resend(
-                    email: email,
-                    type: .signup
-                )
+                if flow == .signup {
+                    try await SupabaseManager.shared.client.auth.resend(
+                        email: email,
+                        type: .signup
+                    )
+                } else {
+                    try await passwordRecoveryService.requestOTP(for: email)
+                }
 
                 await MainActor.run {
-                    AnalyticsManager.logOTPResent()
+                    if flow == .signup {
+                        AnalyticsManager.logOTPResent()
+                    }
                     startResendCountdown()
-                    showToast(message: "Code resent")
+                    showToast(message: flow == .signup ? "Code resent" : "Recovery code resent")
                 }
             } catch {
                 await MainActor.run {
                     setResendEnabled(true)
-                    showError("Could not resend. Please try again.")
+                    showError(flow == .signup ? "Could not resend. Please try again." : "Could not resend recovery code. Please try again.")
                 }
             }
         }
@@ -288,7 +346,7 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
             showError("Invalid code. Please try again.")
             shakeBoxes()
         } else {
-            showError("Account creation failed. Please try again.")
+            showError(flow == .signup ? "Account creation failed. Please try again." : "Password recovery failed. Please try again.")
         }
     }
 
@@ -390,6 +448,15 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
         }
     }
 
+    @MainActor
+    private func showResetPasswordScreen() {
+        let resetPasswordViewController = ResetPasswordViewController(
+            email: email,
+            passwordRecoveryService: passwordRecoveryService
+        )
+        navigationController?.pushViewController(resetPasswordViewController, animated: true)
+    }
+
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
         guard let digitField = textField as? OTPDigitTextField else { return true }
 
@@ -401,15 +468,23 @@ final class OTPVerificationViewController: UIViewController, UITextFieldDelegate
             return false
         }
 
-        let digits = string.filter(\.isNumber)
-        guard let digit = digits.last else { return false }
+        let currentDigits = digitFields.map { $0.text ?? "" }
+        let distribution = OTPInputDistribution.distribute(
+            replacement: string,
+            currentDigits: currentDigits,
+            startingAt: digitField.tag
+        )
 
-        digitField.text = String(digit)
+        guard distribution.digits != currentDigits else { return false }
 
-        if digitField.tag < digitFields.count - 1 {
-            digitFields[digitField.tag + 1].becomeFirstResponder()
+        for (index, field) in digitFields.enumerated() {
+            field.text = distribution.digits[index]
+        }
+
+        if distribution.nextIndex < digitFields.count - 1 {
+            digitFields[distribution.nextIndex + 1].becomeFirstResponder()
         } else {
-            digitField.resignFirstResponder()
+            digitFields[distribution.nextIndex].resignFirstResponder()
         }
 
         Task { @MainActor in

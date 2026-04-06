@@ -96,6 +96,8 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
     private let errorLabel = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let initialMode: AuthMode
+    private let passwordRecoveryService: PasswordRecoveryService
+    private let passwordRecoveryRequestGate = PasswordRecoveryRequestGate()
     var postLoginRouteHandler: (@MainActor () -> Void)?
     
     // Async form state
@@ -120,8 +122,12 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
         }
     }
 
-    init(initialMode: AuthMode = .logIn) {
+    init(
+        initialMode: AuthMode = .logIn,
+        passwordRecoveryService: PasswordRecoveryService = PasswordRecoveryService()
+    ) {
         self.initialMode = initialMode
+        self.passwordRecoveryService = passwordRecoveryService
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -695,22 +701,31 @@ extension AuthViewController {
     }
     
     @objc func forgotPasswordTapped() {
+        guard passwordRecoveryRequestGate.begin() else { return }
+
         let email = InputValidator.trimOnSubmit(emailTextField.text ?? "")
         emailTextField.text = InputValidator.limit(email, maxLength: InputValidator.singleLineMaxLength)
 
         if let emailError = InputValidator.validateEmail(email) {
+            passwordRecoveryRequestGate.end()
             showError(emailError)
             return
         }
+
+        setForgotPasswordLoading(true)
         
         Task {
             do {
-                try await SupabaseManager.shared.client.auth.resetPasswordForEmail(email)
+                try await passwordRecoveryService.requestOTP(for: email)
                 await MainActor.run {
-                    self.showError("Password reset email sent. Check your inbox.")
+                    self.passwordRecoveryRequestGate.end()
+                    self.setForgotPasswordLoading(false)
+                    self.showOTPVerificationScreen(email: email, flow: .recovery)
                 }
             } catch {
                 await MainActor.run {
+                    self.passwordRecoveryRequestGate.end()
+                    self.setForgotPasswordLoading(false)
                     self.showError("We couldn't send the reset email right now. Please try again.")
                 }
             }
@@ -944,6 +959,12 @@ private extension AuthViewController {
         guard !activityIndicator.isAnimating else { return }
         primaryButton.isEnabled = validatedAuthPayload(showErrors: false) != nil
         primaryButton.alpha = primaryButton.isEnabled ? 1.0 : 0.55
+    }
+
+    @MainActor
+    func setForgotPasswordLoading(_ isLoading: Bool) {
+        forgotPasswordButton.isEnabled = !isLoading
+        forgotPasswordButton.alpha = isLoading ? 0.55 : 1.0
     }
 
     func userFacingAuthErrorMessage(_ error: Error, mode: AuthMode) -> String {
@@ -1202,8 +1223,17 @@ extension AuthViewController {
     }
 
     @MainActor
-    private func showOTPVerificationScreen(email: String, password: String) {
-        let otpViewController = OTPVerificationViewController(email: email, password: password)
+    private func showOTPVerificationScreen(
+        email: String,
+        password: String = "",
+        flow: OTPVerificationViewController.Flow = .signup
+    ) {
+        let otpViewController = OTPVerificationViewController(
+            email: email,
+            password: password,
+            flow: flow,
+            passwordRecoveryService: passwordRecoveryService
+        )
 
         if let navigationController = navigationController {
             navigationController.setNavigationBarHidden(false, animated: false)

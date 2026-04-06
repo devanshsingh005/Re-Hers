@@ -120,3 +120,17 @@ final class ReviewAccessConfigurationTests: XCTestCase {
         XCTAssertTrue(routed)
     }
 }
+
+final class DiscoverLayoutMetricsTests: XCTestCase {
+    func test_scrollBottomInset_addsSafeAreaAndExtraPadding() {
+        let inset = DiscoverLayoutMetrics.scrollBottomInset(safeAreaBottom: 34)
+
+        XCTAssertEqual(inset, 58)
+    }
+
+    func test_scrollBottomInset_usesMinimumPaddingWithoutSafeArea() {
+        let inset = DiscoverLayoutMetrics.scrollBottomInset(safeAreaBottom: 0)
+
+        XCTAssertEqual(inset, 24)
+    }
+}
