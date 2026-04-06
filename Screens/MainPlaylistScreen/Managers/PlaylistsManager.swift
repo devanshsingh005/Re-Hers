@@ -64,13 +64,14 @@ public final class PlaylistsManager {
                         .first!.appendingPathComponent(path)
                     displayImageData = try? Data(contentsOf: url)
                 } else if path.contains(".") || path.contains("/") {
-                    // Remote Supabase private storage
+                    // Remote Supabase public storage
                     do {
-                        displayImageUrl = try await SupabaseManager.shared.signedAssetResolver
-                            .maybeSignedURL(for: path, fallbackBucket: "PlayListCover")?
+                        displayImageUrl = try SupabaseManager.shared.client.storage
+                            .from("PlayListCover")
+                            .getPublicURL(path: path)
                             .absoluteString
                     } catch {
-                        debugLog("❌ Failed to sign cover image URL for path \(path):", error)
+                        debugLog("❌ Failed to get public cover image URL for path \(path):", error)
                     }
                 }
             }
