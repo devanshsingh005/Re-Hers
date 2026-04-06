@@ -78,6 +78,12 @@ private struct ExistingProfileProgress: Codable, Sendable {
     let total_study_seconds: Int?
 }
 
+enum PracticeSessionKind: String, Sendable {
+    case practicePage = "practice_page_session"
+    case playAlong = "play_along_session"
+    case animation = "animation_session"
+}
+
 struct GuestLessonEvent: Codable, Sendable {
     let chapterIndex: Int
     let partIndex: Int
@@ -102,6 +108,7 @@ final class SupabaseProgressManager: Sendable {
     private static var db: SupabaseClient { SupabaseManager.shared.client }
     private static let guestLessonEventsKey = "guestLessonEvents"
     private static let guestProgressSnapshotKey = "guestProgressSnapshot"
+    private static let minimumTrackedPracticeDurationSeconds = 5
     
     // MARK: - Public API
     
@@ -243,6 +250,87 @@ final class SupabaseProgressManager: Sendable {
             debugLog("[SupabaseProgressManager] recordLessonCompleted error: \(error)")
         }
     }
+
+    static func beginTrackedPracticeSessionIfNeeded(_ startDate: inout Date?) {
+        guard startDate == nil else { return }
+        startDate = Date()
+    }
+
+    static func endTrackedPracticeSession(
+        _ startDate: inout Date?,
+        kind: PracticeSessionKind
+    ) {
+        guard let sessionStart = startDate else { return }
+        startDate = nil
+
+        let durationSeconds = max(Int(Date().timeIntervalSince(sessionStart)), 0)
+        guard durationSeconds >= minimumTrackedPracticeDurationSeconds else { return }
+
+        Task {
+            await recordPracticeSession(kind: kind, durationSeconds: durationSeconds)
+        }
+    }
+
+    static func recordPracticeSession(
+        kind: PracticeSessionKind,
+        durationSeconds: Int
+    ) async {
+        guard durationSeconds >= minimumTrackedPracticeDurationSeconds else { return }
+
+        await MainActor.run {
+            DailyGoalManager.shared.addPracticeDuration(seconds: durationSeconds)
+        }
+
+        if GuestSessionManager.shared.isGuest() {
+            saveGuestPracticeSession(kind: kind, durationSeconds: durationSeconds)
+            return
+        }
+
+        guard let userID = await currentUserID() else {
+            debugLog("[SupabaseProgressManager] recordPracticeSession: no logged-in user")
+            return
+        }
+
+        do {
+            let event = LessonEventInsert(
+                user_id: userID,
+                chapter_index: -1,
+                part_index: -1,
+                event_type: kind.rawValue,
+                stars: nil,
+                attempts: nil,
+                duration_seconds: durationSeconds,
+                score_points: 0
+            )
+
+            try await db
+                .from("lesson_events")
+                .insert(event)
+                .execute()
+
+            let existingProgress = try await fetchExistingProgress(for: userID)
+            let currentChapter = existingProgress?.current_chapter ?? 1
+            let currentPart = existingProgress?.current_part ?? 0
+            let currentTotal = existingProgress?.total_study_seconds ?? 0
+
+            let profileUpdate = ProfileProgressModel(
+                id: userID.uuidString,
+                current_chapter: currentChapter,
+                current_part: currentPart,
+                last_active_at: iso8601Now(),
+                total_study_seconds: currentTotal + durationSeconds
+            )
+
+            try await db
+                .from("profiles")
+                .upsert(profileUpdate, onConflict: "id")
+                .execute()
+
+            debugLog("[SupabaseProgressManager] Practice session saved — \(kind.rawValue) \(durationSeconds)s")
+        } catch {
+            debugLog("[SupabaseProgressManager] recordPracticeSession error: \(error)")
+        }
+    }
     
     // MARK: - Helpers
     
@@ -369,6 +457,32 @@ final class SupabaseProgressManager: Sendable {
             GuestProgressSnapshot(
                 currentChapter: mergedChapter,
                 currentPart: mergedPart,
+                totalStudySeconds: existingSnapshot.totalStudySeconds + durationSeconds
+            )
+        )
+    }
+
+    private static func saveGuestPracticeSession(
+        kind: PracticeSessionKind,
+        durationSeconds: Int
+    ) {
+        let event = GuestLessonEvent(
+            chapterIndex: -1,
+            partIndex: -1,
+            eventType: kind.rawValue,
+            stars: nil,
+            attempts: nil,
+            durationSeconds: durationSeconds,
+            scorePoints: 0,
+            occurredAt: iso8601Now()
+        )
+        appendGuestLessonEvent(event)
+
+        let existingSnapshot = guestProgressSnapshot()
+        saveGuestProgressSnapshot(
+            GuestProgressSnapshot(
+                currentChapter: existingSnapshot.currentChapter,
+                currentPart: existingSnapshot.currentPart,
                 totalStudySeconds: existingSnapshot.totalStudySeconds + durationSeconds
             )
         )

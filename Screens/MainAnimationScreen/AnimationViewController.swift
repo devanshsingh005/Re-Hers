@@ -44,6 +44,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     // MARK: - Overlay timers
     private var overlayHideTimer: Timer?
     private var didCenterKeyboard = false
+    private var trackedPracticeSessionStartedAt: Date?
 
     // MARK: - Initializer
     init() {
@@ -95,6 +96,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         setOverlay(visible: true, animated: true)
     }
 
@@ -118,6 +120,14 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         } else {
             UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
         }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .animation
+        )
     }
 
     // MARK: - Fix 1: Force Landscape

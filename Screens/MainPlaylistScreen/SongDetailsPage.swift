@@ -10,11 +10,18 @@ import Auth
 internal import PostgREST
 
 class PlaylistSongDetailViewController: UIViewController {
+    private enum SheetSourceContext {
+        case unknown
+        case scan(scanId: Int64)
+        case discoverSongId(UUID)
+        case discoverSongMetadata(title: String, artist: String)
+    }
 
     // MARK: - Public Input
     var passedImage: UIImage?
     var passedSongTitle: String?
     var passedArtist: String?
+    var passedTrackId: String?
     var passedSheetScanId: Int64?
 
     // MARK: - State
@@ -25,6 +32,9 @@ class PlaylistSongDetailViewController: UIViewController {
     }
     private var cachedPDFPath: String?
     private var cachedJobId: UUID?
+    private var sourceContext: SheetSourceContext = .unknown
+    private var loadedDiscoverSong: Song?
+    private var trackedPracticeSessionStartedAt: Date?
 
     // Polling (only used when result_url is genuinely not yet available)
     private var pollTask: Task<Void, Never>?
@@ -64,7 +74,7 @@ class PlaylistSongDetailViewController: UIViewController {
         setupScrollView()
         buildUI()
 
-        debugLog("[SongDetail] viewDidLoad — passedSheetScanId=\(String(describing: passedSheetScanId))")
+        debugLog("[SongDetail] viewDidLoad — passedSheetScanId=\(String(describing: passedSheetScanId)) trackId=\(passedTrackId ?? "nil")")
         loadSheetData()
     }
 
@@ -73,9 +83,18 @@ class PlaylistSongDetailViewController: UIViewController {
         navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         pollTask?.cancel()
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .practicePage
+        )
     }
 
     // MARK: - Scroll View
@@ -317,11 +336,7 @@ class PlaylistSongDetailViewController: UIViewController {
             pdfView.isHidden = true; errorLabel.isHidden = true
             loadingIndicator.startAnimating()
             Task {
-                if isOriginal {
-                    await fetchOriginalPDF()
-                } else {
-                    await fetchLabeledPDFWithPolling(resultUrl: nil, jobId: cachedJobId)
-                }
+                await loadSelectedSegmentFromCurrentSource(isOriginal: isOriginal)
             }
         }
     }
@@ -333,16 +348,35 @@ class PlaylistSongDetailViewController: UIViewController {
     ///   2. If not → poll until the backend sets it, then fetch from Supabase CDN.
     /// Output JSON is also fetched from the backend API concurrently (unchanged).
     private func loadSheetData() {
-        guard let scanId = passedSheetScanId else {
-            debugLog("[SongDetail] ❌ passedSheetScanId is nil — cannot load sheet data")
-            errorLabel.isHidden = false
-            return
-        }
-
         pdfView.isHidden = true
         errorLabel.isHidden = true
         loadingIndicator.startAnimating()
 
+        if let scanId = passedSheetScanId {
+            sourceContext = .scan(scanId: scanId)
+            loadedDiscoverSong = nil
+            loadSheetDataFromScan(scanId)
+            return
+        }
+
+        if let trackId = passedTrackId, let songId = UUID(uuidString: trackId) {
+            sourceContext = .discoverSongId(songId)
+            loadSheetDataFromSong(songId: songId)
+            return
+        }
+
+        if let songTitle = passedSongTitle, let artist = passedArtist {
+            sourceContext = .discoverSongMetadata(title: songTitle, artist: artist)
+            loadSheetDataFromSongMetadata(title: songTitle, artist: artist)
+            return
+        }
+
+        sourceContext = .unknown
+        debugLog("[SongDetail] ❌ neither scanId nor discover song identity available")
+        showError()
+    }
+
+    private func loadSheetDataFromScan(_ scanId: Int64) {
         Task {
             do {
                 // ── Step 1: read scan row to get job_id ──────────────────────────
@@ -398,6 +432,156 @@ class PlaylistSongDetailViewController: UIViewController {
                 debugLog("[SongDetail] ❌ loadSheetData error: \(error)")
                 await MainActor.run { self.showError() }
             }
+        }
+    }
+
+    private func loadSheetDataFromSong(songId: UUID) {
+        Task {
+            do {
+                if let song = try await fetchDiscoverSong(songId: songId) {
+                    await loadDiscoverSongAssets(song)
+                    return
+                }
+
+                debugLog("[SongDetail] ℹ️ no discover song found for trackId=\(songId.uuidString), falling back to title/artist")
+
+                if let song = try await fetchDiscoverSongFromMetadata() {
+                    if let title = passedSongTitle, let artist = passedArtist {
+                        await MainActor.run {
+                            self.sourceContext = .discoverSongMetadata(title: title, artist: artist)
+                        }
+                    }
+                    await loadDiscoverSongAssets(song)
+                    return
+                }
+
+                debugLog("[SongDetail] ❌ no discover song found for trackId or metadata fallback")
+                await MainActor.run { self.showError() }
+            } catch {
+                debugLog("[SongDetail] ❌ load discover song sheet data error: \(error)")
+                await MainActor.run { self.showError() }
+            }
+        }
+    }
+
+    private func loadSheetDataFromSongMetadata(title: String, artist: String) {
+        Task {
+            do {
+                guard let song = try await fetchDiscoverSong(title: title, artist: artist) else {
+                    debugLog("[SongDetail] ❌ no discover song found for title=\(title) artist=\(artist)")
+                    await MainActor.run { self.showError() }
+                    return
+                }
+
+                await loadDiscoverSongAssets(song)
+            } catch {
+                debugLog("[SongDetail] ❌ discover song metadata lookup failed: \(error)")
+                await MainActor.run { self.showError() }
+            }
+        }
+    }
+
+    private func fetchDiscoverSong(songId: UUID) async throws -> Song? {
+        let songs: [Song] = try await supabase
+            .from("songs")
+            .select()
+            .eq("id", value: songId.uuidString)
+            .limit(1)
+            .execute()
+            .value
+
+        return songs.first
+    }
+
+    private func fetchDiscoverSong(title: String, artist: String) async throws -> Song? {
+        let songs: [Song] = try await supabase
+            .from("songs")
+            .select()
+            .eq("title", value: title)
+            .eq("composer", value: artist)
+            .limit(1)
+            .execute()
+            .value
+
+        return songs.first
+    }
+
+    private func fetchDiscoverSongFromMetadata() async throws -> Song? {
+        guard let title = passedSongTitle, let artist = passedArtist else {
+            return nil
+        }
+
+        return try await fetchDiscoverSong(title: title, artist: artist)
+    }
+
+    private func loadDiscoverSongAssets(_ song: Song) async {
+        await MainActor.run {
+            self.loadedDiscoverSong = song
+        }
+
+        async let originalTask: Void = fetchOriginalPDFFromSong(song)
+        async let labeledTask: Void = fetchLabeledPDFFromSong(song)
+        async let jsonTask: Void = fetchOutputJSONFromSong(song)
+        _ = await (originalTask, labeledTask, jsonTask)
+    }
+
+    private func loadSelectedSegmentFromCurrentSource(isOriginal: Bool) async {
+        switch sourceContext {
+        case .scan:
+            if isOriginal {
+                await fetchOriginalPDF()
+            } else {
+                await fetchLabeledPDFWithPolling(resultUrl: nil, jobId: cachedJobId)
+            }
+
+        case .discoverSongId(let songId):
+            var resolvedSong = loadedDiscoverSong
+            if resolvedSong == nil {
+                resolvedSong = try? await fetchDiscoverSong(songId: songId)
+            }
+
+            if let song = resolvedSong {
+                await MainActor.run { self.loadedDiscoverSong = song }
+                if isOriginal {
+                    await fetchOriginalPDFFromSong(song)
+                } else {
+                    await fetchLabeledPDFFromSong(song)
+                }
+            } else if let fallbackSong = try? await fetchDiscoverSongFromMetadata() {
+                await MainActor.run {
+                    self.loadedDiscoverSong = fallbackSong
+                    if let title = self.passedSongTitle, let artist = self.passedArtist {
+                        self.sourceContext = .discoverSongMetadata(title: title, artist: artist)
+                    }
+                }
+                if isOriginal {
+                    await fetchOriginalPDFFromSong(fallbackSong)
+                } else {
+                    await fetchLabeledPDFFromSong(fallbackSong)
+                }
+            } else {
+                await MainActor.run { self.showError() }
+            }
+
+        case .discoverSongMetadata(let title, let artist):
+            var resolvedSong = loadedDiscoverSong
+            if resolvedSong == nil {
+                resolvedSong = try? await fetchDiscoverSong(title: title, artist: artist)
+            }
+
+            if let song = resolvedSong {
+                await MainActor.run { self.loadedDiscoverSong = song }
+                if isOriginal {
+                    await fetchOriginalPDFFromSong(song)
+                } else {
+                    await fetchLabeledPDFFromSong(song)
+                }
+            } else {
+                await MainActor.run { self.showError() }
+            }
+
+        case .unknown:
+            await MainActor.run { self.showError() }
         }
     }
 
@@ -583,6 +767,113 @@ class PlaylistSongDetailViewController: UIViewController {
         } catch {
             debugLog("[SongDetail] ❌ fetchOriginalPDF createSignedURL failed: \(error)")
             await MainActor.run { showError() }
+        }
+    }
+
+    private func signedURL(from rawValue: String, fallbackBucket: String) async throws -> URL {
+        try await SupabaseManager.shared.signedAssetResolver.signedURL(
+            for: rawValue,
+            fallbackBucket: fallbackBucket
+        )
+    }
+
+    private func fetchRemoteData(from rawValue: String, fallbackBucket: String) async throws -> Data {
+        let url = try await signedURL(from: rawValue, fallbackBucket: fallbackBucket)
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(statusCode) else {
+            throw NSError(
+                domain: "PlaylistSongDetail",
+                code: statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Remote asset fetch failed with status \(statusCode)"]
+            )
+        }
+        return data
+    }
+
+    private func fetchOriginalPDFFromSong(_ song: Song) async {
+        guard let originalPath = song.originalPdfPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !originalPath.isEmpty else {
+            debugLog("[SongDetail] ℹ️ No original PDF path for discover song \(song.id)")
+            return
+        }
+
+        do {
+            let data = try await fetchRemoteData(from: originalPath, fallbackBucket: "pdf_uploads")
+            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+                await MainActor.run { self.showError() }
+                return
+            }
+            await MainActor.run {
+                self.originalPDF = doc
+                if self.segmentControl.selectedSegmentIndex == 0 {
+                    self.showPDF(doc)
+                }
+            }
+        } catch {
+            debugLog("[SongDetail] ❌ discover original PDF fetch error: \(error)")
+            await MainActor.run {
+                if self.segmentControl.selectedSegmentIndex == 0 {
+                    self.showError()
+                }
+            }
+        }
+    }
+
+    private func fetchLabeledPDFFromSong(_ song: Song) async {
+        guard let pdfSource = song.discoverPDFSource else {
+            debugLog("[SongDetail] ℹ️ No labeled PDF source for discover song \(song.id)")
+            await MainActor.run {
+                if self.segmentControl.selectedSegmentIndex == 1 {
+                    self.showError()
+                }
+            }
+            return
+        }
+
+        do {
+            let data = try await fetchRemoteData(from: pdfSource.rawValue, fallbackBucket: pdfSource.fallbackBucket)
+            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+                await MainActor.run { self.showError() }
+                return
+            }
+            await MainActor.run {
+                self.labeledPDF = doc
+                if self.segmentControl.selectedSegmentIndex == 1 {
+                    self.showPDF(doc)
+                }
+            }
+        } catch {
+            debugLog("[SongDetail] ❌ discover labeled PDF fetch error: \(error)")
+            await MainActor.run {
+                if self.segmentControl.selectedSegmentIndex == 1 {
+                    self.showError()
+                }
+            }
+        }
+    }
+
+    private func fetchOutputJSONFromSong(_ song: Song) async {
+        guard let jsonSource = song.discoverJSONSource else {
+            debugLog("[SongDetail] ℹ️ No JSON source for discover song \(song.id)")
+            return
+        }
+
+        do {
+            let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  isValidScoreJSON(parsed) else {
+                debugLog("[SongDetail] discover JSON invalid for song \(song.id)")
+                return
+            }
+            await MainActor.run {
+                self.sheetMusicJSON = parsed
+            }
+        } catch {
+            debugLog("[SongDetail] ❌ discover JSON fetch error: \(error)")
         }
     }
 

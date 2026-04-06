@@ -6,6 +6,7 @@
 import UIKit
 import Photos
 import PhotosUI
+import ObjectiveC
 
 // MARK: - Album Placeholder Helper
 func albumPlaceholder(for id: UUID) -> UIImage {
@@ -44,12 +45,23 @@ func loadPlaylistCoverImage(
 ) {
     let placeholder = fallbackImage ?? resolvePlaylistCoverImage(playlistId: playlistId, coverUrl: coverUrl)
     imageView.image = placeholder
+    imageView.rehearseCoverRequestURL = coverUrl
 
     guard let coverUrl, !coverUrl.isEmpty, coverUrl.hasPrefix("http") else { return }
     ImageLoader.shared.loadImage(from: coverUrl) { [weak imageView] image in
         DispatchQueue.main.async {
-            imageView?.image = image ?? placeholder
+            guard let imageView, imageView.rehearseCoverRequestURL == coverUrl else { return }
+            imageView.image = image ?? placeholder
         }
+    }
+}
+
+private var rehearseCoverRequestURLKey: UInt8 = 0
+
+private extension UIImageView {
+    var rehearseCoverRequestURL: String? {
+        get { objc_getAssociatedObject(self, &rehearseCoverRequestURLKey) as? String }
+        set { objc_setAssociatedObject(self, &rehearseCoverRequestURLKey, newValue, .OBJC_ASSOCIATION_COPY_NONATOMIC) }
     }
 }
 
@@ -124,12 +136,14 @@ class PlaylistViewController: UIViewController {
         setupDeleteButton()
         setupActivityIndicator()
         setupRefreshControl()
+        applyCachedPlaylistsIfAvailable()
         fetchPlaylists()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
+        guard !isMovingToParent else { return }
         fetchPlaylists()
     }
 
@@ -351,6 +365,16 @@ class PlaylistViewController: UIViewController {
 
     // MARK: - Data Operations
     @objc private func refreshPlaylists() { fetchPlaylists() }
+
+    private func applyCachedPlaylistsIfAvailable() {
+        let cachedPlaylists = playlistsManager.cachedPlaylistsSnapshot()
+        guard !cachedPlaylists.isEmpty else { return }
+
+        loadedPlaylists = cachedPlaylists
+        playlistLoadErrorMessage = nil
+        collectionView.reloadData()
+        updateEmptyState()
+    }
 
     private func fetchPlaylists() {
         let shouldShowOverlayLoader = loadedPlaylists.isEmpty && !refreshControl.isRefreshing
@@ -602,6 +626,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     var onDelete: (() -> Void)?
     private var panStartingX: CGFloat = 0
     private let isPad = UIDevice.current.userInterfaceIdiom == .pad
+    private var currentRemoteCoverURL: String?
 
     // MARK: Subviews
     let deleteBackgroundView: UIView = {
@@ -752,10 +777,12 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     func configure(with playlist: PlaylistData) {
         titleLabel.text    = playlist.title
         subtitleLabel.text = "\(playlist.trackCount) Tracks · \(playlist.tags)"
+        currentRemoteCoverURL = playlist.imageUrl?.hasPrefix("http") == true ? playlist.imageUrl : nil
 
         let placeholder = albumPlaceholder(for: playlist.id)
         if let imageData = playlist.imageData, let image = UIImage(data: imageData) {
             playlistImageView.image = image
+            playlistImageView.rehearseCoverRequestURL = nil
         } else {
             loadPlaylistCoverImage(
                 into: playlistImageView,
@@ -830,6 +857,12 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        if let currentRemoteCoverURL {
+            ImageLoader.shared.cancelLoad(for: currentRemoteCoverURL)
+        }
+        currentRemoteCoverURL = nil
+        playlistImageView.image = nil
+        playlistImageView.rehearseCoverRequestURL = nil
         resetPan(animated: false)
     }
 }

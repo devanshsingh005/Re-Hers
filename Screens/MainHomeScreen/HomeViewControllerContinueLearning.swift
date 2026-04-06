@@ -17,6 +17,7 @@ extension HomeViewController {
 
         sectionStack.addArrangedSubview(makeSectionHeader("Your Playlist", action: { [weak self] in
             guard let self = self else { return }
+            PlaylistsManager.shared.prewarmPlaylistCacheIfNeeded()
             let vc = PlaylistViewController()
             vc.hidesBottomBarWhenPushed = true
             self.navigationController?.pushViewController(vc, animated: true)
@@ -193,6 +194,7 @@ extension HomeViewController {
             guard let self = self else { return }
             NavigationBarHelper.animateButtonPress(wrapper) { [weak self] in
                 guard let self = self else { return }
+                PlaylistsManager.shared.prewarmPlaylistCacheIfNeeded()
                 let vc = PlaylistViewController()
                 vc.hidesBottomBarWhenPushed = true
                 vc.shouldOpenAddPlaylistOnAppear = true

@@ -38,13 +38,13 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     // Store the top song for navigation
     var topSong: Song?
 
-    private var practiceTimer: Timer?
-
     override func viewDidLoad() {
         super.viewDidLoad()
         scrollView.delegate = self
         setupUI()
-        startPracticeTimer()
+        Task {
+            await DailyGoalManager.shared.refreshFromSupabase()
+        }
         fetchPlaylists()
         fetchTopSong()
         fetchRecents()
@@ -74,7 +74,9 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         super.viewWillAppear(animated)
         updateNavBackgroundAppearance()
         syncNavBarAlpha()
-        startPracticeTimer()
+        Task {
+            await DailyGoalManager.shared.refreshFromSupabase()
+        }
         fetchPlaylists()
         fetchRecents()
         fetchTopSong()
@@ -83,11 +85,6 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         syncNavBarAlpha()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopPracticeTimer()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -99,7 +96,6 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        stopPracticeTimer()
     }
     
     @objc private func handleProfileUpdate() {
@@ -109,6 +105,9 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     @objc private func handleAuthStatusChanged() {
         // Only refresh if we now have a user
         if SupabaseManager.shared.client.auth.currentUser != nil {
+            Task {
+                await DailyGoalManager.shared.refreshFromSupabase()
+            }
             fetchPlaylists()
             fetchRecents()
             fetchTopSong()
@@ -147,21 +146,8 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         syncNavBarAlpha()
     }
 
-    private func startPracticeTimer() {
-        stopPracticeTimer()
-        practiceTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
-            guard self != nil else { return }
-            DailyGoalManager.shared.checkAndResetIfNewDay()
-            DailyGoalManager.shared.practiceTimeMinutesToday += 1
-        }
-    }
-
-    private func stopPracticeTimer() {
-        practiceTimer?.invalidate()
-        practiceTimer = nil
-    }
-
     private func fetchPlaylists() {
+        PlaylistsManager.shared.prewarmPlaylistCacheIfNeeded()
         Task {
             do {
                 let list = try await PlaylistService.shared.fetchPlaylists()

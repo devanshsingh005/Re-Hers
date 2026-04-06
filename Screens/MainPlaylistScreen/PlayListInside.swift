@@ -97,6 +97,12 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         navigationController?.navigationBar.tintColor = .white
         let textAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
         navigationController?.navigationBar.titleTextAttributes = textAttributes
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "square.and.pencil"),
+            style: .plain,
+            target: self,
+            action: #selector(handlePlaylistRename)
+        )
         
         setupTableView()
         setupHeader()
@@ -109,6 +115,9 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
+        if let selectedIndexPath = tracksTableView.indexPathForSelectedRow {
+            tracksTableView.deselectRow(at: selectedIndexPath, animated: animated)
+        }
     }
     
     // MARK: - Apply Passed Playlist Data
@@ -232,10 +241,6 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
             emptyStateLabel.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: -40),
         ])
         
-        // Add tap gesture to playlist title
-        playlistTitleLabel.isUserInteractionEnabled = true
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handlePlaylistRename))
-        playlistTitleLabel.addGestureRecognizer(tap)
     }
     
     @objc private func handlePlaylistRename() {
@@ -424,55 +429,8 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         let cell = tableView.dequeueReusableCell(withIdentifier: "TrackCell", for: indexPath) as! TrackTableViewCell
         let track = trackList[indexPath.row]
         cell.configure(with: track)
-        cell.selectionStyle = .none
-        
-        cell.renameHandler = { [weak self] in
-            self?.handleTrackRename(at: indexPath.row)
-        }
-        
+        cell.selectionStyle = .default
         return cell
-    }
-    
-    private func handleTrackRename(at index: Int) {
-        let track = trackList[index]
-        let alert = UIAlertController(title: "Rename Track", message: "Enter new title", preferredStyle: .alert)
-        alert.addTextField {
-            $0.text = track.title
-            $0.placeholder = "Enter new title"
-            $0.clearButtonMode = .whileEditing
-            $0.autocapitalizationType = .words
-        }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self, weak alert] _ in
-            guard let self else { return }
-            let newTitle = InputValidator.limit(
-                InputValidator.trimOnSubmit(alert?.textFields?.first?.text ?? ""),
-                maxLength: InputValidator.nameMaxLength
-            )
-            guard InputValidator.validateRequired(newTitle, message: "Track title is required.") == nil else {
-                self.showInputError(message: "Track title is required.")
-                return
-            }
-            self.updateTrackTitle(at: index, newTitle: newTitle)
-        })
-        present(alert, animated: true)
-    }
-    
-    private func updateTrackTitle(at index: Int, newTitle: String) {
-        guard let playlistItemId = trackList[index].playlistItemId else { return }
-        Task {
-            do {
-                try await PlaylistsManager.shared.updateTrackName(playlistItemId: playlistItemId, newTitle: newTitle)
-                await MainActor.run {
-                    self.fetchTracks()
-                }
-            } catch {
-                debugLog("❌ Track rename error: \(error)")
-                await MainActor.run {
-                    self.showInputError(message: "We couldn't rename that track right now. Please try again.")
-                }
-            }
-        }
     }
 
     private func showInputError(message: String) {
@@ -487,11 +445,13 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
         let track = trackList[indexPath.row]
         let vc = PlaylistSongDetailViewController()
         vc.passedImage = trackImagePlaceholder(for: track.title)   // ← stable random image
         vc.passedSongTitle = track.title
         vc.passedArtist = track.artist
+        vc.passedTrackId = track.trackId
         vc.passedSheetScanId = track.sheetScanId
         navigationController?.pushViewController(vc, animated: true)
     }
@@ -516,7 +476,7 @@ class TrackTableViewCell: UITableViewCell {
     private let artwork = UIImageView()
     private let titleLabel = UILabel()
     private let artistLabel = UILabel()
-    var renameHandler: (() -> Void)?
+    private let chevronImageView = UIImageView()
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -546,15 +506,18 @@ class TrackTableViewCell: UITableViewCell {
         
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.isUserInteractionEnabled = true
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleRenameTap))
-        titleLabel.addGestureRecognizer(tap)
         container.addSubview(titleLabel)
         
         artistLabel.font = .systemFont(ofSize: 12)
         artistLabel.textColor = .secondaryLabel
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(artistLabel)
+
+        chevronImageView.image = UIImage(systemName: "chevron.right")
+        chevronImageView.tintColor = ComponentColors.SongCard.metadataText.withAlphaComponent(0.45)
+        chevronImageView.contentMode = .scaleAspectFit
+        chevronImageView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(chevronImageView)
         
         NSLayoutConstraint.activate([
             container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
@@ -566,13 +529,17 @@ class TrackTableViewCell: UITableViewCell {
             artwork.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             artwork.widthAnchor.constraint(equalToConstant: 56),
             artwork.heightAnchor.constraint(equalToConstant: 56),
+
+            chevronImageView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            chevronImageView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            chevronImageView.widthAnchor.constraint(equalToConstant: 14),
             
             titleLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
-            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            titleLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -12),
             titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -10),
             
             artistLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
-            artistLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            artistLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -12),
             artistLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: 10),
         ])
     }
@@ -582,9 +549,5 @@ class TrackTableViewCell: UITableViewCell {
         titleLabel.text = track.title
         artistLabel.text = track.artist
         artwork.image = trackImagePlaceholder(for: track.title)   // ← stable random image
-    }
-    
-    @objc private func handleRenameTap() {
-        renameHandler?()
     }
 }

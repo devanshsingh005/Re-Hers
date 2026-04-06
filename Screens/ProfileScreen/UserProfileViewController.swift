@@ -43,6 +43,7 @@ final class UserProfileViewController: UIViewController {
     private let weeklyHoursLabel = UILabel()
     private let goalBadgeBg = UIView()
     private let goalBadgeLabel = UILabel()
+    private let appearanceValueLabel = UILabel()
     private var chartBars: [UIView] = []
     private var chartDots: [UIView] = []
 
@@ -96,6 +97,7 @@ final class UserProfileViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationItem.rightBarButtonItem?.menu = buildProfileMenu()
+        updateAppearanceValueLabel()
         updateSignInOutButton()
     }
 
@@ -136,6 +138,7 @@ final class UserProfileViewController: UIViewController {
         buildHeaderSection()
         buildStatsSection()
         buildPracticeProgressSection()
+        buildAppearanceSection()
         buildLegalSection()
         buildSignOutSection()
     }
@@ -394,6 +397,76 @@ final class UserProfileViewController: UIViewController {
         return chartView
     }
 
+    private func buildAppearanceSection() {
+        let card = UIView()
+        card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
+        card.layer.cornerRadius = 20
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.06
+        card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        card.layer.shadowRadius = 16
+        card.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(card)
+
+        let sectionTitle = UILabel()
+        sectionTitle.text = "Appearance"
+        sectionTitle.font = .systemFont(ofSize: 20, weight: .bold)
+        sectionTitle.textColor = ComponentColors.ProfileScreen.userName
+        sectionTitle.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(sectionTitle)
+
+        let rowButton = UIControl()
+        rowButton.translatesAutoresizingMaskIntoConstraints = false
+        rowButton.addTarget(self, action: #selector(openAppearancePicker), for: .touchUpInside)
+        card.addSubview(rowButton)
+
+        let rowTitleLabel = UILabel()
+        rowTitleLabel.text = "Theme"
+        rowTitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        rowTitleLabel.textColor = ComponentColors.ProfileScreen.userName
+        rowTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        rowButton.addSubview(rowTitleLabel)
+
+        appearanceValueLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        appearanceValueLabel.textColor = ComponentColors.ProfileScreen.statLabel
+        appearanceValueLabel.textAlignment = .right
+        appearanceValueLabel.translatesAutoresizingMaskIntoConstraints = false
+        rowButton.addSubview(appearanceValueLabel)
+        updateAppearanceValueLabel()
+
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+        chevron.tintColor = ComponentColors.ProfileScreen.statLabel
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        rowButton.addSubview(chevron)
+
+        let previousView = contentView.subviews.last(where: { $0 != card })!
+
+        NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: 20),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+
+            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+
+            rowButton.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: 10),
+            rowButton.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            rowButton.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            rowButton.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+            rowButton.heightAnchor.constraint(equalToConstant: 50),
+
+            rowTitleLabel.leadingAnchor.constraint(equalTo: rowButton.leadingAnchor, constant: 20),
+            rowTitleLabel.centerYAnchor.constraint(equalTo: rowButton.centerYAnchor),
+
+            chevron.trailingAnchor.constraint(equalTo: rowButton.trailingAnchor, constant: -20),
+            chevron.centerYAnchor.constraint(equalTo: rowButton.centerYAnchor),
+
+            appearanceValueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -8),
+            appearanceValueLabel.centerYAnchor.constraint(equalTo: rowButton.centerYAnchor),
+            appearanceValueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: rowTitleLabel.trailingAnchor, constant: 12)
+        ])
+    }
+
     // MARK: - SIGN OUT SECTION
     private func buildSignOutSection() {
         signOutButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
@@ -556,6 +629,7 @@ final class UserProfileViewController: UIViewController {
     // MARK: - Load Data
     private func loadData() {
         Task {
+            await DailyGoalManager.shared.refreshFromSupabase()
             await loadProfile()
             await loadStats()
         }
@@ -572,9 +646,7 @@ final class UserProfileViewController: UIViewController {
                 }
                 self.updateAvatar(with: GuestSessionManager.shared.guestAvatarIdentifier())
                 if let goalMins = GuestSessionManager.shared.guestPracticeGoalMinutes() {
-                    let goalHours = Double(goalMins) / 60.0
-                    self.goalBadgeLabel.text = goalHours == goalHours.rounded() ?
-                        "Goal: \(Int(goalHours))h" : String(format: "Goal: %.1fh", goalHours)
+                    self.goalBadgeLabel.text = self.goalBadgeText(for: goalMins)
                     DailyGoalManager.shared.dailyGoalMinutes = goalMins
                 }
                 self.navigationItem.rightBarButtonItem?.menu = self.buildProfileMenu()
@@ -617,9 +689,7 @@ final class UserProfileViewController: UIViewController {
                 
                 await MainActor.run {
                     let goalMins = onboarding.practice_mins
-                    let goalHours = Double(goalMins) / 60.0
-                    goalBadgeLabel.text = goalHours == goalHours.rounded() ?
-                        "Goal: \(Int(goalHours))h" : String(format: "Goal: %.1fh", goalHours)
+                    goalBadgeLabel.text = self.goalBadgeText(for: goalMins)
                     DailyGoalManager.shared.dailyGoalMinutes = goalMins
                 }
             } catch {
@@ -633,8 +703,9 @@ final class UserProfileViewController: UIViewController {
 
     private func loadStats() async {
         if GuestSessionManager.shared.isGuest() {
+            DailyGoalManager.shared.checkAndResetIfNewDay()
             let guestEvents = SupabaseProgressManager.guestLessonEvents()
-            let totalSeconds = guestEvents.compactMap(\.durationSeconds).reduce(0, +)
+            let totalSecondsFromEvents = guestEvents.compactMap(\.durationSeconds).reduce(0, +)
             let lessonEvents = guestEvents.filter { $0.eventType == "lesson_completed" }
             let totalLessons = lessonEvents.count
 
@@ -657,12 +728,19 @@ final class UserProfileViewController: UIViewController {
                 }
             }
 
+            let todayIndex = daysSinceMonday
+            let todayTrackedSeconds = Int(weeklySeconds[todayIndex])
+            let practiceSecondsToday = DailyGoalManager.shared.practiceTimeMinutesToday * 60
+            if practiceSecondsToday > todayTrackedSeconds {
+                weeklySeconds[todayIndex] = Double(practiceSecondsToday)
+            }
+
             let weeklyHours = weeklySeconds.map { $0 / 3600.0 }
             let thisWeekHours = weeklyHours.reduce(0, +)
             let practicedDays = Set(guestEvents.compactMap { event -> Date? in
                 guard let date = formatter.date(from: event.occurredAt) else { return nil }
                 return calendar.startOfDay(for: date)
-            })
+            }).union(practiceSecondsToday > 0 ? [calendar.startOfDay(for: now)] : [])
 
             var streak = 0
             var checkDate = calendar.startOfDay(for: now)
@@ -672,7 +750,8 @@ final class UserProfileViewController: UIViewController {
             }
 
             await MainActor.run {
-                let totalHours = Double(totalSeconds) / 3600.0
+                let adjustedTotalSeconds = totalSecondsFromEvents + max(practiceSecondsToday - todayTrackedSeconds, 0)
+                let totalHours = Double(adjustedTotalSeconds) / 3600.0
                 self.practiceLabel.text = totalHours < 10 ?
                     String(format: "%.1fh", totalHours) : "\(Int(totalHours))h"
                 self.lessonsLabel.text = "\(totalLessons)"
@@ -691,6 +770,8 @@ final class UserProfileViewController: UIViewController {
         guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
 
         do {
+            DailyGoalManager.shared.checkAndResetIfNewDay()
+
             // Fetch lesson_events for this user
             struct LessonEvent: Decodable {
                 let duration_seconds: Int?
@@ -706,8 +787,8 @@ final class UserProfileViewController: UIViewController {
                 .value
 
             // Calculate totals
-            let totalSeconds = events.compactMap { $0.duration_seconds }.reduce(0, +)
-            let totalLessons = events.count
+            let totalSecondsFromEvents = events.compactMap { $0.duration_seconds }.reduce(0, +)
+            let totalLessons = events.filter { $0.event_type == "lesson_completed" }.count
 
             // Weekly data (last 7 days Mon–Sun)
             var weeklySeconds = [Double](repeating: 0, count: 7)
@@ -732,6 +813,21 @@ final class UserProfileViewController: UIViewController {
                 }
             }
 
+            let today = DateFormatter().string(from: now, format: "yyyy-MM-dd")
+            let profilePracticeMinutesToday = currentProfile?.last_practice_date == today
+                ? (currentProfile?.practice_mins_today ?? 0)
+                : 0
+            let freshPracticeMinutesToday = max(
+                profilePracticeMinutesToday,
+                DailyGoalManager.shared.practiceTimeMinutesToday
+            )
+            let practiceSecondsToday = freshPracticeMinutesToday * 60
+            let todayIndex = daysSinceMonday
+            let todayTrackedSeconds = Int(weeklySeconds[todayIndex])
+            if practiceSecondsToday > todayTrackedSeconds {
+                weeklySeconds[todayIndex] = Double(practiceSecondsToday)
+            }
+
             let weeklyHours = weeklySeconds.map { $0 / 3600.0 }
             let thisWeekHours = weeklyHours.reduce(0, +)
 
@@ -741,7 +837,7 @@ final class UserProfileViewController: UIViewController {
             let practicedDays = Set(events.compactMap { event -> Date? in
                 guard let date = formatter.date(from: event.occurred_at) else { return nil }
                 return calendar.startOfDay(for: date)
-            })
+            }).union(practiceSecondsToday > 0 ? [calendar.startOfDay(for: now)] : [])
 
             while practicedDays.contains(checkDate) {
                 streak += 1
@@ -750,7 +846,10 @@ final class UserProfileViewController: UIViewController {
 
             await MainActor.run {
                 // Practice hours label
-                let totalHours = Double(totalSeconds) / 3600.0
+                let storedTotalSeconds = currentProfile?.total_study_seconds ?? 0
+                let adjustedTotalSeconds = max(storedTotalSeconds, totalSecondsFromEvents)
+                    + max(practiceSecondsToday - todayTrackedSeconds, 0)
+                let totalHours = Double(adjustedTotalSeconds) / 3600.0
                 practiceLabel.text = totalHours < 10 ?
                     String(format: "%.1fh", totalHours) : "\(Int(totalHours))h"
 
@@ -1067,7 +1166,7 @@ final class UserProfileViewController: UIViewController {
             var onboardingData = GuestSessionManager.shared.loadGuestOnboardingData() ?? [:]
             onboardingData["practice_mins"] = minutes
             GuestSessionManager.shared.saveGuestOnboardingData(onboardingData)
-            goalBadgeLabel.text = "Goal: \(minutes)m"
+            goalBadgeLabel.text = goalBadgeText(for: minutes)
             DailyGoalManager.shared.dailyGoalMinutes = minutes
             showAlert(title: "Success", message: "Daily goal updated!")
             return
@@ -1084,7 +1183,7 @@ final class UserProfileViewController: UIViewController {
                     .execute()
                 
                 await MainActor.run {
-                    self.goalBadgeLabel.text = "Goal: \(minutes)m"
+                    self.goalBadgeLabel.text = self.goalBadgeText(for: minutes)
                     DailyGoalManager.shared.dailyGoalMinutes = minutes
                     self.showAlert(title: "Success", message: "Daily goal updated!")
                 }
@@ -1092,6 +1191,30 @@ final class UserProfileViewController: UIViewController {
                 await MainActor.run { showAlert(title: "Error", message: "We couldn't update your daily goal right now. Please try again.") }
             }
         }
+    }
+
+    @objc private func openAppearancePicker() {
+        let currentTheme = AppThemeManager.shared.currentTheme
+        let alert = UIAlertController(title: "Theme", message: nil, preferredStyle: .actionSheet)
+
+        let themes: [AppTheme] = [.system, .light, .dark]
+        for theme in themes {
+            let title = theme == currentTheme ? "\(theme.displayName) ✓" : theme.displayName
+            alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                AppThemeManager.shared.setTheme(theme, window: self?.view.window)
+                self?.updateAppearanceValueLabel()
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            let sourceView = appearanceValueLabel.superview ?? view
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView?.bounds ?? .zero
+        }
+
+        present(alert, animated: true)
     }
 
     func updateProfileName(_ fullName: String) {
@@ -1441,6 +1564,20 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
 
 // MARK: - Helpers
 private extension UserProfileViewController {
+    func updateAppearanceValueLabel() {
+        appearanceValueLabel.text = AppThemeManager.shared.currentTheme.displayName
+    }
+
+    func goalBadgeText(for minutes: Int) -> String {
+        if minutes < 60 {
+            return "Goal: \(minutes)m"
+        }
+        let goalHours = Double(minutes) / 60.0
+        return goalHours == goalHours.rounded()
+            ? "Goal: \(Int(goalHours))h"
+            : String(format: "Goal: %.1fh", goalHours)
+    }
+
     func showAlert(title: String, message: String) {
         guard !(presentedViewController is UIAlertController) else { return }
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)

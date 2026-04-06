@@ -14,8 +14,6 @@
 		23542CC02EE5D5750074B2A2 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CBF2EE5D5750074B2A2 /* PostgREST */; };
 		23542CC22EE5D64D0074B2A2 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CC12EE5D64D0074B2A2 /* Storage */; };
 		23542CC42EE5D6530074B2A2 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CC32EE5D6530074B2A2 /* Supabase */; };
-		24FA2E8E2EE5986D0028C205 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 24FA2E8F2EE5986D0028C205 /* FirebaseCore */; };
-		24FA2E902EE5986D0028C205 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 24FA2E912EE5986D0028C205 /* FirebaseAnalytics */; };
 		236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */; };
 		238BCB1C2ED4B21E00301661 /* SongDetailsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */; };
 		238BCB1E2ED4CE8200301661 /* PlayListInside.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238BCB1D2ED4CE8200301661 /* PlayListInside.swift */; };
@@ -32,6 +30,8 @@
 		23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C736412ED579D100BCD95B /* UserProfileViewController.swift */; };
 		23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */; };
 		23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */; };
+		24FA2E8E2EE5986D0028C205 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 24FA2E8F2EE5986D0028C205 /* FirebaseCore */; };
+		24FA2E902EE5986D0028C205 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 24FA2E912EE5986D0028C205 /* FirebaseAnalytics */; };
 		2B12BD8B2EBA7D0F009795DF /* DiscoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8A2EBA7D0F009795DF /* DiscoverViewController.swift */; };
 		2B12BD8E2EBA8D0F009795DF /* DiscoverSongDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B12BD8D2EBA8D0F009795DF /* DiscoverSongDetailViewController.swift */; };
 		2B1DAEB72F67F64F00BE5943 /* PlaylistsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1DAEB52F67F64F00BE5943 /* PlaylistsManager.swift */; };
@@ -75,6 +75,7 @@
 		84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */; };
 		84CC1BDF2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = 84CC1BDE2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 */; };
 		A2F0A1B12EFA000100000001 /* Re-Hearse_v1/Services/GuestSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A1B22EFA000100000001 /* Re-Hearse_v1/Services/GuestSessionManager.swift */; };
+		A2F0A1B32EFA000100000001 /* Re-Hearse_v1/Services/AppThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A1B42EFA000100000001 /* Re-Hearse_v1/Services/AppThemeManager.swift */; };
 		AA1BC2D42F8000010001ABCD /* UploadPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */; };
 		C7CF4171E017AB9C2DE571DB /* NavigationBarHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0110DC55172A44C69E9FCC1 /* NavigationBarHelper.swift */; };
 		F043D9643D57E1C2BE993CE2 /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = 344E0886BE37590B2CF6E687 /* Song.swift */; };
@@ -157,6 +158,7 @@
 		A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Debug.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Release.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A2F0A1B22EFA000100000001 /* Re-Hearse_v1/Services/GuestSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Re-Hearse_v1/Services/GuestSessionManager.swift"; sourceTree = SOURCE_ROOT; };
+		A2F0A1B42EFA000100000001 /* Re-Hearse_v1/Services/AppThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Re-Hearse_v1/Services/AppThemeManager.swift"; sourceTree = SOURCE_ROOT; };
 		A8B6FEB9F6EB754D1A71C261 /* PianoDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PianoDataManager.swift; sourceTree = "<group>"; };
 		AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPickerViewController.swift; sourceTree = "<group>"; };
 		B0110DC55172A44C69E9FCC1 /* NavigationBarHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavigationBarHelper.swift; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Services/AppThemeManager.swift,
 				Services/GuestSessionManager.swift,
 				Views/GuestFeatureGateModal.swift,
 			);
@@ -291,6 +294,7 @@
 				A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */,
 				A1B2C3D42F90000100000001 /* Re-Hearse_v1/Secrets.xcconfig */,
 				2B9B8F5B2F485DE70049535B /* Re-Hearse_v1/Views/GuestFeatureGateModal.swift */,
+				A2F0A1B42EFA000100000001 /* Re-Hearse_v1/Services/AppThemeManager.swift */,
 				A2F0A1B22EFA000100000001 /* Re-Hearse_v1/Services/GuestSessionManager.swift */,
 			);
 			name = "Recovered References";
@@ -660,6 +664,7 @@
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
 				842B08592EBA0712001AC579 /* PianoKeyView.swift in Sources */,
 				2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */,
+				A2F0A1B32EFA000100000001 /* Re-Hearse_v1/Services/AppThemeManager.swift in Sources */,
 				A2F0A1B12EFA000100000001 /* Re-Hearse_v1/Services/GuestSessionManager.swift in Sources */,
 				2BC4A97D2F656AB4004FC90E /* RehearsalInfoCard.swift in Sources */,
 				2B12BD8B2EBA7D0F009795DF /* DiscoverViewController.swift in Sources */,

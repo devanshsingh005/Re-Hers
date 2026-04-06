@@ -22,6 +22,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let window = UIWindow(windowScene: windowScene)
         self.window = window
+        AppThemeManager.shared.applyCurrentTheme(to: window)
 
         // Always show the animated SwiftUI splash screen as the primary entry point
         showSplashAndRoute()

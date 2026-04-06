@@ -25,6 +25,7 @@ class DiscoverSongDetailViewController: UIViewController {
     private var sheetMusicJSON: [String: Any]? {
         didSet { updateActionButtonState() }
     }
+    private var trackedPracticeSessionStartedAt: Date?
 
     // MARK: - Scroll Container
     private let mainScrollView = UIScrollView()
@@ -97,8 +98,17 @@ class DiscoverSongDetailViewController: UIViewController {
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .practicePage
+        )
         let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
         if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
             cancelPendingTasks()
@@ -677,7 +687,8 @@ class DiscoverSongDetailViewController: UIViewController {
                 _ = try await PlaylistsManager.shared.addTrackToPlaylist(
                     playlistId: playlistId,
                     title: song.title,
-                    artist: song.composer
+                    artist: song.composer,
+                    trackId: song.id.uuidString
                 )
                 await MainActor.run {
                     self.presentInfoAlert(title: "Added", message: "\"\(song.title)\" was added to the playlist.")

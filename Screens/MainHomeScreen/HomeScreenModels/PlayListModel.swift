@@ -59,14 +59,14 @@ final class PlaylistService {
 
         for p in dbPlaylists {
             var updated = p
-            if let urlStr = updated.coverImageURL, !urlStr.contains("://"), !urlStr.hasPrefix("doc_"), (urlStr.contains(".") || urlStr.contains("/")) {
+            if let urlStr = updated.coverImageURL,
+               !urlStr.contains("://"),
+               !urlStr.hasPrefix("doc_"),
+               !urlStr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 do {
-                    updated.coverImageURL = try SupabaseManager.shared.client.storage
-                        .from("PlayListCover")
-                        .getPublicURL(path: urlStr)
-                        .absoluteString
+                    updated.coverImageURL = try await PlaylistsManager.shared.resolveCoverImageURL(from: urlStr)
                 } catch {
-                    // Ignore and keep original path if error
+                    // Keep the stored path if resolution fails.
                 }
             }
             resolvedPlaylists.append(updated)

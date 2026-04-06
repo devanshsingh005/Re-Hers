@@ -21,6 +21,7 @@ final class DiscoverSongPreviewViewController: UIViewController {
 
     private var loadedPDF: PDFDocument?
     private var pdfLoadTask: Task<Void, Never>?
+    private var trackedPracticeSessionStartedAt: Date?
 
     // MARK: - UI
 
@@ -146,8 +147,17 @@ final class DiscoverSongPreviewViewController: UIViewController {
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .practicePage
+        )
 
         let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
         if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {

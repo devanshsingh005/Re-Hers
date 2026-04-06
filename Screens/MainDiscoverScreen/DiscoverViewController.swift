@@ -132,6 +132,11 @@ final class DiscoverViewController: UIViewController {
 
     // iPad adaptive width — swapped on rotation
     private var iPadWidthConstraints: [NSLayoutConstraint] = []
+    private lazy var dismissKeyboardTapGesture: UITapGestureRecognizer = {
+        let gesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        gesture.cancelsTouchesInView = false
+        return gesture
+    }()
 
     // MARK: Lifecycle
 
@@ -142,6 +147,7 @@ final class DiscoverViewController: UIViewController {
         navigationItem.titleView?.alpha = 0
         syncNavBarAlpha()
         setupLayout()
+        setupKeyboardDismissal()
         setupNavBackground()
         buildFilterMenus()
         fetchSongs()
@@ -277,6 +283,7 @@ final class DiscoverViewController: UIViewController {
     private func setupLayout() {
         view.addSubview(scrollView)
         scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.keyboardDismissMode = .interactive
         scrollView.addSubview(contentView)
         chipsScrollView.addSubview(chipsStack)
 
@@ -355,6 +362,14 @@ final class DiscoverViewController: UIViewController {
         chipsHeightConstraint?.isActive = true
 
         applyAdaptiveWidth(for: view.bounds.width)
+    }
+
+    private func setupKeyboardDismissal() {
+        view.addGestureRecognizer(dismissKeyboardTapGesture)
+    }
+
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
     }
 
     // MARK: Table Height
@@ -682,6 +697,7 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
     
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        dismissKeyboard()
         tableView.deselectRow(at: indexPath, animated: true)
      
         let song = filteredSongs[indexPath.row]

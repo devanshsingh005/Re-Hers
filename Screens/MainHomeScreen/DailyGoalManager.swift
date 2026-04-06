@@ -16,6 +16,7 @@ class DailyGoalManager {
     private let dailyGoalKey         = "dailyGoalMinutes"
     private let practiceTimeKey      = "practiceTimeToday"
     private let practiceStartDateKey = "practiceStartDate"
+    private let practiceRemainderSecondsKey = "practiceRemainderSeconds"
 
     static let dailyGoalUpdatedNotification = NSNotification.Name("DailyGoalUpdated")
 
@@ -48,6 +49,11 @@ class DailyGoalManager {
         set { if let v = newValue { UserDefaults.standard.set(v, forKey: practiceStartDateKey) } }
     }
 
+    private var practiceRemainderSeconds: Int {
+        get { UserDefaults.standard.integer(forKey: practiceRemainderSecondsKey) }
+        set { UserDefaults.standard.set(newValue, forKey: practiceRemainderSecondsKey) }
+    }
+
     private init() {
         // Load initial values from Disk (immediate)
         let storedGoal = UserDefaults.standard.integer(forKey: dailyGoalKey)
@@ -55,7 +61,9 @@ class DailyGoalManager {
         _practiceMins = UserDefaults.standard.integer(forKey: practiceTimeKey)
         
         // Start background sync from Supabase
-        fetchFromSupabase()
+        Task {
+            await refreshFromSupabase()
+        }
     }
 
     func checkAndResetIfNewDay() {
@@ -63,9 +71,25 @@ class DailyGoalManager {
         if let lastDate = lastPracticeDateString, lastDate != today {
             practiceTimeMinutesToday = 0
             _practiceMins = 0
+            practiceRemainderSeconds = 0
         }
         if lastPracticeDateString == nil || lastPracticeDateString != today {
             lastPracticeDateString = today
+        }
+    }
+
+    func addPracticeDuration(seconds: Int) {
+        let normalizedSeconds = max(seconds, 0)
+        guard normalizedSeconds > 0 else { return }
+
+        checkAndResetIfNewDay()
+
+        let totalSeconds = practiceRemainderSeconds + normalizedSeconds
+        let fullMinutes = totalSeconds / 60
+        practiceRemainderSeconds = totalSeconds % 60
+
+        if fullMinutes > 0 {
+            practiceTimeMinutesToday += fullMinutes
         }
     }
 
@@ -76,35 +100,34 @@ class DailyGoalManager {
 
     // MARK: - Supabase Sync
 
-    private func fetchFromSupabase() {
-        Task {
-            guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
-            do {
-                let profile: UserProfile = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .select("daily_goal_minutes, practice_mins_today, last_practice_date")
-                    .eq("id", value: user.id)
-                    .single()
-                    .execute()
-                    .value
-                
-                await MainActor.run {
-                    self._dailyGoal = profile.daily_goal_minutes ?? self._dailyGoal
-                    
-                    // Only sync practice mins if it's the same day
-                    let today = DateFormatter().string(from: Date(), format: "yyyy-MM-dd")
-                    if profile.last_practice_date == today {
-                        self._practiceMins = profile.practice_mins_today ?? self._practiceMins
-                    } else {
-                        // It's a new day on the server side
-                        self._practiceMins = 0
-                    }
-                    
-                    NotificationCenter.default.post(name: Self.dailyGoalUpdatedNotification, object: nil)
+    func refreshFromSupabase() async {
+        guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+        do {
+            let profile: UserProfile = try await SupabaseManager.shared.client
+                .from("profiles")
+                .select("daily_goal_minutes, practice_mins_today, last_practice_date")
+                .eq("id", value: user.id.uuidString)
+                .single()
+                .execute()
+                .value
+
+            await MainActor.run {
+                self._dailyGoal = profile.daily_goal_minutes ?? self._dailyGoal
+
+                let today = DateFormatter().string(from: Date(), format: "yyyy-MM-dd")
+                if profile.last_practice_date == today {
+                    let remotePracticeMins = profile.practice_mins_today ?? 0
+                    self._practiceMins = max(remotePracticeMins, self._practiceMins)
+                } else {
+                    self._practiceMins = 0
+                    self.practiceRemainderSeconds = 0
                 }
-            } catch {
-                debugLog("DailyGoal sync error (Supabase): \(error)")
+
+                self.lastPracticeDateString = profile.last_practice_date
+                NotificationCenter.default.post(name: Self.dailyGoalUpdatedNotification, object: nil)
             }
+        } catch {
+            debugLog("DailyGoal sync error (Supabase): \(error)")
         }
     }
 
@@ -112,18 +135,24 @@ class DailyGoalManager {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
             let today = DateFormatter().string(from: Date(), format: "yyyy-MM-dd")
-            
-            let update: [String: String] = [
-                "daily_goal_minutes": String(dailyGoalMinutes),
-                "practice_mins_today": String(practiceTimeMinutesToday),
-                "last_practice_date": today
-            ]
-            
+
+            struct DailyGoalProfileUpdate: Encodable {
+                let daily_goal_minutes: Int
+                let practice_mins_today: Int
+                let last_practice_date: String
+            }
+
+            let update = DailyGoalProfileUpdate(
+                daily_goal_minutes: dailyGoalMinutes,
+                practice_mins_today: practiceTimeMinutesToday,
+                last_practice_date: today
+            )
+
             do {
                 try await SupabaseManager.shared.client
                     .from("profiles")
                     .update(update)
-                    .eq("id", value: user.id)
+                    .eq("id", value: user.id.uuidString)
                     .execute()
             } catch {
                 debugLog("DailyGoal push error: \(error)")

@@ -24,6 +24,7 @@ final class PlayAlongViewController: UIViewController {
     private var sessionStartupWorkItem: DispatchWorkItem?
     private var isPreparingScore = false
     private var hasPreparedScore = false
+    private var trackedPracticeSessionStartedAt: Date?
 
     // MARK: - Initializer
     init() {
@@ -70,6 +71,7 @@ final class PlayAlongViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         guard !hasStartedSessionForCurrentAppearance else { return }
         hasStartedSessionForCurrentAppearance = true
         loadSheetDataIfNeeded()
@@ -89,6 +91,14 @@ final class PlayAlongViewController: UIViewController {
         releaseAudioPlaybackSession()
         pitchDetector.stopListening()
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = false
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .playAlong
+        )
     }
 
     private func acquireAudioPlaybackSessionIfNeeded() {

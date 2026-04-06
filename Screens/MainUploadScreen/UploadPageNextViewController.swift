@@ -37,6 +37,7 @@ final class UploadPageNextViewController: UIViewController {
     private var jsonFetchTask:    Task<Void, Never>?
     private var jobLoadTask:      Task<Void, Never>?
     private var pollStatusTask:   Task<Void, Never>?
+    private var trackedPracticeSessionStartedAt: Date?
 
     // MARK: - Scroll
     private let scrollView  = UIScrollView()
@@ -98,6 +99,7 @@ final class UploadPageNextViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         presentUnavailableReasonIfNeeded()
     }
 
@@ -119,6 +121,14 @@ final class UploadPageNextViewController: UIViewController {
         if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
             releasePreviewResources()
         }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .practicePage
+        )
     }
 
     deinit {
