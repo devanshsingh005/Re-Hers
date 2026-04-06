@@ -103,9 +103,8 @@ final class AllRecentsViewController: UIViewController {
     }
 
     private func createRow(song: Song, date: Date) -> UIView {
-        let cardBgColor = UIColor { trait in trait.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : .white }
         let card = UIView()
-        card.backgroundColor = cardBgColor
+        card.backgroundColor = ComponentColors.SongCard.background
         card.layer.cornerRadius = 16
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.05

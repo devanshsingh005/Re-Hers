@@ -24,6 +24,15 @@ struct ProfileStats {
 }
 
 final class UserProfileViewController: UIViewController {
+    private static let practiceEventDateParsers: [ISO8601DateFormatter] = {
+        let fractionalSecondsParser = ISO8601DateFormatter()
+        fractionalSecondsParser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let standardParser = ISO8601DateFormatter()
+        standardParser.formatOptions = [.withInternetDateTime]
+
+        return [fractionalSecondsParser, standardParser]
+    }()
 
     // MARK: - UI
     private let scrollView = UIScrollView()
@@ -65,6 +74,21 @@ final class UserProfileViewController: UIViewController {
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         self.hidesBottomBarWhenPushed = true
+    }
+
+    private func practiceEventDate(from rawValue: String) -> Date? {
+        for parser in Self.practiceEventDateParsers {
+            if let date = parser.date(from: rawValue) {
+                return date
+            }
+        }
+
+        return nil
+    }
+
+    private func practiceHoursText(from seconds: Int) -> String {
+        let hours = Double(seconds) / 3600.0
+        return hours < 10 ? String(format: "%.1fh", hours) : "\(Int(hours))h"
     }
 
     // MARK: - Lifecycle
@@ -716,11 +740,8 @@ final class UserProfileViewController: UIViewController {
             let daysSinceMonday = (weekday + 5) % 7
             guard let monday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: calendar.startOfDay(for: now)) else { return }
 
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
             for event in guestEvents {
-                guard let date = formatter.date(from: event.occurredAt) else { continue }
+                guard let date = practiceEventDate(from: event.occurredAt) else { continue }
                 let dayStart = calendar.startOfDay(for: date)
                 let diff = calendar.dateComponents([.day], from: monday, to: dayStart).day ?? -1
                 if diff >= 0 && diff < 7 {
@@ -731,16 +752,15 @@ final class UserProfileViewController: UIViewController {
             let todayIndex = daysSinceMonday
             let todayTrackedSeconds = Int(weeklySeconds[todayIndex])
             let practiceSecondsToday = DailyGoalManager.shared.practiceTimeMinutesToday * 60
-            if practiceSecondsToday > todayTrackedSeconds {
-                weeklySeconds[todayIndex] = Double(practiceSecondsToday)
-            }
+            let resolvedTodaySeconds = max(practiceSecondsToday, todayTrackedSeconds)
+            weeklySeconds[todayIndex] = Double(resolvedTodaySeconds)
 
             let weeklyHours = weeklySeconds.map { $0 / 3600.0 }
             let thisWeekHours = weeklyHours.reduce(0, +)
             let practicedDays = Set(guestEvents.compactMap { event -> Date? in
-                guard let date = formatter.date(from: event.occurredAt) else { return nil }
+                guard let date = practiceEventDate(from: event.occurredAt) else { return nil }
                 return calendar.startOfDay(for: date)
-            }).union(practiceSecondsToday > 0 ? [calendar.startOfDay(for: now)] : [])
+            }).union(resolvedTodaySeconds > 0 ? [calendar.startOfDay(for: now)] : [])
 
             var streak = 0
             var checkDate = calendar.startOfDay(for: now)
@@ -750,14 +770,11 @@ final class UserProfileViewController: UIViewController {
             }
 
             await MainActor.run {
-                let adjustedTotalSeconds = totalSecondsFromEvents + max(practiceSecondsToday - todayTrackedSeconds, 0)
-                let totalHours = Double(adjustedTotalSeconds) / 3600.0
-                self.practiceLabel.text = totalHours < 10 ?
-                    String(format: "%.1fh", totalHours) : "\(Int(totalHours))h"
+                let adjustedTotalSeconds = max(totalSecondsFromEvents - todayTrackedSeconds + resolvedTodaySeconds, 0)
+                self.practiceLabel.text = self.practiceHoursText(from: adjustedTotalSeconds)
                 self.lessonsLabel.text = "\(totalLessons)"
                 self.streakLabel.text = "\(streak)"
-                self.weeklyHoursLabel.text = thisWeekHours < 10 ?
-                    String(format: "%.1fh", thisWeekHours) : "\(Int(thisWeekHours))h"
+                self.weeklyHoursLabel.text = self.practiceHoursText(from: Int(thisWeekHours * 3600))
 
                 if let chart = self.contentView.viewWithTag(9901) as? PracticeChartView {
                     chart.weeklyData = weeklyHours.map { CGFloat($0) }
@@ -800,12 +817,9 @@ final class UserProfileViewController: UIViewController {
             let daysSinceMonday = (weekday + 5) % 7
             guard let monday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: calendar.startOfDay(for: now)) else { return }
 
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
             for event in events {
                 guard let seconds = event.duration_seconds,
-                      let date = formatter.date(from: event.occurred_at) else { continue }
+                      let date = practiceEventDate(from: event.occurred_at) else { continue }
                 let dayStart = calendar.startOfDay(for: date)
                 let diff = calendar.dateComponents([.day], from: monday, to: dayStart).day ?? -1
                 if diff >= 0 && diff < 7 {
@@ -824,9 +838,15 @@ final class UserProfileViewController: UIViewController {
             let practiceSecondsToday = freshPracticeMinutesToday * 60
             let todayIndex = daysSinceMonday
             let todayTrackedSeconds = Int(weeklySeconds[todayIndex])
-            if practiceSecondsToday > todayTrackedSeconds {
-                weeklySeconds[todayIndex] = Double(practiceSecondsToday)
-            }
+            let storedTotalSeconds = currentProfile?.total_study_seconds ?? 0
+            let pendingTodaySeconds = currentProfile?.last_practice_date == today && todayTrackedSeconds == 0
+                ? max(storedTotalSeconds - totalSecondsFromEvents, 0)
+                : 0
+            let resolvedTodaySeconds = max(
+                practiceSecondsToday,
+                max(todayTrackedSeconds, pendingTodaySeconds)
+            )
+            weeklySeconds[todayIndex] = Double(resolvedTodaySeconds)
 
             let weeklyHours = weeklySeconds.map { $0 / 3600.0 }
             let thisWeekHours = weeklyHours.reduce(0, +)
@@ -835,9 +855,9 @@ final class UserProfileViewController: UIViewController {
             var streak = 0
             var checkDate = calendar.startOfDay(for: now)
             let practicedDays = Set(events.compactMap { event -> Date? in
-                guard let date = formatter.date(from: event.occurred_at) else { return nil }
+                guard let date = practiceEventDate(from: event.occurred_at) else { return nil }
                 return calendar.startOfDay(for: date)
-            }).union(practiceSecondsToday > 0 ? [calendar.startOfDay(for: now)] : [])
+            }).union(resolvedTodaySeconds > 0 ? [calendar.startOfDay(for: now)] : [])
 
             while practicedDays.contains(checkDate) {
                 streak += 1
@@ -846,19 +866,16 @@ final class UserProfileViewController: UIViewController {
 
             await MainActor.run {
                 // Practice hours label
-                let storedTotalSeconds = currentProfile?.total_study_seconds ?? 0
-                let adjustedTotalSeconds = max(storedTotalSeconds, totalSecondsFromEvents)
-                    + max(practiceSecondsToday - todayTrackedSeconds, 0)
-                let totalHours = Double(adjustedTotalSeconds) / 3600.0
-                practiceLabel.text = totalHours < 10 ?
-                    String(format: "%.1fh", totalHours) : "\(Int(totalHours))h"
+                let adjustedTotalSeconds = max(
+                    storedTotalSeconds,
+                    max(totalSecondsFromEvents - todayTrackedSeconds + resolvedTodaySeconds, 0)
+                )
+                practiceLabel.text = practiceHoursText(from: adjustedTotalSeconds)
 
                 lessonsLabel.text = "\(totalLessons)"
                 streakLabel.text = "\(streak)"
 
-                let weekHours = thisWeekHours < 10 ?
-                    String(format: "%.1fh", thisWeekHours) : "\(Int(thisWeekHours))h"
-                weeklyHoursLabel.text = weekHours
+                weeklyHoursLabel.text = practiceHoursText(from: Int(thisWeekHours * 3600))
 
                 // Update chart
                 if let chart = contentView.viewWithTag(9901) as? PracticeChartView {

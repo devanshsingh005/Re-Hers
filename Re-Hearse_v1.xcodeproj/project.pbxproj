@@ -8,6 +8,31 @@
 
 /* Begin PBXBuildFile section */
 		01C024616C4FA0D954572620 /* PianoDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B6FEB9F6EB754D1A71C261 /* PianoDataManager.swift */; };
+		2307AEAD2F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@1x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA62F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@1x.png */; };
+		2307AEAE2F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@1x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE992F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@1x.png */; };
+		2307AEAF2F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA02F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@3x.png */; };
+		2307AEB02F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE9F2F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@2x.png */; };
+		2307AEB12F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA12F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@2x.png */; };
+		2307AEB22F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE9E2F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@3x.png */; };
+		2307AEB32F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@1x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE932F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@1x.png */; };
+		2307AEB42F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE9B2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@2x.png */; };
+		2307AEB52F83C15C00360E1F /* rehearse_icon-iOS-Default-83.5x83.5@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA52F83C15C00360E1F /* rehearse_icon-iOS-Default-83.5x83.5@2x.png */; };
+		2307AEB62F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA22F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@3x.png */; };
+		2307AEB72F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA72F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@2x.png */; };
+		2307AEB82F83C15C00360E1F /* rehearse_icon-iOS-Default-1024x1024@1x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEAB2F83C15C00360E1F /* rehearse_icon-iOS-Default-1024x1024@1x.png */; };
+		2307AEB92F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE9D2F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@2x.png */; };
+		2307AEBA2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE9C2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@3x.png */; };
+		2307AEBB2F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE972F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@2x.png */; };
+		2307AEBC2F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE982F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@3x.png */; };
+		2307AEBD2F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE962F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@3x.png */; };
+		2307AEBE2F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA92F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@2x.png */; };
+		2307AEBF2F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE952F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@2x.png */; };
+		2307AEC02F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE942F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@2x.png */; };
+		2307AEC12F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AE9A2F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@2x.png */; };
+		2307AEC22F83C15C00360E1F /* rehearse_icon-iOS-Default-68x68@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA32F83C15C00360E1F /* rehearse_icon-iOS-Default-68x68@2x.png */; };
+		2307AEC32F83C15C00360E1F /* rehearse_icon-iOS-Default-76x76@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA42F83C15C00360E1F /* rehearse_icon-iOS-Default-76x76@2x.png */; };
+		2307AEC42F83C15C00360E1F /* rehearse_icon-iOS-Default-512x512@1x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEAA2F83C15C00360E1F /* rehearse_icon-iOS-Default-512x512@1x.png */; };
+		2307AEC52F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@1x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2307AEA82F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@1x.png */; };
 		23542CBA2EE5D5600074B2A2 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CB92EE5D5600074B2A2 /* Auth */; };
 		23542CBC2EE5D5660074B2A2 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CBB2EE5D5660074B2A2 /* Realtime */; };
 		23542CBE2EE5D56E0074B2A2 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 23542CBD2EE5D56E0074B2A2 /* Functions */; };
@@ -93,6 +118,31 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2307AE932F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@1x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-16x16@1x.png"; sourceTree = "<group>"; };
+		2307AE942F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-16x16@2x.png"; sourceTree = "<group>"; };
+		2307AE952F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-20x20@2x.png"; sourceTree = "<group>"; };
+		2307AE962F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-20x20@3x.png"; sourceTree = "<group>"; };
+		2307AE972F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-29x29@2x.png"; sourceTree = "<group>"; };
+		2307AE982F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-29x29@3x.png"; sourceTree = "<group>"; };
+		2307AE992F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@1x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-32x32@1x.png"; sourceTree = "<group>"; };
+		2307AE9A2F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-32x32@2x.png"; sourceTree = "<group>"; };
+		2307AE9B2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-38x38@2x.png"; sourceTree = "<group>"; };
+		2307AE9C2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-38x38@3x.png"; sourceTree = "<group>"; };
+		2307AE9D2F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-40x40@2x.png"; sourceTree = "<group>"; };
+		2307AE9E2F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-40x40@3x.png"; sourceTree = "<group>"; };
+		2307AE9F2F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-60x60@2x.png"; sourceTree = "<group>"; };
+		2307AEA02F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-60x60@3x.png"; sourceTree = "<group>"; };
+		2307AEA12F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-64x64@2x.png"; sourceTree = "<group>"; };
+		2307AEA22F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-64x64@3x.png"; sourceTree = "<group>"; };
+		2307AEA32F83C15C00360E1F /* rehearse_icon-iOS-Default-68x68@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-68x68@2x.png"; sourceTree = "<group>"; };
+		2307AEA42F83C15C00360E1F /* rehearse_icon-iOS-Default-76x76@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-76x76@2x.png"; sourceTree = "<group>"; };
+		2307AEA52F83C15C00360E1F /* rehearse_icon-iOS-Default-83.5x83.5@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-83.5x83.5@2x.png"; sourceTree = "<group>"; };
+		2307AEA62F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@1x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-128x128@1x.png"; sourceTree = "<group>"; };
+		2307AEA72F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-128x128@2x.png"; sourceTree = "<group>"; };
+		2307AEA82F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@1x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-256x256@1x.png"; sourceTree = "<group>"; };
+		2307AEA92F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-256x256@2x.png"; sourceTree = "<group>"; };
+		2307AEAA2F83C15C00360E1F /* rehearse_icon-iOS-Default-512x512@1x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-512x512@1x.png"; sourceTree = "<group>"; };
+		2307AEAB2F83C15C00360E1F /* rehearse_icon-iOS-Default-1024x1024@1x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "rehearse_icon-iOS-Default-1024x1024@1x.png"; sourceTree = "<group>"; };
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayListScreen.swift; sourceTree = "<group>"; };
 		238BCB1B2ED4B21E00301661 /* SongDetailsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongDetailsPage.swift; sourceTree = "<group>"; };
 		238BCB1D2ED4CE8200301661 /* PlayListInside.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayListInside.swift; sourceTree = "<group>"; };
@@ -245,6 +295,38 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2307AEAC2F83C15C00360E1F /* Final_icons_all_size */ = {
+			isa = PBXGroup;
+			children = (
+				2307AE932F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@1x.png */,
+				2307AE942F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@2x.png */,
+				2307AE952F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@2x.png */,
+				2307AE962F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@3x.png */,
+				2307AE972F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@2x.png */,
+				2307AE982F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@3x.png */,
+				2307AE992F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@1x.png */,
+				2307AE9A2F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@2x.png */,
+				2307AE9B2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@2x.png */,
+				2307AE9C2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@3x.png */,
+				2307AE9D2F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@2x.png */,
+				2307AE9E2F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@3x.png */,
+				2307AE9F2F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@2x.png */,
+				2307AEA02F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@3x.png */,
+				2307AEA12F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@2x.png */,
+				2307AEA22F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@3x.png */,
+				2307AEA32F83C15C00360E1F /* rehearse_icon-iOS-Default-68x68@2x.png */,
+				2307AEA42F83C15C00360E1F /* rehearse_icon-iOS-Default-76x76@2x.png */,
+				2307AEA52F83C15C00360E1F /* rehearse_icon-iOS-Default-83.5x83.5@2x.png */,
+				2307AEA62F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@1x.png */,
+				2307AEA72F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@2x.png */,
+				2307AEA82F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@1x.png */,
+				2307AEA92F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@2x.png */,
+				2307AEAA2F83C15C00360E1F /* rehearse_icon-iOS-Default-512x512@1x.png */,
+				2307AEAB2F83C15C00360E1F /* rehearse_icon-iOS-Default-1024x1024@1x.png */,
+			);
+			path = Final_icons_all_size;
+			sourceTree = "<group>";
+		};
 		239529BB2F719A67002A14FD /* HomeScreenModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -371,6 +453,7 @@
 		842B08322EBA0465001AC579 = {
 			isa = PBXGroup;
 			children = (
+				2307AEAC2F83C15C00360E1F /* Final_icons_all_size */,
 				84CC1BDE2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 */,
 				84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */,
 				842B088A2EBA5936001AC579 /* .gitignore */,
@@ -635,6 +718,31 @@
 			buildActionMask = 2147483647;
 			files = (
 				84CC1BDF2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 in Resources */,
+				2307AEAD2F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@1x.png in Resources */,
+				2307AEAE2F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@1x.png in Resources */,
+				2307AEAF2F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@3x.png in Resources */,
+				2307AEB02F83C15C00360E1F /* rehearse_icon-iOS-Default-60x60@2x.png in Resources */,
+				2307AEB12F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@2x.png in Resources */,
+				2307AEB22F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@3x.png in Resources */,
+				2307AEB32F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@1x.png in Resources */,
+				2307AEB42F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@2x.png in Resources */,
+				2307AEB52F83C15C00360E1F /* rehearse_icon-iOS-Default-83.5x83.5@2x.png in Resources */,
+				2307AEB62F83C15C00360E1F /* rehearse_icon-iOS-Default-64x64@3x.png in Resources */,
+				2307AEB72F83C15C00360E1F /* rehearse_icon-iOS-Default-128x128@2x.png in Resources */,
+				2307AEB82F83C15C00360E1F /* rehearse_icon-iOS-Default-1024x1024@1x.png in Resources */,
+				2307AEB92F83C15C00360E1F /* rehearse_icon-iOS-Default-40x40@2x.png in Resources */,
+				2307AEBA2F83C15C00360E1F /* rehearse_icon-iOS-Default-38x38@3x.png in Resources */,
+				2307AEBB2F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@2x.png in Resources */,
+				2307AEBC2F83C15C00360E1F /* rehearse_icon-iOS-Default-29x29@3x.png in Resources */,
+				2307AEBD2F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@3x.png in Resources */,
+				2307AEBE2F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@2x.png in Resources */,
+				2307AEBF2F83C15C00360E1F /* rehearse_icon-iOS-Default-20x20@2x.png in Resources */,
+				2307AEC02F83C15C00360E1F /* rehearse_icon-iOS-Default-16x16@2x.png in Resources */,
+				2307AEC12F83C15C00360E1F /* rehearse_icon-iOS-Default-32x32@2x.png in Resources */,
+				2307AEC22F83C15C00360E1F /* rehearse_icon-iOS-Default-68x68@2x.png in Resources */,
+				2307AEC32F83C15C00360E1F /* rehearse_icon-iOS-Default-76x76@2x.png in Resources */,
+				2307AEC42F83C15C00360E1F /* rehearse_icon-iOS-Default-512x512@1x.png in Resources */,
+				2307AEC52F83C15C00360E1F /* rehearse_icon-iOS-Default-256x256@1x.png in Resources */,
 				84CC1BDD2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 in Resources */,
 				84ADF6A12F5EAABA009F3D7D /* sheet_test.json in Resources */,
 				842B088B2EBA594A001AC579 /* .gitignore in Resources */,
@@ -738,6 +846,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 89L44HJL46;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
