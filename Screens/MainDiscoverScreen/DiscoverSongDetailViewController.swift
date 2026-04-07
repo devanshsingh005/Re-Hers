@@ -73,6 +73,7 @@ class DiscoverSongDetailViewController: UIViewController {
         setupContent()
         setupConstraints()
         setupActions()
+        updateActionButtonState()
 
         applyPassedData()
         loadSheetData()
@@ -391,10 +392,11 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func updateActionButtonState() {
         let hasJSON = sheetMusicJSON != nil
-        playAlongButton.isEnabled = hasJSON
-        animationButton.isEnabled = hasJSON
-        playAlongButton.alpha = hasJSON ? 1.0 : 0.6
-        animationButton.alpha = hasJSON ? 1.0 : 0.6
+        let shouldEnableActions = GuestSessionManager.shared.isGuest() || hasJSON
+        playAlongButton.isEnabled = shouldEnableActions
+        animationButton.isEnabled = shouldEnableActions
+        playAlongButton.alpha = shouldEnableActions ? 1.0 : 0.6
+        animationButton.alpha = shouldEnableActions ? 1.0 : 0.6
     }
 
     @objc private func sheetToggleChanged() {
@@ -467,6 +469,9 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     @objc private func didTapAnimation() {
+        guard !presentGuestAnimationGateIfNeeded() else { return }
+        guard canPresentAnimation() else { return }
+
         if sheetMusicJSON == nil {
             loadSheetData()
         }
@@ -489,10 +494,37 @@ class DiscoverSongDetailViewController: UIViewController {
         present(nav, animated: true)
     }
 
+    @discardableResult
+    private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let modal = GuestFeatureGateModal(
+            featureName: "animation",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        present(modal, animated: true)
+        return true
+    }
+
     private func showAnimationError(_ msg: String) {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    private func canPresentAnimation() -> Bool {
+        guard UIDevice.current.userInterfaceIdiom == .phone else {
+            showAnimationError("Animation is currently available on iPhone only.")
+            return false
+        }
+
+        return true
     }
 
     private func showConvertedJSONMissingError() {

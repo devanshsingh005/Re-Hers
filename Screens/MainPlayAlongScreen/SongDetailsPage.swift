@@ -285,6 +285,8 @@ class PlayAlongSongDetailViewController: UIViewController {
         animationButton.setTitleColor(ComponentColors.SongDetailScreen.primaryActionText, for: .normal)
         playAlongButton.backgroundColor = ComponentColors.SongDetailScreen.secondaryActionFill
         playAlongButton.setTitleColor(ComponentColors.SongDetailScreen.secondaryActionText, for: .normal)
+        guard !presentGuestAnimationGateIfNeeded() else { return }
+        guard canPresentAnimation() else { return }
 
         let vc = AnimationViewController()
         vc.songTitle = passedSongTitle ?? "Animation"
@@ -358,5 +360,38 @@ class PlayAlongSongDetailViewController: UIViewController {
             nav.modalPresentationStyle = .fullScreen
             self.present(nav, animated: true)
         }
+    }
+
+    @discardableResult
+    private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let modal = GuestFeatureGateModal(
+            featureName: "animation",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        present(modal, animated: true)
+        return true
+    }
+
+    private func canPresentAnimation() -> Bool {
+        guard UIDevice.current.userInterfaceIdiom == .phone else {
+            let alert = UIAlertController(
+                title: "Unavailable",
+                message: "Animation is currently available on iPhone only.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return false
+        }
+
+        return true
     }
 }

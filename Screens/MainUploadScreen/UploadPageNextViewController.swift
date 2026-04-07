@@ -956,6 +956,8 @@ final class UploadPageNextViewController: UIViewController {
     @objc private func didTapAnimation() {
         NavigationBarHelper.animateButtonPress(animationButton) { [weak self] in
             guard let self = self else { return }
+            guard !self.presentGuestAnimationGateIfNeeded() else { return }
+            guard self.canPresentAnimation() else { return }
             guard let json = self.validSheetMusicJSON(orPresentingFor: "Animation") else { return }
             self.navigateToAnimation(withJSON: json)
         }
@@ -995,6 +997,24 @@ final class UploadPageNextViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @discardableResult
+    private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        let modal = GuestFeatureGateModal(
+            featureName: "animation",
+            onSignUp: { [weak self] in
+                self?.presentGuestAuth(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.presentGuestAuth(mode: .logIn)
+            }
+        )
+
+        present(modal, animated: true)
+        return true
+    }
+
     private func navigateToAnimation(withJSON json: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: json) else {
             showAnimationError("Failed to prepare data."); return
@@ -1004,6 +1024,18 @@ final class UploadPageNextViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+    }
+
+    private func canPresentAnimation() -> Bool {
+        guard UIDevice.current.userInterfaceIdiom == .phone else {
+            showFeatureUnavailableAlert(
+                title: "Unavailable",
+                message: "Animation is currently available on iPhone only."
+            )
+            return false
+        }
+
+        return true
     }
 
     private func showAnimationError(_ msg: String) {
