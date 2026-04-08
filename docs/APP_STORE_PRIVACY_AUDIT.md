@@ -44,11 +44,11 @@ Align the App Store privacy nutrition label with the app-level manifest and actu
 
 The public privacy-policy metadata URL should point to the static public policy page used by the iOS app:
 
-- `https://rehearse.app/privacy-policy`
+- `https://letsrehearse.studio/privacy-policy/`
 
 The public terms URL should match the app's public legal link:
 
-- `https://rehearse.app/terms-of-service`
+- `https://letsrehearse.studio/terms-of-service/`
 
 ## Supabase Edge Function Secret
 

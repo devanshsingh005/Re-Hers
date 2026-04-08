@@ -1,11 +1,10 @@
 import SwiftUI
-import SafariServices
 
 private enum LegalSupportInfo {
     static let operatorName = "Re-Hearse"
     static let supportEmail = "devansh.singh20045@gmail.com"
 
-    static var privacyPolicyURL: URL? {
+    static var privacyURL: URL? {
         URL(string: "https://letsrehearse.studio/privacy-policy/")
     }
 
@@ -260,30 +259,12 @@ public enum LegalTab: String, CaseIterable, Identifiable {
 
 // MARK: - Main Legal Screen View
 
-/// Drop this view into any SwiftUI navigation stack.
-/// Example usage:
-///
-///     NavigationStack {
-///         LegalScreenView()
-///     }
-///
-/// Or present it as a sheet:
-///
-///     .sheet(isPresented: $showLegal) {
-///         LegalScreenView()
-///     }
-///
-/// For onboarding, use LegalAgreementView which includes Accept/Decline buttons:
-///
-///     LegalAgreementView(onAccept: { /* proceed */ }, onDecline: { /* dismiss */ })
-///
 public struct LegalScreenView: View {
 
     @State private var selectedTab: LegalTab
-    @State private var presentedURL: URL?
     @Environment(\.presentationMode) private var presentationMode
 
-    public init(initialTab: LegalTab = .terms) {
+    public init(initialTab: LegalTab = .privacy) {
         _selectedTab = State(initialValue: initialTab)
     }
 
@@ -332,16 +313,20 @@ public struct LegalScreenView: View {
                             .font(.system(.body))
                             .foregroundColor(Color(UIColor.label))
 
-                        if let privacyURL = LegalSupportInfo.privacyPolicyURL {
+                        if let privacyURL = LegalSupportInfo.privacyURL {
                             Button("Open Public Privacy Policy") {
-                                presentedURL = privacyURL
+                                UIApplication.shared.open(privacyURL)
                             }
+                            .buttonStyle(.plain)
+                            .foregroundColor(.accentColor)
                         }
 
                         if let termsURL = LegalSupportInfo.termsURL {
                             Button("Open Public Terms of Service") {
-                                presentedURL = termsURL
+                                UIApplication.shared.open(termsURL)
                             }
+                            .buttonStyle(.plain)
+                            .foregroundColor(.accentColor)
                         }
 
                         if let mailURL = LegalSupportInfo.supportMailURL {
@@ -370,20 +355,6 @@ public struct LegalScreenView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .sheet(
-            isPresented: Binding(
-                get: { presentedURL != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        presentedURL = nil
-                    }
-                }
-            )
-        ) {
-            if let url = presentedURL {
-                SafariSheet(url: url)
-            }
-        }
     }
 
     private var selectedSections: [LegalSection] {
@@ -454,21 +425,14 @@ private struct LegalSectionContentView: View {
 
 // MARK: - Legal Agreement View (Onboarding / First-Launch)
 
-/// Use this view during onboarding to require users to accept the legal terms.
-/// Example:
-///
-///     LegalAgreementView(
-///         onAccept:  { UserDefaults.standard.set(true, forKey: "didAcceptLegal") },
-///         onDecline: { /* handle decline, e.g. exit or show warning */ }
-///     )
-///
 public struct LegalAgreementView: View {
 
     public var onAccept:  () -> Void
     public var onDecline: () -> Void
 
     @State private var didConfirmAgreement = false
-    @State private var presentedTab: LegalTab?
+    @State private var showLegalSheet = false          // ← changed
+    @State private var presentedTab: LegalTab = .terms // ← changed
 
     public init(onAccept: @escaping () -> Void, onDecline: @escaping () -> Void) {
         self.onAccept  = onAccept
@@ -482,7 +446,8 @@ public struct LegalAgreementView: View {
             List {
                 Section(header: Text("Documents")) {
                     Button {
-                        presentedTab = .terms
+                        presentedTab = .terms          // ← set tab first
+                        showLegalSheet = true           // ← then trigger sheet
                     } label: {
                         HStack {
                             Text(LegalTab.terms.rawValue)
@@ -493,7 +458,8 @@ public struct LegalAgreementView: View {
                     }
 
                     Button {
-                        presentedTab = .privacy
+                        presentedTab = .privacy        // ← set tab first
+                        showLegalSheet = true           // ← then trigger sheet
                     } label: {
                         HStack {
                             Text(LegalTab.privacy.rawValue)
@@ -523,9 +489,7 @@ public struct LegalAgreementView: View {
 
                 Section {
                     Button("Continue") {
-                        if canAccept {
-                            onAccept()
-                        }
+                        if canAccept { onAccept() }
                     }
                     .foregroundColor(Color.white)
                     .frame(maxWidth: .infinity)
@@ -553,8 +517,8 @@ public struct LegalAgreementView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .sheet(item: $presentedTab) { tab in
-            LegalScreenView(initialTab: tab)
+        .sheet(isPresented: $showLegalSheet) {      // ← fixed: Bool-driven sheet
+            LegalScreenView(initialTab: presentedTab)
         }
     }
 }
@@ -567,19 +531,7 @@ public struct LegalAgreementView: View {
 
 #Preview("Legal Agreement (Onboarding)") {
     LegalAgreementView(
-        onAccept:  { debugLog("User accepted") },
-        onDecline: { debugLog("User declined") }
+        onAccept:  { print("User accepted") },
+        onDecline: { print("User declined") }
     )
-}
-
-private struct SafariSheet: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let controller = SFSafariViewController(url: url)
-        controller.dismissButtonStyle = .close
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }

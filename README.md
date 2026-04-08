@@ -7,8 +7,8 @@ Re-Hearse is an iOS app for uploading sheet music, practicing songs, and using g
 - The iOS app is the only client included in this repository.
 - Before any Google Play submission, the Android client must be audited separately.
 - Public legal pages are served from the app's static public site:
-  - `https://rehearse.app/privacy-policy`
-  - `https://rehearse.app/terms-of-service`
+  - `https://letsrehearse.studio/privacy-policy/`
+  - `https://letsrehearse.studio/terms-of-service/`
 
 ## Backend Configuration
 
