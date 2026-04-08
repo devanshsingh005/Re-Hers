@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "842B083A2EBA0465001AC579"
-               BuildableName = "Re-Hearse_v1.app"
-               BlueprintName = "Re-Hearse_v1"
-               ReferencedContainer = "container:Re-Hearse_v1.xcodeproj">
+               BuildableName = "Rehearse_v1.app"
+               BlueprintName = "Rehearse_v1"
+               ReferencedContainer = "container:Rehearse.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -29,9 +29,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8F1B6D829C20400100000001"
-               BuildableName = "Re-Hearse_v1Tests.xctest"
-               BlueprintName = "Re-Hearse_v1Tests"
-               ReferencedContainer = "container:Re-Hearse_v1.xcodeproj">
+               BuildableName = "Rehearse_v1Tests.xctest"
+               BlueprintName = "Rehearse_v1Tests"
+               ReferencedContainer = "container:Rehearse.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -47,9 +47,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8F1B6D829C20400100000001"
-               BuildableName = "Re-Hearse_v1Tests.xctest"
-               BlueprintName = "Re-Hearse_v1Tests"
-               ReferencedContainer = "container:Re-Hearse_v1.xcodeproj">
+               BuildableName = "Rehearse_v1Tests.xctest"
+               BlueprintName = "Rehearse_v1Tests"
+               ReferencedContainer = "container:Rehearse.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -69,9 +69,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "842B083A2EBA0465001AC579"
-            BuildableName = "Re-Hearse_v1.app"
-            BlueprintName = "Re-Hearse_v1"
-            ReferencedContainer = "container:Re-Hearse_v1.xcodeproj">
+            BuildableName = "Rehearse_v1.app"
+            BlueprintName = "Rehearse_v1"
+            ReferencedContainer = "container:Rehearse.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -92,9 +92,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "842B083A2EBA0465001AC579"
-            BuildableName = "Re-Hearse_v1.app"
-            BlueprintName = "Re-Hearse_v1"
-            ReferencedContainer = "container:Re-Hearse_v1.xcodeproj">
+            BuildableName = "Rehearse_v1.app"
+            BlueprintName = "Rehearse_v1"
+            ReferencedContainer = "container:Rehearse.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

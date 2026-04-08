@@ -132,7 +132,7 @@
 		84114B692EBCF68300E86F71 /* UploadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadScreen.swift; sourceTree = "<group>"; };
 		84114B6D2EBCF6B100E86F71 /* BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomNavbar.swift; sourceTree = "<group>"; };
 		8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChordRecognitionScreen.swift; sourceTree = "<group>"; };
-		842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Re-Hearse_v1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		842B083B2EBA0465001AC579 /* Rehearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rehearse_v1.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B08562EBA061B001AC579 /* AnimatedKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedKeyboardView.swift; sourceTree = "<group>"; };
 		842B08582EBA0712001AC579 /* PianoKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoKeyView.swift; sourceTree = "<group>"; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
@@ -153,7 +153,7 @@
 		84C6A9882ECCAD8D007DA0D0 /* WaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveView.swift; sourceTree = "<group>"; };
 		84CC1BDC2F227D580008422A /* Resources/SoundFonts/Wurlitzer210.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/Wurlitzer210.sf2; sourceTree = "<group>"; };
 		84CC1BDE2F227D590008422A /* Resources/SoundFonts/SteinGrandPiano.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/SoundFonts/SteinGrandPiano.sf2; sourceTree = "<group>"; };
-		8F1B6D7F9C20400100000001 /* Re-Hearse_v1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Re-Hearse_v1Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8F1B6D7F9C20400100000001 /* Rehearse_v1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Rehearse_v1Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D42F90000100000001 /* Re-Hearse_v1/Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Secrets.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Debug.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Release.xcconfig"; sourceTree = SOURCE_ROOT; };
@@ -166,7 +166,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Re-Hearse_v1" target */ = {
+		842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Rehearse_v1" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Debug.xcconfig,
@@ -177,7 +177,7 @@
 				Services/GuestSessionManager.swift,
 				Views/GuestFeatureGateModal.swift,
 			);
-			target = 842B083A2EBA0465001AC579 /* Re-Hearse_v1 */;
+			target = 842B083A2EBA0465001AC579 /* Rehearse_v1 */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -210,7 +210,7 @@
 		842B083D2EBA0465001AC579 /* Re-Hearse_v1 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Re-Hearse_v1" target */,
+				842B084D2EBA0466001AC579 /* Exceptions for "Re-Hearse_v1" folder in "Rehearse_v1" target */,
 			);
 			path = "Re-Hearse_v1";
 			sourceTree = "<group>";
@@ -393,8 +393,8 @@
 		842B083C2EBA0465001AC579 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */,
-				8F1B6D7F9C20400100000001 /* Re-Hearse_v1Tests.xctest */,
+				842B083B2EBA0465001AC579 /* Rehearse_v1.app */,
+				8F1B6D7F9C20400100000001 /* Rehearse_v1Tests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -534,9 +534,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		842B083A2EBA0465001AC579 /* Re-Hearse_v1 */ = {
+		842B083A2EBA0465001AC579 /* Rehearse_v1 */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 842B084E2EBA0466001AC579 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1" */;
+			buildConfigurationList = 842B084E2EBA0466001AC579 /* Build configuration list for PBXNativeTarget "Rehearse_v1" */;
 			buildPhases = (
 				842B08372EBA0465001AC579 /* Sources */,
 				842B08382EBA0465001AC579 /* Frameworks */,
@@ -554,7 +554,7 @@
 				2BE584CC2F6D19520059620E /* DesignSystem */,
 				842B083D2EBA0465001AC579 /* Re-Hearse_v1 */,
 			);
-			name = "Re-Hearse_v1";
+			name = Rehearse_v1;
 			packageProductDependencies = (
 				23542CB92EE5D5600074B2A2 /* Auth */,
 				23542CBB2EE5D5660074B2A2 /* Realtime */,
@@ -566,12 +566,12 @@
 				24FA2E912EE5986D0028C205 /* FirebaseAnalytics */,
 			);
 			productName = "Re-Hearse_v1";
-			productReference = 842B083B2EBA0465001AC579 /* Re-Hearse_v1.app */;
+			productReference = 842B083B2EBA0465001AC579 /* Rehearse_v1.app */;
 			productType = "com.apple.product-type.application";
 		};
-		8F1B6D829C20400100000001 /* Re-Hearse_v1Tests */ = {
+		8F1B6D829C20400100000001 /* Rehearse_v1Tests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8F1B6D859C20400100000001 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1Tests" */;
+			buildConfigurationList = 8F1B6D859C20400100000001 /* Build configuration list for PBXNativeTarget "Rehearse_v1Tests" */;
 			buildPhases = (
 				8F1B6D809C20400100000001 /* Sources */,
 				8F1B6D819C20400100000001 /* Frameworks */,
@@ -584,9 +584,9 @@
 			fileSystemSynchronizedGroups = (
 				8F1B6D7E9C20400100000001 /* Re-Hearse_v1Tests */,
 			);
-			name = "Re-Hearse_v1Tests";
+			name = Rehearse_v1Tests;
 			productName = "Re-Hearse_v1Tests";
-			productReference = 8F1B6D7F9C20400100000001 /* Re-Hearse_v1Tests.xctest */;
+			productReference = 8F1B6D7F9C20400100000001 /* Rehearse_v1Tests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -608,7 +608,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 842B08362EBA0465001AC579 /* Build configuration list for PBXProject "Re-Hearse_v1" */;
+			buildConfigurationList = 842B08362EBA0465001AC579 /* Build configuration list for PBXProject "Rehearse" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -626,8 +626,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				842B083A2EBA0465001AC579 /* Re-Hearse_v1 */,
-				8F1B6D829C20400100000001 /* Re-Hearse_v1Tests */,
+				842B083A2EBA0465001AC579 /* Rehearse_v1 */,
+				8F1B6D829C20400100000001 /* Rehearse_v1Tests */,
 			);
 		};
 /* End PBXProject section */
@@ -727,7 +727,7 @@
 /* Begin PBXTargetDependency section */
 		8F1B6D869C20400100000001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 842B083A2EBA0465001AC579 /* Re-Hearse_v1 */;
+			target = 842B083A2EBA0465001AC579 /* Rehearse_v1 */;
 			targetProxy = 8F1B6D879C20400100000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -844,7 +844,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -959,7 +959,7 @@
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Re-Hearse_v1.app/Re-Hearse_v1";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Rehearse_v1.app/Rehearse_v1";
 			};
 			name = Debug;
 		};
@@ -988,14 +988,14 @@
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Re-Hearse_v1.app/Re-Hearse_v1";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Rehearse_v1.app/Rehearse_v1";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		842B08362EBA0465001AC579 /* Build configuration list for PBXProject "Re-Hearse_v1" */ = {
+		842B08362EBA0465001AC579 /* Build configuration list for PBXProject "Rehearse" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				842B08512EBA0466001AC579 /* Debug */,
@@ -1004,7 +1004,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		842B084E2EBA0466001AC579 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1" */ = {
+		842B084E2EBA0466001AC579 /* Build configuration list for PBXNativeTarget "Rehearse_v1" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				842B084F2EBA0466001AC579 /* Debug */,
@@ -1013,7 +1013,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		8F1B6D859C20400100000001 /* Build configuration list for PBXNativeTarget "Re-Hearse_v1Tests" */ = {
+		8F1B6D859C20400100000001 /* Build configuration list for PBXNativeTarget "Rehearse_v1Tests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				8F1B6D839C20400100000001 /* Debug */,
