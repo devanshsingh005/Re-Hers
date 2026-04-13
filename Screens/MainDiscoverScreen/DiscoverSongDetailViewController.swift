@@ -9,6 +9,11 @@ import UIKit
 import PDFKit
 import Supabase
 
+enum DiscoverSongDetailAccessPolicy {
+    static let allowsGuestPlayAlong = true
+    static let allowsGuestAnimation = true
+}
+
 class DiscoverSongDetailViewController: UIViewController {
 
     // MARK: - Passed Data
@@ -441,6 +446,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     @discardableResult
     private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard !DiscoverSongDetailAccessPolicy.allowsGuestPlayAlong else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(
@@ -496,6 +502,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     @discardableResult
     private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard !DiscoverSongDetailAccessPolicy.allowsGuestAnimation else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(

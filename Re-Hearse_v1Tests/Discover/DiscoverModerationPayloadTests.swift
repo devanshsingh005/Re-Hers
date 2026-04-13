@@ -134,3 +134,13 @@ final class DiscoverLayoutMetricsTests: XCTestCase {
         XCTAssertEqual(inset, 24)
     }
 }
+
+final class DiscoverSongDetailAccessPolicyTests: XCTestCase {
+    func test_guestUsersCanOpenPlayAlongFromDiscoverDetail() {
+        XCTAssertTrue(DiscoverSongDetailAccessPolicy.allowsGuestPlayAlong)
+    }
+
+    func test_guestUsersCanOpenAnimationFromDiscoverDetail() {
+        XCTAssertTrue(DiscoverSongDetailAccessPolicy.allowsGuestAnimation)
+    }
+}
