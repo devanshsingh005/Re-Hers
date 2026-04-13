@@ -263,6 +263,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
     @discardableResult
     private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsPlayAlong else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(
@@ -317,6 +318,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
     @discardableResult
     private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsAnimation else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(
@@ -350,7 +352,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
     private func updateActionButtonState() {
         let hasJSON = sheetMusicJSON != nil
-        let shouldEnableActions = GuestSessionManager.shared.isGuest() || hasJSON
+        let shouldEnableActions = hasJSON
         playAlongButton.isEnabled = shouldEnableActions
         animationButton.isEnabled = shouldEnableActions
         playAlongButton.alpha = shouldEnableActions ? 1.0 : 0.6
@@ -887,23 +889,30 @@ class PlaylistSongDetailViewController: UIViewController {
     }
 
     private func fetchOutputJSONFromSong(_ song: Song) async {
-        guard let jsonSource = song.discoverJSONSource else {
+        let jsonSources = song.discoverJSONSources(
+            prefersPublicSource: GuestSessionManager.shared.isGuest()
+        )
+
+        guard !jsonSources.isEmpty else {
             debugLog("[SongDetail] ℹ️ No JSON source for discover song \(song.id)")
             return
         }
 
-        do {
-            let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
-            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  isValidScoreJSON(parsed) else {
-                debugLog("[SongDetail] discover JSON invalid for song \(song.id)")
+        for jsonSource in jsonSources {
+            do {
+                let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
+                guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      isValidScoreJSON(parsed) else {
+                    debugLog("[SongDetail] discover JSON invalid for song \(song.id) from \(jsonSource.rawValue)")
+                    continue
+                }
+                await MainActor.run {
+                    self.sheetMusicJSON = parsed
+                }
                 return
+            } catch {
+                debugLog("[SongDetail] ❌ discover JSON fetch error from \(jsonSource.rawValue): \(error)")
             }
-            await MainActor.run {
-                self.sheetMusicJSON = parsed
-            }
-        } catch {
-            debugLog("[SongDetail] ❌ discover JSON fetch error: \(error)")
         }
     }
 

@@ -95,9 +95,6 @@ class UploadScreen: UIViewController {
     private var currentUploadSource = "unknown"
     private var latestRecentUploads: [Scan] = []
     private var recentUploadsErrorMessage: String?
-    private var hasQueuedGuestGatePresentation = false
-    private var isPresentingGuestGate = false
-
     // MARK: - Supabase
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
@@ -147,7 +144,6 @@ class UploadScreen: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        guard !redirectGuestToHomeIfNeeded() else { return }
         loadRecentUploads()
     }
 
@@ -163,39 +159,16 @@ class UploadScreen: UIViewController {
     }
 
     func startUploadFlow() {
-        guard !GuestSessionManager.shared.isGuest() else { return }
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
         presentVisionKitScanner()
     }
 
-    private func redirectGuestToHomeIfNeeded() -> Bool {
-        guard GuestSessionManager.shared.isGuest() else {
-            hasQueuedGuestGatePresentation = false
-            isPresentingGuestGate = false
-            return false
-        }
-
-        guard let tabBarController, tabBarController.selectedIndex == 1 else { return false }
-        guard !hasQueuedGuestGatePresentation, !isPresentingGuestGate else { return true }
-
-        hasQueuedGuestGatePresentation = true
-        tabBarController.selectedIndex = 0
-
-        DispatchQueue.main.async { [weak self] in
-            self?.presentGuestGateIfNeeded()
-        }
-
-        return true
-    }
-
-    private func presentGuestGateIfNeeded() {
-        guard GuestSessionManager.shared.isGuest() else {
-            hasQueuedGuestGatePresentation = false
-            isPresentingGuestGate = false
-            return
-        }
-
-        guard hasQueuedGuestGatePresentation, !isPresentingGuestGate else { return }
-        guard let presenter = guestGatePresenter(), presenter.presentedViewController == nil else { return }
+    @discardableResult
+    private func presentSheetUploadGuestGateIfNeeded() -> Bool {
+        guard GuestFeatureAccessPolicy.shouldGateSheetUploadActions(
+            forGuest: GuestSessionManager.shared.isGuest()
+        ) else { return false }
+        guard let presenter = guestGatePresenter(), presenter.presentedViewController == nil else { return true }
 
         let gateModal = GuestFeatureGateModal(
             featureName: "sheet music upload",
@@ -207,17 +180,14 @@ class UploadScreen: UIViewController {
             }
         )
 
-        hasQueuedGuestGatePresentation = false
-        isPresentingGuestGate = true
         gateModal.presentationController?.delegate = self
         presenter.present(gateModal, animated: true)
+        return true
     }
 
     private func scheduleAuthPresentation(mode: AuthViewController.AuthMode) {
         DispatchQueue.main.async { [weak self] in
             guard let self, let presenter = self.guestGatePresenter(), presenter.presentedViewController == nil else { return }
-
-            self.isPresentingGuestGate = false
 
             let authViewController = AuthViewController(initialMode: mode)
             let authNavigationController = UINavigationController(rootViewController: authViewController)
@@ -547,8 +517,15 @@ class UploadScreen: UIViewController {
             sender.transform = .identity
         }
     }
-    @objc private func scanTapped()       { presentVisionKitScanner() }
-    @objc private func uploadFileTapped() { openFileManager() }
+    @objc private func scanTapped() {
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
+        presentVisionKitScanner()
+    }
+
+    @objc private func uploadFileTapped() {
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
+        openFileManager()
+    }
 
     // MARK: - Recent Uploads Section
     private func setupRecentUploadsSection() {
@@ -2270,7 +2247,6 @@ extension UploadScreen: UIScrollViewDelegate {
 
 extension UploadScreen: UIAdaptivePresentationControllerDelegate {
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        hasQueuedGuestGatePresentation = false
-        isPresentingGuestGate = false
+        // No additional state to reset for the guest upload gate.
     }
 }

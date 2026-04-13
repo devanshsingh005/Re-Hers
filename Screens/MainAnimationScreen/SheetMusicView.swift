@@ -73,6 +73,7 @@ final class SheetMusicView: UIView {
                 guard self.loadGeneration == generation else { return }
 
                 self.applyParsedSheetState(state)
+                self.scheduleRender()
                 self.setNeedsLayout()
             }
         }

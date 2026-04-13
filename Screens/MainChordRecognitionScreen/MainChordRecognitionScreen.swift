@@ -173,6 +173,7 @@ final class ChordRecognitionViewController: UIViewController {
     }
 
     private func redirectGuestIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsChordRecognition else { return false }
         guard GuestSessionManager.shared.isGuest(),
               !hasPresentedGuestGate,
               let navigationController else { return false }

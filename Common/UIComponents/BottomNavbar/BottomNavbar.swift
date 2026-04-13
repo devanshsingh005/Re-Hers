@@ -146,6 +146,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func shouldAllowSelection(of viewController: UIViewController) -> Bool {
         guard isUploadTab(viewController) else { return true }
         guard GuestSessionManager.shared.isGuest() else { return true }
+        guard !GuestFeatureAccessPolicy.allowsUploadTab else { return true }
 
         presentUploadGuestGateIfNeeded()
         return false

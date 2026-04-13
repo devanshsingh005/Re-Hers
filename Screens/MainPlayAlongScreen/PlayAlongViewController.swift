@@ -79,7 +79,9 @@ final class PlayAlongViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: false)
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = true
+        forceLandscape()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -91,6 +93,14 @@ final class PlayAlongViewController: UIViewController {
         releaseAudioPlaybackSession()
         pitchDetector.stopListening()
         (tabBarController as? MainTabBarController)?.tabBar.isHidden = false
+        navigationController?.setNavigationBarHidden(false, animated: false)
+
+        if #available(iOS 16.0, *) {
+            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+            windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+        } else {
+            UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+        }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -119,6 +129,16 @@ final class PlayAlongViewController: UIViewController {
     override var shouldAutorotate: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
+
+    private func forceLandscape() {
+        if #available(iOS 16.0, *) {
+            setNeedsUpdateOfSupportedInterfaceOrientations()
+            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+            windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        } else {
+            UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+        }
+    }
 
     private func scheduleSessionStartup() {
         sessionStartupWorkItem?.cancel()

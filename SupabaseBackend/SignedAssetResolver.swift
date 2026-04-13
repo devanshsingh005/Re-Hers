@@ -47,6 +47,11 @@ public final class SignedAssetResolver: NSObject {
     }
 
     public func signedURL(for rawValue: String, fallbackBucket: String, expiresIn: Int = 300) async throws -> URL {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let directURL = URL(string: trimmed), directURL.scheme != nil {
+            return directURL
+        }
+
         let asset = try normalizeAssetReference(rawValue, fallbackBucket: fallbackBucket)
         return try await signer.createSignedURL(bucket: asset.bucket, path: asset.path, expiresIn: expiresIn)
     }

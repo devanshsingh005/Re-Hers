@@ -1,5 +1,5 @@
 import XCTest
-@testable import Re_Hearse_v1
+@testable import Rehearse_v1
 
 final class DiscoverModerationPayloadTests: XCTestCase {
     func test_song_decodesUserIdentifierForBlocking() throws {
@@ -142,5 +142,79 @@ final class DiscoverSongDetailAccessPolicyTests: XCTestCase {
 
     func test_guestUsersCanOpenAnimationFromDiscoverDetail() {
         XCTAssertTrue(DiscoverSongDetailAccessPolicy.allowsGuestAnimation)
+    }
+
+    func test_actionButtonsRemainDisabledUntilJsonLoadsForGuest() {
+        XCTAssertFalse(DiscoverSongDetailActionAvailability.shouldEnableActions(hasJSON: false))
+    }
+
+    func test_actionButtonsEnableOnceJsonLoads() {
+        XCTAssertTrue(DiscoverSongDetailActionAvailability.shouldEnableActions(hasJSON: true))
+    }
+}
+
+final class GuestFeatureAccessPolicyTests: XCTestCase {
+    func test_guestUsersCanAccessUploadTab() {
+        XCTAssertTrue(GuestFeatureAccessPolicy.allowsUploadTab)
+    }
+
+    func test_guestUsersAreBlockedOnlyFromSheetUploadActions() {
+        XCTAssertTrue(GuestFeatureAccessPolicy.requiresAuthenticationForSheetUpload)
+        XCTAssertTrue(GuestFeatureAccessPolicy.allowsPlayAlong)
+        XCTAssertTrue(GuestFeatureAccessPolicy.allowsAnimation)
+        XCTAssertTrue(GuestFeatureAccessPolicy.allowsChordRecognition)
+    }
+}
+
+final class DiscoverJSONSourceSelectionTests: XCTestCase {
+    func test_guestModePrefersPublicJsonSource() {
+        let song = makeSong(
+            title: "Guest JSON",
+            userID: UUID(),
+            outputJsonPath: "private/output.json",
+            jsonURL: "public/song.json"
+        )
+
+        let sources = song.discoverJSONSources(prefersPublicSource: true)
+
+        XCTAssertEqual(sources.map(\.rawValue), ["public/song.json", "private/output.json"])
+    }
+
+    func test_loggedInModePrefersPrivateJsonSource() {
+        let song = makeSong(
+            title: "Member JSON",
+            userID: UUID(),
+            outputJsonPath: "private/output.json",
+            jsonURL: "public/song.json"
+        )
+
+        let sources = song.discoverJSONSources(prefersPublicSource: false)
+
+        XCTAssertEqual(sources.map(\.rawValue), ["private/output.json", "public/song.json"])
+    }
+
+    private func makeSong(title: String, userID: UUID, outputJsonPath: String?, jsonURL: String?) -> Song {
+        Song(
+            id: UUID(),
+            userId: userID,
+            title: title,
+            composer: "Composer",
+            level: 1,
+            tempo: "90",
+            hands: "both",
+            skillTags: ["timing"],
+            skillDescription: "desc",
+            initials: "AA",
+            sheetFileId: nil,
+            isFree: true,
+            isActive: true,
+            sortOrder: 1,
+            sheetUrl: nil,
+            jsonUrl: jsonURL,
+            originalPdfPath: nil,
+            labeledPdfPath: nil,
+            outputJsonPath: outputJsonPath,
+            coverImageUrl: nil
+        )
     }
 }

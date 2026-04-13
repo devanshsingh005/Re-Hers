@@ -71,18 +71,28 @@ extension Song {
         return nil
     }
 
-    var discoverJSONSource: DiscoverAssetSource? {
-        if let outputJsonPath = outputJsonPath?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !outputJsonPath.isEmpty {
+    func discoverJSONSources(prefersPublicSource: Bool = false) -> [DiscoverAssetSource] {
+        let privateSource: DiscoverAssetSource? = {
+            guard let outputJsonPath = outputJsonPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !outputJsonPath.isEmpty else { return nil }
             return DiscoverAssetSource(rawValue: outputJsonPath, fallbackBucket: "sheet_data")
-        }
+        }()
 
-        if let jsonUrl = jsonUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !jsonUrl.isEmpty {
+        let publicSource: DiscoverAssetSource? = {
+            guard let jsonUrl = jsonUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !jsonUrl.isEmpty else { return nil }
             return DiscoverAssetSource(rawValue: jsonUrl, fallbackBucket: "Sheets")
-        }
+        }()
 
-        return nil
+        let orderedSources = prefersPublicSource
+            ? [publicSource, privateSource]
+            : [privateSource, publicSource]
+
+        return orderedSources.compactMap { $0 }
+    }
+
+    var discoverJSONSource: DiscoverAssetSource? {
+        discoverJSONSources().first
     }
 
     func resolvedCoverImageURL(

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Re_Hearse_v1
+@testable import Rehearse_v1
 
 final class TestSignedURLSigner: SignedURLSigning {
     override func createSignedURL(bucket: String, path: String, expiresIn: Int) async throws -> URL {
@@ -40,7 +40,7 @@ final class SignedAssetResolverTests: XCTestCase {
         XCTAssertEqual(json.path, "users/a/output.json")
     }
 
-    func test_signedURL_callsSignerWithNormalizedBucketAndPath() async throws {
+    func test_signedURL_returnsAbsoluteURLWithoutSigning() async throws {
         let signer = RecordingSignedURLSigner()
         let resolver = SignedAssetResolver(
             signer: signer,
@@ -49,6 +49,25 @@ final class SignedAssetResolverTests: XCTestCase {
 
         let url = try await resolver.signedURL(
             for: "https://demo.supabase.co/storage/v1/object/public/pdf_uploads/user-1/file.pdf",
+            fallbackBucket: "pdf_uploads"
+        )
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://demo.supabase.co/storage/v1/object/public/pdf_uploads/user-1/file.pdf"
+        )
+        XCTAssertTrue(signer.calls.isEmpty)
+    }
+
+    func test_signedURL_callsSignerWithRelativeStoragePath() async throws {
+        let signer = RecordingSignedURLSigner()
+        let resolver = SignedAssetResolver(
+            signer: signer,
+            supabaseBaseURL: URL(string: "https://demo.supabase.co")!
+        )
+
+        let url = try await resolver.signedURL(
+            for: "user-1/file.pdf",
             fallbackBucket: "pdf_uploads"
         )
 

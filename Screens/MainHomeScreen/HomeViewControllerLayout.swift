@@ -279,6 +279,7 @@ extension HomeViewController {
 
     @discardableResult
     private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsPlayAlong else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(

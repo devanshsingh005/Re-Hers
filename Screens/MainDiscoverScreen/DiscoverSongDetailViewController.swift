@@ -10,8 +10,14 @@ import PDFKit
 import Supabase
 
 enum DiscoverSongDetailAccessPolicy {
-    static let allowsGuestPlayAlong = true
-    static let allowsGuestAnimation = true
+    static let allowsGuestPlayAlong = GuestFeatureAccessPolicy.allowsPlayAlong
+    static let allowsGuestAnimation = GuestFeatureAccessPolicy.allowsAnimation
+}
+
+enum DiscoverSongDetailActionAvailability {
+    static func shouldEnableActions(hasJSON: Bool) -> Bool {
+        hasJSON
+    }
 }
 
 class DiscoverSongDetailViewController: UIViewController {
@@ -397,7 +403,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func updateActionButtonState() {
         let hasJSON = sheetMusicJSON != nil
-        let shouldEnableActions = GuestSessionManager.shared.isGuest() || hasJSON
+        let shouldEnableActions = DiscoverSongDetailActionAvailability.shouldEnableActions(hasJSON: hasJSON)
         playAlongButton.isEnabled = shouldEnableActions
         animationButton.isEnabled = shouldEnableActions
         playAlongButton.alpha = shouldEnableActions ? 1.0 : 0.6
@@ -636,21 +642,33 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     private func loadConvertedJSON() async {
-        guard let jsonSource = song?.discoverJSONSource else {
+        guard let song else {
+            print("[DiscoverDetail] ℹ️ No song available for JSON fetch")
+            return
+        }
+
+        let jsonSources = song.discoverJSONSources(
+            prefersPublicSource: GuestSessionManager.shared.isGuest()
+        )
+
+        guard !jsonSources.isEmpty else {
             print("[DiscoverDetail] ℹ️ No JSON path")
             return
         }
 
-        do {
-            let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
-            print("[DiscoverDetail] ✅ Fetched JSON: \(data.count) bytes")
-            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                print("[DiscoverDetail] ❌ Failed to parse JSON data")
+        for jsonSource in jsonSources {
+            do {
+                let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
+                print("[DiscoverDetail] ✅ Fetched JSON: \(data.count) bytes from \(jsonSource.rawValue)")
+                guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    print("[DiscoverDetail] ❌ Failed to parse JSON data from \(jsonSource.rawValue)")
+                    continue
+                }
+                await MainActor.run { self.sheetMusicJSON = parsed }
                 return
+            } catch {
+                print("[DiscoverDetail] ❌ JSON fetch error from \(jsonSource.rawValue): \(error)")
             }
-            await MainActor.run { self.sheetMusicJSON = parsed }
-        } catch {
-            print("[DiscoverDetail] ❌ JSON fetch error: \(error)")
         }
     }
 

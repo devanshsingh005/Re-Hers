@@ -1,5 +1,5 @@
 import XCTest
-@testable import Re_Hearse_v1
+@testable import Rehearse_v1
 import Auth
 
 final class PasswordRecoveryFlowTests: XCTestCase {

@@ -335,6 +335,7 @@ class PlayAlongSongDetailViewController: UIViewController {
     }
     @discardableResult
     private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsPlayAlong else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(
@@ -364,6 +365,7 @@ class PlayAlongSongDetailViewController: UIViewController {
 
     @discardableResult
     private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsAnimation else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
         let modal = GuestFeatureGateModal(
