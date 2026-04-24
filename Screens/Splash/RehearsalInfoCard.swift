@@ -193,12 +193,3 @@ struct BlurView: UIViewRepresentable {
     func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
 }
 
-// MARK: - Preview
-struct RehearsalInfoCard_Previews: PreviewProvider {
-    static var previews: some View {
-        ZStack {
-            Color.black.opacity(0.8).ignoresSafeArea()
-            RehearsalInfoCard(isPresented: .constant(true))
-        }
-    }
-}

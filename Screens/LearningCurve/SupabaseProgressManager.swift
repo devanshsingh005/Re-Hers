@@ -68,10 +68,6 @@ public struct ProfileProgressModel: Codable, Sendable {
     public let total_study_seconds: Int
 }
 
-public struct ProfileFetchResponse: Codable, Sendable {
-    public let total_study_seconds: Int
-}
-
 private struct ExistingProfileProgress: Codable, Sendable {
     let current_chapter: Int?
     let current_part: Int?
