@@ -102,6 +102,7 @@
 		F043D9643D57E1C2BE993CE2 /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = 344E0886BE37590B2CF6E687 /* Song.swift */; };
 		F40798569DB3CF8CB113E078 /* Services/AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5D556F9727BE03E27BD881 /* Services/AnalyticsManager.swift */; };
 		FAE563E76BD5F5BCA26661A2 /* App/SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35B27609B726A2FAD4A8E336 /* App/SceneDelegate.swift */; };
+		E819137328B509AC1149A19B /* test_db.swift in Sources */ = {isa = PBXBuildFile; fileRef = E819137328B509AC1149A19A /* test_db.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -214,6 +215,7 @@
 		DFE55467143C308902EDA1BC /* Services/GuestFeatureAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/GuestFeatureAccessPolicy.swift; sourceTree = SOURCE_ROOT; };
 		F3367193AA38D44495E77159 /* Extensions/BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions/BrandColors.swift; sourceTree = SOURCE_ROOT; };
 		FAA5A780090055590BBFB73D /* Components/TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/TopNavBar.swift; sourceTree = SOURCE_ROOT; };
+		E819137328B509AC1149A19A /* test_db.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = test_db.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -385,6 +387,7 @@
 		842B08552EBA0589001AC579 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				E819137328B509AC1149A19A /* test_db.swift */,
 				A8B6FEB9F6EB754D1A71C261 /* PianoDataManager.swift */,
 				344E0886BE37590B2CF6E687 /* Song.swift */,
 			);
@@ -702,6 +705,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E819137328B509AC1149A19B /* test_db.swift in Sources */,
 				23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */,
 				2BC06DAB2EEE903200CBDC03 /* OnboardingFlowRoot.swift in Sources */,
 				2B9B8F592F485DE70049535B /* UploadQuizPopup.swift in Sources */,

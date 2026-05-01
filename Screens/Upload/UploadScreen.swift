@@ -1357,11 +1357,34 @@ class UploadScreen: UIViewController {
     // MARK: - Quiz Popup
     private func showQuizPopup() -> UploadQuizPopup {
         let popup = UploadQuizPopup()
-        popup.delegate             = self
-        popup.modalPresentationStyle = .overFullScreen
-        popup.modalTransitionStyle   = .crossDissolve
-        activeQuizPopup            = popup
-        present(popup, animated: false)
+        popup.delegate = self
+        
+        if #available(iOS 16.0, *) {
+            popup.modalPresentationStyle = .pageSheet
+            if let sheet = popup.sheetPresentationController {
+                // Custom detent at ~65% of screen height for a "bigger" feel than medium
+                let customDetent = UISheetPresentationController.Detent.custom { context in
+                    return context.maximumDetentValue * 0.65
+                }
+                sheet.detents = [customDetent, .large()]
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = 32
+                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+            }
+        } else if #available(iOS 15.0, *) {
+            popup.modalPresentationStyle = .pageSheet
+            if let sheet = popup.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = 32
+            }
+        } else {
+            popup.modalPresentationStyle = .overFullScreen
+            popup.modalTransitionStyle = .coverVertical
+        }
+        
+        activeQuizPopup = popup
+        present(popup, animated: true)
         return popup
     }
 
