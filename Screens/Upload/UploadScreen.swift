@@ -1649,6 +1649,11 @@ final class ReHersPinnedSessionDelegate: NSObject, URLSessionDelegate {
     private let pinnedPublicKeyHash = "HHrSlgBFDK8S5rQlffqsyZ/rHPP7lqg6OR8l/+k3OIo="
 
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // NOTE: Certificate pinning is disabled for now to allow backend URL changes
+        // (e.g., redeployments to a new Azure Container Apps domain) without breaking uploads.
+        completionHandler(.performDefaultHandling, nil)
+        return
+
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
             completionHandler(.performDefaultHandling, nil)
             return
