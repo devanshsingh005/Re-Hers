@@ -1,0 +1,1532 @@
+[
+  {
+    "name": "Rehearse",
+    "full_name": "Dev-x777/Rehearse",
+    "description": "This is the application for learning music",
+    "private": true,
+    "created_at": "2026-04-01T20:14:34Z",
+    "updated_at": "2026-04-01T20:14:34Z",
+    "pushed_at": "2026-04-01T18:33:10Z",
+    "size_kb": 109522,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Swift": 1080624,
+      "Python": 237697,
+      "Ruby": 17945,
+      "JavaScript": 1639
+    },
+    "readme": "hum haunge kamyaab!\n",
+    "recent_commits": [
+      {
+        "message": "Merge branch 'version-2.0' into main",
+        "date": "2026-03-25T09:07:14Z"
+      },
+      {
+        "message": "All the major security issues solved\n\nsecurity patch",
+        "date": "2026-03-25T08:43:44Z"
+      },
+      {
+        "message": "something something",
+        "date": "2026-03-25T07:28:47Z"
+      },
+      {
+        "message": "merge this shit",
+        "date": "2026-03-25T04:33:39Z"
+      },
+      {
+        "message": "feat: add local worker and remove legacy supervisor config",
+        "date": "2026-03-25T04:31:45Z"
+      }
+    ]
+  },
+  {
+    "name": "arduino_project",
+    "full_name": "devanshsingh005/arduino_project",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-14T14:34:26Z",
+    "updated_at": "2025-02-14T14:35:20Z",
+    "pushed_at": "2025-02-14T14:35:16Z",
+    "size_kb": 0,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "C++": 244
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "light",
+        "date": "2025-02-14T14:34:44Z"
+      }
+    ]
+  },
+  {
+    "name": "Audiforge",
+    "full_name": "devanshsingh005/Audiforge",
+    "description": "A simple go site to change PDF sheet music to XML.",
+    "private": false,
+    "created_at": "2025-11-19T15:54:22Z",
+    "updated_at": "2025-11-19T15:54:22Z",
+    "pushed_at": "2025-05-05T18:28:48Z",
+    "size_kb": 36,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Go": 8537,
+      "JavaScript": 4315,
+      "CSS": 2628,
+      "HTML": 1870,
+      "Dockerfile": 1689
+    },
+    "readme": "# Audiforge - PDF to MusicXML Conversion\n\nA **Go-based web service** that leverages **Audiveris** for converting PDF sheet music to MusicXML format.\n\n---\n\n## Table of Contents\n\n- [Docker Installation](#docker-installation)\n- [Local Development Setup](#local-development-setup)\n- [Environment Variables](#environment-variables)\n- [Configuration](#configuration)\n- [API Endpoints](#api-endpoints)\n- [Project Structure](#project-structure)\n- [Troubleshooting](#troubleshooting)\n- [FAQ](#faq)\n- [Contributing](#contributing)\n- [License](#license)\n\n---\n\n## Docker Installation\n\n### Prerequisites\n\n- Docker installed ([installation guide](https://docs.docker.com/get-docker/))\n\n### Steps\n\n1. **Pull the Docker image:**\n\n   ```bash\n   docker pull nirmata1/audiforge:latest\n   ```\n\n2. **Run the container:**\n\n   ```bash\n   docker run -d -p 8080:8080 \\\n     -e LOG=debug #optional\n     -v /path/to/uploads:/tmp/uploads \\\n     -v /path/to/downloads:/tmp/downloads \\\n     nirmata1/audiforge:latest\n   ```   \n---\n\n## Local Development Setup\n\n### Requirements\n\n- Go 1.20+\n- Java 17+ (for Audiveris)\n- Gradle 7+\n\n### Installation Guide\n\n#### Clone Repositories\n\n```bash\n# Create project directory\nmkdir audiforge && cd audiforge\n\n# Clone Audiveris\ngit clone https://github.com/Audiveris/audiveris.git\n\n# Build Audiveris\ncd audiveris\n./gradlew build\n```\n\n#### Set Up Go Application\n\n```bash\ncd ..\ngit clone https://github.com/Nirmata-1/Audiforge.git\ncd audiforge-go\ngo build\n```\n\n#### Run the Service\n\n```bash\nLOG=debug ./audiforge\n```\n\n---\n\n## Environment Variables\n\n| Variable | Default | Description |\n|----------|---------|-------------|\n| `LOG`    | info    | Set to `debug` to show Audiveris logs in console |\n\n---\n\n## Configuration\n\n### Key Directories\n\n| Directory      | Path             | Purpose                      |\n|----------------|------------------|------------------------------|\n| Uploads        | `/tmp/uploads`   | Temporary PDF storage        |\n| Downloads      | `/tmp/downloads` | Converted MusicXML files     |\n| Audiveris Home | `./audiveris`    | Audiveris engine installation |\n\n### Cleanup Process\n\n- Automatic cleanup runs every hour\n- Files older than 1 hour are deleted\n- Executed via background goroutine\n\n---\n\n## API Endpoints\n\n| Method | Endpoint         | Description                    |\n|--------|------------------|--------------------------------|\n| POST   | `/upload`        | Upload PDF file                |\n| GET    | `/status/{id}`   | Check conversion status        |\n| GET    | `/download/{id}` | Download ZIP of MusicXML files |\n\n---\n\n## Project Structure\n\n```\naudiforge/\n\u251c\u2500\u2500 audiveris/          # Audiveris engine\n\u2502   \u251c\u2500\u2500 build/\n\u2502   \u251c\u2500\u2500 app/\n\u2502   \u2514\u2500\u2500 gradlew\n\u251c\u2500\u2500 main.go             # Go application\n\u251c\u2500\u2500 go.mod\n\u251c\u2500\u2500 go.sum\n\u251c\u2500\u2500 templates/          # Web UI\n\u2514\u2500\u2500 Dockerfile\n```\n\n---\n\n## Troubleshooting\n\n### Common Issues\n\n**Missing Dependencies**\n\n```bash\n# Install Java & Gradle\nsudo apt install openjdk-17-jdk gradle\n```\n\n**Permission Denied**\n\n```bash\nchmod +x audiv",
+    "recent_commits": [
+      {
+        "message": "Update main.go\n\nFixed my shitty code with some ChatGPT magic (I referenced something inaccessible in the function if you're wondering)",
+        "date": "2025-04-17T00:53:09Z"
+      },
+      {
+        "message": "Update main.go\n\nFixed incorrect cleanup logic",
+        "date": "2025-04-17T00:43:12Z"
+      },
+      {
+        "message": "Update README.md\n\nFixed incorrect license date",
+        "date": "2025-04-15T23:44:55Z"
+      },
+      {
+        "message": "Update docker-image.yml",
+        "date": "2025-04-15T23:20:39Z"
+      },
+      {
+        "message": "Update Dockerfile\n\nUpdated to remove unneeded packages from container",
+        "date": "2025-04-15T22:51:36Z"
+      }
+    ]
+  },
+  {
+    "name": "avni-webapp",
+    "full_name": "devanshsingh005/avni-webapp",
+    "description": "Web application for management and data entry",
+    "private": false,
+    "created_at": "2025-04-16T16:38:35Z",
+    "updated_at": "2025-04-18T13:36:05Z",
+    "pushed_at": "2025-04-18T13:36:00Z",
+    "size_kb": 11271,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "master",
+    "topics": [],
+    "languages": {
+      "JavaScript": 2301715,
+      "CSS": 6092,
+      "Makefile": 3213,
+      "HTML": 1152,
+      "Dockerfile": 138
+    },
+    "readme": "# Readme\n\nYou will need `yarn` package mananger to be installed globally to run this project. Follow the instructions on https://yarnpkg.com/en/docs/install to install `yarn` if it is not already installed on your machine.\nOnce installed you can verify it by running `yarn -v` on terminal. It should return whatever is the latest version mentioned on https://yarnpkg.com/en/docs/install.\n\n## Install dependencies\n\nOnce yarn is installed run the following:\n\n```\nmake deps\n```\n\n## Setup\n\nThere are two possible ways to setup Avni Webapp for developement:\n\n1. Connect to the Hosted API Server: This is the easiest and fastest way to get started. You don\u2019t need to set up a local PostgreSQL database or Java API server. This method is lightweight and ideal for contributors who want to focus on the webapp without worrying about backend dependencies.\n2. Set Up a Local Development Environment: This involves setting up a local PostgreSQL database and running the Java API server locally. It\u2019s more resource-intensive and complex but may be necessary for certain testing.\n\n#### 1. Setup to connect to hosted API Server (Samanvay hosted staging server)\n\n1. Run `make start-with-staging`\n2. Use the credentials : Username : `dummy@osc` and Password : `dummy@123`\n3. After logging in please create a new user for yourself and use that .\n\n#### 2. Setup to connect to your local API Server\n\n1. Start your Java Server. For this refer to [product developement setup document](https://avni.readme.io/docs/developer-environment-setup-ubuntu#server-side-components).\n2. Run `make start` in avni-webapp directory.\n3. It will assume whatever user you started the Java Server with since we don't do authentication when running the server locally. If you want to change the user then restart the webapp after setting environment variable `REACT_APP_DEV_ENV_USER` to user you want. E.g. start the server like `REACT_APP_DEV_ENV_USER=ihmp-admin make start`.\n\n## Contributing\n\n#### Pull requests\n\n- Please make sure that your code follows guidelines given in https://avni.readme.io/v2.0/docs/contribution-guide.\n\n#### File/folder structure\n\n- There are multiple apps inside this repository\n  - Admin (Allow admins to do admin work like creating organisations, users, locations)\n  - App Designer (Allow admins to design the app)\n  - Reports (Allow admins to download longitudnal reports)\n  - Translations (Allow admins to upload translations)\n  - Data Entry App (Allow users to do data entry using web based app)\n- Folders per route/feature\n  (See https://marmelab.com/blog/2015/12/17/react-directory-structure.html)\n- Reducers and actions in 'ducks' structure (See https://github.com/erikras/ducks-modular-redux). This is not applicable for App Designer as it does not use Redux.\n\n#### Code Style\n\n- We use Prettier for javascript/jsx formatting. You can use your IDE/Editor specific Plugin to format code using Prettier. Alternatively there is also a command `make prettier-all` that will format all files in src folder u",
+    "recent_commits": [
+      {
+        "message": "#000 | Add Windsurf rules for code style, testing, and quality standards",
+        "date": "2025-04-17T08:06:28Z"
+      },
+      {
+        "message": "#1457 | Add additional tests",
+        "date": "2025-04-17T07:55:16Z"
+      },
+      {
+        "message": "#1457 | Refactor getFEDataValidationErrors into smaller methods",
+        "date": "2025-04-17T06:38:37Z"
+      },
+      {
+        "message": "#1457 | Fix validation for repeatable question groups and add tests for subject form elements being empty",
+        "date": "2025-04-16T14:19:02Z"
+      },
+      {
+        "message": "#1457 | Add tests for form element filtering and question group handling",
+        "date": "2025-04-16T09:43:09Z"
+      }
+    ]
+  },
+  {
+    "name": "biology",
+    "full_name": "devanshsingh005/biology",
+    "description": "This is just a biology project",
+    "private": false,
+    "created_at": "2024-03-18T19:46:27Z",
+    "updated_at": "2024-03-18T19:51:16Z",
+    "pushed_at": "2024-03-18T19:51:12Z",
+    "size_kb": 47,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "HTML": 10268,
+      "CSS": 4430
+    },
+    "readme": "# biology\nThis is just a biology project\n",
+    "recent_commits": [
+      {
+        "message": "Add files via upload",
+        "date": "2024-03-18T19:51:12Z"
+      },
+      {
+        "message": "Initial commit",
+        "date": "2024-03-18T19:46:27Z"
+      }
+    ]
+  },
+  {
+    "name": "biologyproject",
+    "full_name": "devanshsingh005/biologyproject",
+    "description": "This is just a biology project",
+    "private": false,
+    "created_at": "2024-03-18T19:59:09Z",
+    "updated_at": "2024-03-18T20:00:45Z",
+    "pushed_at": "2024-03-19T02:45:13Z",
+    "size_kb": 60,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "HTML": 10336,
+      "CSS": 4430
+    },
+    "readme": "# biologyproject\nThis is just a biology project\n",
+    "recent_commits": [
+      {
+        "message": "Update index.html",
+        "date": "2024-03-19T02:45:13Z"
+      },
+      {
+        "message": "Update index.html",
+        "date": "2024-03-18T20:20:31Z"
+      },
+      {
+        "message": "Add files via upload",
+        "date": "2024-03-18T20:07:02Z"
+      },
+      {
+        "message": "Rename facebook-icon.png to facebook-.png",
+        "date": "2024-03-18T20:06:04Z"
+      },
+      {
+        "message": "Rename facebook.png to facebook-icon.png",
+        "date": "2024-03-18T20:04:07Z"
+      }
+    ]
+  },
+  {
+    "name": "BookMyMoviedidika",
+    "full_name": "devanshsingh005/BookMyMoviedidika",
+    "description": "Text Text Text",
+    "private": false,
+    "created_at": "2024-01-30T05:52:09Z",
+    "updated_at": "2024-01-30T05:52:09Z",
+    "pushed_at": "2023-04-04T07:40:02Z",
+    "size_kb": 23,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "master",
+    "topics": [],
+    "languages": {
+      "HTML": 22948,
+      "Python": 13246,
+      "JavaScript": 1491
+    },
+    "readme": "# BookMyMovie\nText Text Text\n",
+    "recent_commits": [
+      {
+        "message": "Merge branch 'master' of https://github.com/priyanshujalan/BookMyMovie",
+        "date": "2023-04-04T07:39:50Z"
+      },
+      {
+        "message": "Added Theatre Booking Page and Changed the Venues Model",
+        "date": "2023-04-04T07:35:10Z"
+      },
+      {
+        "message": "Create README.md",
+        "date": "2023-04-04T07:22:24Z"
+      },
+      {
+        "message": "Initial Commit",
+        "date": "2023-04-04T07:20:28Z"
+      }
+    ]
+  },
+  {
+    "name": "calender_fetch",
+    "full_name": "devanshsingh005/calender_fetch",
+    "description": null,
+    "private": false,
+    "created_at": "2025-05-13T17:51:52Z",
+    "updated_at": "2025-05-14T14:24:57Z",
+    "pushed_at": "2025-05-14T09:44:24Z",
+    "size_kb": 176,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 2737,
+      "HTML": 1721,
+      "CSS": 1347,
+      "Python": 572
+    },
+    "readme": "# Calendar  App\n![Screenshot 2025-05-13 230912](https://github.com/user-attachments/assets/d37b21d7-36c2-4918-a35f-1aa93f77043f)\n\n## Overview\n\nThis project provides:\n- A date input field\n- Backend API to return the day and day of the week from a date\n\n## Tech Stack\n\n- Frontend: React.js\n- Backend: RESTAPI\n\n## How to Run\n\n### Backend\n\n```bash\ncd backend\npip install -r requirements.txt\napp.py\n```\n### Frontend\n\n```bash\ncd frontend\nnpm install\nnpm start\n```\n\n",
+    "recent_commits": [
+      {
+        "message": "Update README.md",
+        "date": "2025-05-14T09:44:24Z"
+      },
+      {
+        "message": "Add frontend files to main repository",
+        "date": "2025-05-13T18:00:48Z"
+      },
+      {
+        "message": "Fresh",
+        "date": "2025-05-13T17:57:40Z"
+      }
+    ]
+  },
+  {
+    "name": "certificate-generator",
+    "full_name": "devanshsingh005/certificate-generator",
+    "description": "This is Certificate Generator which you can use to make e-certificate and download as a pdf and then you can distribute the certificates to the students.",
+    "private": false,
+    "created_at": "2023-11-20T17:47:49Z",
+    "updated_at": "2023-11-20T17:47:49Z",
+    "pushed_at": "2022-11-11T10:34:06Z",
+    "size_kb": 7059,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "master",
+    "topics": [],
+    "languages": {
+      "JavaScript": 31877,
+      "CSS": 7783,
+      "HTML": 1733,
+      "Dockerfile": 83,
+      "Shell": 35
+    },
+    "readme": "<h1 align=\"center\">Welcome to Certificate-Generator</h1> \n<br>\n\n<div align=\"center\">\n  <img src=\"https://fossnaija.com/wp-content/uploads/2022/09/fossnaija.com-hacktoberfest-2022-1024x455.png\" alt=\"hacktoberfest22\">\n</div>\n\n<br>\n\n<div align=\"center\">\n  <img src=\"https://forthebadge.com/images/badges/for-you.svg\" />\n  <img src=\"https://forthebadge.com/images/badges/made-with-markdown.svg\" alt=\"css\">\n  <img src=\"https://forthebadge.com/images/badges/made-with-javascript.svg\" alt=\"js\">\n  <img src=\"https://forthebadge.com/images/badges/open-source.svg\" alt=\"os\">\n  <img src=\"https://forthebadge.com/images/badges/check-it-out.svg\" alt=\"check\">\n  <img src=\"\" alt=\"\">\n  <img src=\"https://forthebadge.com/images/badges/built-by-developers.svg\" />\n</div>\n\n## Setup Steps\n\n#### Using Docker\n- Make sure you have docker and docker-compose installed\n```\n$ docker-compose up\n```\n\n#### Manually\n- Go to directory\n```\n$ cd certificate-generator\n```\n- Install Dependencies\n```\n$ npm install\n```\n- Start LocalHost Server\n```\n$ npm run start\n```\n\n## Tech Stack Used\n  - Javascript\n  - React\n  - Firebase\n  - Material UI\n\n# [Code of Conduct](CODE_OF_CONDUCT.md)\n\n\n# [Getting Started](CONTRIBUTING.md)\n\n\n<h2 id=\"contribute\">Contributing</h2>\n<p>\n   Thank you for your interest in contributing to our Repo! Pull requests are welcome. For fixing typos, please make a PR with your fixes. For other contributions, we suggest you to read our <a href=\"/CONTRIBUTING.md\">contribution guidelines</a> to see how you can contribute to this project. We are happy for every contribution. \n    \n</p>\n\n<h2 id=\"prs\">Issues & Pull Requests</h2>\n\nBefore making pull requests please look at our contributing guidelines. You can start working on the issue which are mentioned in issues section or add an issue. Just drop a comment before working on the issue. Thank you!\n\n<h2 id=\"license\">License</h2>\n\nThe **code** in this repository is licensed under the MIT license. Feel free to use and share it as per the license.\n\n<br>\n\n# \u2728 Contributors\n\n<a href=\"https://github.com/vedant-jain03/certificate-generator/graphs/contributors\" >\n  <img src=\"https://contrib.rocks/image?repo=vedant-jain03/certificate-generator\"/>\n</a>\n\n\n<div align=\"center\">\n <img src=\"https://forthebadge.com/images/badges/built-with-love.svg\" alt=\"love\" />\n <img src=\"https://forthebadge.com/images/badges/thats-how-they-get-you.svg\" alt=\"how\">\n</div>\n",
+    "recent_commits": [
+      {
+        "message": "Merge pull request #44 from vedant-jain03/fix_gh-pages\n\nfix: gh-pages workflows",
+        "date": "2022-11-11T10:34:01Z"
+      },
+      {
+        "message": "fix: gh-pages workflows",
+        "date": "2022-11-11T10:23:55Z"
+      },
+      {
+        "message": "Merge pull request #43 from vedant-jain03/feat_dockerize\n\nfeat: dockerized the react app",
+        "date": "2022-11-05T12:37:12Z"
+      },
+      {
+        "message": "feat: dockerized the react app",
+        "date": "2022-11-05T12:36:30Z"
+      },
+      {
+        "message": "Merge pull request #42 from futoid/futoid\n\nUpdate README.md",
+        "date": "2022-10-30T17:10:32Z"
+      }
+    ]
+  },
+  {
+    "name": "ChatApp_Decentralized",
+    "full_name": "devanshsingh005/ChatApp_Decentralized",
+    "description": "Decentralized_ChatApp which enables the user to make friends and chat with each other using BlockChain Technology and Ethereum.",
+    "private": false,
+    "created_at": "2024-01-31T09:46:17Z",
+    "updated_at": "2024-01-31T09:46:18Z",
+    "pushed_at": "2024-01-31T09:25:49Z",
+    "size_kb": 0,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 36395,
+      "CSS": 9140,
+      "Solidity": 3824
+    },
+    "readme": "# Sample Hardhat Project\n\nThis project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.\n\nTry running some of the following tasks:\n\n```shell\nnpx hardhat help\nnpx hardhat test\nREPORT_GAS=true npx hardhat test\nnpx hardhat node\nnpx hardhat run scripts/deploy.js\n```\n",
+    "recent_commits": [
+      {
+        "message": "Project completed",
+        "date": "2024-01-31T09:24:49Z"
+      },
+      {
+        "message": "Initial commit from Create Next App",
+        "date": "2024-01-30T06:41:07Z"
+      }
+    ]
+  },
+  {
+    "name": "creed-care",
+    "full_name": "devanshsingh005/creed-care",
+    "description": "Creed care website ",
+    "private": true,
+    "created_at": "2025-09-20T17:17:04Z",
+    "updated_at": "2026-03-04T14:13:45Z",
+    "pushed_at": "2026-03-04T14:13:40Z",
+    "size_kb": 7692,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 102566,
+      "JavaScript": 605,
+      "CSS": 537
+    },
+    "readme": "Creeed care Website ",
+    "recent_commits": [
+      {
+        "message": "discount changed",
+        "date": "2025-10-14T05:36:08Z"
+      },
+      {
+        "message": "updated MRP price link",
+        "date": "2025-10-08T13:55:53Z"
+      },
+      {
+        "message": "updates Prices and added community link",
+        "date": "2025-10-08T06:17:48Z"
+      },
+      {
+        "message": "just talk inculded build fix",
+        "date": "2025-09-27T17:37:19Z"
+      },
+      {
+        "message": "just talk inculded",
+        "date": "2025-09-27T12:26:22Z"
+      }
+    ]
+  },
+  {
+    "name": "creed_care",
+    "full_name": "devanshsingh005/creed_care",
+    "description": null,
+    "private": true,
+    "created_at": "2025-06-09T15:23:32Z",
+    "updated_at": "2025-09-13T13:08:21Z",
+    "pushed_at": "2025-09-22T06:37:34Z",
+    "size_kb": 1022,
+    "stars": 0,
+    "forks": 3,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 96746,
+      "JavaScript": 8140,
+      "CSS": 5227,
+      "HTML": 1788
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "changes to the prices of the website",
+        "date": "2025-09-13T13:05:08Z"
+      },
+      {
+        "message": "Merge pull request #4 from devanshsingh005/niturtion\n\nChanged the Color hard Code to the Code",
+        "date": "2025-09-13T12:38:00Z"
+      },
+      {
+        "message": "Changed the Color hard Code to the Code",
+        "date": "2025-09-13T12:24:27Z"
+      },
+      {
+        "message": "changedd to offers instead of quotes",
+        "date": "2025-09-12T17:45:06Z"
+      },
+      {
+        "message": "changed the order and the nutrition page names",
+        "date": "2025-09-12T17:10:27Z"
+      }
+    ]
+  },
+  {
+    "name": "female_safety",
+    "full_name": "devanshsingh005/female_safety",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-14T14:21:47Z",
+    "updated_at": "2025-02-14T14:25:06Z",
+    "pushed_at": "2025-02-14T14:25:02Z",
+    "size_kb": 40677,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Jupyter Notebook": 5368740,
+      "Python": 5549
+    },
+    "readme": "# Table of Contents\n\n[Introduction](#introduction)\n\n[How to Run](#howtorun)\n\n[Resutls](#results)\n\n[Further Work](#work)\n<a name=\"introduction\"/>\n\n# Introduction\n\nThis repo presents code for Deep Learning based algorithm for\n**detecting violence** in indoor or outdoor environments. The algorithm can\ndetect following scenarios with high accuracy: fight, fire, car crash and even\nmore.\n\nTo detect other scenarios you have to add **descriptive text label** of a\nscenario in `settings.yaml` file under `labels` key. At this moment model can\ndetect 16`+1` scenarios, where one is default `Unknown` label. You can change,\nadd or remove labels according to your use case. The model is trained on wide\nvariety of data. The task for the model at training was to predict similar\nvectors for image and text that describes well a scene on the image. Thus model\ncan generalize well on other scenarios too if you provide proper textual\ninformation about a scene of interest.\n<a name=\"howtorun\"/>\n\n# How to Run\n\nFirst install requirements:\n`pip install -r requirements.txt`\n\nTo test the model you can either run:\n`python run.py --image-path ./data/7.jpg`\n\nOr you can test it through web app:\n`streamlit run app.py`\n\nOr you can see the example code in `tutorial.ipynb` jupyter notebook\n\nOr incorporate this model in your project using this code:\n\n```python\nfrom model import Model\nimport cv2\n\nmodel = Model()\nimage = cv2.imread('./your_image.jpg')\nimage = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)\nlabel = model.predict(image=image)['label']\nprint('Image label is: ', label)\n```\n\n<a name=\"results\"></a>\n\n# Results\n\nBelow are the resulting videos and images. I used the model to make predictions\non each frame of the videos and print model's predictions on the left side of\nframe of saved videos. In case of images, titles are model's predictions. You\ncan find code that produces that result in `tutorial.ipynb` jupyter notebook.\n\n![Result video](./results/output_fire.gif)\n\n![Result video](./results/output_fight.gif)\n\n### Result Images\n\n![Result image](./results/3.jpg)\n![Result image](./results/9.jpg)\n![Result image](./results/2.jpg)\n![Result image](./results/4.jpg)\n![Result image](./results/10.jpg)\n![Result image](./results/7.jpg)\n![Result image](./results/0.jpg)\n\n<a name=\"work\"></a>\n\n# Further Work\n\nFor further enhancements like: Batch processing support for speedup, return of\nmultiple suggestions, threshold fine-tuning for specific data, ect. contact me:\n\nMy\nLinkedin: [Soso Sukhitashvili](https://www.linkedin.com/in/soso-sukhitashvili/)\n\n",
+    "recent_commits": [
+      {
+        "message": "model done",
+        "date": "2025-02-14T14:24:08Z"
+      }
+    ]
+  },
+  {
+    "name": "FinanceManager",
+    "full_name": "devanshsingh005/FinanceManager",
+    "description": null,
+    "private": false,
+    "created_at": "2024-10-05T17:08:43Z",
+    "updated_at": "2025-02-14T17:10:11Z",
+    "pushed_at": "2024-10-09T18:28:14Z",
+    "size_kb": 1271,
+    "stars": 0,
+    "forks": 2,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 42311,
+      "Java": 17767,
+      "CSS": 9645,
+      "HTML": 1754
+    },
+    "readme": "# Personal Finance Manager\n\n## Overview\nThe **Personal Finance Manager** is a web application designed to help users manage their finances efficiently. It enables users to track their income, expenses, loans, EMIs, and future saving goals. The app presents financial data in the form of interactive graphs and pie charts for easy visualization.\n\n## Features\n- **User Authentication**: Secure login and registration.\n- **Income and Expense Tracking**: Keep track of monthly income, expenses, loans, and EMIs.\n- **Graphical Insights**: View detailed financial data through pie charts and graphs.\n- **Goals Management**: Set and monitor future financial goals.\n\n## Tech Stack\n- **Frontend**: React, JavaScript, CSS\n- **Backend**: Java (Spring Boot)\n- **Database**: H2\n![image](https://github.com/user-attachments/assets/67a52f77-77c0-4876-bebc-ffe221b629fa)\n\n\n\n\n",
+    "recent_commits": [
+      {
+        "message": "Merge branch 'main' of https://github.com/devanshsingh005/FinanceManager",
+        "date": "2024-10-09T18:27:39Z"
+      },
+      {
+        "message": "added ananlysis",
+        "date": "2024-10-09T18:24:33Z"
+      },
+      {
+        "message": "Update README.md",
+        "date": "2024-10-05T17:17:52Z"
+      },
+      {
+        "message": "Update README.md",
+        "date": "2024-10-05T17:16:19Z"
+      },
+      {
+        "message": "first commit",
+        "date": "2024-10-01T17:07:12Z"
+      }
+    ]
+  },
+  {
+    "name": "firstrepo",
+    "full_name": "devanshsingh005/firstrepo",
+    "description": null,
+    "private": false,
+    "created_at": "2023-11-15T08:20:04Z",
+    "updated_at": "2023-11-15T08:20:05Z",
+    "pushed_at": "2023-11-15T08:51:20Z",
+    "size_kb": 1,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {},
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "Merge pull request #1 from devanshsingh005/de/feat/add-new-file\n\nchore: change in hello.txt",
+        "date": "2023-11-15T08:51:20Z"
+      },
+      {
+        "message": "chore: change in hello.txt",
+        "date": "2023-11-15T08:41:57Z"
+      },
+      {
+        "message": "feat: add  hello message",
+        "date": "2023-11-15T08:06:00Z"
+      }
+    ]
+  },
+  {
+    "name": "flutter_App",
+    "full_name": "devanshsingh005/flutter_App",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-14T14:45:29Z",
+    "updated_at": "2025-02-14T14:49:55Z",
+    "pushed_at": "2025-05-02T12:48:26Z",
+    "size_kb": 86813,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Dart": 62653192,
+      "C++": 171091,
+      "Objective-C": 102133,
+      "CMake": 93764,
+      "Java": 93232,
+      "Groovy": 85868,
+      "Shell": 53295,
+      "Ruby": 45670,
+      "HTML": 36131,
+      "JavaScript": 34332,
+      "Swift": 25412,
+      "Batchfile": 16366,
+      "Kotlin": 9337,
+      "C": 6614,
+      "CSS": 5955,
+      "PowerShell": 5490,
+      "GLSL": 3873
+    },
+    "readme": "<a href=\"https://flutter.dev/\">\n  <h1 align=\"center\">\n    <picture>\n      <source media=\"(prefers-color-scheme: dark)\" srcset=\"https://storage.googleapis.com/cms-storage-bucket/6e19fee6b47b36ca613f.png\">\n      <img alt=\"Flutter\" src=\"https://storage.googleapis.com/cms-storage-bucket/c823e53b3a1a7b0d36a9.png\">\n    </picture>\n  </h1>\n</a>\n\n[![Flutter CI Status](https://flutter-dashboard.appspot.com/api/public/build-status-badge?repo=flutter)](https://flutter-dashboard.appspot.com/#/build?repo=flutter)\n[![Discord badge][]][Discord instructions]\n[![Twitter handle][]][Twitter badge]\n[![codecov](https://codecov.io/gh/flutter/flutter/branch/master/graph/badge.svg?token=11yDrJU2M2)](https://codecov.io/gh/flutter/flutter)\n[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5631/badge)](https://bestpractices.coreinfrastructure.org/projects/5631)\n[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/flutter/flutter/badge)](https://deps.dev/project/github/flutter%2Fflutter)\n[![SLSA 1](https://slsa.dev/images/gh-badge-level1.svg)](https://slsa.dev)\n\nFlutter is Google's SDK for crafting beautiful, fast user experiences for\nmobile, web, and desktop from a single codebase. Flutter works with existing\ncode, is used by developers and organizations around the world, and is free and\nopen source.\n\n## Documentation\n\n* [Install Flutter](https://flutter.dev/get-started/)\n* [Flutter documentation](https://docs.flutter.dev/)\n* [Development wiki](https://github.com/flutter/flutter/wiki)\n* [Contributing to Flutter](https://github.com/flutter/flutter/blob/master/CONTRIBUTING.md)\n\nFor announcements about new releases, follow the\n[flutter-announce@googlegroups.com](https://groups.google.com/forum/#!forum/flutter-announce)\nmailing list. Our documentation also tracks [breaking\nchanges](https://docs.flutter.dev/release/breaking-changes) across releases.\n\n## Terms of service\n\nThe Flutter tool may occasionally download resources from Google servers. By\ndownloading or using the Flutter SDK, you agree to the Google Terms of Service:\nhttps://policies.google.com/terms\n\nFor example, when installed from GitHub (as opposed to from a prepackaged\narchive), the Flutter tool will download the Dart SDK from Google servers\nimmediately when first run, as it is used to execute the `flutter` tool itself.\nThis will also occur when Flutter is upgraded (e.g. by running the `flutter\nupgrade` command).\n\n## About Flutter\n\nWe think Flutter will help you create beautiful, fast apps, with a productive,\nextensible and open development model, whether you're targeting iOS or Android,\nweb, Windows, macOS, Linux or embedding it as the UI toolkit for a platform of\nyour choice.\n\n### Beautiful user experiences\n\nWe want to enable designers to deliver their full creative vision without being\nforced to water it down due to limitations of the underlying framework.\nFlutter's [layered architecture] gives you control over every pixel on the\nscreen and its powerful compositi",
+    "recent_commits": [
+      {
+        "message": "Initial commit",
+        "date": "2025-02-14T14:47:35Z"
+      },
+      {
+        "message": "[CP] Fix TwoDimensionalViewport's keep alive child not always removed (when no longer should be kept alive) (#149639)\n\nCherry pick request of https://github.com/flutter/flutter/pull/148298 to stable.\r\n\r\nFixes problems in 2D viewport when using keep alive widgets (affects users using Material Ink components).",
+        "date": "2024-06-05T20:15:13Z"
+      },
+      {
+        "message": "[CP-stable] Add frame number and widget location map service extension (#149345)\n\nThis pull request is created by [automatic cherry pick workflow](https://github.com/flutter/flutter/wiki/Flutter-Cherrypick-Process#automatically-creates-a-cherry-pick-request)\r\nPlease fill in the form below, and a flutter domain expert will evaluate this cherry pick request.\r\n\r\n### Issue Link:\r\nWhat is the link to the issue this cherry-pick is addressing?\r\n\r\nDevTools release 2.36.0: https://dart-review.googlesource.com/c/sdk/+/368762\r\n\r\n### Changelog Description:\r\n\r\nThis change adds a service extension that DevTools uses to support a \"Track widget build counts\" feature. This feature is first included in DevTools 2.36.0.\r\n\r\n### Impact Description:\r\n\r\nThis service extension is required for DevTools 2.36.0, which needs to be [cherry-picked](https://dart-review.googlesource.com/c/sdk/+/368762) into the Dart SDK. This beta release of DevTools missed the code cutoff because we were targeting the date listed on go/dash-team-releases (5/29). Since the beta release went out early, we missed the cut off and need to cherry-pick.\r\n\r\nSince this DevTools release depended on the changes from https://github.com/flutter/flutter/pull/148702, we also need to cherry pick those changes into the flutter beta channel.\r\n\r\n### Workaround:\r\nNo. This is required for DevTools 2.36.0 to work properly: https://dart-review.googlesource.com/c/sdk/+/368762.\r\n\r\n### Risk:\r\nWhat is the risk level of this cherry-pick?\r\n\r\n### Test Coverage:\r\nAre you confident that your fix is well-tested by automated tests?\r\n\r\n### Validation Steps:\r\nWhat are the steps to validate that this fix works?\r\n\r\nWith this change, a flutter app connecting to DevTools 2.36.0 (already on the Dart SDK main branch and trying to CP into the Dart SDK beta branch) will be able to use the \"Track widget build counts\" feature in DevTools.",
+        "date": "2024-06-05T18:38:03Z"
+      },
+      {
+        "message": "[flutter_releases] Flutter stable 3.22.2 Framework Cherrypicks (#149752)\n\n# Flutter stable 3.22.2 Framework",
+        "date": "2024-06-05T17:14:23Z"
+      },
+      {
+        "message": "[CP-stable] Remove `TextEditingController` private member access (#149042) (#149208)\n\nManual request (merge conflicts in the test file) for cherry-picking #149042 to stable\r\n\r\n### Issue Link:\r\nWhat is the link to the issue this cherry-pick is addressing?\r\n\r\n#148692 \r\n\r\n### Changelog Description:\r\nExplain this cherry pick in one line that is accessible to most Flutter developers. See [best practices](https://github.com/flutter/flutter/wiki/Hotfix-Documentation-Best-Practices) for examples\r\n\r\nFixes an `EditableText` crash that happens with a custom `TextEditingController` which only `implements` the `TextEditingController` interface.\r\n\r\n### Impact Description:\r\nWhat is the impact (ex. visual jank on Samsung phones, app crash, cannot ship an iOS app)? Does it impact development (ex. flutter doctor crashes when Android Studio is installed), or the shipping production app (the app crashes on launch)\r\n\r\nProduction apps crash if the user gives an `EditableText` a custom `TextEditingControllor` class that `implements TextEditingControllor`.\r\n\r\n### Workaround:\r\nIs there a workaround for this issue?\r\n\r\nThe crash does not happen if the user `extends TextEditingControllor`, but it's not always desirable / feasible. The class could be already extending a different base class.\r\n\r\n### Risk:\r\nWhat is the risk level of this cherry-pick?\r\n\r\n### Test Coverage:\r\nAre you confident that your fix is well-tested by automated tests?\r\n\r\n### Validation Steps:\r\nWhat are the steps to validate that this fix works?\r\n\r\nRun the test in the PR, or follow the repro steps in https://github.com/flutter/flutter/issues/148692",
+        "date": "2024-06-05T06:54:58Z"
+      }
+    ]
+  },
+  {
+    "name": "gdscproject",
+    "full_name": "devanshsingh005/gdscproject",
+    "description": "This is the task for gdsc",
+    "private": false,
+    "created_at": "2024-03-26T07:41:46Z",
+    "updated_at": "2024-03-26T08:06:04Z",
+    "pushed_at": "2024-03-26T08:20:50Z",
+    "size_kb": 215,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 3309,
+      "HTML": 1721,
+      "CSS": 1358
+    },
+    "readme": "# GDSC PROJECT\nThis is the gdsc task\n<br>\n+ FORK the project and type `npm start`\n![Screenshot 2024-03-26 132045](https://github.com/devanshsingh005/gdscproject/assets/150846114/01a1e34d-4db2-4925-9d4e-29542758dc13)\n",
+    "recent_commits": [
+      {
+        "message": "Update App.css",
+        "date": "2024-03-26T08:20:50Z"
+      },
+      {
+        "message": "Update README.md",
+        "date": "2024-03-26T08:03:05Z"
+      },
+      {
+        "message": "Add files via upload",
+        "date": "2024-03-26T07:59:54Z"
+      },
+      {
+        "message": "Update README.md",
+        "date": "2024-03-26T07:55:04Z"
+      },
+      {
+        "message": "Update README.md",
+        "date": "2024-03-26T07:54:34Z"
+      }
+    ]
+  },
+  {
+    "name": "hand_recognition",
+    "full_name": "devanshsingh005/hand_recognition",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-14T14:26:34Z",
+    "updated_at": "2025-02-14T16:47:39Z",
+    "pushed_at": "2025-02-14T16:47:36Z",
+    "size_kb": 2,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Python": 997
+    },
+    "readme": "# hand_recognition",
+    "recent_commits": [
+      {
+        "message": "code added",
+        "date": "2025-02-14T16:47:36Z"
+      },
+      {
+        "message": "Initial commit",
+        "date": "2025-02-14T14:26:34Z"
+      }
+    ]
+  },
+  {
+    "name": "HMS_infosys_Team7",
+    "full_name": "devanshsingh005/HMS_infosys_Team7",
+    "description": null,
+    "private": true,
+    "created_at": "2026-03-12T04:03:32Z",
+    "updated_at": "2026-03-31T19:46:53Z",
+    "pushed_at": "2026-03-26T04:53:19Z",
+    "size_kb": 25211,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Swift": 2594779,
+      "PLpgSQL": 122488,
+      "TypeScript": 49938,
+      "Python": 26031
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "Delete HMS_Team7/Config/AppConfig.xcconfig",
+        "date": "2026-03-26T04:53:19Z"
+      },
+      {
+        "message": "Delete HMS_Team7/Config/LocalSecrets.xcconfig",
+        "date": "2026-03-26T04:53:10Z"
+      },
+      {
+        "message": "Merge branch 'main' into main",
+        "date": "2026-03-26T04:47:27Z"
+      },
+      {
+        "message": "feat: implement comprehensive billing features, migrations, and UI optimizations",
+        "date": "2026-03-26T04:43:54Z"
+      },
+      {
+        "message": "bill generatoin done",
+        "date": "2026-03-25T07:33:53Z"
+      }
+    ]
+  },
+  {
+    "name": "Imagecolorization",
+    "full_name": "devanshsingh005/Imagecolorization",
+    "description": "This tool converts black and white images to colorful  using ML",
+    "private": false,
+    "created_at": "2025-04-14T08:20:01Z",
+    "updated_at": "2025-04-14T08:36:11Z",
+    "pushed_at": "2025-04-14T08:36:08Z",
+    "size_kb": 51,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 8730,
+      "Python": 6817,
+      "CSS": 2077,
+      "JavaScript": 734,
+      "HTML": 366
+    },
+    "readme": "# Image Colorization App\n\nA web application that colorizes black and white images using the DeOldify deep learning model.\n\n## Features\n\n- Upload black and white images\n- Automatic colorization using DeOldify\n- View before/after comparison\n- Download colorized images\n\n## Tech Stack\n\n- Frontend: React + TypeScript + Vite\n- Backend: FastAPI + Python\n- ML Model: DeOldify\n\n## Prerequisites\n\n- Python 3.8+\n- Node.js 16+\n- npm or yarn\n\n## Setup Instructions\n\n### Backend Setup\n\n1. Create and activate a virtual environment:\n```bash\ncd backend\npython -m venv venv\n.\\venv\\Scripts\\activate  # Windows\nsource venv/bin/activate  # Linux/Mac\n```\n\n2. Install Python dependencies:\n```bash\npip install -r requirements.txt\n```\n\n3. Start the backend server:\n```bash\npython main.py\n```\n\nThe backend server will run at `http://localhost:8000`\n\n### Frontend Setup\n\n1. Install Node.js dependencies:\n```bash\ncd frontend\nnpm install\n```\n\n2. Start the development server:\n```bash\nnpm run dev\n```\n\nThe frontend will run at `http://localhost:5173`\n\n## Project Structure\n\n```\nproject-root/\n\u251c\u2500\u2500 frontend/         # React frontend\n\u2502   \u251c\u2500\u2500 src/         # Source files\n\u2502   \u251c\u2500\u2500 public/      # Static files\n\u2502   \u2514\u2500\u2500 package.json # Frontend dependencies\n\u251c\u2500\u2500 backend/         # Python backend\n\u2502   \u251c\u2500\u2500 models/      # ML models\n\u2502   \u251c\u2500\u2500 main.py      # FastAPI server\n\u2502   \u2514\u2500\u2500 requirements.txt\n\u2514\u2500\u2500 README.md        # Project documentation\n```\n\n## API Endpoints\n\n- `POST /colorize` - Upload and colorize an image\n- `GET /uploads/{filename}` - Get a colorized image\n\n## License\n\nMIT\n\n## Contributing\n\n1. Fork the repository\n2. Create your feature branch\n3. Commit your changes\n4. Push to the branch\n5. Create a Pull Request ",
+    "recent_commits": [
+      {
+        "message": "Completey Working",
+        "date": "2025-04-14T08:35:30Z"
+      }
+    ]
+  },
+  {
+    "name": "jovian-careers-site-responsive",
+    "full_name": "devanshsingh005/jovian-careers-site-responsive",
+    "description": "A website showing job openings at Jovian",
+    "private": false,
+    "created_at": "2024-01-10T16:39:09Z",
+    "updated_at": "2024-01-10T16:39:09Z",
+    "pushed_at": "2023-12-26T21:41:05Z",
+    "size_kb": 799,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "HTML": 7243,
+      "CSS": 2229
+    },
+    "readme": "# jovian-careers-site\nA website showing job openings at Jovian\n",
+    "recent_commits": [
+      {
+        "message": "Fix changes",
+        "date": "2023-03-14T12:40:46Z"
+      },
+      {
+        "message": "fix title",
+        "date": "2023-03-14T12:38:56Z"
+      },
+      {
+        "message": "Merge pull request #1 from sydney-jovian/add-meta-tags\n\nadded tags",
+        "date": "2023-03-14T12:20:56Z"
+      },
+      {
+        "message": "added tags",
+        "date": "2023-03-14T12:11:12Z"
+      },
+      {
+        "message": "this is a message",
+        "date": "2023-03-14T11:57:32Z"
+      }
+    ]
+  },
+  {
+    "name": "learning-web-dev",
+    "full_name": "devanshsingh005/learning-web-dev",
+    "description": "A website for headphones",
+    "private": false,
+    "created_at": "2024-01-08T13:47:58Z",
+    "updated_at": "2024-01-09T16:56:26Z",
+    "pushed_at": "2024-01-09T16:59:55Z",
+    "size_kb": 608,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "HTML": 6838,
+      "CSS": 3085
+    },
+    "readme": "# learning-web-dev\nA website for headphones\n\n",
+    "recent_commits": [
+      {
+        "message": "change to \"welcome\"",
+        "date": "2024-01-09T16:59:08Z"
+      },
+      {
+        "message": "updated readme",
+        "date": "2024-01-09T16:50:35Z"
+      },
+      {
+        "message": "Adding HTML and CSS files",
+        "date": "2024-01-09T16:39:39Z"
+      },
+      {
+        "message": "Initial commit",
+        "date": "2024-01-08T13:47:58Z"
+      }
+    ]
+  },
+  {
+    "name": "LitArt",
+    "full_name": "devanshsingh005/LitArt",
+    "description": "Created with StackBlitz \u26a1\ufe0f",
+    "private": false,
+    "created_at": "2024-10-07T20:49:48Z",
+    "updated_at": "2024-10-07T20:49:57Z",
+    "pushed_at": "2024-10-07T20:49:53Z",
+    "size_kb": 66,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 54639,
+      "JavaScript": 994,
+      "PLpgSQL": 661,
+      "HTML": 366,
+      "CSS": 58
+    },
+    "readme": "# LitArt\n\n[Edit in StackBlitz next generation editor \u26a1\ufe0f](https://stackblitz.com/~/github.com/devanshsingh005/LitArt)",
+    "recent_commits": [
+      {
+        "message": "Initial commit",
+        "date": "2024-10-07T20:49:40Z"
+      }
+    ]
+  },
+  {
+    "name": "localrepo",
+    "full_name": "devanshsingh005/localrepo",
+    "description": null,
+    "private": false,
+    "created_at": "2023-11-19T17:35:16Z",
+    "updated_at": "2023-11-19T18:16:46Z",
+    "pushed_at": "2023-11-19T18:16:43Z",
+    "size_kb": 19,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "HTML": 100,
+      "C": 92,
+      "CSS": 22
+    },
+    "readme": "#  this my local repo first",
+    "recent_commits": [
+      {
+        "message": "add both features",
+        "date": "2023-11-19T18:13:47Z"
+      },
+      {
+        "message": "add dropdown",
+        "date": "2023-11-19T18:10:32Z"
+      },
+      {
+        "message": "add button",
+        "date": "2023-11-19T18:09:50Z"
+      },
+      {
+        "message": "Merge pull request #1 from devanshsingh005/feature1\n\nthis a new feature",
+        "date": "2023-11-19T18:07:10Z"
+      },
+      {
+        "message": "this a new feature",
+        "date": "2023-11-19T18:00:34Z"
+      }
+    ]
+  },
+  {
+    "name": "LostAndFound_Official",
+    "full_name": "devanshsingh005/LostAndFound_Official",
+    "description": null,
+    "private": false,
+    "created_at": "2024-10-10T18:39:44Z",
+    "updated_at": "2025-02-14T08:03:03Z",
+    "pushed_at": "2025-02-14T08:03:00Z",
+    "size_kb": 72,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 23396,
+      "JavaScript": 7257,
+      "HTML": 366,
+      "CSS": 58
+    },
+    "readme": "# LostAndFound_Official\n",
+    "recent_commits": [
+      {
+        "message": "Update README.md",
+        "date": "2024-10-22T17:37:09Z"
+      },
+      {
+        "message": "Initial commit",
+        "date": "2024-10-05T16:59:19Z"
+      }
+    ]
+  },
+  {
+    "name": "omegel_new",
+    "full_name": "devanshsingh005/omegel_new",
+    "description": null,
+    "private": false,
+    "created_at": "2024-12-27T07:35:24Z",
+    "updated_at": "2024-12-27T07:37:42Z",
+    "pushed_at": "2024-12-27T07:37:38Z",
+    "size_kb": 2323,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 10290,
+      "CSS": 6291,
+      "HTML": 2349
+    },
+    "readme": "# Creating an End-to-End Clone of Omegle\n\nThis guide provides an exhaustive step-by-step process for building an Omegle clone, designed for easy reference by AI code writers. The project incorporates modern web development practices, leveraging WebRTC for video communication, Socket.io for real-time messaging, and a lightweight backend powered by Node.js. Follow this guide to create a fully functional anonymous chat platform.\n\n---\n\n## Table of Contents\n\n1. [Project Overview](#project-overview)\n2. [Prerequisites](#prerequisites)\n3. [Project Setup](#project-setup)\n4. [Backend Development](#backend-development)\n   - [Server Setup](#server-setup)\n   - [WebSocket Integration](#websocket-integration)\n   - [Session Management with Redis](#session-management-with-redis)\n5. [Frontend Development](#frontend-development)\n   - [UI Design](#ui-design)\n   - [Video and Text Chat Features](#video-and-text-chat-features)\n6. [WebRTC Integration](#webrtc-integration)\n7. [Database Configuration](#database-configuration)\n8. [Testing and Debugging](#testing-and-debugging)\n9. [Deployment](#deployment)\n10. [Future Enhancements](#future-enhancements)\n\n---\n\n## Project Overview\n\nThe Omegle clone will include the following features:\n\n- Randomized user matching for anonymous chats.\n- Support for both text-based and video-based communication.\n- Real-time communication using WebRTC and Socket.io.\n- User session tracking and management using Redis.\n- Responsive user interface for a seamless experience across devices.\n\n---\n\n## Prerequisites\n\nBefore starting, ensure you have the following installed on your system:\n\n1. **Node.js and npm**: For backend development.\n2. **Git**: To manage source control.\n3. **Redis**: For session and data management.\n4. **Basic knowledge**: Familiarity with JavaScript, Node.js, HTML, CSS, and WebRTC is recommended.\n\n---\n\n## Project Setup\n\n### Initializing the Project\n\n1. Create a new project directory and initialize npm:\n   ```bash\n   mkdir omegle-clone\n   cd omegle-clone\n   npm init -y\n   ```\n\n2. Install the necessary dependencies:\n   ```bash\n   npm install express socket.io simple-peer redis\n   ```\n\n3. Organize the project structure:\n   ```\n   omegle-clone/\n   \u251c\u2500\u2500 backend/\n   \u2502   \u251c\u2500\u2500 server.js\n   \u2502   \u251c\u2500\u2500 routes/\n   \u2502   \u2514\u2500\u2500 controllers/\n   \u251c\u2500\u2500 frontend/\n   \u2502   \u251c\u2500\u2500 index.html\n   \u2502   \u251c\u2500\u2500 styles.css\n   \u2502   \u2514\u2500\u2500 app.js\n   \u251c\u2500\u2500 database/\n   \u2502   \u2514\u2500\u2500 redis.js\n   \u251c\u2500\u2500 tests/\n   \u2502   \u2514\u2500\u2500 test.js\n   \u251c\u2500\u2500 README.md\n   \u2514\u2500\u2500 package.json\n   ```\n\n---\n\n## Backend Development\n\n### Server Setup\n\n1. Set up the Express server in `backend/server.js`:\n   ```javascript\n   const express = require('express');\n   const http = require('http');\n   const { Server } = require('socket.io');\n\n   const app = express();\n   const server = http.createServer(app);\n   const io = new Server(server);\n\n   app.use(express.static('../frontend'));\n\n   app.get('/', (req, res) => {\n       res.sendFile('index.html');\n   });\n\n   server.listen(3000, () => {\n       console.log('Server running at http://",
+    "recent_commits": [
+      {
+        "message": "new repo",
+        "date": "2024-12-27T07:35:19Z"
+      },
+      {
+        "message": "Initial commit",
+        "date": "2024-12-27T07:07:46Z"
+      },
+      {
+        "message": "first commit",
+        "date": "2024-12-27T07:06:21Z"
+      }
+    ]
+  },
+  {
+    "name": "Python_scrapper",
+    "full_name": "devanshsingh005/Python_scrapper",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-14T14:38:27Z",
+    "updated_at": "2025-02-14T14:44:05Z",
+    "pushed_at": "2025-02-14T14:44:01Z",
+    "size_kb": 5,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 20313
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "first",
+        "date": "2025-02-14T14:43:36Z"
+      }
+    ]
+  },
+  {
+    "name": "Re-Hers",
+    "full_name": "devanshsingh005/Re-Hers",
+    "description": "This is the application for learning music",
+    "private": true,
+    "created_at": "2025-09-23T18:26:26Z",
+    "updated_at": "2026-03-25T09:07:19Z",
+    "pushed_at": "2026-04-13T18:45:38Z",
+    "size_kb": 114614,
+    "stars": 1,
+    "forks": 2,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Swift": 1080624,
+      "Python": 237697,
+      "Ruby": 17945,
+      "JavaScript": 1639
+    },
+    "readme": "hum haunge kamyaab!\n",
+    "recent_commits": [
+      {
+        "message": "Merge branch 'version-2.0' into main",
+        "date": "2026-03-25T09:07:14Z"
+      },
+      {
+        "message": "All the major security issues solved\n\nsecurity patch",
+        "date": "2026-03-25T08:43:44Z"
+      },
+      {
+        "message": "something something",
+        "date": "2026-03-25T07:28:47Z"
+      },
+      {
+        "message": "merge this shit",
+        "date": "2026-03-25T04:33:39Z"
+      },
+      {
+        "message": "feat: add local worker and remove legacy supervisor config",
+        "date": "2026-03-25T04:31:45Z"
+      }
+    ]
+  },
+  {
+    "name": "Rehearse_Website",
+    "full_name": "devanshsingh005/Rehearse_Website",
+    "description": null,
+    "private": false,
+    "created_at": "2026-04-01T10:36:00Z",
+    "updated_at": "2026-04-11T08:03:08Z",
+    "pushed_at": "2026-04-11T08:03:04Z",
+    "size_kb": 11300,
+    "stars": 1,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "HTML": 50969,
+      "CSS": 38607,
+      "JavaScript": 27657
+    },
+    "readme": "# rehearse-legal",
+    "recent_commits": [
+      {
+        "message": "Merge pull request #1 from devanshsingh005/copilot/replace-devansh-email\n\nReplace contact email across all pages",
+        "date": "2026-04-11T08:03:04Z"
+      },
+      {
+        "message": "Replace devansh.singh20045@gmail.com with letsrehearse.studio@gmail.com across all files\n\nAgent-Logs-Url: https://github.com/devanshsingh005/Rehearse_Website/sessions/2d26a2d4-34a1-4535-b108-74557e6268d3\n\nCo-authored-by: devanshsingh005 <150846114+devanshsingh005@users.noreply.github.com>",
+        "date": "2026-04-11T08:02:12Z"
+      },
+      {
+        "message": "Update index.html",
+        "date": "2026-04-09T04:48:04Z"
+      },
+      {
+        "message": "Update index.html",
+        "date": "2026-04-09T04:45:39Z"
+      },
+      {
+        "message": "Add responsive mobile navigation menu",
+        "date": "2026-04-08T09:08:15Z"
+      }
+    ]
+  },
+  {
+    "name": "STEAM_experiment_hub",
+    "full_name": "devanshsingh005/STEAM_experiment_hub",
+    "description": "An inclusive online lab where students can perform fun science experiments. Contains loads of inclusivity features!",
+    "private": false,
+    "created_at": "2025-03-07T19:26:21Z",
+    "updated_at": "2025-04-25T17:25:27Z",
+    "pushed_at": "2025-04-25T17:25:23Z",
+    "size_kb": 293,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 320328,
+      "HTML": 3494,
+      "CSS": 930
+    },
+    "readme": "# STEAM Experiment Hub\n\nAn interactive platform for exploring science, technology, engineering, arts, and mathematics through immersive experiments.\n\n## Features\n\n- Interactive experiments with PhET simulations\n- Voice command integration for hands-free interaction\n- Gamification with badges and progress tracking\n- Accessibility features for inclusive learning\n- Beautiful, immersive UI with modern design\n\n## Tech Stack\n\n- React 18\n- TypeScript\n- Material UI\n- React Router\n- Zustand for state management\n- Web Speech API for voice commands\n\n## Deployment on Vercel\n\nThis project is configured for seamless deployment on Vercel. Follow these steps to deploy:\n\n1. **Fork or Clone the Repository**\n\n   ```\n   git clone https://github.com/yourusername/steam-experiment-hub.git\n   cd steam-experiment-hub\n   ```\n\n2. **Install Dependencies**\n\n   ```\n   npm install\n   ```\n\n3. **Local Development**\n\n   ```\n   npm start\n   ```\n\n4. **Deploy to Vercel**\n\n   - Install Vercel CLI:\n     ```\n     npm install -g vercel\n     ```\n\n   - Login to Vercel:\n     ```\n     vercel login\n     ```\n\n   - Deploy:\n     ```\n     vercel\n     ```\n\n   - For production deployment:\n     ```\n     vercel --prod\n     ```\n\n   Alternatively, you can connect your GitHub repository to Vercel for automatic deployments.\n\n## Environment Variables\n\nThe following environment variables can be configured in Vercel:\n\n- `REACT_APP_API_URL`: URL for the backend API (if applicable)\n- `REACT_APP_ENV`: Environment (development, production)\n\n## Project Structure\n\n- `src/components`: Reusable UI components\n- `src/features`: Feature-specific components organized by domain\n- `src/hooks`: Custom React hooks\n- `src/stores`: Zustand state management stores\n- `src/types`: TypeScript type definitions\n- `src/theme.ts`: Material UI theme configuration\n\n## License\n\nMIT\n",
+    "recent_commits": [
+      {
+        "message": "Fix: Disable ESLint during build to prevent warnings from being treated as errors",
+        "date": "2025-03-07T22:43:12Z"
+      },
+      {
+        "message": "Fix: Disable treating ESLint warnings as errors in CI environment",
+        "date": "2025-03-07T22:34:40Z"
+      },
+      {
+        "message": "Fix: Add export statement to helpers.ts to make it a proper module",
+        "date": "2025-03-07T22:28:42Z"
+      },
+      {
+        "message": "Fix: Update vercel.json to use rewrites instead of routes",
+        "date": "2025-03-07T22:21:07Z"
+      },
+      {
+        "message": "Fix: Add legacy-peer-deps flag to resolve TypeScript dependency conflicts",
+        "date": "2025-03-07T22:15:15Z"
+      }
+    ]
+  },
+  {
+    "name": "student-team-members-management",
+    "full_name": "devanshsingh005/student-team-members-management",
+    "description": null,
+    "private": false,
+    "created_at": "2026-04-21T05:35:42Z",
+    "updated_at": "2026-04-21T05:36:13Z",
+    "pushed_at": "2026-04-21T05:36:10Z",
+    "size_kb": 173,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "JavaScript": 16122,
+      "CSS": 6378,
+      "HTML": 332
+    },
+    "readme": "# Student Team Members Management Application\n\nStudent Team Members Management Application for SRM CLAT-2 assessment.\n\n## Tech Stack\n\n- Frontend: React.js, React Router DOM, Axios\n- Backend: Node.js, Express.js\n- Database: MongoDB with Mongoose ODM\n- File Uploads: Multer\n- Styling: Plain CSS\n\n## Installation\n\n1. Clone repo\n2. `cd backend && npm install && node server.js`\n3. `cd frontend && npm install && npm start`\n4. Open MongoDB Compass, connect to `mongodb://localhost:27017/teamdb`\n\n## API Endpoints\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| POST   | /members | Add new member (multipart/form-data) |\n| GET    | /api/members | Get all members |\n| GET    | /api/members/:id | Get member by ID |\n\n## How to Test APIs in Browser\n\n- Open `http://localhost:5000/api/members` in the browser to view all members as JSON.\n- Open `http://localhost:5000/api/members/<member-id>` in the browser to view one member as JSON.\n\n## Notes\n\n- `uploads/` folder is auto-created by Multer.\n",
+    "recent_commits": [
+      {
+        "message": "fix: improve local app flow and homepage copy",
+        "date": "2026-04-21T05:36:00Z"
+      },
+      {
+        "message": "feat: build student team members management app",
+        "date": "2026-04-21T05:11:08Z"
+      }
+    ]
+  },
+  {
+    "name": "Trendix",
+    "full_name": "devanshsingh005/Trendix",
+    "description": "This is a website that helps in products analysis and helps make sound decesion",
+    "private": false,
+    "created_at": "2024-12-10T08:35:19Z",
+    "updated_at": "2024-12-20T05:25:15Z",
+    "pushed_at": "2024-12-20T05:25:11Z",
+    "size_kb": 230,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Python": 46054,
+      "TypeScript": 28840,
+      "PLpgSQL": 6135,
+      "HTML": 1721,
+      "CSS": 930
+    },
+    "readme": "# Product Comparison Tool\n\nA web application that helps investors evaluate products of a specified company and its competitors.\n\n## Features\n\n- Input primary company and competitor names\n- Automated web scraping of product details using Make.com\n- Storage of product data in Supabase\n- Comparison view of product details including prices, ratings, and reviews\n\n## Tech Stack\n\n- Frontend: React with Material-UI\n- Backend: Django with Django REST Framework\n- Database: Supabase\n- Web Scraping: Make.com\n\n## Project Structure\n\n```\nPullup/\n\u251c\u2500\u2500 backend/           # Django backend\n\u2502   \u251c\u2500\u2500 api/          # Django app for REST API\n\u2502   \u251c\u2500\u2500 pullup/       # Django project settings\n\u2502   \u2514\u2500\u2500 requirements.txt\n\u2514\u2500\u2500 frontend/         # React frontend\n    \u251c\u2500\u2500 src/\n    \u2502   \u251c\u2500\u2500 components/\n    \u2502   \u2514\u2500\u2500 App.js\n    \u2514\u2500\u2500 package.json\n```\n\n## Setup Instructions\n\n### Backend Setup\n\n1. Create and activate a virtual environment:\n```bash\ncd backend\npython -m venv venv\nsource venv/bin/activate  # On Windows: venv\\Scripts\\activate\n```\n\n2. Install dependencies:\n```bash\npip install -r requirements.txt\n```\n\n3. Set up environment variables in `.env`:\n```\nDJANGO_SECRET_KEY=your-secret-key\nSUPABASE_URL=your-supabase-url\nSUPABASE_KEY=your-supabase-key\n```\n\n4. Run migrations:\n```bash\npython manage.py migrate\n```\n\n5. Start the development server:\n```bash\npython manage.py runserver\n```\n\n### Frontend Setup\n\n1. Install dependencies:\n```bash\ncd frontend\nnpm install\n```\n\n2. Start the development server:\n```bash\nnpm start\n```\n\n## Usage\n\n1. Open http://localhost:3000 in your browser\n2. Enter the primary company name\n3. Add competitor companies using the \"Add Competitor\" button\n4. Click \"Compare Products\" to initiate the comparison\n5. View the comparison results in a grid layout\n\n## API Endpoints\n\n- `POST /api/scrape/`: Initiate web scraping for company products\n- `GET /api/compare/`: Get product comparison data\n- `GET /api/products/`: List all products\n- `POST /api/products/`: Create a new product\n- `GET /api/products/{id}/`: Get product details\n- `PUT /api/products/{id}/`: Update product details\n- `DELETE /api/products/{id}/`: Delete a product\n\n## Make.com Integration\n\nTo set up the Make.com integration:\n\n1. Create a new scenario in Make.com\n2. Add an HTTP webhook trigger\n3. Configure the scraping steps for your target marketplace\n4. Set up the Supabase action to store the scraped data\n5. Deploy the scenario\n\n## Contributing\n\n1. Fork the repository\n2. Create a feature branch\n3. Commit your changes\n4. Push to the branch\n5. Create a Pull Request\n",
+    "recent_commits": [
+      {
+        "message": "asin values added",
+        "date": "2024-12-20T05:24:18Z"
+      },
+      {
+        "message": "streamlined scraping",
+        "date": "2024-12-17T08:09:25Z"
+      },
+      {
+        "message": "scrapper fixed",
+        "date": "2024-12-14T07:49:27Z"
+      },
+      {
+        "message": "Display is fixed",
+        "date": "2024-12-10T08:41:11Z"
+      },
+      {
+        "message": "Add Supabase sync command and update product reviews functionality",
+        "date": "2024-11-19T10:39:30Z"
+      }
+    ]
+  },
+  {
+    "name": "YOLO_OBJECT_DETECTION",
+    "full_name": "devanshsingh005/YOLO_OBJECT_DETECTION",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-13T14:28:52Z",
+    "updated_at": "2025-02-13T17:09:13Z",
+    "pushed_at": "2025-02-13T17:09:09Z",
+    "size_kb": 5820,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Python": 372
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "object detection",
+        "date": "2025-02-13T17:08:20Z"
+      }
+    ]
+  },
+  {
+    "name": "inventoryMaintainer",
+    "full_name": "FLUXY01/inventoryMaintainer",
+    "description": null,
+    "private": false,
+    "created_at": "2025-02-09T16:52:36Z",
+    "updated_at": "2025-02-09T16:52:36Z",
+    "pushed_at": "2025-02-09T16:52:36Z",
+    "size_kb": 0,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {},
+    "readme": "",
+    "recent_commits": []
+  },
+  {
+    "name": "creed_care",
+    "full_name": "mhhussain15/creed_care",
+    "description": null,
+    "private": true,
+    "created_at": "2025-08-14T17:54:04Z",
+    "updated_at": "2025-08-14T22:01:40Z",
+    "pushed_at": "2025-08-14T22:01:37Z",
+    "size_kb": 929,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 79061,
+      "JavaScript": 8140,
+      "CSS": 5227,
+      "HTML": 1788
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "Updated till the final nutrition webpage with all the payment pages attached",
+        "date": "2025-08-14T22:00:34Z"
+      },
+      {
+        "message": "changed favicon and made the code consistent",
+        "date": "2025-08-14T18:10:33Z"
+      },
+      {
+        "message": "Update index.html to replace favicon links, add additional favicon support, and include comments for chatbot script and font loading",
+        "date": "2025-07-26T18:32:33Z"
+      },
+      {
+        "message": "Implement footer and navbar components; update index.html for font preloading and remove unused CSS files",
+        "date": "2025-07-26T18:14:49Z"
+      },
+      {
+        "message": "navbar linked to home",
+        "date": "2025-07-08T08:30:23Z"
+      }
+    ]
+  },
+  {
+    "name": "ReHearse",
+    "full_name": "Mukulparashar05/ReHearse",
+    "description": "This is the application for learning music",
+    "private": true,
+    "created_at": "2026-04-04T17:04:48Z",
+    "updated_at": "2026-04-04T17:04:49Z",
+    "pushed_at": "2026-04-04T16:29:53Z",
+    "size_kb": 113627,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Swift": 1080624,
+      "Python": 237697,
+      "Ruby": 17945,
+      "JavaScript": 1639
+    },
+    "readme": "hum haunge kamyaab!\n",
+    "recent_commits": [
+      {
+        "message": "Merge branch 'version-2.0' into main",
+        "date": "2026-03-25T09:07:14Z"
+      },
+      {
+        "message": "All the major security issues solved\n\nsecurity patch",
+        "date": "2026-03-25T08:43:44Z"
+      },
+      {
+        "message": "something something",
+        "date": "2026-03-25T07:28:47Z"
+      },
+      {
+        "message": "merge this shit",
+        "date": "2026-03-25T04:33:39Z"
+      },
+      {
+        "message": "feat: add local worker and remove legacy supervisor config",
+        "date": "2026-03-25T04:31:45Z"
+      }
+    ]
+  },
+  {
+    "name": "creed-care",
+    "full_name": "neupanekiran/creed-care",
+    "description": "Creed care website ",
+    "private": true,
+    "created_at": "2025-09-13T15:44:23Z",
+    "updated_at": "2025-10-14T05:36:16Z",
+    "pushed_at": "2025-10-14T05:36:13Z",
+    "size_kb": 7692,
+    "stars": 0,
+    "forks": 1,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 102566,
+      "JavaScript": 605,
+      "CSS": 537
+    },
+    "readme": "Creeed care Website ",
+    "recent_commits": [
+      {
+        "message": "discount changed",
+        "date": "2025-10-14T05:36:08Z"
+      },
+      {
+        "message": "updated MRP price link",
+        "date": "2025-10-08T13:55:53Z"
+      },
+      {
+        "message": "updates Prices and added community link",
+        "date": "2025-10-08T06:17:48Z"
+      },
+      {
+        "message": "just talk inculded build fix",
+        "date": "2025-09-27T17:37:19Z"
+      },
+      {
+        "message": "just talk inculded",
+        "date": "2025-09-27T12:26:22Z"
+      }
+    ]
+  },
+  {
+    "name": "HMS_infosys_Team7",
+    "full_name": "notshourya/HMS_infosys_Team7",
+    "description": null,
+    "private": true,
+    "created_at": "2026-03-06T06:19:20Z",
+    "updated_at": "2026-04-02T03:47:50Z",
+    "pushed_at": "2026-03-27T10:31:10Z",
+    "size_kb": 25796,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "Swift": 2766980,
+      "PLpgSQL": 132927,
+      "TypeScript": 49938,
+      "Python": 26031
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "ui updates",
+        "date": "2026-03-27T10:30:33Z"
+      },
+      {
+        "message": "fixed ui",
+        "date": "2026-03-27T01:06:09Z"
+      },
+      {
+        "message": "Feature/lab fix (#17)",
+        "date": "2026-03-27T01:11:41Z"
+      },
+      {
+        "message": "Updated lab section",
+        "date": "2026-03-26T18:16:09Z"
+      },
+      {
+        "message": "revamp queue and history cards for readability and added history navigation",
+        "date": "2026-03-24T06:01:35Z"
+      }
+    ]
+  },
+  {
+    "name": "creed_care",
+    "full_name": "Rushil0007/creed_care",
+    "description": null,
+    "private": true,
+    "created_at": "2025-07-29T08:55:30Z",
+    "updated_at": "2025-07-29T09:12:54Z",
+    "pushed_at": "2025-07-26T18:32:49Z",
+    "size_kb": 790,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 80985,
+      "CSS": 15499,
+      "JavaScript": 8140,
+      "HTML": 1788
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "Update index.html to replace favicon links, add additional favicon support, and include comments for chatbot script and font loading",
+        "date": "2025-07-26T18:32:33Z"
+      },
+      {
+        "message": "Implement footer and navbar components; update index.html for font preloading and remove unused CSS files",
+        "date": "2025-07-26T18:14:49Z"
+      },
+      {
+        "message": "navbar linked to home",
+        "date": "2025-07-08T08:30:23Z"
+      },
+      {
+        "message": "legal at proper location",
+        "date": "2025-07-07T18:46:56Z"
+      },
+      {
+        "message": "tailwind and project structure revamp",
+        "date": "2025-07-07T18:09:10Z"
+      }
+    ]
+  },
+  {
+    "name": "STEAM_experiment_hub",
+    "full_name": "ShinobiWonKnobi/STEAM_experiment_hub",
+    "description": "An inclusive online lab where students can perform fun science experiments. Contains loads of inclusivity features!",
+    "private": false,
+    "created_at": "2025-03-07T18:24:57Z",
+    "updated_at": "2025-03-08T10:44:03Z",
+    "pushed_at": "2025-03-08T10:43:59Z",
+    "size_kb": 293,
+    "stars": 0,
+    "forks": 1,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 320328,
+      "HTML": 3494,
+      "CSS": 930
+    },
+    "readme": "# STEAM Experiment Hub\n\nAn interactive platform for exploring science, technology, engineering, arts, and mathematics through immersive experiments.\n\n## Features\n\n- Interactive experiments with PhET simulations\n- Voice command integration for hands-free interaction\n- Gamification with badges and progress tracking\n- Accessibility features for inclusive learning\n- Beautiful, immersive UI with modern design\n\n## Tech Stack\n\n- React 18\n- TypeScript\n- Material UI\n- React Router\n- Zustand for state management\n- Web Speech API for voice commands\n\n## Deployment on Vercel\n\nThis project is configured for seamless deployment on Vercel. Follow these steps to deploy:\n\n1. **Fork or Clone the Repository**\n\n   ```\n   git clone https://github.com/yourusername/steam-experiment-hub.git\n   cd steam-experiment-hub\n   ```\n\n2. **Install Dependencies**\n\n   ```\n   npm install\n   ```\n\n3. **Local Development**\n\n   ```\n   npm start\n   ```\n\n4. **Deploy to Vercel**\n\n   - Install Vercel CLI:\n     ```\n     npm install -g vercel\n     ```\n\n   - Login to Vercel:\n     ```\n     vercel login\n     ```\n\n   - Deploy:\n     ```\n     vercel\n     ```\n\n   - For production deployment:\n     ```\n     vercel --prod\n     ```\n\n   Alternatively, you can connect your GitHub repository to Vercel for automatic deployments.\n\n## Environment Variables\n\nThe following environment variables can be configured in Vercel:\n\n- `REACT_APP_API_URL`: URL for the backend API (if applicable)\n- `REACT_APP_ENV`: Environment (development, production)\n\n## Project Structure\n\n- `src/components`: Reusable UI components\n- `src/features`: Feature-specific components organized by domain\n- `src/hooks`: Custom React hooks\n- `src/stores`: Zustand state management stores\n- `src/types`: TypeScript type definitions\n- `src/theme.ts`: Material UI theme configuration\n\n## License\n\nMIT\n",
+    "recent_commits": [
+      {
+        "message": "Fix: Disable ESLint during build to prevent warnings from being treated as errors",
+        "date": "2025-03-07T22:43:12Z"
+      },
+      {
+        "message": "Fix: Disable treating ESLint warnings as errors in CI environment",
+        "date": "2025-03-07T22:34:40Z"
+      },
+      {
+        "message": "Fix: Add export statement to helpers.ts to make it a proper module",
+        "date": "2025-03-07T22:28:42Z"
+      },
+      {
+        "message": "Fix: Update vercel.json to use rewrites instead of routes",
+        "date": "2025-03-07T22:21:07Z"
+      },
+      {
+        "message": "Fix: Add legacy-peer-deps flag to resolve TypeScript dependency conflicts",
+        "date": "2025-03-07T22:15:15Z"
+      }
+    ]
+  },
+  {
+    "name": "CreedCare",
+    "full_name": "SrishtiMish/CreedCare",
+    "description": null,
+    "private": true,
+    "created_at": "2025-08-14T16:29:58Z",
+    "updated_at": "2025-08-14T16:29:58Z",
+    "pushed_at": "2025-07-26T18:32:49Z",
+    "size_kb": 790,
+    "stars": 0,
+    "forks": 0,
+    "default_branch": "main",
+    "topics": [],
+    "languages": {
+      "TypeScript": 80985,
+      "CSS": 15499,
+      "JavaScript": 8140,
+      "HTML": 1788
+    },
+    "readme": "",
+    "recent_commits": [
+      {
+        "message": "Update index.html to replace favicon links, add additional favicon support, and include comments for chatbot script and font loading",
+        "date": "2025-07-26T18:32:33Z"
+      },
+      {
+        "message": "Implement footer and navbar components; update index.html for font preloading and remove unused CSS files",
+        "date": "2025-07-26T18:14:49Z"
+      },
+      {
+        "message": "navbar linked to home",
+        "date": "2025-07-08T08:30:23Z"
+      },
+      {
+        "message": "legal at proper location",
+        "date": "2025-07-07T18:46:56Z"
+      },
+      {
+        "message": "tailwind and project structure revamp",
+        "date": "2025-07-07T18:09:10Z"
+      }
+    ]
+  }
+]

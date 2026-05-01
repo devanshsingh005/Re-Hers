@@ -68,8 +68,33 @@ public struct ProfileProgressModel: Codable, Sendable {
     public let total_study_seconds: Int
 }
 
-public struct ProfileFetchResponse: Codable, Sendable {
-    public let total_study_seconds: Int
+private struct ExistingProfileProgress: Codable, Sendable {
+    let current_chapter: Int?
+    let current_part: Int?
+    let total_study_seconds: Int?
+}
+
+enum PracticeSessionKind: String, Sendable {
+    case practicePage = "practice_page_session"
+    case playAlong = "play_along_session"
+    case animation = "animation_session"
+}
+
+struct GuestLessonEvent: Codable, Sendable {
+    let chapterIndex: Int
+    let partIndex: Int
+    let eventType: String
+    let stars: Int?
+    let attempts: Int?
+    let durationSeconds: Int?
+    let scorePoints: Int
+    let occurredAt: String
+}
+
+struct GuestProgressSnapshot: Codable, Sendable {
+    let currentChapter: Int
+    let currentPart: Int
+    let totalStudySeconds: Int
 }
 
 // MARK: - Manager
@@ -77,6 +102,9 @@ public struct ProfileFetchResponse: Codable, Sendable {
 final class SupabaseProgressManager: Sendable {
     
     private static var db: SupabaseClient { SupabaseManager.shared.client }
+    private static let guestLessonEventsKey = "guestLessonEvents"
+    private static let guestProgressSnapshotKey = "guestProgressSnapshot"
+    private static let minimumTrackedPracticeDurationSeconds = 5
     
     // MARK: - Public API
     
@@ -87,8 +115,18 @@ final class SupabaseProgressManager: Sendable {
         attempts:     Int,
         scorePoints:  Int
     ) async {
+        if GuestSessionManager.shared.isGuest() {
+            saveGuestPartCompleted(
+                chapterIndex: chapterIndex,
+                partIndex: partIndex,
+                attempts: attempts,
+                scorePoints: scorePoints
+            )
+            return
+        }
+
         guard let userID = await currentUserID() else {
-            print("[SupabaseProgressManager] recordPartCompleted: no logged-in user")
+            debugLog("[SupabaseProgressManager] recordPartCompleted: no logged-in user")
             return
         }
         
@@ -109,20 +147,24 @@ final class SupabaseProgressManager: Sendable {
                 .insert(event)
                 .execute()
             
-            // Fetch current total_study_seconds safely to avoid omitting it
-            let response: [ProfileFetchResponse] = try await db.from("profiles")
-                .select("total_study_seconds")
-                .eq("id", value: userID.uuidString)
-                .limit(1)
-                .execute()
-                .value
-            
-            let currentTotal = response.first?.total_study_seconds ?? 0
+            let existingProgress = try await fetchExistingProgress(for: userID)
+            let currentChapter = existingProgress?.current_chapter ?? 1
+            let currentPart = existingProgress?.current_part ?? 0
+            let currentTotal = existingProgress?.total_study_seconds ?? 0
+            let mergedChapter = max(currentChapter, chapterIndex)
+            let mergedPart: Int
+            if mergedChapter > chapterIndex {
+                mergedPart = currentPart
+            } else if mergedChapter > currentChapter {
+                mergedPart = partIndex
+            } else {
+                mergedPart = max(currentPart, partIndex)
+            }
             
             let profileUpdate = ProfileProgressModel(
                 id: userID.uuidString,
-                current_chapter: chapterIndex,
-                current_part: partIndex,
+                current_chapter: mergedChapter,
+                current_part: mergedPart,
                 last_active_at: iso8601Now(),
                 total_study_seconds: currentTotal
             )
@@ -132,9 +174,9 @@ final class SupabaseProgressManager: Sendable {
                 .upsert(profileUpdate, onConflict: "id")
                 .execute()
             
-            print("[SupabaseProgressManager] Part saved — ch:\(chapterIndex) part:\(partIndex)")
+            debugLog("[SupabaseProgressManager] Part saved — ch:\(chapterIndex) part:\(partIndex)")
         } catch {
-            print("[SupabaseProgressManager] recordPartCompleted error: \(error)")
+            debugLog("[SupabaseProgressManager] recordPartCompleted error: \(error)")
         }
     }
     
@@ -145,8 +187,18 @@ final class SupabaseProgressManager: Sendable {
         durationSeconds: Int,
         scorePoints:     Int
     ) async {
+        if GuestSessionManager.shared.isGuest() {
+            saveGuestLessonCompleted(
+                chapterIndex: chapterIndex,
+                stars: stars,
+                durationSeconds: durationSeconds,
+                scorePoints: scorePoints
+            )
+            return
+        }
+
         guard let userID = await currentUserID() else {
-            print("[SupabaseProgressManager] recordLessonCompleted: no logged-in user")
+            debugLog("[SupabaseProgressManager] recordLessonCompleted: no logged-in user")
             return
         }
         
@@ -167,20 +219,18 @@ final class SupabaseProgressManager: Sendable {
                 .insert(event)
                 .execute()
             
-            // Calculate new total_study_seconds without hitting any undefined RPC
-            let response: [ProfileFetchResponse] = try await db.from("profiles")
-                .select("total_study_seconds")
-                .eq("id", value: userID.uuidString)
-                .limit(1)
-                .execute()
-                .value
-            
-            let currentTotal = response.first?.total_study_seconds ?? 0
+            let existingProgress = try await fetchExistingProgress(for: userID)
+            let currentChapter = existingProgress?.current_chapter ?? 1
+            let currentPart = existingProgress?.current_part ?? 0
+            let currentTotal = existingProgress?.total_study_seconds ?? 0
+            let completedChapter = chapterIndex + 1
+            let mergedChapter = max(currentChapter, completedChapter)
+            let mergedPart = mergedChapter == completedChapter ? 0 : currentPart
             
             let profileUpdate = ProfileProgressModel(
                 id: userID.uuidString,
-                current_chapter: chapterIndex + 1,
-                current_part: 0,
+                current_chapter: mergedChapter,
+                current_part: mergedPart,
                 last_active_at: iso8601Now(),
                 total_study_seconds: currentTotal + durationSeconds
             )
@@ -190,10 +240,91 @@ final class SupabaseProgressManager: Sendable {
                 .upsert(profileUpdate, onConflict: "id")
                 .execute()
             
-            print("[SupabaseProgressManager] Lesson saved — ch:\(chapterIndex) ⭐\(stars) \(durationSeconds)s")
+            debugLog("[SupabaseProgressManager] Lesson saved — ch:\(chapterIndex) ⭐\(stars) \(durationSeconds)s")
             
         } catch {
-            print("[SupabaseProgressManager] recordLessonCompleted error: \(error)")
+            debugLog("[SupabaseProgressManager] recordLessonCompleted error: \(error)")
+        }
+    }
+
+    static func beginTrackedPracticeSessionIfNeeded(_ startDate: inout Date?) {
+        guard startDate == nil else { return }
+        startDate = Date()
+    }
+
+    static func endTrackedPracticeSession(
+        _ startDate: inout Date?,
+        kind: PracticeSessionKind
+    ) {
+        guard let sessionStart = startDate else { return }
+        startDate = nil
+
+        let durationSeconds = max(Int(Date().timeIntervalSince(sessionStart)), 0)
+        guard durationSeconds >= minimumTrackedPracticeDurationSeconds else { return }
+
+        Task {
+            await recordPracticeSession(kind: kind, durationSeconds: durationSeconds)
+        }
+    }
+
+    static func recordPracticeSession(
+        kind: PracticeSessionKind,
+        durationSeconds: Int
+    ) async {
+        guard durationSeconds >= minimumTrackedPracticeDurationSeconds else { return }
+
+        await MainActor.run {
+            DailyGoalManager.shared.addPracticeDuration(seconds: durationSeconds)
+        }
+
+        if GuestSessionManager.shared.isGuest() {
+            saveGuestPracticeSession(kind: kind, durationSeconds: durationSeconds)
+            return
+        }
+
+        guard let userID = await currentUserID() else {
+            debugLog("[SupabaseProgressManager] recordPracticeSession: no logged-in user")
+            return
+        }
+
+        do {
+            let event = LessonEventInsert(
+                user_id: userID,
+                chapter_index: -1,
+                part_index: -1,
+                event_type: kind.rawValue,
+                stars: nil,
+                attempts: nil,
+                duration_seconds: durationSeconds,
+                score_points: 0
+            )
+
+            try await db
+                .from("lesson_events")
+                .insert(event)
+                .execute()
+
+            let existingProgress = try await fetchExistingProgress(for: userID)
+            let currentChapter = existingProgress?.current_chapter ?? 1
+            let currentPart = existingProgress?.current_part ?? 0
+            let currentTotal = existingProgress?.total_study_seconds ?? 0
+
+            let profileUpdate = ProfileProgressModel(
+                id: userID.uuidString,
+                current_chapter: currentChapter,
+                current_part: currentPart,
+                last_active_at: iso8601Now(),
+                total_study_seconds: currentTotal + durationSeconds
+            )
+
+            try await db
+                .from("profiles")
+                .upsert(profileUpdate, onConflict: "id")
+                .execute()
+
+            debugLog("[SupabaseProgressManager] Practice session saved — \(kind.rawValue) \(durationSeconds)s")
+        } catch {
+            debugLog("[SupabaseProgressManager] recordPracticeSession error: \(error)")
         }
     }
     
@@ -204,6 +335,168 @@ final class SupabaseProgressManager: Sendable {
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: Date())
     }
+
+    private static func fetchExistingProgress(for userID: UUID) async throws -> ExistingProfileProgress? {
+        let response: [ExistingProfileProgress] = try await db
+            .from("profiles")
+            .select("current_chapter, current_part, total_study_seconds")
+            .eq("id", value: userID.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return response.first
+    }
+
+    static func guestProgressSnapshot() -> GuestProgressSnapshot {
+        if let data = UserDefaults.standard.data(forKey: guestProgressSnapshotKey),
+           let snapshot = try? JSONDecoder().decode(GuestProgressSnapshot.self, from: data) {
+            return snapshot
+        }
+
+        return GuestProgressSnapshot(currentChapter: 1, currentPart: 0, totalStudySeconds: 0)
+    }
+
+    static func guestLessonEvents() -> [GuestLessonEvent] {
+        guard let data = UserDefaults.standard.data(forKey: guestLessonEventsKey),
+              let events = try? JSONDecoder().decode([GuestLessonEvent].self, from: data) else {
+            return []
+        }
+
+        return events
+    }
+
+    static func guestCompletedPartIndexes(for chapterIndex: Int) -> Set<Int> {
+        Set(
+            guestLessonEvents()
+                .filter { $0.chapterIndex == chapterIndex && $0.eventType == "part_completed" && $0.partIndex >= 0 }
+                .map(\.partIndex)
+        )
+    }
+
+    static func guestChapterStars() -> [Int: Int] {
+        var starsMap: [Int: Int] = [:]
+        for event in guestLessonEvents() where event.eventType == "lesson_completed" {
+            let stars = event.stars ?? 1
+            starsMap[event.chapterIndex] = max(starsMap[event.chapterIndex] ?? 0, stars)
+        }
+        return starsMap
+    }
+
+    static func clearGuestProgressData() {
+        UserDefaults.standard.removeObject(forKey: guestLessonEventsKey)
+        UserDefaults.standard.removeObject(forKey: guestProgressSnapshotKey)
+    }
+
+    private static func saveGuestPartCompleted(
+        chapterIndex: Int,
+        partIndex: Int,
+        attempts: Int,
+        scorePoints: Int
+    ) {
+        let event = GuestLessonEvent(
+            chapterIndex: chapterIndex,
+            partIndex: partIndex,
+            eventType: "part_completed",
+            stars: nil,
+            attempts: attempts,
+            durationSeconds: nil,
+            scorePoints: scorePoints,
+            occurredAt: iso8601Now()
+        )
+        appendGuestLessonEvent(event)
+
+        let existingSnapshot = guestProgressSnapshot()
+        let mergedChapter = max(existingSnapshot.currentChapter, chapterIndex)
+        let mergedPart: Int
+
+        if mergedChapter > chapterIndex {
+            mergedPart = existingSnapshot.currentPart
+        } else if mergedChapter > existingSnapshot.currentChapter {
+            mergedPart = partIndex
+        } else {
+            mergedPart = max(existingSnapshot.currentPart, partIndex)
+        }
+
+        saveGuestProgressSnapshot(
+            GuestProgressSnapshot(
+                currentChapter: mergedChapter,
+                currentPart: mergedPart,
+                totalStudySeconds: existingSnapshot.totalStudySeconds
+            )
+        )
+    }
+
+    private static func saveGuestLessonCompleted(
+        chapterIndex: Int,
+        stars: Int,
+        durationSeconds: Int,
+        scorePoints: Int
+    ) {
+        let event = GuestLessonEvent(
+            chapterIndex: chapterIndex,
+            partIndex: -1,
+            eventType: "lesson_completed",
+            stars: stars,
+            attempts: nil,
+            durationSeconds: durationSeconds,
+            scorePoints: scorePoints,
+            occurredAt: iso8601Now()
+        )
+        appendGuestLessonEvent(event)
+
+        let existingSnapshot = guestProgressSnapshot()
+        let completedChapter = chapterIndex + 1
+        let mergedChapter = max(existingSnapshot.currentChapter, completedChapter)
+        let mergedPart = mergedChapter == completedChapter ? 0 : existingSnapshot.currentPart
+
+        saveGuestProgressSnapshot(
+            GuestProgressSnapshot(
+                currentChapter: mergedChapter,
+                currentPart: mergedPart,
+                totalStudySeconds: existingSnapshot.totalStudySeconds + durationSeconds
+            )
+        )
+    }
+
+    private static func saveGuestPracticeSession(
+        kind: PracticeSessionKind,
+        durationSeconds: Int
+    ) {
+        let event = GuestLessonEvent(
+            chapterIndex: -1,
+            partIndex: -1,
+            eventType: kind.rawValue,
+            stars: nil,
+            attempts: nil,
+            durationSeconds: durationSeconds,
+            scorePoints: 0,
+            occurredAt: iso8601Now()
+        )
+        appendGuestLessonEvent(event)
+
+        let existingSnapshot = guestProgressSnapshot()
+        saveGuestProgressSnapshot(
+            GuestProgressSnapshot(
+                currentChapter: existingSnapshot.currentChapter,
+                currentPart: existingSnapshot.currentPart,
+                totalStudySeconds: existingSnapshot.totalStudySeconds + durationSeconds
+            )
+        )
+    }
+
+    private static func appendGuestLessonEvent(_ event: GuestLessonEvent) {
+        var events = guestLessonEvents()
+        events.append(event)
+        if let data = try? JSONEncoder().encode(events) {
+            UserDefaults.standard.set(data, forKey: guestLessonEventsKey)
+        }
+    }
+
+    private static func saveGuestProgressSnapshot(_ snapshot: GuestProgressSnapshot) {
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: guestProgressSnapshotKey)
+        }
+    }
     
     // MARK: - Auth helper
     
@@ -211,9 +504,8 @@ final class SupabaseProgressManager: Sendable {
         do {
             return try await db.auth.session.user.id
         } catch {
-            print("[SupabaseProgressManager] Auth session error: \(error)")
+            debugLog("[SupabaseProgressManager] Auth session error: \(error)")
             return nil
         }
     }
 }
-
