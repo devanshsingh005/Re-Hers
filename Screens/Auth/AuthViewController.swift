@@ -54,6 +54,7 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
     private let contentView = UIView()
     
     // Top title
+    private let backButton = UIButton(type: .system)
     private let appTitleLabel = UILabel()
     private let screenTitleLabel = UILabel()       // "Sign In" / "Sign Up"
     
@@ -170,6 +171,23 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
 private extension AuthViewController {
     
     func setupViews() {
+        // MARK: - Close button (Top Right)
+        
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.filled()
+            config.image = UIImage(systemName: "xmark")
+            config.baseBackgroundColor = .secondarySystemFill
+            config.baseForegroundColor = .secondaryLabel
+            config.cornerStyle = .capsule
+            backButton.configuration = config
+        } else {
+            backButton.setImage(UIImage(systemName: "xmark"), for: .normal)
+            backButton.tintColor = .secondaryLabel
+            backButton.backgroundColor = .secondarySystemFill
+            backButton.layer.cornerRadius = 15
+        }
+        backButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
+        
         // MARK: - Top titles
         
         appTitleLabel.text = "Rehearse"
@@ -357,7 +375,8 @@ private extension AuthViewController {
         contentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
         
-        [appTitleLabel,
+        [backButton,
+         appTitleLabel,
          screenTitleLabel,
          emailTitleLabel,
          emailContainerView,
@@ -472,6 +491,11 @@ private extension AuthViewController {
         
         // Container constraints
         NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            backButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            backButton.widthAnchor.constraint(equalToConstant: 30),
+            backButton.heightAnchor.constraint(equalToConstant: 30),
+            
             appTitleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 40),
             appTitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalMargin),
             appTitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalMargin),
@@ -661,6 +685,14 @@ private extension AuthViewController {
 
 // MARK: - Actions
 extension AuthViewController {
+    
+    @objc private func backButtonTapped() {
+        if let nav = navigationController, nav.viewControllers.count > 1 {
+            nav.popViewController(animated: true)
+        } else {
+            dismiss(animated: true, completion: nil)
+        }
+    }
     
     @objc func toggleLegalAgreement() {
         hasAcceptedSignupLegal.toggle()

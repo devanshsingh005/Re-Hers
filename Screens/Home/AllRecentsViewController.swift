@@ -9,7 +9,7 @@ final class AllRecentsViewController: UIViewController {
 
     private let scrollView  = UIScrollView()
     private let contentStack = UIStackView()
-    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let skeleton = SkeletonContainerView()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,10 +41,6 @@ final class AllRecentsViewController: UIViewController {
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentStack)
 
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-        spinner.hidesWhenStopped = true
-        view.addSubview(spinner)
-
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
@@ -56,14 +52,68 @@ final class AllRecentsViewController: UIViewController {
             contentStack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
-
-            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
+
+        // Add skeleton rows placeholder
+        buildSkeletonRows()
+    }
+
+    private func buildSkeletonRows() {
+        skeleton.backgroundColor = ComponentColors.HomeScreen.background
+        skeleton.show(in: view)
+
+        // Build 7 fake rows inside the skeleton container
+        let inner = UIStackView()
+        inner.axis = .vertical
+        inner.spacing = 12
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        skeleton.addSubview(inner)
+
+        NSLayoutConstraint.activate([
+            inner.topAnchor.constraint(equalTo: skeleton.topAnchor, constant: 16),
+            inner.leadingAnchor.constraint(equalTo: skeleton.leadingAnchor, constant: 16),
+            inner.trailingAnchor.constraint(equalTo: skeleton.trailingAnchor, constant: -16),
+        ])
+
+        for _ in 0..<7 {
+            inner.addArrangedSubview(makeRecentSkeletonRow())
+        }
+    }
+
+    private func makeRecentSkeletonRow() -> UIView {
+        let card = UIView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.backgroundColor = SkeletonTokens.base.withAlphaComponent(0.6)
+        card.layer.cornerRadius = 16
+        card.heightAnchor.constraint(equalToConstant: 80).isActive = true
+
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = 14
+        row.alignment = .center
+        row.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(row)
+
+        let thumb = SkeletonBox(height: nil, cornerRadius: 12)
+        thumb.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        thumb.heightAnchor.constraint(equalToConstant: 52).isActive = true
+
+        let text = SkeletonLineGroup(lines: 2, lineHeight: 13, spacing: 6)
+        let play = SkeletonCircle(diameter: 30)
+
+        row.addArrangedSubview(thumb)
+        row.addArrangedSubview(text)
+        row.addArrangedSubview(play)
+
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
+            row.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+        ])
+        return card
     }
 
     private func fetchAll() {
-        spinner.startAnimating()
         Task {
             do {
                 let recents = try await RecentPlayService.shared.fetchRecents(limit: 50)
@@ -76,7 +126,7 @@ final class AllRecentsViewController: UIViewController {
     }
 
     private func populate(_ recents: [RecentPlay]) {
-        spinner.stopAnimating()
+        skeleton.hide()
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         guard !recents.isEmpty else { showEmpty(); return }
@@ -92,7 +142,7 @@ final class AllRecentsViewController: UIViewController {
     }
 
     private func showEmpty() {
-        spinner.stopAnimating()
+        skeleton.hide()
         let label = UILabel()
         label.text = "No recent plays yet.\nStart playing songs to build your history!"
         label.numberOfLines = 0

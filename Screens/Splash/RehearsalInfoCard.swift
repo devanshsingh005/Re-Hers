@@ -1,155 +1,130 @@
 import SwiftUI
 
-struct RehearsalInfoCard: View {
-    @Binding var isPresented: Bool
-    @State private var appear = false
+// MARK: - RehearsalInfoCard
+// Full-screen overlay (overFullScreen presentation).
+// GeometryReader gives reliable actual screen height for the slide-in offset.
+
+struct RehearsalFeaturesSheetView: View {
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isUp    = false
+    @State private var dragY:  CGFloat = 0
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Dimmed background
-            Color.black.opacity(0.45)
-                .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
 
-            // Card
-            ZStack(alignment: .topTrailing) {
-                VStack(spacing: 0) {
-                    // Drag Handle
-                    Capsule()
-                        .fill(Color(SemanticColors.Text.tertiary).opacity(0.3))
-                        .frame(width: 36, height: 5)
-                        .padding(.top, 12)
+                // ── Dim layer ─────────────────────────────────────────────
+                Color.black
+                    .opacity(isUp ? 0.45 : 0)
+                    .ignoresSafeArea()
+                    .animation(.easeOut(duration: 0.25), value: isUp)
+                    .onTapGesture { slideDown() }
 
-                    // Header
-                    VStack(spacing: 4) {
-                        Text("Welcome to")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(Color(SemanticColors.Text.primary))
+                // ── Card ─────────────────────────────────────────────────
+                ZStack(alignment: .topTrailing) {
+                    VStack(spacing: 0) {
+                        // Drag Handle
+                        Capsule()
+                            .fill(Color.gray.opacity(0.35))
+                            .frame(width: 36, height: 5)
+                            .padding(.top, 12)
 
-                        Text("Rehearse")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(Color(BrandColors.brand))
+                        // Header
+                        VStack(spacing: 4) {
+                            Text("Welcome to")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(Color(SemanticColors.Text.primary))
+                            Text("Rehearse")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(Color(BrandColors.brand))
+                            Text("Learn piano faster with interactive tools\nand guided practice.")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(Color(SemanticColors.Text.secondary))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
+                                .padding(.top, 10)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 28)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 22)
 
-                        Text("Learn piano faster with interactive tools\nand guided practice.")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(Color(SemanticColors.Text.secondary))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(3)
-                            .padding(.top, 10)
+                        // Features
+                        VStack(alignment: .leading, spacing: 0) {
+                            FeatureRow(icon: "doc.viewfinder",  title: "Scan & Play",       description: "Scan sheet music and instantly start practicing.")
+                            FeatureRow(icon: "pianokeys",        title: "Animations",        description: "See animated keys that guide your fingers while playing.")
+                            FeatureRow(icon: "play.circle",      title: "Play Along",        description: "Practice songs in real time with guided playback.")
+                            FeatureRow(icon: "dumbbell",         title: "Build Your Basics", description: "Strengthen core piano skills with structured exercises.")
+                        }
+
+                        // Got It
+                        Button(action: slideDown) {
+                            Text("Got It")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color(SemanticColors.Background.primaryButton))
+                                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                        .padding(.bottom, max(geo.safeAreaInsets.bottom + 20, 44))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 36) // Increased for breathing space
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
+                    .background(
+                        ZStack {
+                            Color(SemanticColors.Background.modal)
+                            BlurView(style: .systemThinMaterial).opacity(0.72)
+                        }
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .shadow(color: .black.opacity(0.18), radius: 28, x: 0, y: -8)
 
-
-
-                    // Features
-                    VStack(alignment: .leading, spacing: 0) {
-                        FeatureRow(
-                            icon: "doc.viewfinder",
-                            title: "Scan & Play",
-                            description: "Scan sheet music and instantly start practicing."
-                        )
-
-                        FeatureRow(
-                            icon: "pianokeys",
-                            title: "Animations",
-                            description: "See animated keys that guide your fingers while playing."
-                        )
-
-                        FeatureRow(
-                            icon: "play.circle",
-                            title: "Play Along",
-                            description: "Practice songs in real time with guided playback."
-                        )
-
-                        FeatureRow(
-                            icon: "dumbbell",
-                            title: "Build Your Basics",
-                            description: "Strengthen core piano skills with structured exercises."
-                        )
+                    // Close ×
+                    Button(action: slideDown) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(SemanticColors.Background.secondaryButton))
+                                .frame(width: 30, height: 30)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(Color(BrandColors.brand))
+                        }
                     }
-                    .padding(.vertical, 8) // Extra space between headers and button
-
-
-
-                    // Got It Button
-                    Button(action: dismiss) {
-                        Text("Got It")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color(SemanticColors.Background.primaryButton))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                    .padding(.bottom, 36) // Extra bottom breathing space
+                    .padding(14)
                 }
-                .background(
-                    ZStack {
-                        // Adaptive background color from Design System
-                        Color(SemanticColors.Background.modal).opacity(0.85)
-                        // Glassy blur effect (adaptive material)
-                        BlurView(style: .systemThinMaterial).opacity(0.7)
-                    }
+                // Slide from fully below screen → resting position
+                .offset(y: isUp ? max(0, dragY) : geo.size.height + 60)
+                .animation(
+                    isUp ? nil : .spring(response: 0.42, dampingFraction: 0.82),
+                    value: isUp
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                .shadow(
-                    color: Color(SemanticColors.Shadow.level3),
-                    radius: 30, x: 0, y: 10
+                .gesture(
+                    DragGesture()
+                        .onChanged { v in dragY = max(0, v.translation.height) }
+                        .onEnded   { v in
+                            if v.translation.height > 100 { slideDown() }
+                            else { withAnimation(.spring(response: 0.32, dampingFraction: 0.75)) { dragY = 0 } }
+                        }
                 )
-
-                // Close button
-                Button(action: dismiss) {
-                    ZStack {
-                        Circle()
-                            .fill(Color(SemanticColors.Background.secondaryButton))
-                            .frame(width: 30, height: 30)
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(Color(BrandColors.brand))
-                    }
-                }
-                .padding(14)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
-            .offset(y: appear ? 0 : 800)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        if value.translation.height > -20 {
-                            // Only allow dragging down
-                        }
-                    }
-                    .onEnded { value in
-                        if value.translation.height > 80 {
-                            dismiss()
-                        }
-                    }
-            )
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
         }
+        .ignoresSafeArea()
         .onAppear {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
-                appear = true
-            }
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { isUp = true }
         }
     }
 
-    private func dismiss() {
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-            appear = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            isPresented = false
-        }
+    private func slideDown() {
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) { isUp = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { dismiss() }
     }
 }
 
 // MARK: - Feature Row
+
 struct FeatureRow: View {
     let icon: String
     let title: String
@@ -165,7 +140,6 @@ struct FeatureRow: View {
                     .font(.system(size: 19, weight: .medium))
                     .foregroundColor(Color(BrandColors.brand))
             }
-
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
@@ -176,7 +150,6 @@ struct FeatureRow: View {
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -184,12 +157,12 @@ struct FeatureRow: View {
     }
 }
 
-// MARK: - Blur View Helper
+// MARK: - Blur helper
+
 struct BlurView: UIViewRepresentable {
     var style: UIBlurEffect.Style
     func makeUIView(context: Context) -> UIVisualEffectView {
-        return UIVisualEffectView(effect: UIBlurEffect(style: style))
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
     }
     func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
 }
-

@@ -109,12 +109,7 @@ final class DiscoverViewController: UIViewController {
         return tv
     }()
 
-    private lazy var spinner: UIActivityIndicatorView = {
-        let s = UIActivityIndicatorView(style: .medium)
-        s.hidesWhenStopped = true
-        s.translatesAutoresizingMaskIntoConstraints = false
-        return s
-    }()
+    private let discoverSkeleton = DiscoverSkeletonView()
 
     private lazy var scrollView: UIScrollView = {
         let sv = UIScrollView()
@@ -296,7 +291,7 @@ final class DiscoverViewController: UIViewController {
         contentView.addSubview(headerContainer)
 
         [searchBar, filterRow, chipsScrollView,
-         songsTitleLabel, tableView, emptyLabel, spinner]
+         songsTitleLabel, tableView, emptyLabel]
             .forEach { contentView.addSubview($0) }
 
         // Install a starting table height constraint (updated after each reload)
@@ -359,8 +354,6 @@ final class DiscoverViewController: UIViewController {
             // Overlays
             emptyLabel.centerXAnchor.constraint(equalTo: c.centerXAnchor),
             emptyLabel.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 60),
-            spinner.centerXAnchor.constraint(equalTo: c.centerXAnchor),
-            spinner.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 60),
         ])
 
         chipsHeightConstraint = chipsScrollView.heightAnchor.constraint(equalToConstant: 0)
@@ -481,7 +474,7 @@ final class DiscoverViewController: UIViewController {
     // MARK: Data & Filtering
 
     private func fetchSongs() {
-        spinner.startAnimating()
+        discoverSkeleton.show(in: view)
         tableView.isHidden = true
         emptyLabel.isHidden = true
 
@@ -492,7 +485,7 @@ final class DiscoverViewController: UIViewController {
                     self.allSongs = songs
                     self.updateDynamicFilters(from: songs)
                     self.applyFilters()
-                    self.spinner.stopAnimating()
+                    self.discoverSkeleton.hide()
                     self.tableView.isHidden = false
                 }
             } catch {
@@ -502,7 +495,7 @@ final class DiscoverViewController: UIViewController {
                     fallback: "We couldn't load songs right now. Please try again."
                 )
                 await MainActor.run {
-                    self.spinner.stopAnimating()
+                    self.discoverSkeleton.hide()
                     self.showError(message)
                 }
             }

@@ -53,7 +53,7 @@ class PlaylistSongDetailViewController: UIViewController {
     private let segmentControl    = UISegmentedControl(items: ["Original", "Labeled"])
     private let pageLabel         = UILabel()
     private let pdfView           = PDFView()
-    private let loadingIndicator  = UIActivityIndicatorView(style: .medium)
+    private let pdfSkeleton       = PDFSkeletonView()
     private let errorLabel        = UILabel()
     private let playAlongButton   = UIButton(type: .system)
     private let animationButton   = UIButton(type: .system)
@@ -148,8 +148,7 @@ class PlaylistSongDetailViewController: UIViewController {
         pdfView.isHidden = true
         pdfView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(didTapPDF)))
 
-        loadingIndicator.color = ComponentColors.SongDetailScreen.primaryActionFill
-        loadingIndicator.hidesWhenStopped = true
+        pdfSkeleton.translatesAutoresizingMaskIntoConstraints = false
 
         errorLabel.text = "Sheet music is still processing.\nPlease wait a moment and try again."
         errorLabel.numberOfLines = 0
@@ -173,7 +172,7 @@ class PlaylistSongDetailViewController: UIViewController {
         buttonStack.distribution = .fillEqually
 
         let views: [UIView] = [albumArt, titleLabel, artistLabel, segmentControl,
-                               pageLabel, pdfView, loadingIndicator, errorLabel, buttonStack]
+                               pageLabel, pdfView, pdfSkeleton, errorLabel, buttonStack]
         views.forEach { $0.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview($0) }
 
         let cx = contentView.centerXAnchor
@@ -200,8 +199,10 @@ class PlaylistSongDetailViewController: UIViewController {
             pdfView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             pdfView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            loadingIndicator.centerXAnchor.constraint(equalTo: pdfView.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: pdfView.centerYAnchor),
+            pdfSkeleton.topAnchor.constraint(equalTo: pdfView.topAnchor),
+            pdfSkeleton.leadingAnchor.constraint(equalTo: pdfView.leadingAnchor),
+            pdfSkeleton.trailingAnchor.constraint(equalTo: pdfView.trailingAnchor),
+            pdfSkeleton.bottomAnchor.constraint(equalTo: pdfView.bottomAnchor),
 
             errorLabel.centerXAnchor.constraint(equalTo: pdfView.centerXAnchor),
             errorLabel.centerYAnchor.constraint(equalTo: pdfView.centerYAnchor),
@@ -366,7 +367,7 @@ class PlaylistSongDetailViewController: UIViewController {
             showPDF(doc)
         } else {
             pdfView.isHidden = true; errorLabel.isHidden = true
-            loadingIndicator.startAnimating()
+            pdfSkeleton.show(in: view)
             Task {
                 await loadSelectedSegmentFromCurrentSource(isOriginal: isOriginal)
             }
@@ -382,7 +383,7 @@ class PlaylistSongDetailViewController: UIViewController {
     private func loadSheetData() {
         pdfView.isHidden = true
         errorLabel.isHidden = true
-        loadingIndicator.startAnimating()
+        pdfSkeleton.show(in: view)
 
         if let scanId = passedSheetScanId {
             sourceContext = .scan(scanId: scanId)
@@ -985,12 +986,12 @@ class PlaylistSongDetailViewController: UIViewController {
 
         pdfView.layoutIfNeeded()
         if let p = doc.page(at: 0) { pdfView.go(to: p) }
-        loadingIndicator.stopAnimating()
+        pdfSkeleton.hide()
         errorLabel.isHidden = true
     }
 
     private func showError() {
-        loadingIndicator.stopAnimating()
+        pdfSkeleton.hide()
         pdfView.isHidden = true
         errorLabel.isHidden = false
     }

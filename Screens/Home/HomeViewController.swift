@@ -32,10 +32,19 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
     // Store the top song for navigation
     var topSong: Song?
 
+    // MARK: - Skeleton
+    private let homeSkeleton = HomeSkeletonView()
+    /// Tracks how many of the 4 initial fetches have finished.
+    private var fetchesRemaining = 0
+
     override func viewDidLoad() {
         super.viewDidLoad()
         scrollView.delegate = self
         setupUI()
+
+        // Show skeleton immediately before any network call
+        showHomeSkeleton(fetchCount: 4)
+
         Task {
             await DailyGoalManager.shared.refreshFromSupabase()
         }
@@ -147,15 +156,18 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                 let list = try await PlaylistService.shared.fetchPlaylists()
                 await MainActor.run {
                     self.populatePlaylists(list)
+                    self.fetchDidFinish()
                 }
             } catch {
                 debugLog("Error fetching playlists: \(error)")
+                await MainActor.run { self.fetchDidFinish() }
             }
         }
     }
     
     private func fetchTopSong() {
         Task {
+            defer { Task { await MainActor.run { self.fetchDidFinish() } } }
             do {
                 // 1. Try from recents first!
                 let recents = try await RecentPlayService.shared.fetchRecents(limit: 1)
@@ -325,10 +337,27 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
                 let recents = try await RecentPlayService.shared.fetchRecents(limit: 4)
                 await MainActor.run {
                     self.populateRecents(recents)
+                    self.fetchDidFinish()
                 }
             } catch {
                 debugLog("Error fetching recents: \(error)")
+                await MainActor.run { self.fetchDidFinish() }
             }
+        }
+    }
+
+    // MARK: - Skeleton helpers
+
+    private func showHomeSkeleton(fetchCount: Int) {
+        fetchesRemaining = fetchCount
+        homeSkeleton.show(in: view)
+    }
+
+    private func fetchDidFinish() {
+        guard fetchesRemaining > 0 else { return }
+        fetchesRemaining -= 1
+        if fetchesRemaining == 0 {
+            homeSkeleton.hide()
         }
     }
 

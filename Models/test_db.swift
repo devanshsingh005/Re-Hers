@@ -6,4 +6,6 @@ struct PlaylistQueryResponse: Codable {
 }
 
 // Just checking if we can compile and run a simple test or read files
-print("Test script ready")
+func testDBConnection() {
+    print("Test script ready")
+}
