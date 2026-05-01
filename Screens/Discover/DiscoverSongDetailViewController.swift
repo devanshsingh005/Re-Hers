@@ -55,7 +55,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private let sheetContainer      = UIView()
     private let pdfView             = PDFView()
-    private let pdfLoadingIndicator = UIActivityIndicatorView(style: .medium)
+    private let pdfSkeleton         = PDFSkeletonView()
     private let pdfErrorLabel       = UILabel()
 
     private let bottomSpacer = UIView()
@@ -318,10 +318,8 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfView.addGestureRecognizer(pdfTap)
         sheetContainer.addSubview(pdfView)
 
-        pdfLoadingIndicator.color = ComponentColors.SongDetailScreen.primaryActionFill
-        pdfLoadingIndicator.hidesWhenStopped = true
-        pdfLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
-        sheetContainer.addSubview(pdfLoadingIndicator)
+        pdfSkeleton.translatesAutoresizingMaskIntoConstraints = false
+        sheetContainer.addSubview(pdfSkeleton)
 
         pdfErrorLabel.text = "Sheet music unavailable.\nThe file might not be uploaded yet."
         pdfErrorLabel.numberOfLines = 0
@@ -373,8 +371,10 @@ class DiscoverSongDetailViewController: UIViewController {
             buttonStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             buttonStack.heightAnchor.constraint(equalToConstant: 46),
 
-            pdfLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
-            pdfLoadingIndicator.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
+            pdfSkeleton.topAnchor.constraint(equalTo: sheetContainer.topAnchor),
+            pdfSkeleton.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
+            pdfSkeleton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
+            pdfSkeleton.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor),
 
             pdfErrorLabel.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             pdfErrorLabel.centerYAnchor.constraint(equalTo: sheetContainer.centerYAnchor),
@@ -416,7 +416,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 renderPDF(doc)
             } else {
                 pdfView.isHidden = true
-                pdfLoadingIndicator.startAnimating()
+                pdfSkeleton.show(in: sheetContainer)
                 pdfErrorLabel.isHidden = true
             }
         } else {
@@ -424,7 +424,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 renderPDF(doc)
             } else {
                 pdfView.isHidden = true
-                pdfLoadingIndicator.startAnimating()
+                pdfSkeleton.show(in: sheetContainer)
                 pdfErrorLabel.isHidden = true
             }
         }
@@ -553,7 +553,7 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Fetch Data
     private func loadSheetData() {
         sheetLoadTask?.cancel()
-        pdfLoadingIndicator.startAnimating()
+        pdfSkeleton.show(in: sheetContainer)
         pdfErrorLabel.isHidden = true
 
         sheetLoadTask = Task {
@@ -677,7 +677,7 @@ class DiscoverSongDetailViewController: UIViewController {
         pdfView.isHidden  = false
         pdfView.layoutIfNeeded()
         if let p = doc.page(at: 0) { pdfView.go(to: p) }
-        pdfLoadingIndicator.stopAnimating()
+        pdfSkeleton.hide()
         pdfErrorLabel.isHidden = true
     }
 
@@ -692,7 +692,7 @@ class DiscoverSongDetailViewController: UIViewController {
     }
 
     private func showPDFError() {
-        pdfLoadingIndicator.stopAnimating()
+        pdfSkeleton.hide()
         pdfErrorLabel.isHidden = false
     }
 

@@ -322,6 +322,10 @@ class LessonMapViewController: UIViewController {
     // ── Single source of truth — always loaded from Supabase ─────────────
     /// Starts as all-locked; replaced on every viewWillAppear from Supabase.
     private var chapters: [MusicChapter] = allChapters.map { $0.with(status: .locked) }
+
+    // MARK: - Skeleton
+    private let lessonSkeleton = LessonMapSkeletonView()
+    private var skeletonShown = false
     // ─────────────────────────────────────────────────────────────────────
     // Header progress refs
     private var headerProgressLabel:     UILabel?
@@ -411,6 +415,11 @@ class LessonMapViewController: UIViewController {
     // MARK: - Supabase Progress Load
 
     private func loadProgressFromSupabase() {
+        // Only show skeleton on first load
+        if !skeletonShown {
+            skeletonShown = true
+            lessonSkeleton.show(in: view)
+        }
         Task {
             if GuestSessionManager.shared.isGuest() {
                 let snapshot = SupabaseProgressManager.guestProgressSnapshot()
@@ -421,6 +430,7 @@ class LessonMapViewController: UIViewController {
                         currentChapter: snapshot.currentChapter,
                         chapterStars: starsMap
                     )
+                    self.lessonSkeleton.hide()
                     self.rebuildPath()
                 }
                 return
@@ -434,11 +444,13 @@ class LessonMapViewController: UIViewController {
                         currentChapter: currentChapter,
                         chapterStars:   starsMap
                     )
+                    self.lessonSkeleton.hide()
                     self.rebuildPath()
                 }
             } catch {
                 debugLog("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
                 await MainActor.run {
+                    self.lessonSkeleton.hide()
                     self.chapters = applyProgress(currentChapter: 1)
                     self.rebuildPath()
                 }

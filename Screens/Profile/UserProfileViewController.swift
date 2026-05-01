@@ -65,6 +65,9 @@ final class UserProfileViewController: UIViewController {
     private weak var activeImagePicker: UIImagePickerController?
     private var pendingDeleteAccountBearerToken: String?
 
+    // MARK: - Skeleton
+    private let profileSkeleton = ProfileSkeletonView()
+
     // MARK: - Init
     init() {
         super.init(nibName: nil, bundle: nil)
@@ -113,6 +116,8 @@ final class UserProfileViewController: UIViewController {
         )
         
         setupUI()
+        // Show skeleton while data loads
+        profileSkeleton.show(in: view)
         loadData()
     }
 
@@ -656,6 +661,8 @@ final class UserProfileViewController: UIViewController {
             await DailyGoalManager.shared.refreshFromSupabase()
             await loadProfile()
             await loadStats()
+            // Hide skeleton once both profile + stats have resolved
+            await MainActor.run { profileSkeleton.hide() }
         }
     }
 
