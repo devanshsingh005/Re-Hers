@@ -104,16 +104,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let root = window?.rootViewController,
               root.presentedViewController == nil else { return }
 
-        let hostingController = UIHostingController(
-            rootView: RehearsalInfoCardWrapper { [weak root] in
-                GuestSessionManager.shared.hasSeenInfoCard = true
-                root?.dismiss(animated: true)
-            }
-        )
-        hostingController.modalPresentationStyle = .overFullScreen
-        hostingController.view.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        let vc = UIHostingController(rootView: RehearsalFeaturesSheetView())
+        // overFullScreen → underlying app stays visible through our dim layer
+        vc.modalPresentationStyle = .overFullScreen
+        // transparent → our SwiftUI ZStack owns ALL background/dim rendering
+        vc.view.backgroundColor  = .clear
 
-        root.present(hostingController, animated: true)
+        // animated: false → suppresses the system's own slide-up so only
+        // our GeometryReader-driven spring animation from below plays.
+        root.present(vc, animated: false)
+        // Mark seen immediately (user has seen it whether they dismiss via Got It or X)
+        GuestSessionManager.shared.hasSeenInfoCard = true
     }
 
     /// Route to the login / sign-up screen
@@ -174,26 +175,5 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Called as the scene transitions from the foreground to the background.
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
-    }
-}
-
-private struct RehearsalInfoCardWrapper: View {
-    let onDismiss: () -> Void
-
-    @State private var isPresented = true
-
-    var body: some View {
-        RehearsalInfoCard(
-            isPresented: Binding(
-                get: { isPresented },
-                set: { updatedValue in
-                    let wasPresented = isPresented
-                    isPresented = updatedValue
-
-                    guard wasPresented, !updatedValue else { return }
-                    onDismiss()
-                }
-            )
-        )
     }
 }
