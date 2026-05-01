@@ -119,7 +119,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// Route to the login / sign-up screen
     func showLoginScreen() {
-        let authVC = AuthViewController()
+        let authVC = AuthViewController(showBackButton: false)
         let nav = UINavigationController(rootViewController: authVC)
         nav.setNavigationBarHidden(true, animated: false)
         setRootViewController(nav)

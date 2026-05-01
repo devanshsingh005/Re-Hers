@@ -99,6 +99,7 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
     private let initialMode: AuthMode
     private let passwordRecoveryService: PasswordRecoveryService
     private let passwordRecoveryRequestGate = PasswordRecoveryRequestGate()
+    private var showBackButton: Bool = true
     var postLoginRouteHandler: (@MainActor () -> Void)?
     
     // Async form state
@@ -125,10 +126,12 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
 
     init(
         initialMode: AuthMode = .logIn,
-        passwordRecoveryService: PasswordRecoveryService = PasswordRecoveryService()
+        passwordRecoveryService: PasswordRecoveryService = PasswordRecoveryService(),
+        showBackButton: Bool = true
     ) {
         self.initialMode = initialMode
         self.passwordRecoveryService = passwordRecoveryService
+        self.showBackButton = showBackButton
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -148,6 +151,8 @@ final class AuthViewController: UIViewController, UITextFieldDelegate {
         updateTextsForMode()
         
         setupKeyboardDismiss()
+        
+        backButton.isHidden = !showBackButton
     }
     
     private func setupKeyboardDismiss() {

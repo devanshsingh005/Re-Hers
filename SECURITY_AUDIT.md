@@ -328,7 +328,7 @@ print("[Upload] outputURL=\(outputURL)")
 **File:** `Screens/MainUploadScreen/UploadScreen.swift` line 828
 **Code:**
 ```swift
-let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
+let url      = URL(string: "https://re-hers-api.delightfulsea-b059d6c8.westus2.azurecontainerapps.io/convert")!
 ...
 req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 ```
@@ -340,7 +340,7 @@ req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 **File:** `Screens/MainUploadScreen/UploadScreen.swift` line 828
 **Code:**
 ```swift
-let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
+let url      = URL(string: "https://re-hers-api.delightfulsea-b059d6c8.westus2.azurecontainerapps.io/convert")!
 ```
 **Why it is a problem:** This is a force unwrap in a token-bearing upload path. Under the audit rules, that is a crash vector and therefore a finding.
 **Exact fix:** Replace the force unwrap with guarded URL construction and fail the request cleanly if configuration is invalid.
@@ -463,7 +463,7 @@ catch { print("[Auth] \(error)"); return nil }
 **File:** `Screens/MainDiscoverScreen/DiscoverSongPreviewViewController.swift` line 455
 **Code:**
 ```swift
-let url      = URL(string: "https://re-hers-api.bravesea-cec8c7b0.eastus.azurecontainerapps.io/convert")!
+let url      = URL(string: "https://re-hers-api.delightfulsea-b059d6c8.westus2.azurecontainerapps.io/convert")!
 ...
 req.setValue("Bearer \(token)",                            forHTTPHeaderField: "Authorization")
 ```
