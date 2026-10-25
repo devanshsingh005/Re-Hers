@@ -21,8 +21,9 @@ Engine is not available in the Simulator).
 3. Add the **OemerKit** library to your app target.
 
 The package ships its resources (two Core ML models, ~53 MB, and the symbol classifiers,
-~4.4 MB). Models are compiled on the device the first time they are used and cached in
-*Application Support/OemerKit*.
+~4.4 MB). In an Xcode build the models are compiled at build time and loaded straight from
+the bundle; with plain `swift build` they are compiled the first time they are used and cached
+in *Application Support/OemerKit*.
 
 ## Use it
 

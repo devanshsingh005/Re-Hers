@@ -20,6 +20,9 @@ enum ModelStore {
     static let modelVersion = "1"
 
     static func compiledURL(named name: String) async throws -> URL {
+        // Xcode compiles .mlpackage resources at build time (even with .copy), so app bundles
+        // ship a ready .mlmodelc; plain SwiftPM builds ship the .mlpackage, compiled below.
+        if let bundled = Bundle.module.url(forResource: name, withExtension: "mlmodelc") { return bundled }
         guard let packageURL = Bundle.module.url(forResource: name, withExtension: "mlpackage") else {
             throw OMRError.modelUnavailable("\(name).mlpackage is missing from the OemerKit bundle")
         }
