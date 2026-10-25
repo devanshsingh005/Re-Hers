@@ -1,6 +1,12 @@
 // swift-tools-version:5.9
 import PackageDescription
 
+// The engine is 15-20x slower unoptimized, which makes Debug builds of an app (Xcode's default
+// for Run) slow and hot on a phone. Optimize the library targets in Debug too; Release is
+// unchanged. Unsafe flags are fine for a root or local (path) package; a remote dependency on
+// this package would have to drop them.
+let optimizedInDebug: [SwiftSetting] = [.unsafeFlags(["-O"], .when(configuration: .debug))]
+
 let package = Package(
     name: "OemerKit",
     platforms: [
@@ -16,7 +22,8 @@ let package = Package(
     targets: [
         .target(
             name: "OemerCore",
-            path: "Sources/OemerCore"
+            path: "Sources/OemerCore",
+            swiftSettings: optimizedInDebug
         ),
         .target(
             name: "OemerKit",
@@ -27,7 +34,8 @@ let package = Package(
                 .copy("Resources/SegNetDetails.mlpackage"),
                 .copy("Resources/classifiers.bin"),
                 .copy("Resources/selftest.bin"),
-            ]
+            ],
+            swiftSettings: optimizedInDebug
         ),
         // Command-line checker used to compare the Swift engine with the Python reference.
         .executableTarget(
