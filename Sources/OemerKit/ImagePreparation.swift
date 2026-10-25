@@ -57,7 +57,8 @@ enum ImagePreparation {
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(target.width, target.height),
+            // never above the image's own size: iOS logs an error for that (and returns the full image anyway)
+            kCGImageSourceThumbnailMaxPixelSize: min(max(target.width, target.height), max(pw, ph)),
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             throw OMRError.imageDecodingFailed
