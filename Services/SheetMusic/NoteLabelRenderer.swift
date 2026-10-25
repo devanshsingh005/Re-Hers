@@ -27,6 +27,11 @@ nonisolated enum NoteLabelRenderer {
     static let offsetBelowStaff: CGFloat = 2.5
     static let minGapScale: CGFloat = 2.2
     static let lineHeightScale: CGFloat = 1.8
+    /// Added to label_notes.py's rule: a label never covers a notehead of its own staff (notes
+    /// on ledger lines below the staff reach that fixed line); it starts below the lowest one it
+    /// would overlap. Half a label's width and the baseline's clearance, in label heights.
+    static let halfWidthScale: CGFloat = 0.9
+    static let clearanceScale: CGFloat = 0.95
 
     /// Lays out one label per note: "A4", "G#5", "Bb4" (the name OemerKit reports).
     static func layout(_ notes: [LocatedNote]) -> [Label] {
@@ -34,8 +39,9 @@ nonisolated enum NoteLabelRenderer {
         var labels: [Label] = []
         let byStaff = Dictionary(grouping: notes) { StaffKey(system: $0.system, staff: $0.staff) }
         for key in byStaff.keys.sorted(by: { ($0.system, $0.staff) < ($1.system, $1.staff) }) {
+            let staffNotes = byStaff[key]!.sorted(by: { $0.rect.midX < $1.rect.midX })
             var placed: [(x: CGFloat, y: CGFloat)] = []
-            for note in byStaff[key]!.sorted(by: { $0.rect.midX < $1.rect.midX }) {
+            for note in staffNotes {
                 let space = CGFloat(note.staffSpace)
                 guard space > 0, space.isFinite else { continue }
                 let fontSize = space * fontScale
@@ -43,6 +49,11 @@ nonisolated enum NoteLabelRenderer {
                 let lineHeight = fontSize * lineHeightScale
                 let x = note.rect.midX
                 var y = CGFloat(note.staffBottom) + space * offsetBelowStaff
+                let halfWidth = fontSize * halfWidthScale
+                let lowestCovered = staffNotes
+                    .filter { abs($0.rect.midX - x) < halfWidth + $0.rect.width / 2 }
+                    .map(\.rect.maxY).max() ?? 0
+                y = max(y, lowestCovered + fontSize * clearanceScale)
                 for p in placed where abs(x - p.x) < minGap && abs(y - p.y) < lineHeight {
                     y = p.y + lineHeight
                 }
