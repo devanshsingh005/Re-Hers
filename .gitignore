@@ -1,10 +1,11 @@
 # Xcode
 *.xcuserstate
 *.xcworkspace
-!Re-Hearse_v1.xcodeproj/project.xcworkspace/
-!Re-Hearse_v1.xcodeproj/project.xcworkspace/xcshareddata/
-!Re-Hearse_v1.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
-!Re-Hearse_v1.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+!Rehearse.xcodeproj/project.xcworkspace/
+!Rehearse.xcodeproj/project.xcworkspace/xcshareddata/
+!Rehearse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+!Rehearse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+xcuserdata/
 DerivedData/
 build/
 *.mode1v3

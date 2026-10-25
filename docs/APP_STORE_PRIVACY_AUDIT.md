@@ -2,22 +2,28 @@
 
 ## Pinned SDK Versions
 
-Source: `Re-Hearse_v1.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
+Source: `Rehearse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` (October 2026;
+the older `Re-Hearse_v1.xcodeproj` was removed)
 
-- `supabase-swift` `2.38.0`
-- `swift-crypto` `4.2.0`
-- `swift-asn1` `1.5.1`
-- `swift-clocks` `1.0.6`
-- `swift-concurrency-extras` `1.3.2`
-- `swift-http-types` `1.5.1`
-- `xctest-dynamic-overlay` `1.8.0`
+- `supabase-swift` `2.55.4`
+- `swift-crypto` `4.5.2`
+- `swift-asn1` `1.7.3`
+- `swift-clocks` `1.1.1`
+- `swift-concurrency-extras` `1.4.3`
+- `swift-http-types` `1.8.0`
+- `xctest-dynamic-overlay` `1.13.1`
+
+The same file also pins Firebase (`firebase-ios-sdk` `11.15.0`) and `SkeletonView` `1.31.0`.
+OemerKit is a local package in the repo (`OemerKit/`) and is not listed there.
 
 ## Manifest Verification
 
 - Inspected locally:
   - `Re-Hearse_v1/PrivacyInfo.xcprivacy`
   - `build/Re-Hearse_v1.xcarchive/Products/Applications/Re-Hearse_v1.app/swift-crypto_Crypto.bundle/PrivacyInfo.xcprivacy`
-  - `Re-Hearse_v1.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
+  - the project's `Package.resolved` at the time
+- These checks were made with the earlier pins (`supabase-swift` `2.38.0`, `swift-crypto` `4.2.0`);
+  repeat them with the current pins above before the next submission.
 - `swift-crypto` privacy manifests were observed locally in the built app archive.
 - No `PrivacyInfo.xcprivacy` file was found locally for `supabase-swift` `2.38.0` in this environment.
 - App-level disclosures should reflect the shipped iOS app's actual collected data and runtime use, not inferred SDK capabilities alone. Based on the local code inspection, that includes:

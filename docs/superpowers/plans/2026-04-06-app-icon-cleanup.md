@@ -62,11 +62,11 @@ git commit -m "clean up shared app icon asset"
 ### Task 2: Verify The Project Still Builds With The Cleaned Asset Set
 
 **Files:**
-- Test: `Re-Hearse_v1.xcodeproj`
+- Test: `Rehearse.xcodeproj`
 
 - [ ] **Step 1: Run a simulator build**
 
-Run: `xcodebuild build -quiet -project /Users/user30/Documents/Re-Hers/Re-Hearse_v1.xcodeproj -scheme Re-Hearse_v1 -destination 'platform=iOS Simulator,name=iPhone 17'`
+Run: `xcodebuild build -quiet -project Rehearse.xcodeproj -scheme Re-Hearse_v1 -destination 'platform=iOS Simulator,name=iPhone 17'`
 Expected: build succeeds; any remaining warnings should be existing warnings, not new app icon structure failures.
 
 - [ ] **Step 2: Confirm the icon cleanup matches the approved scope**

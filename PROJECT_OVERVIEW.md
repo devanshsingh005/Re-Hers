@@ -181,9 +181,6 @@ Rehearse/
 └── docs/                       # architecture and audit notes
 ```
 
-`Re-Hearse_v1.xcodeproj` is an older project file that no longer builds the current sources;
-use `Rehearse.xcodeproj`.
-
 ---
 
 ## 🚀 Development Setup
