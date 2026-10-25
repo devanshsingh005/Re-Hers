@@ -2,9 +2,9 @@
 //  NoteLabelRenderer.swift
 //  Re-Hearse_v1
 //
-//  English note names under the notes of a recognized page, placed by the same rules the
-//  old server-side label_notes.py used, but from the note and staff positions OemerKit found
-//  on the page itself instead of from the MusicXML layout.
+//  English note names under the notes of a recognized page. The placement rules come from
+//  the label_notes.py script of the former conversion server (since removed); here they work
+//  from the note and staff positions OemerKit found on the page instead of the MusicXML layout.
 //
 
 import OemerKit
@@ -20,14 +20,14 @@ nonisolated enum NoteLabelRenderer {
         let fontSize: CGFloat
     }
 
-    /// label_notes.py: label height 1.3 staff spaces, baseline 2.5 staff spaces below the
+    /// The server's rules: label height 1.3 staff spaces, baseline 2.5 staff spaces below the
     /// staff's bottom line; a label closer than 2.2 label heights to one already placed on the
     /// same staff moves down by 1.8 label heights.
     static let fontScale: CGFloat = 1.3
     static let offsetBelowStaff: CGFloat = 2.5
     static let minGapScale: CGFloat = 2.2
     static let lineHeightScale: CGFloat = 1.8
-    /// Added to label_notes.py's rule: a label never covers a notehead of its own staff (notes
+    /// Added to the server's rules: a label never covers a notehead of its own staff (notes
     /// on ledger lines below the staff reach that fixed line); it starts below the lowest one it
     /// would overlap. Half a label's width and the baseline's clearance, in label heights.
     static let halfWidthScale: CGFloat = 0.9

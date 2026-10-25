@@ -35,10 +35,10 @@ If you are new to the project, use this order:
 
 | Feature | Main controller file(s) | Core logic file(s) |
 | --- | --- | --- |
-| Animation | `Screens/MainAnimationScreen/AnimationViewController.swift` | `Screens/MainAnimationScreen/MusicJSONLoader.swift`, `Screens/MainAnimationScreen/SheetMusicView.swift`, `Screens/MainAnimationScreen/PianoView.swift` |
-| Play Along | `Screens/MainPlayAlongScreen/PlayAlongViewController.swift` | `PlayAlongEngine` inside same file, `Common/Audio/PitchDetector.swift`, `Models/PianoDataManager.swift` |
-| Note Labelling | `Screens/MainUploadScreen/UploadPageNextViewController.swift` (frontend), `backend/app/main.py` (API) | `backend/app/dispatcher.py`, `backend/app/label_notes.py`, `backend/app/storage.py` |
-| Chord Recognition | `Screens/MainChordRecognitionScreen/MainChordRecognitionScreen.swift` | `Common/Audio/PitchDetector.swift` (active live logic) |
+| Animation | `Screens/PianoAnimation/AnimationViewController.swift` | `Screens/PianoAnimation/MusicJSONLoader.swift`, `Screens/PianoAnimation/SheetMusicView.swift`, `Screens/PianoAnimation/PianoView.swift` |
+| Play Along | `Screens/PlayAlong/PlayAlongViewController.swift` | `PlayAlongEngine` inside same file, `Components/PitchDetector.swift`, `Models/PianoDataManager.swift` |
+| Note Labelling | `Screens/Upload/UploadPageNextViewController.swift` | `Services/SheetMusic/OnDeviceSheetConverter.swift`, `Services/SheetMusic/NoteLabelRenderer.swift`, `Services/SheetMusic/LocalSheetLibrary.swift`, `OemerKit/` |
+| Chord Recognition | `Screens/ChordRecognition/MainChordRecognitionScreen.swift` | `Components/PitchDetector.swift` (active live logic) |
 
 ---
 
@@ -46,16 +46,17 @@ If you are new to the project, use this order:
 
 ```mermaid
 flowchart TD
-    A["User Uploads Sheet<br/>UploadScreen.swift"] --> B["Backend /convert<br/>backend/app/main.py"]
-    B --> C["Queue + Worker<br/>backend/app/dispatcher.py"]
-    C --> D["OCR Convert (Audiveris)<br/>backend/app/audiveris_client.py"]
-    D --> E["Store output.json<br/>Supabase Storage (sheet_data)"]
-    E --> F["Generate Labeled PDF<br/>backend/app/label_notes.py"]
-    F --> G["Store labeled.pdf + status<br/>backend/app/storage.py + database.py"]
+    A["User Uploads Sheet<br/>UploadScreen.swift"] --> B["Store on device + start conversion<br/>LocalSheetLibrary.swift"]
+    B --> C["Render pages + recognize<br/>OnDeviceSheetConverter.swift + OemerKit"]
+    C --> D["Merge pages, score JSON + MusicXML<br/>MusicXMLDocument.swift"]
+    C --> F["Place note names<br/>NoteLabelRenderer.swift"]
+    D --> G["output.json + score.musicxml<br/>app storage (per account)"]
+    F --> G2["labeled.pdf<br/>app storage (per account)"]
 
-    G --> H["Upload Result Screen Polls Job<br/>UploadPageNextViewController.swift"]
-    H --> I["Fetch JSON<br/>GET /sheets/{job_id}"]
-    H --> J["Fetch Labeled PDF<br/>GET /sheets/{job_id}/pdf"]
+    G --> H["Upload Result Screen waits for the conversion<br/>UploadPageNextViewController.swift"]
+    G2 --> H
+    H --> I["Score JSON"]
+    H --> J["Labeled PDF"]
 
     I --> K["Parse Song Chords<br/>MusicJSONLoader.swift"]
     J --> L["Render PDF Preview<br/>PDFKit views in Upload/Playlist/Discover detail screens"]
@@ -81,12 +82,12 @@ These files are cross-feature foundations:
 
 | File | Why it matters |
 | --- | --- |
-| `Screens/MainAnimationScreen/MusicJSONLoader.swift` | Converts converted-sheet JSON into timed note groups (`SongChord`). Used by Animation + Play Along. |
-| `Screens/MainAnimationScreen/SongChord.swift` | Shared note-group model (`leftHandNotes`, `rightHandNotes`, `duration`, `globalTick`). |
-| `Screens/MainAnimationScreen/SheetMusicView.swift` | Draws sheet notation and keeps scroll position in sync with ticks/progress. |
-| `Screens/MainAnimationScreen/PianoView.swift` | Main keyboard UI (`AnimatedPianoKeyboardView`) for both Animation + Play Along. |
-| `Screens/MainAnimationScreen/AudioEngineManager.swift` | Shared sound playback system (AVAudioEngine + sampler). |
-| `Common/Audio/PitchDetector.swift` | Shared mic + FFT detector (used in Play Along and Chord Recognition). |
+| `Screens/PianoAnimation/MusicJSONLoader.swift` | Converts converted-sheet JSON into timed note groups (`SongChord`). Used by Animation + Play Along. |
+| `Screens/PianoAnimation/SongChord.swift` | Shared note-group model (`leftHandNotes`, `rightHandNotes`, `duration`, `globalTick`). |
+| `Screens/PianoAnimation/SheetMusicView.swift` | Draws sheet notation and keeps scroll position in sync with ticks/progress. |
+| `Screens/PianoAnimation/PianoView.swift` | Main keyboard UI (`AnimatedPianoKeyboardView`) for both Animation + Play Along. |
+| `Screens/PianoAnimation/AudioEngineManager.swift` | Shared sound playback system (AVAudioEngine + sampler). |
+| `Components/PitchDetector.swift` | Shared mic + FFT detector (used in Play Along and Chord Recognition). |
 | `Models/PianoDataManager.swift` | Converts parsed chords into play-along groups. |
 
 ---
@@ -132,23 +133,23 @@ flowchart LR
 
 | File | Responsibility |
 | --- | --- |
-| `Screens/MainAnimationScreen/AnimationViewController.swift` | The orchestrator. Owns playback state machine, chord indexing, seeking, tempo changes, progress math, display loop, orientation handling, and UI overlays/settings. |
-| `Screens/MainAnimationScreen/PianoAnimationkeyboardViewController.swift` | Keyboard+audio execution layer for each chord event. Highlights left/right notes, manages hand labels, and schedules note-off timing for articulation clarity. |
-| `Screens/MainAnimationScreen/MusicJSONLoader.swift` | Converts Audiveris-style JSON into a normalized timed sequence (`SongChord`) with stable `globalTick` and computed durations. |
-| `Screens/MainAnimationScreen/PianoDemoManager.swift` | Simple loader/iterator over `SongChord` data; decouples source data from playback controller. |
-| `Screens/MainAnimationScreen/SheetMusicView.swift` | Pure rendering layer for notation and tick-based scroll positioning. |
-| `Screens/MainAnimationScreen/PianoView.swift` | UI implementation of full keyboard (`AnimatedPianoKeyboardView`, `AnimatedPianoKeyView`) including hand color cues and animations. |
-| `Screens/MainAnimationScreen/AudioEngineManager.swift` | Sound generation and note lifecycle (note-on/off, instrument switching, engine sessions). |
-| `Screens/MainAnimationScreen/TopView.swift` | `LessonNavBarView` (back/menu/progress slider) used by Animation. |
-| `Screens/MainAnimationScreen/SongChord.swift` | Data contract for one playable event (left notes, right notes, duration, tick). |
+| `Screens/PianoAnimation/AnimationViewController.swift` | The orchestrator. Owns playback state machine, chord indexing, seeking, tempo changes, progress math, display loop, orientation handling, and UI overlays/settings. |
+| `Screens/PianoAnimation/PianoAnimationkeyboardViewController.swift` | Keyboard+audio execution layer for each chord event. Highlights left/right notes, manages hand labels, and schedules note-off timing for articulation clarity. |
+| `Screens/PianoAnimation/MusicJSONLoader.swift` | Converts the score JSON (MusicXML as JSON, written by the on-device converter; Discover songs use the same layout) into a normalized timed sequence (`SongChord`) with stable `globalTick` and computed durations. |
+| `Screens/PianoAnimation/PianoDemoManager.swift` | Simple loader/iterator over `SongChord` data; decouples source data from playback controller. |
+| `Screens/PianoAnimation/SheetMusicView.swift` | Pure rendering layer for notation and tick-based scroll positioning. |
+| `Screens/PianoAnimation/PianoView.swift` | UI implementation of full keyboard (`AnimatedPianoKeyboardView`, `AnimatedPianoKeyView`) including hand color cues and animations. |
+| `Screens/PianoAnimation/AudioEngineManager.swift` | Sound generation and note lifecycle (note-on/off, instrument switching, engine sessions). |
+| `Screens/PianoAnimation/TopView.swift` | `LessonNavBarView` (back/menu/progress slider) used by Animation. |
+| `Screens/PianoAnimation/SongChord.swift` | Data contract for one playable event (left notes, right notes, duration, tick). |
 
 ### Entry points into Animation
 
 | File | Launch path |
 | --- | --- |
-| `Screens/MainUploadScreen/UploadPageNextViewController.swift` | Uses freshly converted JSON from upload pipeline. |
-| `Screens/MainPlaylistScreen/SongDetailsPage.swift` | Launches from playlist song detail with fetched converted JSON. |
-| `Screens/MainDiscoverScreen/DiscoverSongDetailViewController.swift` | Launches from discover song detail with fetched converted JSON. |
+| `Screens/Upload/UploadPageNextViewController.swift` | Uses freshly converted JSON from upload pipeline. |
+| `Screens/Playlist/SongDetailsPage.swift` | Launches from playlist song detail with fetched converted JSON. |
+| `Screens/Discover/DiscoverSongDetailViewController.swift` | Launches from discover song detail with fetched converted JSON. |
 
 ### Data contract used by Animation
 
@@ -296,13 +297,13 @@ This logic is why converted scores play with stable event spacing instead of col
 
 | Goal | Start editing here |
 | --- | --- |
-| Fix drift between sheet and audio | `Screens/MainAnimationScreen/AnimationViewController.swift` (`tick`, `seekBy`, `seekToProgress`) |
-| Improve rhythm/timing parse from JSON | `Screens/MainAnimationScreen/MusicJSONLoader.swift` |
-| Change notation movement behavior | `Screens/MainAnimationScreen/SheetMusicView.swift` |
-| Change key highlight style/hand colors | `Screens/MainAnimationScreen/PianoView.swift` |
-| Change note articulation/attack/release feel | `Screens/MainAnimationScreen/PianoAnimationkeyboardViewController.swift` |
-| Change instrument/sound rendering | `Screens/MainAnimationScreen/AudioEngineManager.swift` |
-| Change nav/slider/menu UI | `Screens/MainAnimationScreen/TopView.swift` and `AnimationViewController.swift` |
+| Fix drift between sheet and audio | `Screens/PianoAnimation/AnimationViewController.swift` (`tick`, `seekBy`, `seekToProgress`) |
+| Improve rhythm/timing parse from JSON | `Screens/PianoAnimation/MusicJSONLoader.swift` |
+| Change notation movement behavior | `Screens/PianoAnimation/SheetMusicView.swift` |
+| Change key highlight style/hand colors | `Screens/PianoAnimation/PianoView.swift` |
+| Change note articulation/attack/release feel | `Screens/PianoAnimation/PianoAnimationkeyboardViewController.swift` |
+| Change instrument/sound rendering | `Screens/PianoAnimation/AudioEngineManager.swift` |
+| Change nav/slider/menu UI | `Screens/PianoAnimation/TopView.swift` and `AnimationViewController.swift` |
 
 ### Debug checklist for Animation issues
 
@@ -335,7 +336,7 @@ If animation “looks wrong”, use this quick path:
 | --- | --- |
 | `Common/Music_Components/AnimatedKeyboardView.swift` | Older demo keyboard component; not the active Animation keyboard. |
 | `Common/Music_Components/PianoKeyView.swift` | Supports the older demo component above. |
-| `Screens/MainAnimationScreen/PianoLogic.swift` | Contains chord utility logic, but not in the active Animation playback runtime path. |
+| `Screens/PianoAnimation/PianoLogic.swift` | Contains chord utility logic, but not in the active Animation playback runtime path. |
 
 ---
 
@@ -355,22 +356,22 @@ Play Along is a guided practice mode:
 
 | File | Responsibility |
 | --- | --- |
-| `Screens/MainPlayAlongScreen/PlayAlongViewController.swift` | Main screen + orchestration. Handles loading, mic permission, session lifecycle, callbacks, and finish reporting. |
+| `Screens/PlayAlong/PlayAlongViewController.swift` | Main screen + orchestration. Handles loading, mic permission, session lifecycle, callbacks, and finish reporting. |
 | `PlayAlongEngine` (inside same file) | Core rule engine for expected notes, matching logic, progression, scoring, tempo pulse, seek, and finish conditions. |
-| `Common/Audio/PitchDetector.swift` | Mic capture + FFT note detection input to Play Along. |
+| `Components/PitchDetector.swift` | Mic capture + FFT note detection input to Play Along. |
 | `Models/PianoDataManager.swift` | Converts parsed `SongChord` sequence into grouped note targets. |
-| `Screens/MainAnimationScreen/MusicJSONLoader.swift` | Parses JSON into timed `SongChord` data used by Play Along. |
-| `Screens/MainAnimationScreen/SheetMusicView.swift` | Notation display + progress updates + wrong-note markers. |
-| `Screens/MainAnimationScreen/PianoView.swift` | Hinting keyboard and on-screen input surface. |
-| `Screens/MainAnimationScreen/AudioEngineManager.swift` | Optional key sound output for interactions. |
+| `Screens/PianoAnimation/MusicJSONLoader.swift` | Parses JSON into timed `SongChord` data used by Play Along. |
+| `Screens/PianoAnimation/SheetMusicView.swift` | Notation display + progress updates + wrong-note markers. |
+| `Screens/PianoAnimation/PianoView.swift` | Hinting keyboard and on-screen input surface. |
+| `Screens/PianoAnimation/AudioEngineManager.swift` | Optional key sound output for interactions. |
 
 ### Where Play Along gets launched
 
 | File | Launch path |
 | --- | --- |
-| `Screens/MainUploadScreen/UploadPageNextViewController.swift` | Launch from freshly converted upload. |
-| `Screens/MainPlaylistScreen/SongDetailsPage.swift` | Launch from playlist song detail. |
-| `Screens/MainDiscoverScreen/DiscoverSongDetailViewController.swift` | Launch from discover song detail. |
+| `Screens/Upload/UploadPageNextViewController.swift` | Launch from freshly converted upload. |
+| `Screens/Playlist/SongDetailsPage.swift` | Launch from playlist song detail. |
+| `Screens/Discover/DiscoverSongDetailViewController.swift` | Launch from discover song detail. |
 
 ### Runtime flow (step-by-step)
 
@@ -397,11 +398,11 @@ Play Along is a guided practice mode:
 
 | Change needed | Primary file to edit |
 | --- | --- |
-| Match/scoring rules, progression, debounce | `Screens/MainPlayAlongScreen/PlayAlongViewController.swift` (`PlayAlongEngine` section) |
-| Mic behavior and detection robustness | `Common/Audio/PitchDetector.swift` |
+| Match/scoring rules, progression, debounce | `Screens/PlayAlong/PlayAlongViewController.swift` (`PlayAlongEngine` section) |
+| Mic behavior and detection robustness | `Components/PitchDetector.swift` |
 | Note group structure | `Models/PianoDataManager.swift` |
-| Hint drawing and keyboard visuals | `Screens/MainAnimationScreen/PianoView.swift` |
-| Sheet feedback markers | `Screens/MainAnimationScreen/SheetMusicView.swift` |
+| Hint drawing and keyboard visuals | `Screens/PianoAnimation/PianoView.swift` |
+| Sheet feedback markers | `Screens/PianoAnimation/SheetMusicView.swift` |
 
 ### Important design note
 
@@ -420,86 +421,68 @@ This makes onboarding easy (single file), but long-term refactors may split it f
 
 ### What this feature does
 
-Note Labelling is mostly a backend pipeline. It:
+Note Labelling runs entirely on the device. For every upload it:
 
-- accepts uploaded PDF/image
-- runs OCR/music parsing through Audiveris
-- generates `output.json`
-- computes exact note label positions
-- writes labels (like `C4`, `A#4`) onto a new PDF
-- stores labeled PDF and serves it to app screens
+- reads the sheet music on each page with OemerKit (Core ML + the oemer engine in Swift)
+- produces the score JSON used by Animation and Play Along, and MusicXML
+- writes English note names (like `C4`, `A#4`, `Bb3`) under the notes onto a copy of the
+  uploaded PDF
+- keeps everything in the app's storage, per account
 
-Frontend mainly monitors status and displays results.
+Nothing is uploaded and there is no job to poll; the result screen waits for the conversion
+running in the app.
 
-### Frontend files and responsibilities
-
-| File | Responsibility |
-| --- | --- |
-| `Screens/MainUploadScreen/UploadPageNextViewController.swift` | Main post-upload orchestrator: polls job state, fetches converted JSON and labeled PDF, displays preview, unlocks Animation/Play Along entry. |
-| `Screens/MainUploadScreen/UploadScreen.swift` | Initial upload flow; routes to next-step processing screen. |
-| `Screens/MainUploadScreen/AllUploadsViewController.swift` | Re-opens previous jobs and routes back into upload result flow. |
-| `Screens/MainPlaylistScreen/SongDetailsPage.swift` | Fetches original/labeled PDFs and converted JSON for playlist songs. |
-| `Screens/MainDiscoverScreen/DiscoverSongDetailViewController.swift` | Same as above for discover songs. |
-| `Models/Song.swift` | Defines and resolves `labeledPdfPath` and `outputJsonPath` references. |
-
-### Backend files and responsibilities
+### Files and responsibilities
 
 | File | Responsibility |
 | --- | --- |
-| `backend/app/main.py` | API endpoints for convert, status, JSON retrieval, labeled PDF retrieval. |
-| `backend/app/dispatcher.py` | Worker pipeline from upload to final labeled output + status updates. |
-| `backend/app/audiveris_client.py` | HTTP client for Audiveris conversion call. |
-| `backend/app/label_notes.py` | Core note-label placement and PDF writing logic. |
-| `backend/app/storage.py` | Upload/download for JSON and labeled PDF in Supabase storage. |
-| `backend/app/database.py` | Persists job state, `label_status`, warnings, and metadata. |
+| `Screens/Upload/UploadScreen.swift` | Upload entry (scan, photo, library, PDF): builds the PDF and adds it to `LocalSheetLibrary`, then opens the result screen. |
+| `Screens/Upload/UploadPageNextViewController.swift` | Result screen: shows conversion progress, then the labeled PDF, key/tempo/chords, and unlocks Animation/Play Along. Refresh retries a failed conversion. |
+| `Screens/Upload/AllUploadsViewController.swift` | All uploads on the device: open, rename, delete, retry. |
+| `Screens/Playlist/SongDetailsPage.swift` | Opens an upload added to a playlist (`track_id = "local-upload:<uuid>"`) from the device; Discover songs from Supabase. |
+| `Services/SheetMusic/LocalSheetLibrary.swift` | Stores uploads and results per account, runs conversions (they continue when you leave the screen), progress, retry, resume after the app was closed. |
+| `Services/SheetMusic/OnDeviceSheetConverter.swift` | Pipeline: render each PDF page, run OemerKit, merge pages, write score JSON, MusicXML and the labeled PDF. |
+| `Services/SheetMusic/NoteLabelRenderer.swift` | Label placement and drawing. |
+| `Services/SheetMusic/MusicXMLDocument.swift` | MusicXML parse/merge/write, and conversion to the app's score JSON. |
+| `OemerKit/` | The recognizer (local Swift package): note names, rhythm, and where each note and its staff are on the page. |
 
 ### End-to-end runtime flow
 
-1. Upload starts from `UploadScreen`.
-2. Backend endpoint `POST /convert` (`backend/app/main.py`) creates job.
-3. Background worker (`dispatcher.py`) runs:
-   - download source PDF
-   - call Audiveris via `audiveris_client.py`
-   - save `output.json`
-   - normalize geometry
-   - run `label_notes.py`
-   - save `labeled.pdf`
-   - update job status (`completed` or `completed_with_warning`)
-4. Frontend `UploadPageNextViewController` polls status.
-5. On completion, frontend fetches:
-   - `/sheets/{job_id}` -> converted JSON
-   - `/sheets/{job_id}/pdf` -> labeled PDF
-6. App displays labeled PDF and reuses JSON in Animation + Play Along.
+1. `UploadScreen` creates a PDF from the scan/photo (612×792 pt pages) or takes the picked PDF.
+2. `LocalSheetLibrary.add(...)` saves `input.pdf` and starts a conversion task.
+3. `OnDeviceSheetConverter.convert(...)`, per page:
+   - renders the page at ~4 MP
+   - `SheetMusicRecognizer.recognize(cgImage:)` (OemerKit) returns MusicXML and the located notes
+   - `NoteLabelRenderer.layout(...)` places the labels
+4. Pages are merged (measures renumbered); the converter writes `output.json` (score JSON),
+   `labeled.pdf` (original pages + labels) and `score.musicxml`.
+5. `UploadPageNextViewController` shows progress, then the labeled PDF; its JSON feeds
+   Animation and Play Along.
 
-### Deep detail: what `label_notes.py` actually computes
+### How labels are placed (`NoteLabelRenderer`)
 
-`backend/app/label_notes.py` is the real implementation center of note labelling.
-
-Core operations inside it:
-
-1. Parse MusicXML-like JSON from Audiveris.
-2. Read scaling (`millimeters`, `tenths`) and compute conversion to PDF points.
-3. Derive staff geometry from MusicXML tenths values.
-4. Track clef/staff assignments for each note.
-5. Convert pitch (`step`, `alter`, `octave`) to display label text.
-6. Calculate note-head Y based on diatonic pitch index and clef top-line reference.
-7. Compute X based on measure/system offsets and `@default-x`.
-8. Position labels below staff.
-9. Prevent overlap:
-   - enforce minimum X gaps
-   - push labels down when collisions happen
-   - avoid barline clipping near measure boundaries
-10. Write text on page with PyMuPDF and save final PDF.
+1. Label text is OemerKit's note name: step + `#`/`b` + octave (`C#4`, `Bb3`).
+2. Labels are grouped by system and staff, and sorted left to right.
+3. Font size is 1.3 × the staff's line spacing; the baseline is 2.5 spacings below the staff's
+   bottom line.
+4. If that line would cover a notehead of the same staff (notes on ledger lines below it), the
+   label starts below the lowest such notehead instead.
+5. A label within 2.2 label heights (horizontally) of one already placed moves down by 1.8
+   label heights, so chord names stack.
+6. Labels are drawn in black Helvetica on top of the original PDF page; positions are converted
+   from page-image pixels to PDF points.
 
 ### Where to edit when changing Note Labelling
 
 | Change needed | Primary file to edit |
 | --- | --- |
-| Label text format (`Bb4`, `C#5`, etc.) | `backend/app/label_notes.py` (`pitch_label`) |
-| Label placement geometry | `backend/app/label_notes.py` |
-| Pipeline order / retry behavior | `backend/app/dispatcher.py` |
-| API response behavior to app | `backend/app/main.py` |
-| Frontend job polling or load UX | `Screens/MainUploadScreen/UploadPageNextViewController.swift` |
+| Label text format (`Bb4`, `C#5`, etc.) | `Services/SheetMusic/NoteLabelRenderer.swift` (uses `LocatedNote.name`) |
+| Label placement geometry, font, collisions | `Services/SheetMusic/NoteLabelRenderer.swift` |
+| Page rendering, page merging, outputs | `Services/SheetMusic/OnDeviceSheetConverter.swift` |
+| Score JSON shape | `Services/SheetMusic/MusicXMLDocument.swift` (`jsonObject`) |
+| Storage, progress, retry | `Services/SheetMusic/LocalSheetLibrary.swift` |
+| Recognition itself (notes, rhythm, accidentals) | `OemerKit/` (see its README and HANDOFF: its output must stay identical to the oemer reference) |
+| Result screen UX | `Screens/Upload/UploadPageNextViewController.swift` |
 
 ---
 
@@ -519,8 +502,8 @@ It is named chord recognition, but full multi-note chord naming is not the activ
 
 | File | Responsibility |
 | --- | --- |
-| `Screens/MainChordRecognitionScreen/MainChordRecognitionScreen.swift` | Active screen UI and control flow for start/stop, permissions, waveform, and display updates. |
-| `Common/Audio/PitchDetector.swift` | Active audio-analysis engine producing detected note list + frequency + amplitude. |
+| `Screens/ChordRecognition/MainChordRecognitionScreen.swift` | Active screen UI and control flow for start/stop, permissions, waveform, and display updates. |
+| `Components/PitchDetector.swift` | Active audio-analysis engine producing detected note list + frequency + amplitude. |
 
 ### Runtime flow (step-by-step)
 
@@ -540,17 +523,17 @@ It is named chord recognition, but full multi-note chord naming is not the activ
 
 | Change needed | Primary file to edit |
 | --- | --- |
-| Start/stop behavior, UI states, permissions | `Screens/MainChordRecognitionScreen/MainChordRecognitionScreen.swift` |
-| Detection sensitivity/FFT strategy/noise gating | `Common/Audio/PitchDetector.swift` |
-| Waveform visual behavior | `Screens/MainChordRecognitionScreen/MainChordRecognitionScreen.swift` |
+| Start/stop behavior, UI states, permissions | `Screens/ChordRecognition/MainChordRecognitionScreen.swift` |
+| Detection sensitivity/FFT strategy/noise gating | `Components/PitchDetector.swift` |
+| Waveform visual behavior | `Screens/ChordRecognition/MainChordRecognitionScreen.swift` |
 
 ### Files around this feature that look non-active/legacy
 
 | File | Note |
 | --- | --- |
-| `Screens/MainChordRecognitionScreen/ChordAudioManager.swift` | Timer-based simulated detector; does not appear to be wired into active live path. |
+| `Screens/ChordRecognition/ChordAudioManager.swift` | Timer-based simulated detector; does not appear to be wired into active live path. |
 | `Features/ChordRecognition/ChordRecognition.swift` | Minimal placeholder view controller, not the active screen path. |
-| `Screens/MainAnimationScreen/PianoLogic.swift` | Contains chord-detection utilities not currently connected to the active chord-recognition screen runtime path. |
+| `Screens/PianoAnimation/PianoLogic.swift` | Contains chord-detection utilities not currently connected to the active chord-recognition screen runtime path. |
 
 ---
 
@@ -559,11 +542,13 @@ It is named chord recognition, but full multi-note chord naming is not the activ
 This is the most important big-picture flow:
 
 1. User uploads score from `UploadScreen`.
-2. Backend creates job and processes via Audiveris + `label_notes`.
-3. Backend stores:
-   - converted JSON (`output.json`)
+2. `LocalSheetLibrary` stores it on the device and `OnDeviceSheetConverter` reads it with
+   OemerKit; nothing is uploaded.
+3. The app stores, per account:
+   - score JSON (`output.json`)
    - labeled PDF (`labeled.pdf`)
-4. Frontend `UploadPageNextViewController` polls until complete.
+   - MusicXML (`score.musicxml`)
+4. `UploadPageNextViewController` shows progress until the conversion finishes.
 5. Once ready:
    - PDF preview is shown to user
    - JSON is parsed by `MusicJSONLoader`
@@ -571,7 +556,7 @@ This is the most important big-picture flow:
    - Animation -> playback + synced sheet
    - Play Along -> guided expected-note practice
 
-So the conversion/note-labelling pipeline is upstream of Animation and Play Along.
+So the on-device conversion/note-labelling pipeline is upstream of Animation and Play Along.
 
 ---
 
@@ -599,10 +584,10 @@ Check in this order:
 
 Check in this order:
 
-1. `backend/app/dispatcher.py` pipeline logs/status
-2. `backend/app/label_notes.py` label placement path
-3. `backend/app/storage.py` upload/download path
-4. frontend polling in `UploadPageNextViewController`
+1. the upload's status and error in `LocalSheetLibrary` (`[OnDevice]` lines in the debug log)
+2. skipped pages in `OnDeviceSheetConverter.convert(...)` (pages where no music was found)
+3. `NoteLabelRenderer.layout(...)` label placement
+4. `UploadPageNextViewController.showConversionResult(...)`
 
 ### Chord screen not detecting properly?
 
@@ -628,5 +613,5 @@ If you remember only one thing:
 
 - `AnimationViewController.swift` controls animation behavior.
 - `PlayAlongViewController.swift` controls play-along behavior.
-- `label_notes.py` controls note-label generation logic.
+- `Services/SheetMusic/` (with `OemerKit/`) controls sheet conversion and note labels.
 - `MainChordRecognitionScreen.swift` + `PitchDetector.swift` control chord-recognition screen behavior.

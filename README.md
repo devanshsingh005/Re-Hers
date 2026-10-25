@@ -31,13 +31,8 @@ recent iPhone. Judge speed and heat in Release builds.
   - `https://letsrehearse.studio/privacy-policy/`
   - `https://letsrehearse.studio/terms-of-service/`
 
-## Backend (no longer used by the app for conversion)
+## Configuration
 
-`backend/` holds the former conversion service (FastAPI, Redis worker, Audiveris on Azure). The
-app no longer calls it. Its configuration lives in `backend/.env`:
-
-- `SUPABASE_URL`
-- `SUPABASE_KEY`
-- `BACKEND_API_URL`
-- `AUDIVERIS_API_URL`
-- `LOG_LEVEL`
+The app reads `SUPABASE_URL` and `SUPABASE_KEY` from `Re-Hearse_v1/*.xcconfig` (through
+`Info.plist`). There is no server of its own: the former conversion backend (FastAPI, a Redis
+worker and Audiveris on Azure) was removed once conversion moved onto the device.

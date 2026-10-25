@@ -1,5 +1,10 @@
 # SECURITY AUDIT
 
+> **Note (October 2026):** the `backend/` service audited here has been removed. Sheet music is now
+> converted on the device (`OemerKit/`, `Services/SheetMusic/`), so the findings about `backend/**`
+> files, and about the app code that called it (the conversion API client, job polling), no
+> longer apply. The report is kept as written for the record.
+
 Scope: every `.swift` and `.py` file in `/Users/user30/Documents/Re-Hers`, excluding ignored paths requested by the audit instructions.
 
 ---

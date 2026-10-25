@@ -4,7 +4,7 @@
 //
 //  Sheet music PDF → score JSON + MusicXML + labeled PDF, entirely on the device: OemerKit
 //  runs oemer's two networks with Core ML (Neural Engine) and its recognition engine in Swift.
-//  This replaces the old /convert API (Audiveris on a server) and label_notes.py.
+//  It replaced the former conversion server (Audiveris behind a /convert API), now removed.
 //
 
 import OemerKit
