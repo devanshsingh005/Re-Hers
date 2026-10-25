@@ -48,5 +48,11 @@ let package = Package(
             // end-to-end fixtures, read from disk by EndToEndTests
             exclude: ["Fixtures"]
         ),
+        // Apple layer: photo inputs (orientations, HEIC, large images, CGImage/UIImage) and Core ML.
+        .testTarget(
+            name: "OemerKitTests",
+            dependencies: ["OemerKit"],
+            path: "Tests/OemerKitTests"
+        ),
     ]
 )

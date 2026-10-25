@@ -125,10 +125,16 @@ bash OemerKit/scripts/verify_mac.sh
 What it checks and what to expect:
 
 1. `swift build -c release` and an iOS device build with `xcodebuild` — no errors.
-2. `swift test` — 19 tests. The 4 *EndToEndTests* run the whole engine on saved
+2. `swift test` — 24 tests. The 4 *EndToEndTests* run the whole engine on saved
    segmentation maps (tabi with and without deskew, a clean piano page, a photo) and require
    **byte-identical** MusicXML to the Python reference; *RobustnessTests* feed it blank,
-   tiny, damaged and noisy inputs and require a clean result or error.
+   tiny, damaged and noisy inputs and require a clean result or error. *ImageInputTests*
+   check photos as cameras deliver them: all 8 EXIF orientations (portrait iPhone photos are
+   stored sideways), JPEG and HEIC, a 48 MP photo, and the `CGImage` path must all give the
+   upright image, and a portrait photo must give the same notes at the same places. In the
+   iOS Simulator (`xcodebuild test -scheme OemerKit-Package -configuration Release
+   ENABLE_TESTABILITY=YES -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`) two more
+   cover the `UIImage` path, 26 in all.
 3. `oemer-demo --selftest` — runs both Core ML models on a bundled tile and compares with the
    original TensorFlow output: expect `PASS` (agreement > 99 %).
 4. `oemer-demo Examples/tabi.jpg` — full pipeline on oemer's sample page; expect roughly
@@ -185,7 +191,9 @@ OemerKit/
   Sources/oemer-check/   command-line checker (engine on saved maps, for parity tests)
   Sources/oemer-demo/    macOS command-line demo of the full pipeline + self-test
   Tests/OemerCoreTests/  unit tests and end-to-end fixtures
+  Tests/OemerKitTests/   photo inputs: orientations, HEIC, 48 MP, CGImage/UIImage
   Examples/tabi.jpg      oemer's sample page
+  Examples/OemerTestApp/ minimal iOS app: self-test, timings, thermal state, photo picker
   scripts/verify_mac.sh  one-command check on a Mac
 ```
 
