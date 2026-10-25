@@ -12,8 +12,6 @@ import CoreImage.CIFilterBuiltins
 import Supabase
 import Auth
 internal import PostgREST
-import CryptoKit
-import Security
 
 class UploadScreen: UIViewController {
 
@@ -39,45 +37,8 @@ class UploadScreen: UIViewController {
         return "SheetMusic_\(f.string(from: Date())).pdf"
     }
 
-    private func generateUniqueUploadTitle(for userId: UUID) async throws -> String {
-        struct ScanTitleRow: Decodable {
-            let jsonData: AnyCodable?
-            let originalFilename: String?
-
-            enum CodingKeys: String, CodingKey {
-                case jsonData = "json_data"
-                case originalFilename = "original_filename"
-            }
-        }
-
-        let scans: [ScanTitleRow] = try await supabase
-            .from("scans")
-            .select("json_data, original_filename")
-            .eq("user_id", value: userId)
-            .limit(200)
-            .execute()
-            .value
-
-        let existingTitles: Set<String> = Set(scans.compactMap { scan in
-            if let jsonTitle = (scan.jsonData?.value as? [String: Any])?["title"] as? String,
-               !jsonTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return jsonTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-
-            guard let fallbackName = scan.originalFilename?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !fallbackName.isEmpty else { return nil }
-            return fallbackName.hasSuffix(".pdf") ? String(fallbackName.dropLast(4)) : fallbackName
-        })
-
-        if !existingTitles.contains(defaultUploadTitleBase) {
-            return defaultUploadTitleBase
-        }
-
-        var suffix = 2
-        while existingTitles.contains("\(defaultUploadTitleBase) \(suffix)") {
-            suffix += 1
-        }
-        return "\(defaultUploadTitleBase) \(suffix)"
+    private func generateUniqueUploadTitle() -> String {
+        LocalSheetLibrary.shared.uniqueTitle(base: defaultUploadTitleBase)
     }
     private var currentUploadData: Data?
     private var currentFileName  = ""
@@ -89,14 +50,11 @@ class UploadScreen: UIViewController {
     private weak var activePhotoPicker: PHPickerViewController?
     private weak var activeCameraController: UploadCameraCaptureViewController?
     private var profileFetchTask: Task<Void, Never>?
-    private var recentUploadsTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
     private var uploadTask: Task<Void, Never>?
     private var currentUploadSource = "unknown"
-    private var latestRecentUploads: [Scan] = []
+    private var latestRecentUploads: [LocalSheetLibrary.Upload] = []
     private var recentUploadsErrorMessage: String?
-    // MARK: - Supabase
-    private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     // MARK: - UI
     private let scrollView  = UIScrollView()
@@ -129,6 +87,27 @@ class UploadScreen: UIViewController {
             name: NavigationBarHelper.profileDidUpdateNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLibraryChange),
+            name: LocalSheetLibrary.didChangeNotification,
+            object: nil
+        )
+
+        // Sheets are converted on this device: finish any conversion the app was closed during,
+        // and load the recognition models now so the first upload doesn't wait for them.
+        LocalSheetLibrary.shared.resumeInterruptedConversions()
+        Task.detached(priority: .utility) { await OnDeviceSheetConverter.shared.prepare() }
+    }
+
+    @objc private func handleLibraryChange(_ note: Notification) {
+        // progress ticks don't change the list; status, title and membership do
+        guard let id = note.userInfo?["id"] as? UUID else { return }
+        let current = LocalSheetLibrary.shared.upload(id: id)
+        let shown = latestRecentUploads.first { $0.id == id }
+        if current?.status != shown?.status || current?.title != shown?.title || (current == nil) != (shown == nil) {
+            loadRecentUploads()
+        }
     }
 
     deinit {
@@ -556,69 +535,33 @@ class UploadScreen: UIViewController {
 
     // MARK: - Load & Display Recent Uploads
     private func loadRecentUploads() {
-        recentUploadsTask?.cancel()
-        recentUploadsTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let uploads = try await self.fetchRecentUploads()
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    self.latestRecentUploads = uploads
-                    self.recentUploadsErrorMessage = nil
-                    self.displayRecentUploads(uploads)
-                }
-            } catch {
-                guard !Task.isCancelled else { return }
-                debugLog("[Uploads] load error: \(error)")
-                let message = AppUserFacingError.message(
-                    for: "load your recent uploads",
-                    error: error,
-                    fallback: "We couldn't load your recent uploads right now. Please try again."
-                )
-                await MainActor.run {
-                    if self.latestRecentUploads.isEmpty {
-                        self.recentUploadsErrorMessage = message
-                        self.displayRecentUploads([])
-                    } else {
-                        self.recentUploadsErrorMessage = nil
-                        self.displayRecentUploads(self.latestRecentUploads)
-                    }
-                }
-            }
-        }
+        let uploads = Array(LocalSheetLibrary.shared.uploads().prefix(5))
+        latestRecentUploads = uploads
+        recentUploadsErrorMessage = nil
+        displayRecentUploads(uploads)
     }
 
-    private func fetchRecentUploads() async throws -> [Scan] {
-        guard let uid = await currentUserId(), let userId = UUID(uuidString: uid) else { return [] }
-        let response: [Scan] = try await supabase
-            .from("scans").select()
-            .eq("user_id", value: userId)
-            .order("updated_at", ascending: false)
-            .limit(5)
-            .execute().value
-        var seen = Set<Int64>()
-        return response.filter { seen.insert($0.id).inserted }
-    }
-
-    private func displayRecentUploads(_ scans: [Scan]) {
+    private func displayRecentUploads(_ uploads: [LocalSheetLibrary.Upload]) {
         guard let stack = recentUploadsStack else { return }
         uploadTitle = DateFormatter.shortDate.string(from: Date())
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        if scans.isEmpty {
+        if uploads.isEmpty {
             stack.addArrangedSubview(makeEmptyState(message: recentUploadsErrorMessage))
             return
         }
-        for scan in scans {
-            let title    = extractTitle(from: scan.jsonData)
-                        ?? extractOriginalFilename(from: scan.jsonData)
-                        ?? scan.originalFilename
-                        ?? DateFormatter.shortDate.string(from: Date())
-            let fileType = (scan.fileType ?? "application/pdf").contains("pdf") ? "PDF" : "FILE"
-            let dateStr  = extractDate(from: scan.jsonData, fallback: scan.processedAt ?? scan.updatedAt)
-            let sizeStr  = extractFileSize(from: scan.jsonData)
-            let meta     = [dateStr, sizeStr].filter { !$0.isEmpty }.joined(separator: " • ")
-            stack.addArrangedSubview(makeUploadRow(title: title, fileType: fileType,
-                                                    meta: meta, scan: scan))
+        for upload in uploads {
+            stack.addArrangedSubview(makeUploadRow(title: upload.title, fileType: "PDF",
+                                                    meta: uploadMeta(upload), upload: upload))
+        }
+    }
+
+    /// "Today • 812 KB", or the conversion state while it isn't finished.
+    private func uploadMeta(_ upload: LocalSheetLibrary.Upload) -> String {
+        switch upload.status {
+        case .processing: return "Converting on device…"
+        case .failed:     return "Conversion failed"
+        case .completed:
+            return [relativeDate(upload.uploadedAt), formatBytes(upload.fileSizeBytes)].joined(separator: " • ")
         }
     }
 
@@ -642,7 +585,8 @@ class UploadScreen: UIViewController {
         return container
     }
 
-    private func makeUploadRow(title: String, fileType: String, meta: String, scan: Scan) -> UIView {
+    private func makeUploadRow(title: String, fileType: String, meta: String,
+                               upload: LocalSheetLibrary.Upload) -> UIView {
         // Card
         let card = UIButton(type: .custom)
         card.backgroundColor       = ComponentColors.SongCard.background
@@ -710,14 +654,14 @@ class UploadScreen: UIViewController {
         moreBtn.showsMenuAsPrimaryAction = true
         
         let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self, weak titleLbl] _ in
-            self?.showRenameAlert(for: scan.id, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
+            self?.showRenameAlert(for: upload.scanId, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
         }
         let delete = UIAction(
             title: "Delete Upload",
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
-            self?.confirmDeleteScan(id: scan.id, title: titleLbl.text ?? title)
+            self?.confirmDeleteScan(id: upload.scanId, title: titleLbl.text ?? title)
         }
         moreBtn.menu = UIMenu(title: "", children: [rename, delete])
 
@@ -741,132 +685,41 @@ class UploadScreen: UIViewController {
             moreBtn.heightAnchor.constraint(equalToConstant: 30)
         ])
 
-        // ── Tap: pass jobId + resultURL so the next screen can fetch both
-        //   the input PDF and the output JSON without an extra DB round-trip. ──
+        // ── Tap: open the result screen; while the sheet is still converting it shows the
+        //   progress and fills in by itself. A failed conversion can be retried. ──
         card.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            let jsonDict = scan.jsonData?.value as? [String: Any]
-
-            guard let jobIdStr = jsonDict?["job_id"] as? String,
-                  let jobId    = UUID(uuidString: jobIdStr) else {
-                debugLog("[RowTap] ❌ No job_id in scan \(scan.id)")
+            guard let current = LocalSheetLibrary.shared.upload(id: upload.id) else {
+                self.loadRecentUploads()
                 return
             }
-
-            let outputURL = jsonDict?["output_url"] as? String
-            Task { [weak self] in
-                guard let self else { return }
-                if let statusMessage = await self.jobStatusGateMessage(jobId: jobId) {
-                    await MainActor.run {
-                        self.presentUploadStatusAlert(title: title, message: statusMessage)
-                    }
-                    return
-                }
-
-                await MainActor.run {
-                    let vc        = UploadPageNextViewController()
-                    vc.jobId      = jobId
-                    vc.resultURL  = outputURL
-                    debugLog("[RowTap] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
-                    self.navigationController?.pushViewController(vc, animated: true)
-                }
+            if current.status == .failed {
+                self.presentFailedUploadAlert(current)
+                return
             }
+            let vc   = UploadPageNextViewController()
+            vc.jobId = current.id
+            debugLog("[RowTap] upload=\(current.id.uuidString.lowercased()) status=\(current.status.rawValue)")
+            self.navigationController?.pushViewController(vc, animated: true)
         }, for: .touchUpInside)
 
         attachPressAnimations(to: card)
         return card
     }
 
-    private func jobStatusGateMessage(jobId: UUID) async -> String? {
-        struct JobStatusRow: Decodable {
-            let status: String?
-            let errorMessage: String?
-            let labelStatus: String?
-            let labelWarning: String?
-            let resultUrl: String?
-            enum CodingKeys: String, CodingKey {
-                case status
-                case errorMessage = "error_message"
-                case labelStatus = "label_status"
-                case labelWarning = "label_warning"
-                case resultUrl = "result_url"
-            }
-        }
-
-        do {
-            let rows: [JobStatusRow] = try await supabase
-                .from("jobs")
-                .select("status, error_message, label_status, label_warning, result_url")
-                .eq("id", value: jobId)
-                .limit(1)
-                .execute()
-                .value
-
-            guard let row = rows.first else { return nil }
-            let status = row.status?.lowercased() ?? ""
-            let labelStatus = row.labelStatus?.lowercased() ?? ""
-            let hasResult = (row.resultUrl?.isEmpty == false)
-
-            if (status == "pending" || status == "processing") && !hasResult {
-                return "This sheet music is still being prepared. Please wait a little longer, then try again."
-            }
-
-            if status == "failed" {
-                if let message = userFriendlyUploadStatusMessage(
-                    rawMessage: row.errorMessage,
-                    fallback: "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete."
-                ) {
-                    return message
-                }
-                return "This upload could not be converted successfully. The sheet may be unclear, unsupported, or incomplete."
-            }
-
-            if labelStatus == "failed" {
-                if let message = userFriendlyUploadStatusMessage(
-                    rawMessage: row.labelWarning ?? row.errorMessage,
-                    fallback: "We processed this file, but couldn't prepare the practice sheet for it."
-                ) {
-                    return message
-                }
-                return "We processed this file, but couldn't prepare the practice sheet for it."
-            }
-
-            if hasResult && (labelStatus.isEmpty || labelStatus == "success") {
-                return nil
-            }
-
-            return nil
-        } catch {
-            debugLog("[UploadStatus] job lookup failed: \(error)")
-            return nil
-        }
-    }
-
-    private func userFriendlyUploadStatusMessage(rawMessage: String?, fallback: String) -> String? {
-        let trimmed = rawMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !trimmed.isEmpty else { return fallback }
-
-        let lowercased = trimmed.lowercased()
-        if lowercased.contains("note labeling pipeline failed") {
-            return "We processed this file, but couldn't recognize the notes clearly enough to build a practice sheet."
-        }
-        if lowercased.contains("timeout") {
-            return "The conversion took too long and couldn't be completed. Please try again with a clearer file."
-        }
-        if lowercased.contains("unsupported") {
-            return "This file format or sheet layout isn't supported yet. Please try a different file."
-        }
-
-        return trimmed
-    }
-
-    private func presentUploadStatusAlert(title: String, message: String) {
+    private func presentFailedUploadAlert(_ upload: LocalSheetLibrary.Upload) {
         let alert = UIAlertController(
-            title: "Upload Not Ready",
-            message: message,
+            title: "Conversion Failed",
+            message: upload.errorMessage ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete.",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.addAction(UIAlertAction(title: "Try Again", style: .default) { [weak self] _ in
+            LocalSheetLibrary.shared.retry(id: upload.id)
+            let vc   = UploadPageNextViewController()
+            vc.jobId = upload.id
+            self?.navigationController?.pushViewController(vc, animated: true)
+        })
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         present(alert, animated: true)
     }
 
@@ -930,19 +783,8 @@ class UploadScreen: UIViewController {
         }
 
         do {
-            let scans: [Scan] = try await supabase.from("scans").select()
-                .eq("id", value: Int(scanId)).limit(1).execute().value
-            guard let scan = scans.first else { return }
-            var dict = (scan.jsonData?.value as? [String: Any]) ?? [:]
-            dict["title"] = sanitizedTitle
-            let upd = ScanUpdate(
-                jsonData:    AnyCodable(dict),
-                status:      scan.status ?? "completed",
-                processedAt: scan.processedAt ?? ISO8601DateFormatter().string(from: Date()),
-                updatedAt:   ISO8601DateFormatter().string(from: Date())
-            )
-            try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
-            debugLog("[Rename] scan \(scanId) → \(sanitizedTitle)")
+            try LocalSheetLibrary.shared.rename(scanId: scanId, to: sanitizedTitle)
+            debugLog("[Rename] upload \(scanId) → \(sanitizedTitle)")
         } catch {
             debugLog("[Rename] failed: \(error)")
             let message = AppUserFacingError.message(
@@ -979,12 +821,8 @@ class UploadScreen: UIViewController {
 
     private func deleteScan(id scanId: Int64) async {
         do {
-            try await supabase
-                .from("scans")
-                .delete()
-                .eq("id", value: Int(scanId))
-                .execute()
-            await MainActor.run { self.loadRecentUploads() }
+            try LocalSheetLibrary.shared.delete(scanId: scanId)
+            loadRecentUploads()
         } catch {
             debugLog("[Delete] failed: \(error)")
             let message = AppUserFacingError.message(
@@ -1004,47 +842,11 @@ class UploadScreen: UIViewController {
         }
     }
 
-    // MARK: - JSON Helpers
-    private func extractTitle(from json: AnyCodable?) -> String? {
-        (json?.value as? [String: Any])?["title"] as? String
-    }
-
-    private func extractOriginalFilename(from json: AnyCodable?) -> String? {
-        guard let name = (json?.value as? [String: Any])?["original_filename"] as? String else { return nil }
-        // Strip .pdf extension for display
-        return name.hasSuffix(".pdf") ? String(name.dropLast(4)) : name
-    }
-
-    private func extractDate(from json: AnyCodable?, fallback: String?) -> String {
-        if let ua = (json?.value as? [String: Any])?["uploaded_at"] as? String {
-            return formatDate(ua)
-        }
-        return formatDate(fallback)
-    }
-
-    private func extractFileSize(from json: AnyCodable?) -> String {
-        guard let d = json?.value as? [String: Any] else { return "" }
-        if let b = d["file_size_bytes"] as? Int    { return formatBytes(b) }
-        if let b = d["file_size_bytes"] as? Double { return formatBytes(Int(b)) }
-        if let b = d["file_size"] as? Int          { return formatBytes(b) }
-        if let s = d["file_size"] as? String, let b = Int(s) { return formatBytes(b) }
-        return ""
-    }
-
+    // MARK: - Formatting
     private func formatBytes(_ bytes: Int) -> String {
         let kb = Double(bytes) / 1024.0
         return kb < 1024 ? String(format: "%.0f KB", kb)
                          : String(format: "%.1f MB", kb / 1024.0)
-    }
-
-    private func formatDate(_ s: String?) -> String {
-        guard let s, !s.isEmpty else { return "" }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = iso.date(from: s) { return relativeDate(d) }
-        iso.formatOptions = [.withInternetDateTime]
-        if let d = iso.date(from: s) { return relativeDate(d) }
-        return ""
     }
 
     private func relativeDate(_ date: Date) -> String {
@@ -1052,132 +854,32 @@ class UploadScreen: UIViewController {
         return DateFormatter.shortDate.string(from: date)
     }
 
-    // MARK: - Auth Helpers
-    private func currentUserId() async -> String? {
-        do    { return try await SupabaseManager.shared.currentUserId() }
-        catch { debugLog("[Auth] user ID retrieval failed"); return nil }
-    }
-
-    private func authToken() async -> String? {
-        do    { return try await SupabaseManager.shared.accessToken() }
-        catch { debugLog("[Auth] auth retrieval failed"); return nil }
-    }
-
     // MARK: - Upload Pipeline
+    /// Saves the PDF on this device and starts converting it there (OemerKit: Core ML + the
+    /// oemer engine); nothing is uploaded. The result screen shows progress until it's done.
     private func saveUploadToDatabase(imageData: Data, fileName: String,
                                        fileType: String, popup: UploadQuizPopup) async throws {
-        debugLog("[Upload] size=\(imageData.count) bytes")
+        debugLog("[Upload] size=\(imageData.count) bytes, converting on device")
 
-        guard let uidStr = await currentUserId(), let userId = UUID(uuidString: uidStr) else {
-            throw UploadError.invalidUser
-        }
-        guard let token = await authToken() else {
-            throw UploadError.missingToken
-        }
-
-        // ── Step 1: Railway API ───────────────────────────────────────────────────
-        // Railway uploads the PDF to Supabase Storage with its service key and
-        // returns the job ID. We do NOT re-upload from iOS (would 403 on RLS).
-        let api = try await callConversionAPI(imageData: imageData,
-                                              fileName: fileName, fileType: fileType, token: token)
-
-        guard let jobIdStr = api["job_id"] as? String,
-              let jobId = UUID(uuidString: jobIdStr) else { throw UploadError.badAPIResponse }
-
-        let apiUidStr = uidStr.lowercased()
-        let pdfPath   = "\(apiUidStr)/\(jobIdStr.lowercased())/input.pdf"
-        let outputURL = "\(ReHersAPI.baseURLString)/sheets/\(jobIdStr.lowercased())"
-
-        // ── Step 3: Build json_data (protect canonical keys from API overwrite) ───
-        let timestampFilename = generateTimestampFilename()
-        let friendlyTitle = try await generateUniqueUploadTitle(for: userId)
+        let friendlyTitle = generateUniqueUploadTitle()
         uploadTitle = friendlyTitle
+        let upload = try LocalSheetLibrary.shared.add(pdfData: imageData, title: friendlyTitle,
+                                                       originalFilename: fileName)
 
-        var jsonDict: [String: Any] = [
-            "uploaded_at":         ISO8601DateFormatter().string(from: Date()),
-            "title":               friendlyTitle,
-            "original_filename":   timestampFilename,
-            "job_id":              jobIdStr,
-            "user_id":             apiUidStr,
-            "output_url":          outputURL,
-            "file_size_bytes":     imageData.count
-        ]
-        let protectedKeys: Set<String> = ["job_id", "user_id", "output_url", "title", "status"]
-        for (k, v) in api where !protectedKeys.contains(k) { jsonDict[k] = v }
-
-        // ── Step 4: Upsert scan record ────────────────────────────────────────────
-        let existingScans: [Scan] = try await supabase.from("scans").select()
-            .eq("user_id", value: userId)
-            .like("json_data->>'job_id'", pattern: "%\(jobIdStr)%")
-            .execute().value
-
-        if existingScans.isEmpty {
-            let ins = ScanInsert(userId: userId, jsonData: AnyCodable(jsonDict),
-                                  processingId: jobIdStr, status: "pending",
-                                  originalFilename: timestampFilename, fileType: "application/pdf",
-                                  processedAt: ISO8601DateFormatter().string(from: Date()))
-            let _: Scan = try await supabase.from("scans").insert(ins).select().single().execute().value
-        } else if let existing = existingScans.first {
-            let upd = ScanUpdate(jsonData: AnyCodable(jsonDict), status: "pending",
-                                  processedAt: ISO8601DateFormatter().string(from: Date()),
-                                  updatedAt: ISO8601DateFormatter().string(from: Date()))
-            try await supabase.from("scans").update(upd).eq("id", value: Int(existing.id)).execute()
+        AnalyticsManager.logUploadCompleted(
+            source: currentUploadSource,
+            fileType: fileType,
+            fileSizeBytes: imageData.count
+        )
+        loadRecentUploads()
+        clearUploadState()
+        let vc       = UploadPageNextViewController()
+        vc.jobId     = upload.id
+        vc.onDataReady = {
+            popup.notifyUploadComplete()
         }
-
-        // ── Navigate ──────────────────────────────────────────────────────────────
-        await MainActor.run {
-            AnalyticsManager.logUploadCompleted(
-                source: self.currentUploadSource,
-                fileType: fileType,
-                fileSizeBytes: imageData.count
-            )
-            self.loadRecentUploads()
-            self.clearUploadState()
-            let vc       = UploadPageNextViewController()
-            vc.jobId     = jobId
-            vc.onDataReady = {
-                popup.notifyUploadComplete()
-            }
-            debugLog("[Navigate] jobId=\(jobId.uuidString)")
-            self.navigationController?.pushViewController(vc, animated: true)
-        }
-    }
-
-    // MARK: - Conversion API
-    private func callConversionAPI(imageData: Data, fileName: String,
-                                   fileType: String, token: String) async throws -> [String: Any] {
-        guard let url = ReHersAPI.url(path: "/convert") else {
-            throw UploadError.noResponse
-        }
-        let boundary = UUID().uuidString
-        var req      = URLRequest(url: url)
-        req.httpMethod  = "POST"
-        req.timeoutInterval = 60
-        if #available(iOS 14.5, *) {
-            req.assumesHTTP3Capable = false   // force HTTP/1.1 — avoids QUIC sendmsg failures
-        }
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var body = Data()
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
-        body.append("Content-Type: \(fileType)\r\n\r\n")
-        body.append(imageData)
-        body.append("\r\n--\(boundary)--\r\n")
-        req.httpBody = body
-
-        let (data, response) = try await ReHersPinnedSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw UploadError.noResponse }
-        guard (200...299).contains(http.statusCode) else {
-            let msg = String(data: data, encoding: .utf8) ?? ""
-            throw UploadError.apiError(http.statusCode, msg)
-        }
-
-        let obj = try JSONSerialization.jsonObject(with: data)
-        if let d = obj as? [String: Any]              { return d }
-        if let a = obj as? [[String: Any]], let f = a.first { return f }
-        return ["api_response": obj, "status": "success"]
+        debugLog("[Navigate] upload=\(upload.id.uuidString)")
+        navigationController?.pushViewController(vc, animated: true)
     }
 
     // MARK: - Document Scanner (VisionKit)
@@ -1406,22 +1108,11 @@ class UploadScreen: UIViewController {
         let message = AppUserFacingError.message(
             for: "finish this upload",
             error: error,
-            fallback: "Our servers are facing an issue. Please try uploading something else."
+            fallback: "We couldn't save this sheet on your device. Please check your free storage and try again."
         )
         popup.dismiss(animated: true) { [weak self] in
             self?.presentAlert(title: title, message: message)
         }
-    }
-
-    private func canStartUploadRequest() -> Bool {
-        guard AppConnectivityMonitor.shared.isOnline else {
-            presentAlert(
-                title: "No Internet Connection",
-                message: "Your internet connection appears to be offline. Please reconnect before uploading."
-            )
-            return false
-        }
-        return true
     }
 
     private func validateUploadSize(_ data: Data, title: String = "Upload Too Large") -> Bool {
@@ -1441,7 +1132,6 @@ class UploadScreen: UIViewController {
 
     private func cancelPendingTasks() {
         profileFetchTask?.cancel()
-        recentUploadsTask?.cancel()
         renameTask?.cancel()
         uploadTask?.cancel()
     }
@@ -1501,7 +1191,6 @@ class UploadScreen: UIViewController {
                 return
             }
             guard validateUploadSize(pdfData) else { return }
-            guard canStartUploadRequest() else { return }
 
             currentUploadData = pdfData
             currentFileName = generateTimestampFilename()
@@ -1541,216 +1230,6 @@ class UploadScreen: UIViewController {
             return .failure(error)
         }
     }
-
-    // MARK: - Upload Errors
-    enum UploadError: LocalizedError {
-        case invalidUser, missingToken, badAPIResponse, noResponse
-        case apiError(Int, String)
-        var errorDescription: String? {
-            switch self {
-            case .invalidUser:    return "Could not retrieve your user ID."
-            case .missingToken:   return "Could not retrieve authentication token."
-            case .badAPIResponse: return "Missing job_id in API response."
-            case .noResponse:     return "No response received from the server."
-            case .apiError(let code, let msg): return "Server error \(code): \(msg)"
-            }
-        }
-    }
-
-    // MARK: - Data Models
-    struct Job: Codable, Identifiable {
-        let id: UUID; let userId: UUID; let pdfPath: String
-        let resultUrl: String?; let status: String
-        let errorMessage: String?; let createdAt: String?; let updatedAt: String?
-        enum CodingKeys: String, CodingKey {
-            case id; case userId = "user_id"; case pdfPath = "pdf_path"
-            case resultUrl = "result_url"; case status
-            case errorMessage = "error_message"; case createdAt = "created_at"; case updatedAt = "updated_at"
-        }
-    }
-    struct JobInsert: Encodable {
-        let id: UUID; let userId: UUID; let pdfPath: String; let resultUrl: String?; let status: String
-        enum CodingKeys: String, CodingKey {
-            case id; case userId = "user_id"; case pdfPath = "pdf_path"
-            case resultUrl = "result_url"; case status
-        }
-    }
-    struct JobUpdate: Encodable {
-        let resultUrl: String?; let status: String?; let errorMessage: String?; let updatedAt: String
-        enum CodingKeys: String, CodingKey {
-            case resultUrl = "result_url"; case status
-            case errorMessage = "error_message"; case updatedAt = "updated_at"
-        }
-        init(resultUrl: String? = nil, status: String? = nil,
-             errorMessage: String? = nil, updatedAt: String) {
-            self.resultUrl    = resultUrl;    self.status       = status
-            self.errorMessage = errorMessage; self.updatedAt    = updatedAt
-        }
-    }
-    struct Scan: Codable, Identifiable {
-        let id: Int64; let userId: UUID; let jsonData: AnyCodable?; let processingId: String?
-        let status: String?; let originalFilename: String?; let fileType: String?
-        let processedAt: String?; let updatedAt: String?; let errorMessage: String?
-        enum CodingKeys: String, CodingKey {
-            case id; case userId = "user_id"; case jsonData = "json_data"
-            case processingId = "processing_id"; case status
-            case originalFilename = "original_filename"; case fileType = "file_type"
-            case processedAt = "processed_at"; case updatedAt = "updated_at"
-            case errorMessage = "error_message"
-        }
-    }
-    struct ScanInsert: Encodable {
-        let userId: UUID; let jsonData: AnyCodable; let processingId: String; let status: String
-        let originalFilename: String?; let fileType: String?; let processedAt: String?
-        enum CodingKeys: String, CodingKey {
-            case userId = "user_id"; case jsonData = "json_data"
-            case processingId = "processing_id"; case status
-            case originalFilename = "original_filename"; case fileType = "file_type"
-            case processedAt = "processed_at"
-        }
-    }
-    struct ScanUpdate: Encodable {
-        let jsonData: AnyCodable; let status: String; let processedAt: String; let updatedAt: String
-        enum CodingKeys: String, CodingKey {
-            case jsonData = "json_data"; case status
-            case processedAt = "processed_at"; case updatedAt = "updated_at"
-        }
-    }
-    struct AnyCodable: Codable {
-        let value: Any
-        init(_ value: Any) { self.value = value }
-        init(from decoder: Decoder) throws {
-            let c = try decoder.singleValueContainer()
-            if      let b = try? c.decode(Bool.self)                  { value = b }
-            else if let i = try? c.decode(Int.self)                   { value = i }
-            else if let d = try? c.decode(Double.self)                { value = d }
-            else if let s = try? c.decode(String.self)                { value = s }
-            else if let a = try? c.decode([AnyCodable].self)          { value = a.map { $0.value } }
-            else if let d = try? c.decode([String: AnyCodable].self)  { value = d.mapValues { $0.value } }
-            else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
-        }
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.singleValueContainer()
-            switch value {
-            case let b as Bool:          try c.encode(b)
-            case let i as Int:           try c.encode(i)
-            case let d as Double:        try c.encode(d)
-            case let s as String:        try c.encode(s)
-            case let a as [Any]:         try c.encode(a.map { AnyCodable($0) })
-            case let d as [String: Any]: try c.encode(d.mapValues { AnyCodable($0) })
-            default: throw EncodingError.invalidValue(
-                value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
-            }
-        }
-    }
-}
-
-enum ReHersAPI {
-    static var baseURLString: String {
-        guard let rawBaseURL = Bundle.main.object(forInfoDictionaryKey: "BACKEND_API_URL") as? String else {
-            fatalError("BACKEND_API_URL not set in build configuration")
-        }
-
-        let baseURL = rawBaseURL
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-
-        guard !baseURL.isEmpty else {
-            fatalError("BACKEND_API_URL not set in build configuration")
-        }
-
-        return baseURL
-    }
-
-    static func url(path: String) -> URL? {
-        URL(string: "\(baseURLString)\(path)")
-    }
-}
-
-final class ReHersPinnedSessionDelegate: NSObject, URLSessionDelegate {
-    private let expectedHost = URL(string: ReHersAPI.baseURLString)?.host ?? ""
-    private let pinnedPublicKeyHash = "HHrSlgBFDK8S5rQlffqsyZ/rHPP7lqg6OR8l/+k3OIo="
-
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        // NOTE: Certificate pinning is disabled for now to allow backend URL changes
-        // (e.g., redeployments to a new Azure Container Apps domain) without breaking uploads.
-        completionHandler(.performDefaultHandling, nil)
-        return
-
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
-            completionHandler(.performDefaultHandling, nil)
-            return
-        }
-
-        guard challenge.protectionSpace.host == expectedHost,
-              let trust = challenge.protectionSpace.serverTrust,
-              SecTrustEvaluateWithError(trust, nil),
-              let certificate = SecTrustGetCertificateAtIndex(trust, 0),
-              let hash = spkiHash(for: certificate) else {
-            completionHandler(.cancelAuthenticationChallenge, nil)
-            return
-        }
-
-        guard hash == pinnedPublicKeyHash else {
-            completionHandler(.cancelAuthenticationChallenge, nil)
-            return
-        }
-
-        completionHandler(.useCredential, URLCredential(trust: trust))
-    }
-
-    private func spkiHash(for certificate: SecCertificate) -> String? {
-        guard let key = SecCertificateCopyKey(certificate),
-              let keyData = SecKeyCopyExternalRepresentation(key, nil) as Data?,
-              let attributes = SecKeyCopyAttributes(key) as? [String: Any],
-              let keyType = attributes[kSecAttrKeyType as String] as? String else {
-            return nil
-        }
-
-        let algorithmIdentifier: Data
-        if keyType == (kSecAttrKeyTypeRSA as String) {
-            algorithmIdentifier = Data([
-                0x30, 0x0d,
-                0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
-                0x05, 0x00
-            ])
-        } else {
-            return nil
-        }
-
-        let subjectPublicKey = derEncoded(tag: 0x03, body: Data([0x00]) + keyData)
-        let spki = derEncoded(tag: 0x30, body: algorithmIdentifier + subjectPublicKey)
-        return Data(SHA256.hash(data: spki)).base64EncodedString()
-    }
-
-    private func derEncoded(tag: UInt8, body: Data) -> Data {
-        var data = Data([tag])
-        data.append(derLength(body.count))
-        data.append(body)
-        return data
-    }
-
-    private func derLength(_ length: Int) -> Data {
-        if length < 0x80 {
-            return Data([UInt8(length)])
-        }
-
-        var value = length
-        var bytes: [UInt8] = []
-        while value > 0 {
-            bytes.insert(UInt8(value & 0xff), at: 0)
-            value >>= 8
-        }
-
-        return Data([0x80 | UInt8(bytes.count)] + bytes)
-    }
-}
-
-enum ReHersPinnedSession {
-    static let shared: URLSession = {
-        let config = URLSessionConfiguration.default
-        return URLSession(configuration: config, delegate: ReHersPinnedSessionDelegate(), delegateQueue: nil)
-    }()
 }
 
 protocol UploadCameraCaptureViewControllerDelegate: AnyObject {
@@ -1961,7 +1440,6 @@ extension UploadScreen: VNDocumentCameraViewControllerDelegate {
                                   message: "Could not create a PDF from the scanned pages.")
                 return
             }
-            guard self.canStartUploadRequest() else { return }
             self.currentUploadData = pdfData
             self.currentFileName   = self.generateTimestampFilename()
             self.currentFileType   = "application/pdf"
@@ -2053,7 +1531,6 @@ extension UploadScreen: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                 self.currentFileName   = self.generateTimestampFilename()
                 self.currentFileType   = "application/pdf"
                 self.currentUploadSource = "document_picker"
-                guard self.canStartUploadRequest() else { return }
                 let popup = self.showQuizPopup()
                 AnalyticsManager.logUploadStarted(source: self.currentUploadSource, fileType: self.currentFileType)
                 self.uploadTask?.cancel()

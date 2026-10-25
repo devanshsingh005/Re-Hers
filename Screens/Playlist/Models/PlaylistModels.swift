@@ -143,16 +143,20 @@ public struct DBPlaylistItemInsert: Codable {
 /// A lightweight representation of a user's uploaded scan, used for playlist-track selection.
 public struct UploadScanItem {
     public let id: Int64
-    public let title: String       // derived from json_data["title"] or original_filename
+    public let title: String
     public let fileType: String    // "PDF" / "FILE"
     public let dateString: String  // formatted date
     public let sizeString: String  // formatted file size
+    /// The upload in LocalSheetLibrary (uploads are stored and converted on this device).
+    public let localUploadId: UUID
 
-    public init(id: Int64, title: String, fileType: String, dateString: String, sizeString: String) {
+    public init(id: Int64, title: String, fileType: String, dateString: String, sizeString: String,
+                localUploadId: UUID) {
         self.id = id
         self.title = title
         self.fileType = fileType
         self.dateString = dateString
         self.sizeString = sizeString
+        self.localUploadId = localUploadId
     }
 }
