@@ -24,6 +24,14 @@ public struct LocatedNote: Sendable {
     public let dotted: Bool
     /// Notehead rectangle in the upright original image, in pixels (origin top-left).
     public let rect: CGRect
+    /// 0-based system on the page (top to bottom); `staff` counts within it.
+    public let system: Int
+    /// This note's staff at the note: top of its first line, bottom of its last line, and the
+    /// distance between lines, in pixels of the upright original image. Use them to place
+    /// marks relative to the staff (e.g. note names a fixed distance below it).
+    public let staffTop: Double
+    public let staffBottom: Double
+    public let staffSpace: Double
 }
 
 public struct SheetMusicResult: Sendable {
@@ -166,15 +174,23 @@ public final class SheetMusicRecognizer: @unchecked Sendable {
         let notes: [LocatedNote] = result.notes.map { n in
             let b = n.bbox
             var y1 = Double(b.y1), y2 = Double(b.y2)
+            var staffTop = n.staffTop, staffBottom = n.staffBottom
             if let rows = result.dewarpRows {
                 let cx = min(max((b.x1 + b.x2) / 2, 0), rows.width - 1)
-                y1 = Double(rows[min(max(b.y1, 0), rows.height - 1), cx])
-                y2 = Double(rows[min(max(b.y2, 0), rows.height - 1), cx])
+                func source(_ y: Double) -> Double { Double(rows[min(max(Int(y.rounded()), 0), rows.height - 1), cx]) }
+                y1 = source(Double(b.y1))
+                y2 = source(Double(b.y2))
+                staffTop = source(n.staffTop)
+                staffBottom = source(n.staffBottom)
             }
+            // dewarping can stretch the staff a little; scale the line distance with it
+            let stretch = n.staffBottom > n.staffTop ? (staffBottom - staffTop) / (n.staffBottom - n.staffTop) : 1
             let rect = CGRect(x: Double(b.x1) / sx, y: y1 / sy,
                               width: Double(b.x2 - b.x1) / sx, height: max(0, y2 - y1) / sy)
             return LocatedNote(name: n.name, step: n.step, alter: n.alter, octave: n.octave, staff: n.staff,
-                               type: n.type, dotted: n.dotted, rect: rect)
+                               type: n.type, dotted: n.dotted, rect: rect, system: n.system,
+                               staffTop: staffTop / sy, staffBottom: staffBottom / sy,
+                               staffSpace: n.staffSpace * stretch / sy)
         }
         return SheetMusicResult(musicXML: result.musicXML, notes: notes,
                                 imageSize: CGSize(width: image.originalWidth, height: image.originalHeight),

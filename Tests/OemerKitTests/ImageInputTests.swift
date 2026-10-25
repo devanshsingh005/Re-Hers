@@ -128,6 +128,8 @@ final class ImageInputTests: XCTestCase {
         let a = try await recognizer.recognize(imageData: Self.encode(up, orientation: 1, type: "public.tiff"))
         let b = try await recognizer.recognize(imageData: Self.encode(Self.stored(up, orientation: 6), orientation: 6, type: "public.tiff"))
         assertSameNotes(b, a, "recognize(imageData:) EXIF 6")
+        assertStaffGeometry(a, "upright")
+        assertStaffGeometry(b, "EXIF 6")
     }
 
     #if canImport(UIKit)
@@ -209,6 +211,24 @@ final class ImageInputTests: XCTestCase {
         print("\(label): \(got.notes.count) notes vs \(expected.notes.count) upright, \(unmatched) upright notes not matched")
         XCTAssertLessThanOrEqual(abs(got.notes.count - expected.notes.count), expected.notes.count / 100, label, file: file, line: line)
         XCTAssertLessThanOrEqual(unmatched, expected.notes.count / 100, label, file: file, line: line)
+    }
+
+    /// Each note's staff spans about 4 line distances, and the note sits on it or on nearby
+    /// ledger lines, all in photo coordinates.
+    func assertStaffGeometry(_ result: SheetMusicResult, _ label: String,
+                             file: StaticString = #filePath, line: UInt = #line)
+    {
+        XCTAssertFalse(result.notes.isEmpty, label, file: file, line: line)
+        var bad = 0
+        for n in result.notes {
+            let height = n.staffBottom - n.staffTop
+            let spaces = height / n.staffSpace
+            let near = n.rect.midY > n.staffTop - 7 * n.staffSpace && n.rect.midY < n.staffBottom + 7 * n.staffSpace
+            if !(n.staffSpace > 2 && spaces > 3.5 && spaces < 5.5 && near) { bad += 1 }
+        }
+        let systems = Set(result.notes.map(\.system)).count
+        print("\(label): \(systems) systems, staff space ~\(Int(result.notes[0].staffSpace)) px, \(bad) notes off their staff")
+        XCTAssertEqual(bad, 0, label, file: file, line: line)
     }
 
     // MARK: - Test images

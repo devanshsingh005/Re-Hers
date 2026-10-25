@@ -352,6 +352,13 @@ public struct RecognizedNote {
     public let staff: Int
     public let type: String
     public let dotted: Bool
+    /// 0-based system (group of staffs read together) on the page, top to bottom.
+    public let system: Int
+    /// Outer edges of this note's staff (top of its first line, bottom of its last line) near
+    /// the note, and the distance between its lines, in the same coordinates as `bbox`.
+    public let staffTop: Double
+    public let staffBottom: Double
+    public let staffSpace: Double
 
     /// Name like "C#4" / "Bb3".
     public var name: String { step + (alter == 1 ? "#" : alter == -1 ? "b" : "") + String(octave) }
@@ -625,9 +632,20 @@ final class MusicXMLBuilder {
         e.add("stem", text: n.stemUp == true ? "up" : "down")
         e.add("staff", text: String(n.track + 1))
         e.add("voice", text: String(voice))
+        let st = staffGeometry(of: n)
         writtenNotes.append(RecognizedNote(bbox: n.bbox, step: step, alter: alter, octave: octave,
-                                           staff: n.track + 1, type: r.name, dotted: n.hasDot))
+                                           staff: n.track + 1, type: r.name, dotted: n.hasDot, system: n.group,
+                                           staffTop: st.yUpper, staffBottom: st.yLower, staffSpace: st.unitSize))
         return e
+    }
+
+    /// The staff a note was read on (its group and track), in the zone nearest to it. Only
+    /// reported with the note; it does not affect the MusicXML.
+    private func staffGeometry(of n: NoteHead) -> Staff {
+        let cx = Double(n.bbox.x1 + n.bbox.x2) / 2
+        let own = ctx.staffsFlat.filter { $0.group == n.group && $0.track == n.track }
+        if let st = own.min(by: { abs($0.xCenter - cx) < abs($1.xCenter - cx) }) { return st }
+        return ctx.findClosestStaffs(cx, Double(n.bbox.y1 + n.bbox.y2) / 2).0
     }
 
     private func restElement(_ r: Rest) -> XMLNode {
