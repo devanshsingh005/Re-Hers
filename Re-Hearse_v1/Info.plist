@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>BACKEND_API_URL</key>
-	<string>$(BACKEND_API_URL)</string>
 	<key>PUBLIC_LEGAL_BASE_URL</key>
 	<string>https://letsrehearse.studio</string>
 	<key>SUPABASE_KEY</key>
