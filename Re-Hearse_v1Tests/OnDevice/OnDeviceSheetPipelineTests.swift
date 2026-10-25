@@ -3,7 +3,7 @@ import UIKit
 import XCTest
 @testable import Rehearse_v1
 
-/// The on-device replacement for the old /convert server pipeline: a PDF goes into
+/// Sheet music conversion on the device (it replaced a server pipeline): a PDF goes into
 /// LocalSheetLibrary and comes back as score JSON (read by Play Along, Animation and the result
 /// screen), a labeled PDF and MusicXML, without any network.
 final class OnDeviceSheetPipelineTests: XCTestCase {
@@ -141,6 +141,21 @@ final class OnDeviceSheetPipelineTests: XCTestCase {
         let done = try XCTUnwrap(finished)
         XCTAssertEqual(done.status, .failed)
         XCTAssertEqual(done.errorMessage, SheetConversionError.noMusicFound.errorDescription)
+    }
+
+    /// Deleting the account also removes its uploads from the device.
+    @MainActor
+    func test_deleteAllUploadsOfCurrentAccount_removesFilesAndRecords() async throws {
+        let library = LocalSheetLibrary.shared
+        let upload = try library.add(pdfData: try Self.tabiPDF(), title: "To be deleted", originalFilename: "x.pdf")
+        XCTAssertNotNil(library.inputPDF(id: upload.id))
+
+        library.deleteAllUploadsOfCurrentAccount()
+
+        XCTAssertTrue(library.uploads().isEmpty)
+        XCTAssertNil(library.inputPDF(id: upload.id))
+        let finished = await library.waitForConversion(id: upload.id)
+        XCTAssertNil(finished, "the stopped conversion must not bring the upload back")
     }
 
     // MARK: - Helpers

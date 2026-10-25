@@ -3,8 +3,8 @@
 //  Re-Hearse_v1
 //
 //  The user's uploaded sheets and their conversions, kept only on this device in
-//  Application Support/SheetLibrary/<account>/. This replaces the old server pipeline: the
-//  /convert API, the Supabase `jobs` and `scans` rows, the storage buckets and the polling.
+//  Application Support/SheetLibrary/<account>/. Nothing is uploaded: uploads made before
+//  on-device conversion (Supabase `jobs`/`scans` rows and storage files) are not shown.
 //
 //  Each upload has a folder with input.pdf, and once converted output.json (the score JSON
 //  Play Along and Animation read), labeled.pdf (note names under the notes) and score.musicxml.
@@ -148,6 +148,19 @@ final class LocalSheetLibrary {
         try save(all, owner: owner)
         try? FileManager.default.removeItem(at: folder(of: id, owner: owner))
         notify(id)
+    }
+
+    /// Removes every upload of the signed-in account from this device; call it when the account
+    /// is deleted, before signing out.
+    func deleteAllUploadsOfCurrentAccount() {
+        let owner = self.owner
+        for upload in list(for: owner) {
+            tasks.removeValue(forKey: upload.id)?.cancel()
+            progress[upload.id] = nil
+        }
+        lists[owner] = []
+        try? FileManager.default.removeItem(at: root.appendingPathComponent(owner, isDirectory: true))
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
     }
 
     /// Converts the upload again (e.g. after a failure).
