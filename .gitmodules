@@ -1,0 +1,3 @@
+[submodule ".agents/aso-skills"]
+	path = .agents/aso-skills
+	url = https://github.com/eronred/aso-skills.git

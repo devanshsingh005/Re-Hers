@@ -1,0 +1,6 @@
+# keep fixtures and models byte-exact (no line-ending conversion)
+*.musicxml binary
+*.omrmaps binary
+*.bin binary
+*.mlpackage/** binary
+*.sh text eol=lf
