@@ -11,13 +11,13 @@ import UIKit
 
 // MARK: - Chapter Status
 
-enum ChapterStatus {
+enum ChapterStatus: String, Codable {
     case completed, current, locked
 }
 
 // MARK: - Extended Models
 
-struct ChordDetail {
+struct ChordDetail: Codable {
     let name: String
     let notes: [String]
     let type: String
@@ -26,13 +26,13 @@ struct ChordDetail {
     let commonUse: String
 }
 
-struct ProgressionExample {
+struct ProgressionExample: Codable {
     let numerals: String
     let chords: String
     let feel: String
 }
 
-struct MusicLesson {
+struct MusicLesson: Codable {
     let title: String
     let noteName: String
     let noteEnglish: String
@@ -64,25 +64,20 @@ struct MusicLesson {
     }
 }
 
-struct MusicChapter {
-    let id = UUID()
+struct MusicChapter: Codable {
     let chapterIndex: Int          // 1-based
     let title: String
     let subtitle: String
-    let status: ChapterStatus
-    let stars: Int
+    var status: ChapterStatus = .locked
+    var stars: Int = 0
     let lesson: MusicLesson
 
     /// Returns a copy with a new status and stars — used when applying Supabase progress.
     func with(status: ChapterStatus, stars: Int = 0) -> MusicChapter {
-        MusicChapter(
-            chapterIndex: chapterIndex,
-            title:        title,
-            subtitle:     subtitle,
-            status:       status,
-            stars:        stars,
-            lesson:       lesson
-        )
+        var copy = self
+        copy.status = status
+        copy.stars = stars
+        return copy
     }
 }
 
@@ -112,7 +107,7 @@ func applyProgress(currentChapter: Int, chapterStars: [Int: Int] = [:]) -> [Musi
 
 // MARK: - All Chapters (content only — status always .locked as baseline)
 
-let allChapters: [MusicChapter] = [
+var allChapters: [MusicChapter] = [
 
     // ─────────────────────────────────────────
     // CHAPTER 1 — Piano Basics

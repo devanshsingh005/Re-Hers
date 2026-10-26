@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 from urllib.parse import urlparse
+import re
 from dotenv import load_dotenv
 
 # Load .env from sibling directory (backend/)
@@ -39,23 +40,20 @@ LOCAL_HTTP_SCHEME = 'http' + '://'
 
 def validate_audiveris_api_url(api_url: str | None) -> str:
     """Validate the Audiveris backend URL."""
+    import re
     if api_url is None or not str(api_url).strip():
         raise ValueError("AUDIVERIS_API_URL must be set")
-
     url: str = str(api_url)
     parsed = urlparse(url)
     scheme = (parsed.scheme or "").lower()
     host = (parsed.hostname or "").lower()
-
     if scheme not in {"http", "https"}:
         raise ValueError(f"Invalid scheme '{scheme}' for AUDIVERIS_API_URL. Use 'http' or 'https'.")
-
     if not host:
         raise ValueError("AUDIVERIS_API_URL must have a valid hostname.")
-
-    if scheme == "http" and host not in {"localhost", "127.0.0.1"}:
+    is_ip = bool(re.match(r'^\d+\.\d+\.\d+\.\d+$', host))
+    if scheme == "http" and host not in {"localhost", "127.0.0.1"} and not is_ip:
         raise ValueError("AUDIVERIS_API_URL must use HTTPS for remote hosts.")
-
     return url
 
 

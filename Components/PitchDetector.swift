@@ -1,0 +1,373 @@
+import Foundation
+import AVFoundation
+import Accelerate
+
+/// Reports the strongest detected note and its frequency.
+public protocol PitchDetectorDelegate: AnyObject {
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat)
+}
+
+/// A reusable real-time FFT pitch detector based on the logic from ChordRecognitionViewController.
+public final class PitchDetector {
+    enum StartFailure: LocalizedError {
+        case microphonePermissionMissing
+        case noInputRouteAvailable
+        case fftInitializationFailed
+        case audioSessionConfigurationFailed(Error)
+        case engineStartFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .microphonePermissionMissing:
+                return "Microphone access is required before listening can begin."
+            case .noInputRouteAvailable:
+                return "No microphone input route is currently available."
+            case .fftInitializationFailed:
+                return "The audio analysis engine could not be initialized."
+            case .audioSessionConfigurationFailed(let error):
+                return "The audio session could not be configured: \(error.localizedDescription)"
+            case .engineStartFailed(let error):
+                return "The microphone engine could not start: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    // MARK: - Properties
+    weak var delegate: PitchDetectorDelegate?
+    
+    private let audioEngine = AVAudioEngine()
+    private var fftSetup: FFTSetup?
+    private var bufferSize: Int = 4096
+    private var sampleRate: Double = 44100
+    private var hasInstalledTap = false
+    private(set) var isListening = false
+    private(set) var lastStartFailure: StartFailure?
+    
+    // Audio processing
+    private let minMagnitudeThreshold: Float = 0.0025
+    private var frequencyHistory: [Float] = []
+    private let historySize = 5 // Increased from 3 for smoother note tracking
+    
+    // Antigravity: Session-based permission flag
+    private static var hasRequestedPermissionInSession = false
+    
+    // MARK: - Init / Deinit
+    init() {
+        setupNotifications()
+    }
+    
+    deinit {
+        stopListening()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Start/Stop
+
+    func recordPermissionStatus() -> AVAudioSession.RecordPermission {
+        AVAudioSession.sharedInstance().recordPermission
+    }
+
+    func requestMicrophonePermission(_ completion: @escaping (Bool) -> Void) {
+        let audioSession = AVAudioSession.sharedInstance()
+        PitchDetector.hasRequestedPermissionInSession = true
+        audioSession.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                completion(granted)
+            }
+        }
+    }
+
+    /// Starts the audio engine once permission has already been granted.
+    @discardableResult
+    func startListening() -> Bool {
+        let audioSession = AVAudioSession.sharedInstance()
+        lastStartFailure = nil
+
+        if audioSession.recordPermission != .granted {
+            lastStartFailure = .microphonePermissionMissing
+            return false
+        }
+
+        return self.startEngine()
+    }
+    
+    /// Stops the audio engine and removes the tap.
+    func stopListening() {
+        if hasInstalledTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledTap = false
+        }
+        audioEngine.stop()
+        audioEngine.reset()
+        
+        if let setup = fftSetup {
+            vDSP_destroy_fftsetup(setup)
+        }
+        fftSetup = nil
+        isListening = false
+        frequencyHistory.removeAll()
+        debugLog("🛑 [PitchDetector] Stopped listening")
+    }
+    
+    // MARK: - Audio Session & Engine
+    
+    private func configureAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothHFP, .mixWithOthers])
+        try session.setActive(true)
+    }
+    
+    private func startEngine() -> Bool {
+        guard !isListening else { return true }
+        
+        do {
+            try configureAudioSession()
+        } catch {
+            lastStartFailure = .audioSessionConfigurationFailed(error)
+            debugLog("❌ [PitchDetector] Audio session configuration failed:", error)
+            return false
+        }
+
+        audioEngine.stop()
+        audioEngine.reset()
+
+        if hasInstalledTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledTap = false
+        }
+
+        do {
+            let input = audioEngine.inputNode
+            let format = input.inputFormat(forBus: 0)
+
+            guard format.channelCount > 0 else {
+                lastStartFailure = .noInputRouteAvailable
+                debugLog("❌ [PitchDetector] No microphone input route available")
+                return false
+            }
+            
+            sampleRate = format.sampleRate
+            
+            let log2n = vDSP_Length(log2(Float(bufferSize)))
+            fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
+            guard fftSetup != nil else {
+                lastStartFailure = .fftInitializationFailed
+                debugLog("❌ [PitchDetector] FFT setup failed")
+                return false
+            }
+            
+            var window = [Float](repeating: 0, count: bufferSize)
+            vDSP_hann_window(&window, vDSP_Length(bufferSize), Int32(vDSP_HANN_NORM))
+            
+            input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(bufferSize), format: format) { [weak self] buffer, _ in
+                self?.process(buffer: buffer, window: window)
+            }
+            hasInstalledTap = true
+            
+            audioEngine.prepare()
+            try audioEngine.start()
+            isListening = true
+            debugLog("🎙️ [PitchDetector] Started listening")
+            return true
+        } catch {
+            if hasInstalledTap {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                hasInstalledTap = false
+            }
+            if let setup = fftSetup {
+                vDSP_destroy_fftsetup(setup)
+            }
+            fftSetup = nil
+            lastStartFailure = .engineStartFailed(error)
+            debugLog("❌ [PitchDetector] Engine start error:", error)
+            return false
+        }
+    }
+    
+    private func setupNotifications() {
+        NotificationCenter.default.addObserver(self, selector: #selector(handleInterruption), name: AVAudioSession.interruptionNotification, object: nil)
+    }
+    
+    @objc private func handleInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+        
+        if type == .began {
+            stopListening()
+        } else if type == .ended {
+            if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                if options.contains(.shouldResume) {
+                    _ = startListening()
+                }
+            }
+        }
+    }
+    
+    // MARK: - FFT Processing
+    
+    private func process(buffer: AVAudioPCMBuffer, window: [Float]) {
+        guard let channel = buffer.floatChannelData?[0], let setup = fftSetup else { return }
+        
+        // Calculate root mean square (RMS) amplitude as a noise gate
+        var rms: Float = 0
+        vDSP_rmsqv(channel, 1, &rms, vDSP_Length(buffer.frameLength))
+        if rms < 0.015 { 
+            return // Ignore very quiet background noise 
+        }
+        
+        var samples = [Float](repeating: 0, count: bufferSize)
+        let copySize = min(Int(buffer.frameLength), bufferSize)
+        // Copy audio data
+        memcpy(&samples, channel, copySize * MemoryLayout<Float>.size)
+        
+        // Apply Hann window
+        vDSP_vmul(samples, 1, window, 1, &samples, 1, vDSP_Length(bufferSize))
+        
+        let half = bufferSize / 2
+        var real = [Float](repeating: 0, count: half)
+        var imag = [Float](repeating: 0, count: half)
+        
+        real.withUnsafeMutableBufferPointer { realBuf in
+            imag.withUnsafeMutableBufferPointer { imagBuf in
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                
+                samples.withUnsafeBufferPointer {
+                    $0.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: half) {
+                        vDSP_ctoz($0, 2, &split, 1, vDSP_Length(half))
+                    }
+                }
+                
+                // Perform Forward FFT
+                vDSP_fft_zrip(setup, &split, 1, vDSP_Length(log2(Float(bufferSize))), FFTDirection(FFT_FORWARD))
+                
+                var magnitudes = [Float](repeating: 0, count: half)
+                // Convert complex array to magnitudes
+                vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(half))
+                
+        let peaks = findSignificantPeaks(in: magnitudes)
+                DispatchQueue.main.async { [weak self] in
+                    self?.handleDetectedPeaks(peaks, rms: rms)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Peak Analysis
+    
+    private func findSignificantPeaks(in magnitudes: [Float]) -> [(frequency: Float, magnitude: Float)] {
+        var peaks: [(frequency: Float, magnitude: Float)] = []
+        
+        for i in 2..<(magnitudes.count - 2) {
+            let mag = magnitudes[i]
+            
+            // Local maxima check
+            if mag > minMagnitudeThreshold &&
+               mag > magnitudes[i-2] &&
+               mag > magnitudes[i-1] &&
+               mag > magnitudes[i+1] &&
+               mag > magnitudes[i+2] {
+                
+                let frequency = Float(i) * Float(sampleRate) / Float(bufferSize)
+                
+                // Typical piano/vocal range (C2 ~65Hz, C7 ~2093Hz)
+                if frequency >= 60 && frequency <= 2100 {
+                    let interpolatedFreq = quadraticInterpolation(
+                        index: i,
+                        magnitudes: magnitudes,
+                        sampleRate: Float(sampleRate),
+                        fftSize: bufferSize
+                    )
+                    peaks.append((frequency: interpolatedFreq, magnitude: mag))
+                }
+            }
+        }
+        
+        peaks.sort { $0.magnitude > $1.magnitude }
+        return Array(peaks.prefix(3)) // Return up to 3 strongest peaks
+    }
+    
+    private func quadraticInterpolation(index: Int, magnitudes: [Float], sampleRate: Float, fftSize: Int) -> Float {
+        guard index > 0 && index < magnitudes.count - 1 else {
+            return Float(index) * sampleRate / Float(fftSize)
+        }
+        let left   = magnitudes[index - 1]
+        let center = magnitudes[index]
+        let right  = magnitudes[index + 1]
+        
+        let p = 0.5 * (left - right) / (left - 2 * center + right)
+        let interpolatedIndex = Float(index) + p
+        return interpolatedIndex * sampleRate / Float(fftSize)
+    }
+    
+    private func handleDetectedPeaks(_ peaks: [(frequency: Float, magnitude: Float)], rms: Float) {
+        guard !peaks.isEmpty else { return }
+
+        let primaryPeak = selectPrimaryPeak(from: peaks)
+        let stabilizedFrequency = stabilizedFrequency(from: primaryPeak.frequency)
+
+        var foundNotes: [String] = [PitchDetector.frequencyToNoteName(stabilizedFrequency)]
+        for peak in peaks {
+            let note = PitchDetector.frequencyToNoteName(peak.frequency)
+            if !foundNotes.contains(note) {
+                foundNotes.append(note)
+            }
+            if foundNotes.count == 3 {
+                break
+            }
+        }
+
+        let amplitude = CGFloat(min(1.0, max(Double(rms) * 10.0, Double(primaryPeak.magnitude) * 180.0)))
+
+        delegate?.pitchDetectorDidDetect(notes: foundNotes, frequency: stabilizedFrequency, amplitude: amplitude)
+    }
+
+    private func selectPrimaryPeak(from peaks: [(frequency: Float, magnitude: Float)]) -> (frequency: Float, magnitude: Float) {
+        guard let strongest = peaks.first else { return (0, 0) }
+
+        let candidateFloor = strongest.magnitude * 0.18
+        let candidates = peaks.filter { peak in
+            peak.magnitude >= candidateFloor &&
+            peak.frequency >= 60 &&
+            peak.frequency <= 1400
+        }
+
+        return candidates.min(by: { $0.frequency < $1.frequency }) ?? strongest
+    }
+
+    private func stabilizedFrequency(from frequency: Float) -> Float {
+        if let last = frequencyHistory.last, last > 0, frequency > 0 {
+            let semitoneJump = abs(12 * log2(frequency / last))
+            if semitoneJump > 2.5 {
+                frequencyHistory.removeAll()
+            }
+        }
+
+        frequencyHistory.append(frequency)
+        if frequencyHistory.count > historySize {
+            frequencyHistory.removeFirst(frequencyHistory.count - historySize)
+        }
+
+        let sorted = frequencyHistory.sorted()
+        let middle = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[middle - 1] + sorted[middle]) / 2
+        }
+        return sorted[middle]
+    }
+    
+    // MARK: - Utilities
+    
+    static func frequencyToNoteName(_ f: Float) -> String {
+        guard f > 0 else { return "—" }
+        let midi = Int(round(69 + 12 * log2(f / 440.0)))
+        let clampedMidi = max(0, min(127, midi))
+        
+        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let index = clampedMidi % 12
+        let octave = (clampedMidi / 12) - 1
+        
+        return "\(names[index])\(octave)"
+    }
+}
