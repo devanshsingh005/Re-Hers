@@ -201,8 +201,8 @@ public final class PlaylistsManager {
     
     // MARK: - Add Upload Scan to Playlist
     
-    /// Inserts a user's existing upload (scan) as a track into the playlist.
-    /// Links via `sheet_scan_id` so data is always recoverable from Supabase.
+    /// Inserts one of the user's uploads as a track. Uploads live on this device, so the track
+    /// points at it through `track_id` ("local-upload:<uuid>") and has no `sheet_scan_id`.
     public func addScanToPlaylist(playlistId: UUID, scan: UploadScanItem) async throws -> PlaylistTrack {
         let session = try await SupabaseManager.shared.client.auth.session
         let userId = session.user.id
@@ -221,10 +221,10 @@ public final class PlaylistsManager {
         let insertItem = DBPlaylistItemInsert(
             playlistId: playlistId,
             userId: userId,
-            trackId: String(scan.id),     // use scan id as trackId
+            trackId: LocalSheetLibrary.playlistTrackId(for: scan.localUploadId),
             trackTitle: scan.title,
             artistName: "My Upload",       // uploads don't have an artist field
-            sheetScanId: scan.id,
+            sheetScanId: nil,
             position: nextPosition
         )
         
@@ -236,7 +236,7 @@ public final class PlaylistsManager {
             .execute()
             .value
         
-        debugLog("✅ Added scan \(scan.id) '\(scan.title)' to playlist \(playlistId)")
+        debugLog("✅ Added upload \(scan.localUploadId) '\(scan.title)' to playlist \(playlistId)")
         
         return PlaylistTrack(
             id: UUID(),
@@ -248,167 +248,20 @@ public final class PlaylistsManager {
         )
     }
     
-    // MARK: - Fetch labeled PDF URL for a scan
-
-    /// Reads `json_data.output_url` from the `scans` table for the given scan ID.
-    /// Returns `nil` gracefully when no output URL exists yet.
-    public func fetchPDFURL(forScanId scanId: Int64) async throws -> URL? {
-        struct ScanRow: Codable {
-            let jsonData: AnyScan?
-            enum CodingKeys: String, CodingKey { case jsonData = "json_data" }
-        }
-        struct AnyScan: Codable {
-            let outputUrl: String?
-            enum CodingKeys: String, CodingKey { case outputUrl = "output_url" }
-        }
-
-        let rows: [ScanRow] = try await SupabaseManager.shared.client
-            .from("scans")
-            .select("json_data")
-            .eq("id", value: Int(scanId))
-            .limit(1)
-            .execute()
-            .value
-
-        guard let urlString = rows.first?.jsonData?.outputUrl,
-              !urlString.isEmpty,
-              let url = URL(string: urlString) else { return nil }
-        return url
-    }
-
-    /// Fetches the labeled PDF URL string from the scans table for a given scan ID.
-    /// Returns the result URL string (may be relative path or full URL).
-    public func fetchJobPDFURLString(forScanId scanId: Int64) async throws -> String? {
-        struct ScanRow: Codable {
-            let jobId: String?
-            let jsonData: AnyScan?
-            enum CodingKeys: String, CodingKey {
-                case jobId = "job_id"
-                case jsonData = "json_data"
-            }
-        }
-        struct AnyScan: Codable {
-            let outputUrl: String?
-            enum CodingKeys: String, CodingKey { case outputUrl = "output_url" }
-        }
-
-        let rows: [ScanRow] = try await SupabaseManager.shared.client
-            .from("scans")
-            .select("job_id, json_data")
-            .eq("id", value: Int(scanId))
-            .limit(1)
-            .execute()
-            .value
-
-        // Try to get output_url from json_data first
-        if let urlString = rows.first?.jsonData?.outputUrl, !urlString.isEmpty {
-            return urlString
-        }
-        
-        // If that doesn't work, try to fetch from jobs table if we have a job_id
-        if let jobId = rows.first?.jobId, !jobId.isEmpty {
-            struct JobRow: Codable {
-                let resultUrl: String?
-                enum CodingKeys: String, CodingKey {
-                    case resultUrl = "result_url"
-                }
-            }
-            
-            let jobRows: [JobRow] = try await SupabaseManager.shared.client
-                .from("jobs")
-                .select("result_url")
-                .eq("id", value: jobId)
-                .limit(1)
-                .execute()
-                .value
-            
-            if let resultUrl = jobRows.first?.resultUrl, !resultUrl.isEmpty {
-                return resultUrl
-            }
-        }
-        
-        return nil
-    }
-
     // MARK: - Fetch User Uploads
 
-    /// Fetches all scans for the current user, mapped to lightweight UploadScanItem models.
+    /// The user's converted uploads on this device, for adding to a playlist.
     public func fetchUserUploads() async throws -> [UploadScanItem] {
-        let session = try await SupabaseManager.shared.client.auth.session
-        let userId = session.user.id
-        
-        struct ScanRow: Codable {
-            let id: Int64
-            let jsonData: ScanJSON?
-            let originalFilename: String?
-            let fileType: String?
-            let processedAt: String?
-            let updatedAt: String?
-            enum CodingKeys: String, CodingKey {
-                case id
-                case jsonData = "json_data"
-                case originalFilename = "original_filename"
-                case fileType = "file_type"
-                case processedAt = "processed_at"
-                case updatedAt = "updated_at"
+        LocalSheetLibrary.shared.uploads()
+            .filter { $0.status == .completed }
+            .map { upload in
+                UploadScanItem(id: upload.scanId, title: upload.title, fileType: "PDF",
+                               dateString: Self.relativeUploadDate(upload.uploadedAt),
+                               sizeString: Self.formatUploadSize(fileSizeBytes: upload.fileSizeBytes),
+                               localUploadId: upload.id)
             }
-        }
-        struct ScanJSON: Codable {
-            let title: String?
-            let originalFilename: String?
-            let uploadedAt: String?
-            let fileSizeBytes: Int?
-            let fileSize: Int?
-            enum CodingKeys: String, CodingKey {
-                case title
-                case originalFilename = "original_filename"
-                case uploadedAt = "uploaded_at"
-                case fileSizeBytes = "file_size_bytes"
-                case fileSize = "file_size"
-            }
-        }
-        
-        let rows: [ScanRow] = try await SupabaseManager.shared.client
-            .from("scans")
-            .select()
-            .eq("user_id", value: userId.uuidString)
-            .order("updated_at", ascending: false)
-            .limit(100)
-            .execute()
-            .value
-        
-        // De-duplicate by id
-        var seen = Set<Int64>()
-        let unique = rows.filter { seen.insert($0.id).inserted }
-        
-        return unique.map { row -> UploadScanItem in
-            let json = row.jsonData
-            
-            let title: String = {
-                if let t = json?.title, !t.isEmpty { return t }
-                if let f = json?.originalFilename { return f.hasSuffix(".pdf") ? String(f.dropLast(4)) : f }
-                if let f = row.originalFilename { return f.hasSuffix(".pdf") ? String(f.dropLast(4)) : f }
-                return "Upload #\(row.id)"
-            }()
-            
-            let fileType = (row.fileType ?? "").contains("pdf") ? "PDF" : "FILE"
-            let dateStr = Self.formatUploadDate(json?.uploadedAt ?? row.processedAt ?? row.updatedAt)
-            let sizeStr = Self.formatUploadSize(fileSizeBytes: json?.fileSizeBytes ?? json?.fileSize)
-            
-            return UploadScanItem(id: row.id, title: title, fileType: fileType,
-                                  dateString: dateStr, sizeString: sizeStr)
-        }
     }
-    
-    private static func formatUploadDate(_ raw: String?) -> String {
-        guard let raw, !raw.isEmpty else { return "" }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = iso.date(from: raw) { return relativeUploadDate(d) }
-        iso.formatOptions = [.withInternetDateTime]
-        if let d = iso.date(from: raw) { return relativeUploadDate(d) }
-        return ""
-    }
+
     private static func relativeUploadDate(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) { return "Today" }
         let f = DateFormatter(); f.dateFormat = "MMM d"; return f.string(from: date)

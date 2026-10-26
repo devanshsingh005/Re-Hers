@@ -1030,6 +1030,8 @@ final class UserProfileViewController: UIViewController {
 
                 await MainActor.run {
                     self.pendingDeleteAccountBearerToken = nil
+                    // uploads are stored on this device, not in Supabase: remove them too
+                    LocalSheetLibrary.shared.deleteAllUploadsOfCurrentAccount()
                     self.showDeletionSuccessAndSignOut()
                 }
             } catch {

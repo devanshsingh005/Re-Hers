@@ -4,9 +4,6 @@
 //
 
 import UIKit
-import Supabase
-import Auth
-internal import PostgREST
 
 class AllUploadsViewController: UIViewController {
 
@@ -15,9 +12,7 @@ class AllUploadsViewController: UIViewController {
     private let contentStack     = UIStackView()
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
     private var uploadLoadErrorMessage: String?
-
-    // MARK: - Supabase
-    private var supabase: SupabaseClient { SupabaseManager.shared.client }
+    private var shownUploads: [LocalSheetLibrary.Upload] = []
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -28,6 +23,18 @@ class AllUploadsViewController: UIViewController {
         setupScrollView()
         setupLoadingIndicator()
         loadUploads()
+        NotificationCenter.default.addObserver(self, selector: #selector(handleLibraryChange),
+                                               name: LocalSheetLibrary.didChangeNotification, object: nil)
+    }
+
+    @objc private func handleLibraryChange(_ note: Notification) {
+        // progress ticks don't change the list; status, title and membership do
+        guard let id = note.userInfo?["id"] as? UUID else { return }
+        let current = LocalSheetLibrary.shared.upload(id: id)
+        let shown = shownUploads.first { $0.id == id }
+        if current?.status != shown?.status || current?.title != shown?.title || (current == nil) != (shown == nil) {
+            loadUploads()
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -81,70 +88,31 @@ class AllUploadsViewController: UIViewController {
 
     // MARK: - Data
     private func loadUploads() {
-        loadingIndicator.startAnimating()
-        Task {
-            do {
-                let scans = try await fetchScans()
-                await MainActor.run {
-                    self.uploadLoadErrorMessage = nil
-                    self.loadingIndicator.stopAnimating()
-                    self.renderRows(scans)
-                }
-            } catch {
-                debugLog("[AllUploads] fetch error: \(error)")
-                await MainActor.run {
-                    self.uploadLoadErrorMessage = AppUserFacingError.message(
-                        for: "load your uploads",
-                        error: error,
-                        fallback: "We couldn't load your uploads right now. Please try again."
-                    )
-                    self.loadingIndicator.stopAnimating()
-                    self.renderRows([])
-                }
-            }
-        }
-    }
-
-    private func fetchScans() async throws -> [Scan] {
-        guard let uidStr = try? await supabase.auth.session.user.id.uuidString,
-              let userId = UUID(uuidString: uidStr) else { return [] }
-        let response: [Scan] = try await supabase
-            .from("scans").select()
-            .eq("user_id", value: userId)
-            .order("updated_at", ascending: false)
-            .limit(50)
-            .execute().value
-        var seen = Set<Int64>()
-        return response.filter { seen.insert($0.id).inserted }
+        uploadLoadErrorMessage = nil
+        shownUploads = LocalSheetLibrary.shared.uploads()
+        renderRows(shownUploads)
     }
 
     // MARK: - Render
-    private func renderRows(_ scans: [Scan]) {
+    private func renderRows(_ uploads: [LocalSheetLibrary.Upload]) {
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        if scans.isEmpty {
+        if uploads.isEmpty {
             contentStack.addArrangedSubview(makeEmptyState(message: uploadLoadErrorMessage))
             return
         }
-        for scan in scans { contentStack.addArrangedSubview(makeRow(for: scan)) }
+        for upload in uploads { contentStack.addArrangedSubview(makeRow(for: upload)) }
     }
 
-    private func makeRow(for scan: Scan) -> UIView {
-        let jsonDict = scan.jsonData?.value as? [String: Any]
-
-        // Title: prefer json_data.title → json_data.original_filename → scan.originalFilename → date
-        let title: String = {
-            if let t = jsonDict?["title"] as? String, !t.isEmpty { return t }
-            if let f = jsonDict?["original_filename"] as? String {
-                return f.hasSuffix(".pdf") ? String(f.dropLast(4)) : f
+    private func makeRow(for upload: LocalSheetLibrary.Upload) -> UIView {
+        let title    = upload.title
+        let fileType = "PDF"
+        let meta: String = {
+            switch upload.status {
+            case .processing: return "Converting on device…"
+            case .failed:     return "Conversion failed"
+            case .completed:  return [relativeDate(upload.uploadedAt), formatSize(upload.fileSizeBytes)].joined(separator: " • ")
             }
-            return scan.originalFilename ?? formatDate(jsonDict?["uploaded_at"] as? String
-                                                       ?? scan.processedAt ?? scan.updatedAt)
         }()
-
-        let fileType = (scan.fileType ?? "application/pdf").contains("pdf") ? "PDF" : "FILE"
-        let dateStr  = formatDate(jsonDict?["uploaded_at"] as? String ?? scan.processedAt ?? scan.updatedAt)
-        let sizeStr  = formatSize(jsonDict)
-        let meta     = [dateStr, sizeStr].filter { !$0.isEmpty }.joined(separator: " • ")
 
         // Card
         let card = UIButton(type: .custom)
@@ -199,7 +167,7 @@ class AllUploadsViewController: UIViewController {
         moreBtn.tintColor = .tertiaryLabel
         moreBtn.translatesAutoresizingMaskIntoConstraints = false
         moreBtn.showsMenuAsPrimaryAction = true
-        let scanId = scan.id
+        let scanId = upload.scanId
         let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self, weak titleLbl] _ in
             self?.showRenameAlert(for: scanId, currentTitle: titleLbl?.text ?? title, titleLabel: titleLbl)
         }
@@ -232,32 +200,21 @@ class AllUploadsViewController: UIViewController {
             moreBtn.heightAnchor.constraint(equalToConstant: 30)
         ])
 
-        // ── Tap: pass jobId + resultURL to UploadPageNextViewController ──
+        // ── Tap: open the result screen (it shows progress while still converting) ──
         card.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            guard let jobIdStr = jsonDict?["job_id"] as? String,
-                  let jobId    = UUID(uuidString: jobIdStr) else {
-                debugLog("[AllUploads] ❌ No job_id in scan \(scan.id)")
+            guard let current = LocalSheetLibrary.shared.upload(id: upload.id) else {
+                self.loadUploads()
                 return
             }
-            let outputURL = jsonDict?["output_url"] as? String
-            Task { [weak self] in
-                guard let self else { return }
-                if let statusMessage = await self.statusGateMessage(for: scan, jobId: jobId) {
-                    await MainActor.run {
-                        self.presentUploadStatusAlert(title: title, message: statusMessage)
-                    }
-                    return
-                }
-
-                await MainActor.run {
-                    let vc        = UploadPageNextViewController()
-                    vc.jobId      = jobId
-                    vc.resultURL  = outputURL
-                    debugLog("[AllUploads] jobId=\(jobId.uuidString.lowercased())  hasResultURL=\(outputURL?.isEmpty == false)")
-                    self.navigationController?.pushViewController(vc, animated: true)
-                }
+            if current.status == .failed {
+                self.presentFailedUploadAlert(current)
+                return
             }
+            let vc   = UploadPageNextViewController()
+            vc.jobId = current.id
+            debugLog("[AllUploads] upload=\(current.id.uuidString.lowercased()) status=\(current.status.rawValue)")
+            self.navigationController?.pushViewController(vc, animated: true)
         }, for: .touchUpInside)
 
         card.addTarget(self, action: #selector(cardDown(_:)), for: .touchDown)
@@ -266,100 +223,19 @@ class AllUploadsViewController: UIViewController {
         return card
     }
 
-    private func statusGateMessage(for scan: Scan, jobId: UUID) async -> String? {
-        await jobStatusGateMessage(jobId: jobId)
-    }
-
-    private func jobStatusGateMessage(jobId: UUID) async -> String? {
-        struct JobStatusRow: Decodable {
-            let status: String?
-            let errorMessage: String?
-            let labelStatus: String?
-            let labelWarning: String?
-            let resultUrl: String?
-            enum CodingKeys: String, CodingKey {
-                case status
-                case errorMessage = "error_message"
-                case labelStatus = "label_status"
-                case labelWarning = "label_warning"
-                case resultUrl = "result_url"
-            }
-        }
-
-        do {
-            let rows: [JobStatusRow] = try await supabase
-                .from("jobs")
-                .select("status, error_message, label_status, label_warning, result_url")
-                .eq("id", value: jobId)
-                .limit(1)
-                .execute()
-                .value
-
-            guard let row = rows.first else { return nil }
-            let status = row.status?.lowercased() ?? ""
-            let labelStatus = row.labelStatus?.lowercased() ?? ""
-            let hasResult = (row.resultUrl?.isEmpty == false)
-
-            if (status == "pending" || status == "processing") && !hasResult {
-                return "This sheet music is still being prepared. Please wait a little longer, then try again."
-            }
-
-            if status == "failed" {
-                if let message = userFriendlyUploadStatusMessage(
-                    rawMessage: row.errorMessage,
-                    fallback: "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete."
-                ) {
-                    return message
-                }
-                return "This upload could not be converted successfully. The sheet may be unclear, unsupported, or incomplete."
-            }
-
-            if labelStatus == "failed" {
-                if let message = userFriendlyUploadStatusMessage(
-                    rawMessage: row.labelWarning ?? row.errorMessage,
-                    fallback: "We processed this file, but couldn't prepare the practice sheet for it."
-                ) {
-                    return message
-                }
-                return "We processed this file, but couldn't prepare the practice sheet for it."
-            }
-
-            if hasResult && (labelStatus.isEmpty || labelStatus == "success") {
-                return nil
-            }
-
-            return nil
-        } catch {
-            debugLog("[AllUploads] job lookup failed: \(error)")
-            return nil
-        }
-    }
-
-    private func userFriendlyUploadStatusMessage(rawMessage: String?, fallback: String) -> String? {
-        let trimmed = rawMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !trimmed.isEmpty else { return fallback }
-
-        let lowercased = trimmed.lowercased()
-        if lowercased.contains("note labeling pipeline failed") {
-            return "We processed this file, but couldn't recognize the notes clearly enough to build a practice sheet."
-        }
-        if lowercased.contains("timeout") {
-            return "The conversion took too long and couldn't be completed. Please try again with a clearer file."
-        }
-        if lowercased.contains("unsupported") {
-            return "This file format or sheet layout isn't supported yet. Please try a different file."
-        }
-
-        return trimmed
-    }
-
-    private func presentUploadStatusAlert(title: String, message: String) {
+    private func presentFailedUploadAlert(_ upload: LocalSheetLibrary.Upload) {
         let alert = UIAlertController(
-            title: "Upload Not Ready",
-            message: message,
+            title: "Conversion Failed",
+            message: upload.errorMessage ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete.",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.addAction(UIAlertAction(title: "Try Again", style: .default) { [weak self] _ in
+            LocalSheetLibrary.shared.retry(id: upload.id)
+            let vc   = UploadPageNextViewController()
+            vc.jobId = upload.id
+            self?.navigationController?.pushViewController(vc, animated: true)
+        })
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         present(alert, animated: true)
     }
 
@@ -429,15 +305,7 @@ class AllUploadsViewController: UIViewController {
         }
 
         do {
-            let scans: [Scan] = try await supabase.from("scans").select()
-                .eq("id", value: Int(scanId)).limit(1).execute().value
-            guard let scan = scans.first else { return }
-            var dict = (scan.jsonData?.value as? [String: Any]) ?? [:]
-            dict["title"] = sanitizedTitle
-            let upd = ScanUpdate(jsonData: AnyCodable(dict), status: scan.status ?? "completed",
-                                  processedAt: scan.processedAt ?? ISO8601DateFormatter().string(from: Date()),
-                                  updatedAt: ISO8601DateFormatter().string(from: Date()))
-            try await supabase.from("scans").update(upd).eq("id", value: Int(scanId)).execute()
+            try LocalSheetLibrary.shared.rename(scanId: scanId, to: sanitizedTitle)
         } catch {
             debugLog("[AllUploads] rename failed: \(error)")
             let message = AppUserFacingError.message(
@@ -477,12 +345,8 @@ class AllUploadsViewController: UIViewController {
 
     private func deleteScan(id scanId: Int64) async {
         do {
-            try await supabase
-                .from("scans")
-                .delete()
-                .eq("id", value: Int(scanId))
-                .execute()
-            await MainActor.run { self.loadUploads() }
+            try LocalSheetLibrary.shared.delete(scanId: scanId)
+            loadUploads()
         } catch {
             debugLog("[AllUploads] delete failed: \(error)")
             let message = AppUserFacingError.message(
@@ -510,78 +374,14 @@ class AllUploadsViewController: UIViewController {
     }
 
     // MARK: - Formatting Helpers
-    private func formatDate(_ raw: String?) -> String {
-        guard let raw, !raw.isEmpty else { return "" }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = iso.date(from: raw) { return relativeDate(d) }
-        iso.formatOptions = [.withInternetDateTime]
-        if let d = iso.date(from: raw) { return relativeDate(d) }
-        return ""
-    }
-
     private func relativeDate(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) { return "Today" }
         let f = DateFormatter(); f.dateFormat = "MMM d"; return f.string(from: date)
     }
 
-    private func formatSize(_ dict: [String: Any]?) -> String {
-        guard let d = dict else { return "" }
-        let bytes: Int? = (d["file_size_bytes"] as? Int)
-            ?? (d["file_size_bytes"] as? Double).map { Int($0) }
-            ?? (d["file_size"] as? Int)
-            ?? (d["file_size"] as? String).flatMap { Int($0) }
-        guard let b = bytes else { return "" }
-        let kb = Double(b) / 1024.0
+    private func formatSize(_ bytes: Int) -> String {
+        let kb = Double(bytes) / 1024.0
         return kb < 1024 ? String(format: "%.0f KB", kb) : String(format: "%.1f MB", kb / 1024.0)
-    }
-
-    // MARK: - Data Models
-    struct Scan: Codable, Identifiable {
-        let id: Int64; let userId: UUID; let jsonData: AnyCodable?; let processingId: String?
-        let status: String?; let originalFilename: String?; let fileType: String?
-        let processedAt: String?; let updatedAt: String?; let errorMessage: String?
-        enum CodingKeys: String, CodingKey {
-            case id; case userId = "user_id"; case jsonData = "json_data"
-            case processingId = "processing_id"; case status
-            case originalFilename = "original_filename"; case fileType = "file_type"
-            case processedAt = "processed_at"; case updatedAt = "updated_at"
-            case errorMessage = "error_message"
-        }
-    }
-    struct ScanUpdate: Encodable {
-        let jsonData: AnyCodable; let status: String; let processedAt: String; let updatedAt: String
-        enum CodingKeys: String, CodingKey {
-            case jsonData = "json_data"; case status
-            case processedAt = "processed_at"; case updatedAt = "updated_at"
-        }
-    }
-    struct AnyCodable: Codable {
-        let value: Any
-        init(_ value: Any) { self.value = value }
-        init(from decoder: Decoder) throws {
-            let c = try decoder.singleValueContainer()
-            if      let b = try? c.decode(Bool.self)                 { value = b }
-            else if let i = try? c.decode(Int.self)                  { value = i }
-            else if let d = try? c.decode(Double.self)               { value = d }
-            else if let s = try? c.decode(String.self)               { value = s }
-            else if let a = try? c.decode([AnyCodable].self)         { value = a.map { $0.value } }
-            else if let d = try? c.decode([String: AnyCodable].self) { value = d.mapValues { $0.value } }
-            else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
-        }
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.singleValueContainer()
-            switch value {
-            case let b as Bool:          try c.encode(b)
-            case let i as Int:           try c.encode(i)
-            case let d as Double:        try c.encode(d)
-            case let s as String:        try c.encode(s)
-            case let a as [Any]:         try c.encode(a.map { AnyCodable($0) })
-            case let d as [String: Any]: try c.encode(d.mapValues { AnyCodable($0) })
-            default: throw EncodingError.invalidValue(
-                value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
-            }
-        }
     }
 
     @objc private func handleBack() {

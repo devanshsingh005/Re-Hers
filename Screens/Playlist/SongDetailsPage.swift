@@ -12,7 +12,7 @@ internal import PostgREST
 class PlaylistSongDetailViewController: UIViewController {
     private enum SheetSourceContext {
         case unknown
-        case scan(scanId: Int64)
+        case localUpload(UUID)
         case discoverSongId(UUID)
         case discoverSongMetadata(title: String, artist: String)
     }
@@ -30,16 +30,9 @@ class PlaylistSongDetailViewController: UIViewController {
     private var sheetMusicJSON: [String: Any]? {
         didSet { updateActionButtonState() }
     }
-    private var cachedPDFPath: String?
-    private var cachedJobId: UUID?
     private var sourceContext: SheetSourceContext = .unknown
     private var loadedDiscoverSong: Song?
     private var trackedPracticeSessionStartedAt: Date?
-
-    // Polling (only used when result_url is genuinely not yet available)
-    private var pollTask: Task<Void, Never>?
-    private let maxPollAttempts = 20
-    private let pollIntervalSeconds: UInt64 = 3
 
     // MARK: - Supabase
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
@@ -90,7 +83,6 @@ class PlaylistSongDetailViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        pollTask?.cancel()
         SupabaseProgressManager.endTrackedPracticeSession(
             &trackedPracticeSessionStartedAt,
             kind: .practicePage
@@ -376,19 +368,29 @@ class PlaylistSongDetailViewController: UIViewController {
 
     // MARK: - Data Fetch
 
-    /// Main entry point. Reads scan row → job row, then:
-    ///   1. If result_url is already set → fetch labeled PDF directly from Supabase CDN (instant).
-    ///   2. If not → poll until the backend sets it, then fetch from Supabase CDN.
-    /// Output JSON is also fetched from the backend API concurrently (unchanged).
+    /// Main entry point. The user's own uploads are stored and converted on this device;
+    /// Discover songs come from Supabase.
     private func loadSheetData() {
         pdfView.isHidden = true
         errorLabel.isHidden = true
         pdfSkeleton.show(in: view)
 
-        if let scanId = passedSheetScanId {
-            sourceContext = .scan(scanId: scanId)
+        if let trackId = passedTrackId, let uploadId = LocalSheetLibrary.uploadId(fromPlaylistTrackId: trackId) {
+            sourceContext = .localUpload(uploadId)
             loadedDiscoverSong = nil
-            loadSheetDataFromScan(scanId)
+            loadSheetDataFromLocalUpload(uploadId)
+            return
+        }
+
+        if let scanId = passedSheetScanId {
+            // playlist items from before uploads moved onto the device point at a server-side scan
+            loadedDiscoverSong = nil
+            if let upload = LocalSheetLibrary.shared.upload(scanId: scanId) {
+                sourceContext = .localUpload(upload.id)
+                loadSheetDataFromLocalUpload(upload.id)
+            } else {
+                showError(message: "This upload isn't on this device.\nUpload the sheet again to practise it here.")
+            }
             return
         }
 
@@ -409,61 +411,24 @@ class PlaylistSongDetailViewController: UIViewController {
         showError()
     }
 
-    private func loadSheetDataFromScan(_ scanId: Int64) {
+    private func loadSheetDataFromLocalUpload(_ id: UUID) {
         Task {
-            do {
-                // ── Step 1: read scan row to get job_id ──────────────────────────
-                struct ScanRow: Codable {
-                    let jsonData: AnyCodable?
-                    enum CodingKeys: String, CodingKey { case jsonData = "json_data" }
-                }
-                let scans: [ScanRow] = try await supabase.from("scans").select("json_data")
-                    .eq("id", value: Int(scanId)).limit(1).execute().value
-
-                guard let dict = scans.first?.jsonData?.value as? [String: Any],
-                      let jobId = (dict["job_id"] as? String).flatMap(UUID.init) else {
-                    debugLog("[SongDetail] ❌ Could not extract job_id from scan \(scanId)")
-                    await MainActor.run { self.showError() }
-                    return
-                }
-
-                debugLog("[SongDetail] ✓ jobId=\(jobId.uuidString)")
-
-                // ── Step 2: read job row to get pdf_path + result_url ────────────
-                struct JobRow: Decodable {
-                    let pdfPath: String
-                    let resultUrl: String?
-                    enum CodingKeys: String, CodingKey {
-                        case pdfPath = "pdf_path"; case resultUrl = "result_url"
-                    }
-                }
-                let jobs: [JobRow] = try await supabase.from("jobs").select("pdf_path, result_url")
-                    .eq("id", value: jobId).limit(1).execute().value
-
-                guard let job = jobs.first else {
-                    debugLog("[SongDetail] ❌ No job row found for jobId=\(jobId.uuidString)")
-                    await MainActor.run { self.showError() }
-                    return
-                }
-
-                debugLog("[SongDetail] job.result_url=\(job.resultUrl ?? "nil")")
-
-                await MainActor.run {
-                    self.cachedPDFPath = job.pdfPath
-                    self.cachedJobId   = jobId
-                }
-
-                // ── Step 3: fetch labeled PDF + output JSON concurrently ─────────
-                // fetchLabeledPDFWithPolling goes direct to Supabase CDN via
-                // a signed URL — no Azure hop. It only polls when result_url is nil.
-                async let pdfTask: Void  = fetchLabeledPDFWithPolling(
-                    resultUrl: job.resultUrl, jobId: jobId)
-                async let jsonTask: Void = fetchOutputJSON(jobId: jobId, pdfPath: job.pdfPath)
-                _ = await (pdfTask, jsonTask)
-
-            } catch {
-                debugLog("[SongDetail] ❌ loadSheetData error: \(error)")
-                await MainActor.run { self.showError() }
+            let library = LocalSheetLibrary.shared
+            guard let upload = await library.waitForConversion(id: id) else {
+                showError(message: "This upload is no longer on this device.")
+                return
+            }
+            guard upload.status == .completed else {
+                showError(message: upload.errorMessage ?? "This sheet couldn't be converted.")
+                return
+            }
+            originalPDF = library.inputPDF(id: id).flatMap { PDFDocument(data: $0) }
+            labeledPDF = library.labeledPDF(id: id).flatMap { PDFDocument(data: $0) }
+            if let json = library.scoreJSON(id: id), isValidScoreJSON(json) { sheetMusicJSON = json }
+            if let doc = segmentControl.selectedSegmentIndex == 0 ? originalPDF : labeledPDF {
+                showPDF(doc)
+            } else {
+                showError()
             }
         }
     }
@@ -560,11 +525,13 @@ class PlaylistSongDetailViewController: UIViewController {
 
     private func loadSelectedSegmentFromCurrentSource(isOriginal: Bool) async {
         switch sourceContext {
-        case .scan:
-            if isOriginal {
-                await fetchOriginalPDF()
+        case .localUpload(let id):
+            let library = LocalSheetLibrary.shared
+            if let doc = (isOriginal ? library.inputPDF(id: id) : library.labeledPDF(id: id)).flatMap({ PDFDocument(data: $0) }) {
+                if isOriginal { originalPDF = doc } else { labeledPDF = doc }
+                showPDF(doc)
             } else {
-                await fetchLabeledPDFWithPolling(resultUrl: nil, jobId: cachedJobId)
+                showError()
             }
 
         case .discoverSongId(let songId):
@@ -618,29 +585,6 @@ class PlaylistSongDetailViewController: UIViewController {
         }
     }
 
-    // MARK: - Output JSON (Azure backend — unchanged)
-    private func fetchOutputJSON(jobId: UUID, pdfPath: String) async {
-        _ = pdfPath
-        guard let token = try? await SupabaseManager.shared.accessToken(),
-              let url = ReHersAPI.url(path: "/sheets/\(jobId.uuidString)") else { return }
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        do {
-            let (data, response) = try await ReHersPinnedSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            debugLog("[SongDetail] fetchOutputJSON status=\(status)")
-            guard status == 200 else { return }
-            guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  isValidScoreJSON(parsed) else {
-                debugLog("[SongDetail] fetchOutputJSON — not valid score JSON")
-                return
-            }
-            await MainActor.run { self.sheetMusicJSON = parsed }
-        } catch {
-            debugLog("[SongDetail] fetchOutputJSON error: \(error)")
-        }
-    }
-
     private func isValidScoreJSON(_ json: [String: Any]) -> Bool {
         if json["score-partwise"] != nil { return true }
         if json["measure"] != nil { return true }
@@ -655,152 +599,6 @@ class PlaylistSongDetailViewController: UIViewController {
             return false
         }
         return findMeasure(in: json)
-    }
-
-    // MARK: - Labeled PDF: fast path + poll fallback
-
-    /// Entry point for labeled PDF.
-    ///
-    /// Fast path (result_url already set):
-    ///   iOS → Supabase Storage CDN  (~1–2 s)
-    ///
-    /// Slow path (result_url nil — job still processing):
-    ///   Poll jobs table until result_url appears, then take the fast path.
-    ///   Never touches the Azure backend for the PDF bytes.
-    private func fetchLabeledPDFWithPolling(resultUrl: String?, jobId: UUID?) async {
-        guard let jId = jobId ?? cachedJobId else {
-            debugLog("[SongDetail] ❌ no jobId for labeled PDF fetch")
-            await MainActor.run { showError() }
-            return
-        }
-
-        // ── Fast path: result_url is already available ───────────────────────────
-        if let url = resultUrl, !url.isEmpty {
-            debugLog("[SongDetail] result_url ready — going direct to Supabase CDN: \(url)")
-            await fetchLabeledPDFFromStoragePath(url, jobId: jId)
-            return
-        }
-
-        // ── Slow path: poll jobs table until result_url is populated ─────────────
-        debugLog("[SongDetail] result_url nil — polling jobId=\(jId.uuidString)")
-
-        pollTask = Task {
-            struct JobPollRow: Decodable {
-                let resultUrl: String?
-                let status: String?
-                enum CodingKeys: String, CodingKey {
-                    case resultUrl = "result_url"; case status
-                }
-            }
-
-            for attempt in 1...maxPollAttempts {
-                if Task.isCancelled { debugLog("[SongDetail] poll cancelled"); return }
-
-                do {
-                    let rows: [JobPollRow] = try await supabase
-                        .from("jobs").select("result_url, status")
-                        .eq("id", value: jId).limit(1).execute().value
-
-                    let status = rows.first?.status ?? "unknown"
-                    let url    = rows.first?.resultUrl
-                    debugLog("[SongDetail] poll \(attempt)/\(maxPollAttempts) status=\(status) url=\(url ?? "nil")")
-
-                    if status == "failed" {
-                        await MainActor.run { self.showError() }
-                        return
-                    }
-                    // result_url is now populated → take fast path immediately
-                    if let resolvedURL = url, !resolvedURL.isEmpty {
-                        await fetchLabeledPDFFromStoragePath(resolvedURL, jobId: jId)
-                        return
-                    }
-                } catch {
-                    debugLog("[SongDetail] poll \(attempt) error: \(error)")
-                }
-
-                if attempt < maxPollAttempts {
-                    try? await Task.sleep(nanoseconds: pollIntervalSeconds * 1_000_000_000)
-                }
-            }
-
-            debugLog("[SongDetail] ❌ polling exhausted")
-            await MainActor.run { self.showError() }
-        }
-
-        await pollTask?.value
-    }
-
-    /// Converts the raw result_url stored in the jobs table into a short-lived
-    /// Supabase signed URL and downloads the PDF **directly from Supabase CDN**.
-    ///
-    /// The result_url stored by the backend is either:
-    ///   • A bare storage path:  "uid/job-id/labeled.pdf"
-    ///   • A full storage URL:   "https://<project>.supabase.co/storage/v1/object/public/labeled_pdfs/uid/job-id/labeled.pdf"
-    ///
-    /// We strip the bucket prefix in the full-URL case so we always pass a bare
-    /// path to createSignedURL, which then hands us a fresh CDN-signed URL.
-    ///
-    ///   Before: iOS → Azure backend → Supabase Storage → Azure → iOS  (~8–12 s)
-    ///   After:  iOS → Supabase Storage CDN                             (~1–2 s)
-    private func fetchLabeledPDFFromStoragePath(_ rawURL: String, jobId: UUID) async {
-        let bucketName = "pdf_uploads"
-        let storagePath: String
-
-        if let parsed = URL(string: rawURL), parsed.scheme != nil {
-            // Full URL — strip known Supabase storage prefixes to get the bare path
-            let prefixes = [
-                "/object/public/\(bucketName)/",
-                "/object/sign/\(bucketName)/",
-                "/object/\(bucketName)/"
-            ]
-            if let prefix = prefixes.first(where: { rawURL.contains($0) }),
-               let range = rawURL.range(of: prefix) {
-                let raw = String(rawURL[range.upperBound...])
-                // Strip any query string that may already be on an existing signed URL
-                storagePath = raw.components(separatedBy: "?").first ?? raw
-                debugLog("[SongDetail] extracted storage path: \(storagePath)")
-            } else {
-                // Unrecognised URL format — try fetching as-is (still hits Supabase CDN)
-                debugLog("[SongDetail] ⚠️ unrecognised URL format, fetching as-is: \(rawURL)")
-                await fetchAndCache(urlString: rawURL, isOriginal: false)
-                return
-            }
-        } else {
-            // Bare path (e.g. "uid/job-id/labeled.pdf")
-            storagePath = rawURL
-            debugLog("[SongDetail] bare storage path: \(storagePath)")
-        }
-
-        do {
-            // Generate a 1-hour signed URL — this hits the Supabase CDN directly,
-            // with no Azure backend involved at all.
-            let signedURL = try await supabase.storage
-                .from(bucketName)
-                .createSignedURL(path: storagePath, expiresIn: 3600)
-            debugLog("[SongDetail] ✓ signed URL ready — fetching from Supabase CDN")
-            await fetchAndCache(urlString: signedURL.absoluteString, isOriginal: false)
-        } catch {
-            debugLog("[SongDetail] ❌ createSignedURL failed path=\(storagePath): \(error)")
-            await MainActor.run { self.showError() }
-        }
-    }
-
-    // MARK: - Original PDF (Supabase CDN — unchanged)
-    private func fetchOriginalPDF() async {
-        guard let path = cachedPDFPath else {
-            debugLog("[SongDetail] ❌ fetchOriginalPDF — no cachedPDFPath")
-            await MainActor.run { showError() }
-            return
-        }
-        do {
-            let signedURL = try await supabase.storage
-                .from("pdf_uploads")
-                .createSignedURL(path: path, expiresIn: 3600)
-            await fetchAndCache(urlString: signedURL.absoluteString, isOriginal: true)
-        } catch {
-            debugLog("[SongDetail] ❌ fetchOriginalPDF createSignedURL failed: \(error)")
-            await MainActor.run { showError() }
-        }
     }
 
     private func signedURL(from rawValue: String, fallbackBucket: String) async throws -> URL {
@@ -917,59 +715,6 @@ class PlaylistSongDetailViewController: UIViewController {
         }
     }
 
-    // MARK: - Generic fetch + cache
-
-    /// Downloads a PDF from `urlString` and caches it.
-    ///
-    /// For Supabase signed URLs the Bearer token and pinned session are NOT needed
-    /// (the signed URL itself is the credential). Only our own Azure backend URLs
-    /// require the Bearer header + certificate pinning.
-    private func fetchAndCache(urlString: String, isOriginal: Bool) async {
-        guard let url = URL(string: urlString) else {
-            debugLog("[SongDetail] ❌ invalid URL: \(urlString)")
-            await MainActor.run { showError() }
-            return
-        }
-
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 30
-
-        // Only add Bearer + pinned session for our own Azure backend URLs.
-        // Supabase signed URLs are self-credentialed — adding a Bearer header
-        // would actually cause a 400 on some CDN edge nodes.
-        let isBackendURL = urlString.hasPrefix(ReHersAPI.baseURLString)
-        if isBackendURL, let token = try? await SupabaseManager.shared.accessToken() {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        let session: URLSession = isBackendURL ? ReHersPinnedSession.shared : URLSession.shared
-
-        do {
-            let (data, resp) = try await session.data(for: req)
-            let statusCode = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            debugLog("[SongDetail] fetchAndCache isOriginal=\(isOriginal) status=\(statusCode) bytes=\(data.count)")
-
-            guard (200...299).contains(statusCode) else {
-                debugLog("[SongDetail] ❌ non-2xx: \(statusCode)")
-                await MainActor.run { self.showError() }
-                return
-            }
-            guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
-                debugLog("[SongDetail] ❌ not a valid PDF (bytes=\(data.count))")
-                await MainActor.run { self.showError() }
-                return
-            }
-            await MainActor.run {
-                if isOriginal { self.originalPDF = doc } else { self.labeledPDF = doc }
-                if isOriginal == (self.segmentControl.selectedSegmentIndex == 0) {
-                    self.showPDF(doc)
-                }
-            }
-        } catch {
-            debugLog("[SongDetail] ❌ fetchAndCache error: \(error)")
-            await MainActor.run { self.showError() }
-        }
-    }
-
     // MARK: - PDF Display
     private func showPDF(_ doc: PDFDocument) {
         pdfView.document = doc
@@ -996,39 +741,16 @@ class PlaylistSongDetailViewController: UIViewController {
         errorLabel.isHidden = false
     }
 
+    private func showError(message: String) {
+        errorLabel.text = message
+        showError()
+    }
+
     @objc private func didTapPDF() {
         guard let doc = segmentControl.selectedSegmentIndex == 0 ? originalPDF : labeledPDF else { return }
         let vc = MaximizeUploadPageViewController()
         vc.pdfDocument = doc
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
-    }
-}
-
-// MARK: - AnyCodable
-private struct AnyCodable: Codable {
-    let value: Any
-    init(_ value: Any) { self.value = value }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if      let v = try? c.decode(Bool.self)                 { value = v }
-        else if let v = try? c.decode(Int.self)                  { value = v }
-        else if let v = try? c.decode(Double.self)               { value = v }
-        else if let v = try? c.decode(String.self)               { value = v }
-        else if let v = try? c.decode([AnyCodable].self)         { value = v.map(\.value) }
-        else if let v = try? c.decode([String: AnyCodable].self) { value = v.mapValues(\.value) }
-        else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Cannot decode") }
-    }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch value {
-        case let v as Bool:          try c.encode(v)
-        case let v as Int:           try c.encode(v)
-        case let v as Double:        try c.encode(v)
-        case let v as String:        try c.encode(v)
-        case let v as [Any]:         try c.encode(v.map { AnyCodable($0) })
-        case let v as [String: Any]: try c.encode(v.mapValues { AnyCodable($0) })
-        default: throw EncodingError.invalidValue(value, .init(codingPath: c.codingPath, debugDescription: "Cannot encode"))
-        }
     }
 }

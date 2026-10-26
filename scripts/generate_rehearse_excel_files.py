@@ -1,3 +1,7 @@
+# Note (October 2026): test cases here that involve the conversion backend (/convert, jobs,
+# Audiveris, backend security) describe the server pipeline that has since been removed; sheet
+# music is now converted on the device. They are kept as the record of what was tested.
+
 from pathlib import Path
 
 from openpyxl import Workbook

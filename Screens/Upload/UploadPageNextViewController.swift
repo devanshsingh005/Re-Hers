@@ -4,18 +4,12 @@
 //
 
 import UIKit
-import Supabase
-import Auth
-internal import PostgREST
 import PDFKit
 
 final class UploadPageNextViewController: UIViewController {
 
-    // Set jobId from the previous screen.
-    // Optionally set resultURL to skip the DB round-trip for the output JSON URL
-    // (when the caller already has it, e.g. from scan.jsonData["output_url"]).
+    // Set jobId from the previous screen: the id of an upload in LocalSheetLibrary.
     var jobId:     UUID?
-    var resultURL: String?          // ← NEW: drives JSON fetch + animation
     var onDataReady: (() -> Void)?
 
     private var sheetMusicText:   String       = ""
@@ -27,16 +21,11 @@ final class UploadPageNextViewController: UIViewController {
     private var isProcessing      = true
     private var unavailableReasonMessage: String?
     private var hasPresentedUnavailableReason = false
-    private var pollingTimer:     Timer?
     private var processingHeightConstraint: NSLayoutConstraint?
     private var statusHeightConstraint:     NSLayoutConstraint?
     private var refreshHeightConstraint:    NSLayoutConstraint?
     private var loadedPDFData:     Data?
-    private var pendingPDFPath:   String?       // raw pdf_path from DB, used after processing
-    private var pdfLoadTask:      Task<Void, Never>?
-    private var jsonFetchTask:    Task<Void, Never>?
     private var jobLoadTask:      Task<Void, Never>?
-    private var pollStatusTask:   Task<Void, Never>?
     private var trackedPracticeSessionStartedAt: Date?
 
     // MARK: - Scroll
@@ -93,7 +82,9 @@ final class UploadPageNextViewController: UIViewController {
         view.backgroundColor = ComponentColors.App.screenBackground
         setupNativeNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
         showProcessingState()
-        debugLog("[VDL] jobId=\(jobId?.uuidString.lowercased() ?? "nil")  hasResultURL=\(resultURL?.isEmpty == false)")
+        debugLog("[VDL] upload=\(jobId?.uuidString.lowercased() ?? "nil")")
+        NotificationCenter.default.addObserver(self, selector: #selector(handleLibraryChange),
+                                               name: LocalSheetLibrary.didChangeNotification, object: nil)
         loadFromJobId()
     }
 
@@ -107,15 +98,12 @@ final class UploadPageNextViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationController?.navigationBar.isHidden = false
+        if isProcessing, jobLoadTask?.isCancelled == true { loadFromJobId() }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        pollingTimer?.invalidate(); pollingTimer = nil
-        pdfLoadTask?.cancel()
-        jsonFetchTask?.cancel()
         jobLoadTask?.cancel()
-        pollStatusTask?.cancel()
 
         let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
         if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
@@ -132,171 +120,72 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     deinit {
-        pollingTimer?.invalidate()
-        pdfLoadTask?.cancel()
-        jsonFetchTask?.cancel()
         jobLoadTask?.cancel()
-        pollStatusTask?.cancel()
         releasePreviewResources()
     }
 
     // MARK: - Data Loading
 
+    /// Shows the upload stored on this device. While it is still being converted on the device,
+    /// the processing state shows progress and the results fill in when it finishes.
     private func loadFromJobId() {
         guard let jobId else {
-            debugLog("[Load] ❌ No jobId available for upload result screen")
+            debugLog("[Load] ❌ No upload id for the upload result screen")
             showUnavailableState(message: "We couldn't load this upload. Please return to Uploads and try again.")
             return
         }
+        guard LocalSheetLibrary.shared.upload(id: jobId) != nil else {
+            showUnavailableState(message: "This upload is no longer on this device. Please refresh your uploads list.")
+            return
+        }
+        showProcessingState()
+        updateConversionProgress()
         jobLoadTask?.cancel()
         jobLoadTask = Task { [weak self] in
-            guard let self else { return }
-            await self.fetchJobAndLoad(jobId: jobId)
+            let finished = await LocalSheetLibrary.shared.waitForConversion(id: jobId)
+            guard let self, !Task.isCancelled else { return }
+            await self.showConversionResult(finished)
         }
     }
 
-    private func fetchJobAndLoad(jobId: UUID) async {
-        struct JobRow: Decodable {
-            let pdfPath:   String
-            let resultUrl: String?
-            enum CodingKeys: String, CodingKey {
-                case pdfPath = "pdf_path"; case resultUrl = "result_url"
-            }
+    private func showConversionResult(_ upload: LocalSheetLibrary.Upload?) async {
+        guard let upload else {
+            showUnavailableState(message: "This upload is no longer on this device. Please refresh your uploads list.")
+            return
         }
-
-        do {
-            let rows: [JobRow] = try await SupabaseManager.shared.client
-                .from("jobs")
-                .select("pdf_path, result_url")
-                .eq("id", value: jobId)
-                .limit(1)
-                .execute()
-                .value
-
-            guard let row = rows.first else {
-                debugLog("[Load] ❌ No job found for jobId=\(jobId)")
-                await MainActor.run {
-                    self.showUnavailableState(message: "This upload is no longer available. Please refresh your uploads list.")
-                }
+        switch upload.status {
+        case .processing:
+            return
+        case .failed:
+            isProcessing = false
+            showUnavailableState(message: upload.errorMessage
+                ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete.")
+        case .completed:
+            isProcessing = false
+            progressView.isHidden  = true
+            statusLabel.isHidden   = true
+            refreshButton.isHidden = true
+            let library = LocalSheetLibrary.shared
+            if let pdf = library.labeledPDF(id: upload.id) ?? library.inputPDF(id: upload.id) {
+                handlePDFData(pdf)
+            }
+            guard let json = library.scoreJSON(id: upload.id) else {
+                showUnavailableState(message: "This upload is missing its converted sheet music. Please convert it again.")
                 return
             }
-
-            // Store path — PDF loads only after processing completes (labeled if ready, else input)
-            self.pendingPDFPath = row.pdfPath
-
-            // Determine effective result URL
-            let _: String
-            if let preSupplied = self.resultURL, !preSupplied.isEmpty {
-                if isLegacyPublicStorageURL(preSupplied) {
-                    let authenticatedURL = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
-                    debugLog("[Load] Ignoring legacy public resultURL; using authenticated route: \(authenticatedURL)")
-                    _ = authenticatedURL
-                } else {
-                    debugLog("[Load] Using pre-supplied authenticated resultURL")
-                    _ = preSupplied
-                }
-            } else if let dbURL = row.resultUrl, !dbURL.isEmpty {
-                if isLegacyPublicStorageURL(dbURL) {
-                    let authenticatedURL = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
-                    debugLog("[Load] Ignoring legacy DB result_url; using authenticated route: \(authenticatedURL)")
-                    _ = authenticatedURL
-                } else {
-                    debugLog("[Load] Using DB result_url")
-                    _ = dbURL
-                }
-            } else {
-                let derived = deriveOutputURL(jobId: jobId, pdfPath: row.pdfPath)
-                debugLog("[Load] No result_url — using derived: \(derived)")
-                _ = derived
-            }
-
-            // Start polling job status — backend owns all transitions
-            await MainActor.run { self.startPollingJobStatus() }
-
-        } catch {
-            debugLog("[Load] ❌ DB error: \(error)")
-            let message = AppUserFacingError.message(
-                for: "load this upload",
-                error: error,
-                fallback: "We hit a problem loading this upload. Please try again."
-            )
-            await MainActor.run {
-                self.showUnavailableState(message: message)
-            }
+            debugLog("[OnDevice] showing \(upload.noteCount ?? 0) notes, skipped pages \(upload.skippedPages ?? [])")
+            await parseAndDisplayJSON(json)
         }
     }
 
-    /// Derives the authenticated output JSON endpoint for the current job.
-    private func deriveOutputURL(jobId: UUID, pdfPath: String) -> String {
-        _ = pdfPath
-        return "\(ReHersAPI.baseURLString)/sheets/\(normalizedJobIDString(jobId))"
+    @objc private func handleLibraryChange(_ note: Notification) {
+        guard let id = note.userInfo?["id"] as? UUID, id == jobId else { return }
+        updateConversionProgress()
     }
 
-    private func deriveLabeledPDFURL(jobId: UUID) -> String {
-        "\(ReHersAPI.baseURLString)/sheets/\(normalizedJobIDString(jobId))/pdf"
-    }
-
-    private func normalizedJobIDString(_ jobId: UUID) -> String {
-        jobId.uuidString.lowercased()
-    }
-
-    // MARK: - PDF Display
-
-    private func loadSheetPDF(from urlString: String) {
-        guard let url = URL(string: urlString) else {
-            debugLog("[PDF] ❌ Invalid URL: \(urlString)"); return
-        }
-        debugLog("[PDF] 🔄 Loading: \(urlString)")
-        releasePreviewResources()
-        sheetLoadingIndicator.startAnimating()
-        sheetPDFView.isHidden = true
-
-        pdfLoadTask?.cancel()
-        pdfLoadTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let (data, code) = try await self.fetchAuthenticatedData(
-                    from: url,
-                    logPrefix: "PDF",
-                    usePinnedSession: urlString.hasPrefix(ReHersAPI.baseURLString)
-                )
-
-                guard (200...299).contains(code) else {
-                    let body = String(data: data, encoding: .utf8) ?? "<binary>"
-                    debugLog("[PDF] ❌ HTTP \(code): \(body)")
-                    let message = AppUserFacingError.message(
-                        for: "load this sheet preview",
-                        error: nil,
-                        fallback: "We couldn't load this sheet preview right now. Please try again."
-                    )
-                    await MainActor.run {
-                        self.sheetLoadingIndicator.stopAnimating()
-                        self.statusLabel.text      = message
-                        self.statusLabel.isHidden  = false
-                        self.refreshButton.isHidden = false
-                    }
-                    return
-                }
-
-                await MainActor.run {
-                    self.sheetLoadingIndicator.stopAnimating()
-                    self.handlePDFData(data)
-                }
-            } catch {
-                debugLog("[PDF] ❌ Network error: \(error.localizedDescription)")
-                let message = AppUserFacingError.message(
-                    for: "load this sheet preview",
-                    error: error,
-                    fallback: "We couldn't load this sheet preview right now. Please try again."
-                )
-                await MainActor.run {
-                    self.sheetLoadingIndicator.stopAnimating()
-                    self.statusLabel.text      = message
-                    self.statusLabel.isHidden  = false
-                    self.refreshButton.isHidden = false
-                }
-            }
-        }
+    private func updateConversionProgress() {
+        guard isProcessing, let jobId, let p = LocalSheetLibrary.shared.progress[jobId] else { return }
+        updateProcessingStatus(message: "Reading the notes on your device… \(Int((p * 100).rounded()))%")
     }
 
     private func handlePDFData(_ data: Data) {
@@ -313,163 +202,10 @@ final class UploadPageNextViewController: UIViewController {
         sheetPDFView.document  = doc
         if let p = doc.page(at: 0) { sheetPDFView.go(to: p) }
         sheetPDFView.isHidden  = false
-    }
-
-    // MARK: - Job Status Polling
-
-    private static let maxPollAttempts = 60   // 60 × 5 s = 5 min max
-    private var pollAttempts = 0
-
-    /// Polls the jobs table every 5 s. Proceeds only when the backend sets
-    /// status = 'completed' or 'completed_with_warning', guaranteeing that
-    /// labeled.pdf is already saved before we try to load it.
-    private func startPollingJobStatus() {
-        guard let jobId else { return }
-        showProcessingState()
-        pollAttempts = 0
-        let timer = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.pollAttempts += 1
-            if self.pollAttempts >= Self.maxPollAttempts {
-                self.pollingTimer?.invalidate(); self.pollingTimer = nil
-                let message = AppUserFacingError.message(
-                    for: "finish processing this upload",
-                    error: nil,
-                    fallback: "Processing is taking longer than expected. Please try again in a moment."
-                )
-                DispatchQueue.main.async {
-                    self.statusLabel.text       = message
-                    self.statusLabel.isHidden   = false
-                    self.refreshButton.isHidden = false
-                    self.progressView.isHidden  = true
-                }
-                return
-            }
-            self.pollStatusTask?.cancel()
-            self.pollStatusTask = Task { [weak self] in
-                guard let self else { return }
-                await self.pollJobStatus(jobId: jobId)
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        pollingTimer = timer
-        pollStatusTask?.cancel()
-        pollStatusTask = Task { [weak self] in
-            guard let self else { return }
-            await self.pollJobStatus(jobId: jobId)
-        }  // immediate first check
-    }
-
-    private func pollJobStatus(jobId: UUID) async {
-        struct StatusRow: Decodable {
-            let status: String
-            let resultUrl: String?
-            enum CodingKeys: String, CodingKey {
-                case status
-                case resultUrl = "result_url"
-            }
-        }
-        do {
-            let rows: [StatusRow] = try await SupabaseManager.shared.client
-                .from("jobs").select("status, result_url")
-                .eq("id", value: jobId).limit(1).execute().value
-            guard let row = rows.first else { return }
-            switch row.status {
-            case "completed", "completed_with_warning":
-                pollingTimer?.invalidate(); pollingTimer = nil
-                await handleJobCompleted(resultUrl: row.resultUrl)
-            case "failed":
-                pollingTimer?.invalidate(); pollingTimer = nil
-                let message = AppUserFacingError.message(
-                    for: "finish processing this upload",
-                    error: nil,
-                    fallback: "We couldn't finish processing this upload. Please try again."
-                )
-                await MainActor.run {
-                    self.isProcessing = false
-                    self.showUnavailableState(message: message)
-                }
-            case "processing":
-                await MainActor.run { self.updateProcessingStatus(message: "Processing…") }
-            default:
-                await MainActor.run { self.updateProcessingStatus(message: "Job queued…") }
-            }
-        } catch {
-            debugLog("[Poll] DB polling error")
-            stopPolling()
-            let message = AppUserFacingError.message(
-                for: "check this upload",
-                error: error,
-                fallback: "We couldn't refresh this upload right now. Please try again."
-            )
-            DispatchQueue.main.async { self.showErrorState(error: message) }
-        }
-    }
-
-    /// Called once the backend marks the job complete. The authenticated backend
-    /// owns access to both output.json and labeled.pdf for this job.
-    private func handleJobCompleted(resultUrl: String?) async {
-        guard let currentJobId = jobId else { return }
-        await MainActor.run {
-            self.isProcessing           = false
-            self.progressView.isHidden  = true
-            self.statusLabel.isHidden   = true
-            self.refreshButton.isHidden = true
-        }
-
-        let pdfURL = deriveLabeledPDFURL(jobId: currentJobId)
-        if let relPath = resultUrl, isLegacyPublicStorageURL(relPath) {
-            debugLog("[PDF] Ignoring legacy public PDF path; using authenticated route")
-        } else {
-            debugLog("[PDF] Using authenticated backend PDF route")
-        }
-        debugLog("[PDF] ✅ Loading labeled PDF")
-        await MainActor.run { self.loadSheetPDF(from: pdfURL) }
-
-        // Download output.json and populate chord/key/time/tempo fields
-        if let rawPath = pendingPDFPath {
-            await fetchOutputJSON(jobId: currentJobId, pdfPath: rawPath)
-        }
-    }
-
-    private func fetchOutputJSON(jobId: UUID, pdfPath: String) async {
-        let jsonURL = deriveOutputURL(jobId: jobId, pdfPath: pdfPath)
-        debugLog("[JSON] Fetching output.json from authenticated route")
-
-        jsonFetchTask?.cancel()
-        jsonFetchTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                guard let url = URL(string: jsonURL) else { return }
-                let (data, code) = try await self.fetchAuthenticatedData(
-                    from: url,
-                    logPrefix: "JSON",
-                    usePinnedSession: true
-                )
-
-                guard (200...299).contains(code) else {
-                    debugLog("❌ [JSON] Failed to fetch output.json: HTTP \(code)")
-                    return
-                }
-
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    debugLog("✅ [JSON] Successfully parsed output.json. Keys: \(json.keys.sorted())")
-                    await parseAndDisplayJSON(json)
-                } else {
-                    debugLog("❌ [JSON] output.json is not a dictionary")
-                }
-            } catch {
-                debugLog("❌ [JSON] Error fetching/parsing output.json: \(error)")
-            }
-        }
-
-        await jsonFetchTask?.value
+        sheetLoadingIndicator.stopAnimating()
     }
 
     private func parseAndDisplayJSON(_ json: [String: Any]) async {
-        if let status = json["status"] as? String, status == "queued" {
-            await MainActor.run { self.updateProcessingStatus(message: "Job queued…") }; return
-        }
         let chords   = extractChordsFromJSON(json)
         let timeSig  = extractTimeSignature(json)
         let keySig   = extractKeySignature(json)
@@ -482,69 +218,6 @@ final class UploadPageNextViewController: UIViewController {
                 text: "", chords: chords, timeSignature: timeSig,
                 tempo: tempoStr, keySignature: keySig, jsonData: json))
         }
-    }
-
-    private func authToken() async -> String? {
-        try? await SupabaseManager.shared.accessToken()
-    }
-
-    private func refreshAuthToken() async -> String? {
-        try? await SupabaseManager.shared.accessToken(forceRefresh: true)
-    }
-
-    private func fetchAuthenticatedData(
-        from url: URL,
-        logPrefix: String,
-        usePinnedSession: Bool
-    ) async throws -> (Data, Int) {
-        let session = usePinnedSession ? ReHersPinnedSession.shared : URLSession.shared
-        var didRetryAfterRefresh = false
-
-        while true {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 15
-
-            if usePinnedSession {
-                guard let token = await (didRetryAfterRefresh ? refreshAuthToken() : authToken()) else {
-                    debugLog("❌ [\(logPrefix)] Missing auth credentials")
-                    return (Data(), 401)
-                }
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                debugLog("[\(logPrefix)] Authorization header set: true")
-            }
-
-            let (data, response) = try await session.data(for: request)
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            debugLog("[\(logPrefix)] HTTP \(code)  bytes=\(data.count)")
-
-            if code == 401 && usePinnedSession && !didRetryAfterRefresh {
-                debugLog("[\(logPrefix)] 401 received, refreshing session and retrying once")
-                didRetryAfterRefresh = true
-                continue
-            }
-
-            return (data, code)
-        }
-    }
-
-    private func isLegacyPublicStorageURL(_ value: String) -> Bool {
-        let storageMarker = ["/storage", "v1", "object", "public"].joined(separator: "/")
-        return value.contains(storageMarker)
-    }
-
-    private func stopPolling() {
-        pollingTimer?.invalidate()
-        pollingTimer = nil
-        pollStatusTask?.cancel()
-        pollStatusTask = nil
-    }
-
-    private func showErrorState() {
-        showErrorState(error: AppUserFacingError.message(
-            for: "load this upload",
-            error: nil,
-            fallback: "We couldn't load this upload right now. Please try again."
-        ))
     }
 
     /// Reads "staff" (or parts/clefs) from the JSON and returns a human-readable focus label.
@@ -756,7 +429,7 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.isHidden   = false
         refreshButton.isHidden = false
         animateProgress()
-        tipsBodyLabel.text = "• Processing usually takes 30–60 seconds\n• Results will appear automatically"
+        tipsBodyLabel.text = "• Your sheet is being read on this device — nothing is uploaded\n• Results will appear automatically"
     }
 
     private func animateProgress() {
@@ -856,7 +529,13 @@ final class UploadPageNextViewController: UIViewController {
         refreshButton.addTarget(self,   action: #selector(didTapRefresh),   for: .touchUpInside)
     }
 
-    @objc private func didTapRefresh() { loadFromJobId() }
+    @objc private func didTapRefresh() {
+        if let jobId, LocalSheetLibrary.shared.upload(id: jobId)?.status == .failed {
+            hasPresentedUnavailableReason = false
+            LocalSheetLibrary.shared.retry(id: jobId)
+        }
+        loadFromJobId()
+    }
 
     @objc private func didTapPreview() {
         NavigationBarHelper.animateButtonPress(previewButton) { [weak self] in
