@@ -1,0 +1,3 @@
+SLASH = /
+SUPABASE_URL = https:$(SLASH)$(SLASH)djqgmowfjxsnjdffdohw.supabase.co
+SUPABASE_KEY = sb_publishable__FkMcK1683czdRktkt7YsA_vYR4ZsOW
