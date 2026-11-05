@@ -26,10 +26,11 @@ Steps and expected results are in README.md under *Test it on a Mac*.
 
 - Compile errors in `Sources/OemerKit` or `Sources/oemer-demo`: fix freely; that code was never
   built for real.
-- Do **not** change behaviour in `Sources/OemerCore` to make something pass. Its output must stay
-  byte-identical to the Python reference. The 4 `EndToEndTests` (fixtures in
-  `Tests/OemerCoreTests/Fixtures`) enforce that on the Mac, where the Python reference is not
-  available.
+- `Sources/OemerCore` has two modes. With `OMROptions.pythonParity` it must stay byte-identical
+  to the Python reference; the 4 `EndToEndTests` (fixtures in `Tests/OemerCoreTests/Fixtures`)
+  and `oemer-check` run in that mode and enforce it on the Mac, where the Python reference is not
+  available. Corrections of oemer's behaviour (the default mode, see README *Corrections*) must
+  be guarded by `ctx.pythonParity` and covered by `CorrectionTests`.
 - If an `EndToEndTests` case differs on the Mac only, suspect a platform math difference
   (Darwin `exp`/`log`/`pow` vs glibc in the last bit) before suspecting the logic, and report the
   first differing line.
