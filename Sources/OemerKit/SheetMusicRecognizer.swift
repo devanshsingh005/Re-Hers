@@ -46,8 +46,8 @@ public struct LocatedNote: Sendable {
 public struct SheetMusicResult: Sendable {
     /// MusicXML 4.0 (partwise) — the same format the oemer command line writes.
     public let musicXML: String
-    /// Notes in MusicXML order, each chord from its lowest note up, with their positions on the
-    /// photo.
+    /// Notes in the MusicXML's order (the n-th note here is its n-th pitched <note>), with their
+    /// positions on the photo. Each chord is written from its lowest note up (not in parity mode).
     public let notes: [LocatedNote]
     /// Size of the upright original image in pixels.
     public let imageSize: CGSize
@@ -185,7 +185,9 @@ public final class SheetMusicRecognizer: @unchecked Sendable {
 
         // map note boxes back to the original photo
         let sx = image.scaleX, sy = image.scaleY
-        let located: [LocatedNote] = result.notes.map { n in
+        // exactly the MusicXML's order (apps pair notes with its <note> elements by index); the
+        // engine writes each chord from its lowest note up, which also orders the chord here
+        let notes: [LocatedNote] = result.notes.map { n in
             let b = n.bbox
             var y1 = Double(b.y1), y2 = Double(b.y2)
             var staffTop = n.staffTop, staffBottom = n.staffBottom
@@ -206,15 +208,6 @@ public final class SheetMusicRecognizer: @unchecked Sendable {
                                staffTop: staffTop / sy, staffBottom: staffBottom / sy,
                                staffSpace: n.staffSpace * stretch / sy, chord: n.chord)
         }
-        // document order, and within a chord from the lowest note up (by pitch, then lower on the
-        // page first), so apps can map chord tones to keys and labels one to one
-        let notes = located.enumerated().sorted { a, b in
-            let x = a.element, y = b.element
-            if x.chord != y.chord { return x.chord < y.chord }
-            if x.midi != y.midi { return x.midi < y.midi }
-            if x.rect.midY != y.rect.midY { return x.rect.midY > y.rect.midY }
-            return a.offset < b.offset
-        }.map(\.element)
         return SheetMusicResult(musicXML: result.musicXML, notes: notes,
                                 imageSize: CGSize(width: image.originalWidth, height: image.originalHeight),
                                 timings: timings)
