@@ -195,7 +195,7 @@ extension OMRContext {
             let cx = Double(c.x), cy = Double(c.y)
             let (st1, st2) = findClosestStaffs(cx, cy)
             let master: Staff
-            if st1.yCenter == st2.yCenter || (st1.yUpper <= cy && cy <= st1.yLower) {
+            if !pythonParity || st1.yCenter == st2.yCenter || (st1.yUpper <= cy && cy <= st1.yLower) {
                 master = st1
             } else {
                 let (up, lo) = st1.yCenter < st2.yCenter ? (st1, st2) : (st2, st1)
@@ -203,31 +203,38 @@ extension OMRContext {
             }
             nn.group = master.group
             nn.track = master.track
-
-            let step = master.unitSize / 2
-            let base = master.lines.reversed().map { $0.yCenter }
-            var posCen: [Double] = []
-            for (i, v) in base.enumerated() {
-                posCen.append(v)
-                if i + 1 < base.count { posCen.append((v + base[i + 1]) / 2) }
-            }
-            posCen = [posCen[0] + step] + posCen + [posCen[posCen.count - 1] - step]
-            var posIdx = 0
-            var best = Double.infinity
-            for (i, v) in posCen.enumerated() where abs(v - cy) < best {
-                best = abs(v - cy)
-                posIdx = i
-            }
-            if posIdx > 0 && posIdx < posCen.count - 1 {
-                nn.staffLinePos = posIdx
-            } else if posIdx == 0 {
-                nn.staffLinePos = -pyRound(abs(posCen[0] - cy) / step)
-            } else {
-                nn.staffLinePos = pyRound(abs(posCen[posCen.count - 1] - cy) / step) + posCen.count - 1
-            }
+            nn.staffLinePos = staffLinePosition(cy, on: master)
             notes.append(nn)
         }
         return notes
+    }
+
+    /// Line/space index of height `y` on `staff`, counted upward: 1 = bottom line, 2 = the
+    /// space above it, …, 9 = top line; 0 and 10 are the spaces just outside, and beyond that
+    /// ledger positions continue (negative below). Same rule as oemer's `gen_notes`.
+    func staffLinePosition(_ y: Double, on staff: Staff) -> Int {
+        let step = staff.unitSize / 2
+        let base = staff.lines.reversed().map { $0.yCenter }
+        guard !base.isEmpty, step > 0, step.isFinite else { return 0 }
+        var posCen: [Double] = []
+        for (i, v) in base.enumerated() {
+            posCen.append(v)
+            if i + 1 < base.count { posCen.append((v + base[i + 1]) / 2) }
+        }
+        posCen = [posCen[0] + step] + posCen + [posCen[posCen.count - 1] - step]
+        var posIdx = 0
+        var best = Double.infinity
+        for (i, v) in posCen.enumerated() where abs(v - y) < best {
+            best = abs(v - y)
+            posIdx = i
+        }
+        if posIdx > 0 && posIdx < posCen.count - 1 {
+            return posIdx
+        } else if posIdx == 0 {
+            return -pyRound(abs(posCen[0] - y) / step)
+        } else {
+            return pyRound(abs(posCen[posCen.count - 1] - y) / step) + posCen.count - 1
+        }
     }
 
     /// `parse_stem_info(notes)`

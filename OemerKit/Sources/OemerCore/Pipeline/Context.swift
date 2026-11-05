@@ -10,6 +10,13 @@ final class OMRContext {
     let classifiers: SymbolClassifiers
     /// true when the maps are float32 (dewarped); false for oemer's int64 0/1 maps.
     let floatMaps: Bool
+    /// Follow the Python pipeline exactly, bugs included. When false, these are corrected:
+    /// accidentals are bound in a 2D window and never invalidate their note, unbound ones attach
+    /// to the next note of their pitch, accidentals carry per staff and octave within a measure,
+    /// key signatures are read from the measure header by per-staff vote and persist, notes of
+    /// one chord keep their own pitch when moved to a common staff, clef labels are checked
+    /// against their size, and chord notes are written lowest first.
+    let pythonParity: Bool
 
     let staffF: Grid<Float>
     /// symbols + clefs_keys + stems_rests, values above 1 clamped to 1
@@ -47,12 +54,13 @@ final class OMRContext {
     var rests: [Rest] = []
 
     init(staff: Grid<Float>, symbols: Grid<Float>, stemsRests: Grid<Float>, notehead: Grid<Float>, clefsKeys: Grid<Float>,
-         floatMaps: Bool, classifiers: SymbolClassifiers)
+         floatMaps: Bool, classifiers: SymbolClassifiers, pythonParity: Bool = false)
     {
         width = staff.width
         height = staff.height
         self.classifiers = classifiers
         self.floatMaps = floatMaps
+        self.pythonParity = pythonParity
         staffF = staff
         stemsF = stemsRests
         noteheadF = notehead

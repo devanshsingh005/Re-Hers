@@ -38,8 +38,19 @@ private func restDura(_ t: RestType) -> Int { restDuration.first { $0.0 == t }!.
 
 private let gClefPosToPitch = ["D", "E", "F", "G", "A", "B", "C"]
 private let fClefPosToPitch = ["F", "G", "A", "B", "C", "D", "E"]
-private let sharpKeyOrder = ["F", "C", "G", "D", "A", "E"]
-private let flatKeyOrder = ["B", "E", "A", "D", "G", "C"]
+private let sharpKeyOrder = ["F", "C", "G", "D", "A", "E", "B"]
+private let flatKeyOrder = ["B", "E", "A", "D", "G", "C", "F"]
+
+/// Where key signature accidentals stand on the staff (`staffLinePosition`: 1 = bottom line,
+/// 9 = top line), in the order they are written: F C G D A E B for sharps, B E A D G C F for
+/// flats. On the F clef everything sits one line (two positions) lower.
+private func keyPositions(_ label: SfnType, _ clef: ClefType) -> [Int] {
+    let treble = label == .flat ? [5, 8, 4, 7, 3, 6, 2] : [9, 6, 10, 7, 4, 8, 5]
+    return clef == .gClef ? treble : treble.map { $0 - 2 }
+}
+
+/// The usual clef of a track when none was detected: treble on even tracks, bass on odd.
+func defaultClef(track: Int) -> ClefType { track % 2 == 0 ? .gClef : .fClef }
 
 /// A chord/voice built from a note group (top or bottom part).
 final class Voice: MeasureSymbol {
@@ -84,6 +95,15 @@ final class Measure {
     var group = 0
     var timeSlots: [[MeasureSymbol]] = []
     var slotDuras: [[Double]] = []
+    /// Outside parity mode, from `readKeyHeader()`: key signature per track (fifths; nil when
+    /// that staff shows none), the combined key, and whether the header holds only naturals.
+    var keyPerTrack: [Int?] = []
+    var keyFifths: Int? = nil
+    var keyCancels = false
+    /// The accidentals read as the key signature (not yet applied, see `applyKeySignature()`).
+    var keySfns: [Sfn] = []
+    /// Outside parity mode: the key this measure changes to, if it does.
+    var keyChange: Int? = nil
 
     unowned let ctx: OMRContext
     init(ctx: OMRContext) { self.ctx = ctx }
@@ -158,6 +178,136 @@ final class Measure {
         if label == .flat { count *= -1 }
         for s in cands { s.isKey = true }
         return max(-6, min(6, count))
+    }
+
+    /// Outside parity mode: reads the key signature at the head of every staff of the measure.
+    /// oemer takes the first symbols of the measure only if they are all accidentals and
+    /// averages the counts of the staffs (2 flats on one staff and 1 on the other rounds to 2,
+    /// but 2 and 0 round to 1). Here, per staff, the accidentals before its first note or rest
+    /// are read left to right while they are close together and stand where a key signature's
+    /// k-th accidental stands for that staff's clef (one missing glyph allowed). At the start of
+    /// a system, where a key signature is expected, positions may be one off and accidentals a
+    /// note claimed count too, and so does a glyph the classifier called a natural once the run
+    /// has begun (it confuses a key's flats with naturals); elsewhere positions must be exact and
+    /// claimed ones are left to their notes. The staff showing the most accidentals of the agreed
+    /// kind gives the key.
+    /// Nothing is changed yet: the builder decides whether this is a key signature at all.
+    func readKeyHeader() {
+        let n = ctx.totalTrackNums
+        let unit = ctx.globalUnitSize
+        let tolerance = atBeginning ? 1 : 0
+        var perTrack = [Int?](repeating: nil, count: n)
+        var naturalsOnly = [Bool](repeating: false, count: n)
+        var used: [Sfn] = []
+        for t in 0..<n {
+            let firstEvent = symbols.filter { ($0 is Voice || $0 is Rest) && $0.track == t }.map { $0.xCenter }.min()
+                ?? .infinity
+            let head = sfns.filter {
+                $0.track == t && $0.xCenter < firstEvent && $0.linePos != nil && (atBeginning || $0.noteId == nil)
+            }
+            if head.isEmpty { continue }
+            let clef = clefs.last(where: { $0.track == t })?.label ?? defaultClef(track: t)
+            var best: (label: SfnType, run: [Sfn]) = (.sharp, [])
+            for label in [SfnType.sharp, .flat] {
+                let cands = head.filter { $0.label == label || (atBeginning && $0.label == .natural) }
+                let run = Measure.keyRun(cands, keyPositions(label, clef), unit: unit, tolerance: tolerance,
+                                         label: label)
+                if run.count > best.run.count { best = (label, run) }
+            }
+            if best.run.isEmpty {
+                naturalsOnly[t] = head.allSatisfy { $0.label == .natural }
+                if naturalsOnly[t] { perTrack[t] = 0 }
+                continue
+            }
+            let count = Measure.keyCount(best.run, keyPositions(best.label, clef), tolerance: tolerance)
+            perTrack[t] = best.label == .flat ? -count : count
+            used += best.run
+        }
+        keyPerTrack = perTrack
+        let signed = perTrack.compactMap { $0 }.filter { $0 != 0 }
+        if signed.isEmpty {
+            keyFifths = nil
+            keyCancels = naturalsOnly.contains(true)
+        } else {
+            let sharps = signed.filter { $0 > 0 }, flats = signed.filter { $0 < 0 }
+            let useFlats = flats.reduce(0) { $0 - $1 } > sharps.reduce(0, +)
+            keyFifths = useFlats ? max(-7, flats.min()!) : min(7, sharps.max()!)
+            keyCancels = false
+        }
+        keySfns = used
+    }
+
+    /// Marks the header accidentals as the key signature and releases any that were bound to a
+    /// note (the first note right after a key signature often is in reach of its last glyph).
+    func applyKeySignature() {
+        for s in keySfns {
+            s.isKey = true
+            if let nid = s.noteId, nid < ctx.notes.count {
+                if ctx.notes[nid].sfn == s.label { ctx.notes[nid].sfn = nil }
+                s.noteId = nil
+            }
+        }
+    }
+
+    /// The leading accidentals that follow `canonical` (close together, within `tolerance`
+    /// positions, one gap).
+    private static func keyRun(_ cands: [Sfn], _ canonical: [Int], unit: Double, tolerance: Int,
+                               label: SfnType) -> [Sfn] {
+        let sorted = cands.sorted { $0.xCenter < $1.xCenter }
+        var run: [Sfn] = []
+        var k = 0
+        var skipped = false
+        for s in sorted {
+            guard k < canonical.count, let p = s.linePos else { break }
+            if run.isEmpty && s.label != label { break }  // the run starts with a real one
+            if let last = run.last, unit > 0, Double(s.bbox.x1 - last.bbox.x2) > 1.5 * unit { break }
+            if abs(p - canonical[k]) <= tolerance {
+                k += 1
+            } else if !skipped && !run.isEmpty && k + 1 < canonical.count && abs(p - canonical[k + 1]) <= tolerance {
+                k += 2
+                skipped = true
+            } else {
+                break
+            }
+            run.append(s)
+        }
+        return run
+    }
+
+    /// Number of accidentals in a key run, counting a glyph skipped inside it.
+    private static func keyCount(_ run: [Sfn], _ canonical: [Int], tolerance: Int) -> Int {
+        var k = 0
+        for s in run {
+            guard let p = s.linePos, k < canonical.count else { break }
+            if abs(p - canonical[k]) <= tolerance { k += 1 } else { k += 2 }
+        }
+        return min(k, 7)
+    }
+
+    /// Outside parity mode: an accidental in the measure that no note claimed alters the next
+    /// note on its staff at its line position (oemer drops it). Exact position first; failing
+    /// that, a note one position off in the very next chord.
+    func bindLooseAccidentals() {
+        for s in sfns where s.noteId == nil && s.isKey != true {
+            guard let pos = s.linePos else { continue }
+            let following = voices.filter { $0.track == s.track && $0.xCenter > s.xCenter }
+            var target: NoteHead? = nil
+            for v in following {
+                if let nid = v.noteIds.first(where: { ctx.notes[$0].staffLinePos == pos && ctx.notes[$0].sfn == nil }) {
+                    target = ctx.notes[nid]
+                    break
+                }
+            }
+            if target == nil, let next = following.first {
+                let near = next.noteIds.filter { abs(ctx.notes[$0].staffLinePos - pos) == 1 && ctx.notes[$0].sfn == nil }
+                if near.count == 1 { target = ctx.notes[near[0]] }
+            }
+            if let note = target {
+                note.sfn = s.label
+                s.noteId = note.id
+                s.isKey = false
+            }
+        }
     }
 
     func trackClefs() -> [Clef?] {
@@ -319,8 +469,12 @@ private struct WriterState {
     var key = 0
     var clefs: [Clef?] = []
     var sfnState: [String: SfnType?] = [:]
+    /// Outside parity mode: accidentals written so far in the measure, per track and staff
+    /// position (an accidental holds for its staff and octave; the key for every octave).
+    var measureAccidentals: [Int: [Int: SfnType]] = [:]
 
     mutating func initSfnState() {
+        measureAccidentals = [:]
         sfnState = Dictionary(uniqueKeysWithValues: ["A", "B", "C", "D", "E", "F", "G"].map { ($0, nil as SfnType?) })
         if key > 0 {
             for n in sharpKeyOrder.prefix(key) { sfnState[n] = .sharp }
@@ -359,6 +513,9 @@ public struct RecognizedNote {
     public let staffTop: Double
     public let staffBottom: Double
     public let staffSpace: Double
+    /// Index of the chord (onset) this note belongs to, counting from 0 in document order;
+    /// the notes of one chord share it.
+    public let chord: Int
 
     /// Name like "C#4" / "Bb3".
     public var name: String { step + (alter == 1 ? "#" : alter == -1 ? "b" : "") + String(octave) }
@@ -369,14 +526,25 @@ final class MusicXMLBuilder {
     private var measures: [(group: Int, measures: [Measure])] = []
     private var actions: [Action] = []
     private(set) var writtenNotes: [RecognizedNote] = []
+    /// Outside parity mode: the key the piece starts in (from the first measure's header).
+    private var initialKey: Int? = nil
+    /// Outside parity mode: systems (groups) whose last measure ends with a double barline.
+    private var endsWithDoubleBarline: Set<Int> = []
+    private var chordCounter = -1
+    /// Outside parity mode: the key while measures are generated (nil before the first one).
+    private var keyWhileGenerating: Int? = nil
 
     init(ctx: OMRContext) { self.ctx = ctx }
 
     private func voices() -> [Voice] {
         var out: [Voice] = []
         func addVoice(_ g: NoteGroup, _ nidsIn: [Int], _ stemUp: Bool?) {
-            let nids = nidsIn.filter { !ctx.notes[$0].invalid }
+            var nids = nidsIn.filter { !ctx.notes[$0].invalid }
             if nids.isEmpty { return }
+            if !ctx.pythonParity {
+                // lowest first: written order of the chord, and the order apps get the notes in
+                nids.sort { (ctx.notes[$0].staffLinePos, $0) < (ctx.notes[$1].staffLinePos, $1) }
+            }
             let v = Voice()
             v.group = g.group
             v.groupId = g.id
@@ -434,7 +602,9 @@ final class MusicXMLBuilder {
         add(ctx.barlines)
         add(ctx.rests)
         add(ctx.clefs)
-        add(ctx.sfns.filter { $0.noteId == nil })
+        // outside parity mode bound accidentals go in too: a key signature accidental may have
+        // been bound to the measure's first note and is released by readKeyHeader()
+        add(ctx.pythonParity ? ctx.sfns.filter { $0.noteId == nil } : ctx.sfns)
         return order.sorted().map { g in
             let list = container[g]!.enumerated()
                 .sorted { $0.element.xCenter != $1.element.xCenter ? $0.element.xCenter < $1.element.xCenter : $0.offset < $1.offset }
@@ -443,21 +613,44 @@ final class MusicXMLBuilder {
         }
     }
 
-    private func genMeasure(_ buffer: [MeasureSymbol], _ grp: Int, _ num: Int, _ atBeginning: Bool, _ doubleBarline: Bool) -> Measure {
+    private func genMeasure(_ buffer: [MeasureSymbol], _ grp: Int, _ num: Int, _ atBeginning: Bool, _ doubleBarline: Bool,
+                            afterSystemDoubleBarline: Bool = false) -> Measure {
         let m = Measure(ctx: ctx)
         m.addSymbols(buffer)
         m.doubleBarline = doubleBarline
         m.number = num
         m.atBeginning = atBeginning
         m.group = grp
-        _ = m.getKey()
+        if ctx.pythonParity {
+            _ = m.getKey()
+        } else {
+            m.readKeyHeader()
+            if let current = keyWhileGenerating {
+                if let k = acceptedKeyChange(m, current: current,
+                                             afterDoubleBarline: doubleBarline || afterSystemDoubleBarline) {
+                    m.keyChange = k
+                    keyWhileGenerating = k
+                    m.applyKeySignature()
+                } else if atBeginning {
+                    m.applyKeySignature()  // the reminder at the start of a system
+                }
+            } else {
+                keyWhileGenerating = m.keyFifths ?? 0
+                initialKey = keyWhileGenerating
+                m.applyKeySignature()
+            }
+            m.bindLooseAccidentals()
+        }
         m.alignSymbols()
         return m
     }
 
     private func genMeasures(_ container: [(Int, [MeasureSymbol])]) {
         var num = 1
+        var previousGroup: Int? = nil
         for (grp, insts) in container {
+            let afterSystemDouble = previousGroup.map(endsWithDoubleBarline.contains) ?? false
+            previousGroup = grp
             var list: [Measure] = []
             var buffer: [MeasureSymbol] = []
             var atBeginning = true
@@ -467,7 +660,8 @@ final class MusicXMLBuilder {
                     if buffer.isEmpty {
                         doubleBarline = true
                     } else {
-                        list.append(genMeasure(buffer, grp, num, atBeginning, doubleBarline))
+                        list.append(genMeasure(buffer, grp, num, atBeginning, doubleBarline,
+                                               afterSystemDoubleBarline: atBeginning && afterSystemDouble))
                         num += 1
                         buffer = []
                         atBeginning = false
@@ -477,7 +671,12 @@ final class MusicXMLBuilder {
                 }
                 buffer.append(inst)
             }
-            if !buffer.isEmpty { list.append(genMeasure(buffer, grp, num, atBeginning, doubleBarline)) }
+            if !buffer.isEmpty {
+                list.append(genMeasure(buffer, grp, num, atBeginning, doubleBarline,
+                                       afterSystemDoubleBarline: atBeginning && afterSystemDouble))
+            } else if doubleBarline {
+                endsWithDoubleBarline.insert(grp)
+            }
             measures.append((grp, list))
         }
     }
@@ -485,9 +684,15 @@ final class MusicXMLBuilder {
     /// `MusicXMLBuilder.build()`
     func build() {
         genMeasures(sortSymbols(voices()))
-        guard let first = measures.first(where: { $0.group == 0 })?.measures.first ?? measures.first?.measures.first else { return }
+        // oemer: the first measure of system 0 (or of the first system); when that system came out
+        // empty this found nothing and the whole score was left empty
+        let firstMeasure = ctx.pythonParity
+            ? measures.first(where: { $0.group == 0 })?.measures.first ?? measures.first?.measures.first
+            : measures.lazy.flatMap { $0.measures }.first
+        guard let first = firstMeasure else { return }
         actions.append(.initMeasure(first))
-        var curKey = first.getKey()
+        let parity = ctx.pythonParity
+        var curKey = parity ? first.getKey() : (initialKey ?? 0)
         var curClefs = first.trackClefs()
         let totalTracks = curClefs.count
 
@@ -495,6 +700,10 @@ final class MusicXMLBuilder {
             var addBreak = true
             for m in ms {
                 actions.append(.measure(m, addBreak: addBreak))
+                if !parity, let k = m.keyChange {
+                    actions.append(.keyChange(k))
+                    curKey = k
+                }
                 addBreak = false
                 var lastTidx = 0
                 var lastDura = 0.0
@@ -509,7 +718,7 @@ final class MusicXMLBuilder {
                             curClefs[track] = c
                         }
                     } else if sym is Sfn {
-                        if m.hasKey() {
+                        if parity && m.hasKey() {
                             let k = m.getKey()
                             if k != curKey {
                                 actions.append(.keyChange(k))
@@ -567,6 +776,26 @@ final class MusicXMLBuilder {
         }
     }
 
+    /// Outside parity mode: whether the key signature read at the head of `m` changes the key.
+    /// A key signature is written on every staff, so every staff must show one:
+    /// - at the start of a later system it is a reminder and only changes the key right after a
+    ///   double barline (a staff that lost an accidental there must not change it);
+    /// - after a double barline the staffs must agree on sharps or flats (the one showing more
+    ///   gives the count), or all show only naturals (back to no key);
+    /// - anywhere else they must show exactly the same new key.
+    private func acceptedKeyChange(_ m: Measure, current: Int, afterDoubleBarline: Bool) -> Int? {
+        let shown = m.keyPerTrack.compactMap { $0 }
+        guard !shown.isEmpty, shown.count == m.keyPerTrack.count else { return nil }
+        if m.atBeginning && !afterDoubleBarline { return nil }
+        if afterDoubleBarline {
+            if m.keyCancels && shown.allSatisfy({ $0 == 0 }) { return current != 0 ? 0 : nil }
+            guard let k = m.keyFifths, shown.allSatisfy({ $0 != 0 && ($0 > 0) == (k > 0) }) else { return nil }
+            return k != current ? k : nil
+        }
+        guard let k = m.keyFifths, Set(shown) == [k], k != current else { return nil }
+        return k
+    }
+
     // MARK: - XML
 
     private func keyElement(_ k: Int) -> XMLNode {
@@ -589,7 +818,7 @@ final class MusicXMLBuilder {
     }
 
     /// `decode_note(...)`; also records the written pitch.
-    private func noteElement(_ n: NoteHead, clef: ClefType, chord: Bool, voice: Int) -> XMLNode? {
+    private func noteElement(_ n: NoteHead, clef: ClefType, chord: Bool, voice: Int, chordIndex: Int) -> XMLNode? {
         if n.invalid { return nil }
         let e = XMLNode("note")
         if chord { e.add("chord") }
@@ -635,7 +864,8 @@ final class MusicXMLBuilder {
         let st = staffGeometry(of: n)
         writtenNotes.append(RecognizedNote(bbox: n.bbox, step: step, alter: alter, octave: octave,
                                            staff: n.track + 1, type: r.name, dotted: n.hasDot, system: n.group,
-                                           staffTop: st.yUpper, staffBottom: st.yLower, staffSpace: st.unitSize))
+                                           staffTop: st.yUpper, staffBottom: st.yLower, staffSpace: st.unitSize,
+                                           chord: chordIndex))
         return e
     }
 
@@ -686,16 +916,19 @@ final class MusicXMLBuilder {
         var state = WriterState()
         var measureEl: XMLNode? = nil
         writtenNotes = []
+        chordCounter = -1
+        let parity = ctx.pythonParity
+        var chordHeadWritten = false
         for a in actions {
             switch a {
             case .initMeasure(let m):
-                state.key = m.getKey()
+                state.key = parity ? m.getKey() : (initialKey ?? 0)
                 state.clefs = m.trackClefs()
                 state.initSfnState()
                 let el = part.add("measure", [("number", String(m.number))])
                 let attr = el.add("attributes")
                 attr.add("divisions", text: String(divisionPerQuarter))
-                attr.append(keyElement(m.getKey()))
+                attr.append(keyElement(state.key))
                 attr.add("staves", text: String(ctx.totalTrackNums))
                 for c in m.trackClefs() { if let c = c { attr.append(clefElement(c)) } }
                 measureEl = el
@@ -716,15 +949,31 @@ final class MusicXMLBuilder {
                 attr.append(keyElement(k))
                 measureEl?.append(attr)
             case .note(let n, let chord, let voice):
-                let clef = (n.track < state.clefs.count ? state.clefs[n.track]?.label : nil) ?? .gClef
+                let detected = n.track < state.clefs.count ? state.clefs[n.track]?.label : nil
+                let clef = detected ?? (parity ? .gClef : defaultClef(track: n.track))
                 let ch = chroma(n.staffLinePos, clef)
-                let cur = state.sfnState[ch] ?? nil
-                if let s = n.sfn, cur != s {
-                    state.sfnState[ch] = s
+                if parity {
+                    let cur = state.sfnState[ch] ?? nil
+                    if let s = n.sfn, cur != s {
+                        state.sfnState[ch] = s
+                    } else {
+                        n.sfn = cur
+                    }
+                } else if let s = n.sfn {
+                    state.measureAccidentals[n.track, default: [:]][n.staffLinePos] = s
                 } else {
-                    n.sfn = cur
+                    n.sfn = state.measureAccidentals[n.track]?[n.staffLinePos] ?? (state.sfnState[ch] ?? nil)
                 }
-                if let el = noteElement(n, clef: clef, chord: chord, voice: voice) { measureEl?.append(el) }
+                // a chord whose first note could not be written starts with its next note
+                // (oemer leaves that note marked <chord/>, tying it to the previous onset)
+                let asChord = parity ? chord : (chord && chordHeadWritten)
+                if !asChord { chordCounter += 1 }
+                let el = noteElement(n, clef: clef, chord: asChord, voice: voice, chordIndex: chordCounter)
+                if let el { measureEl?.append(el) }
+                if !asChord {
+                    chordHeadWritten = el != nil
+                    if el == nil && !parity { chordCounter -= 1 }
+                }
             case .rest(let r):
                 measureEl?.append(restElement(r))
             case .backup(let d):

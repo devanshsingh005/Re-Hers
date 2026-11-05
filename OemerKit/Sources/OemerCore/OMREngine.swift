@@ -26,10 +26,16 @@ public struct OMROptions {
     public var deskew: Bool
     /// Work title written into the MusicXML.
     public var title: String
+    /// Reproduce the Python oemer pipeline exactly (byte-identical MusicXML), including its
+    /// recognition bugs. Off by default: accidentals, key signatures, staff assignment of chord
+    /// notes and chord order are then corrected (see `OMRContext.pythonParity`). Parity is for
+    /// checking the port against the Python reference.
+    public var pythonParity: Bool
 
-    public init(deskew: Bool = true, title: String = "Score") {
+    public init(deskew: Bool = true, title: String = "Score", pythonParity: Bool = false) {
         self.deskew = deskew
         self.title = title
+        self.pythonParity = pythonParity
     }
 }
 
@@ -73,7 +79,7 @@ public enum OMREngine {
         }
 
         let ctx = OMRContext(staff: f[0], symbols: f[1], stemsRests: f[2], notehead: f[3], clefsKeys: f[4],
-                             floatMaps: options.deskew, classifiers: classifiers)
+                             floatMaps: options.deskew, classifiers: classifiers, pythonParity: options.pythonParity)
         f.removeAll()
         try ctx.extractStaffs()
         lap("staffs")

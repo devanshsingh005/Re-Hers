@@ -7,9 +7,10 @@ recognized note on the photo. Nothing leaves the device.
 - **Neural networks** (oemer's two segmentation models) run through Core ML on the
   **Neural Engine** in 16-bit precision — the most power-efficient way to run them on an iPhone.
 - **Everything after the networks** (dewarping, staff lines, noteheads, beams, rhythm,
-  accidentals, MusicXML writing) is a pure-Swift reimplementation of oemer's Python code. It
-  produces **byte-identical MusicXML** to the Python pipeline on the same model outputs
-  (see *Verification*).
+  accidentals, MusicXML writing) is a pure-Swift reimplementation of oemer's Python code. By
+  default it corrects several of oemer's recognition bugs on piano music (see *Corrections*);
+  with `pythonParity` on it produces **byte-identical MusicXML** to the Python pipeline on the
+  same model outputs (see *Verification*).
 
 Requirements: iOS 16+ (or macOS 13+), Xcode 15+. Physical device recommended (the Neural
 Engine is not available in the Simulator).
@@ -125,10 +126,12 @@ bash OemerKit/scripts/verify_mac.sh
 What it checks and what to expect:
 
 1. `swift build -c release` and an iOS device build with `xcodebuild` — no errors.
-2. `swift test` — 24 tests. The 4 *EndToEndTests* run the whole engine on saved
-   segmentation maps (tabi with and without deskew, a clean piano page, a photo) and require
-   **byte-identical** MusicXML to the Python reference; *RobustnessTests* feed it blank,
-   tiny, damaged and noisy inputs and require a clean result or error. *ImageInputTests*
+2. `swift test` — 39 tests. The 4 *EndToEndTests* run the whole engine on saved
+   segmentation maps (tabi with and without deskew, a clean piano page, a photo) in parity
+   mode and require **byte-identical** MusicXML to the Python reference; *CorrectionTests*
+   check each correction on small hand-built grand staffs (most also show oemer's behavior)
+   and run the same four pages with the corrections; *RobustnessTests* feed blank, tiny,
+   damaged and noisy inputs to both modes and require a clean result or error. *ImageInputTests*
    check photos as cameras deliver them: all 8 EXIF orientations (portrait iPhone photos are
    stored sideways), JPEG and HEIC, a 48 MP photo, and the `CGImage` path must all give the
    upright image, and a portrait photo must give the same notes at the same places. In the
@@ -154,11 +157,38 @@ print(report)   // e.g. "staff/symbols model 99.9xx%, detail model 99.9xx% agree
 - Output contains notes, rests, chords, accidentals, key signatures, clefs, dots and
   barlines. Time signatures, ties, slurs, dynamics, lyrics and tuplets are not recognized.
 
+## Corrections
+
+oemer gets several things wrong on multi-staff piano music. OemerKit corrects them unless
+`Configuration.pythonParity` (`OMROptions.pythonParity`) is on:
+
+- **Accidentals.** The note an accidental belongs to is searched in a window 2.5 staff spaces
+  to the right and 0.75 above and below (oemer: one pixel row, one space), choosing the
+  notehead at the accidental's pitch height (a flat's bowl); an accidental between the staffs
+  no longer deletes its note; one no note claimed alters the next note of its pitch on its
+  staff; and an accidental holds for its own staff and octave until the barline (oemer shared
+  it across both hands and all octaves).
+- **Key signatures.** Read per staff from the accidentals before the first note, which must
+  stand where a key signature's accidentals stand for that clef; the staff showing the most
+  gives the key (oemer averaged the staffs, and lost the key when one staff showed none). The
+  key persists: the reminder at the start of each system cannot change it, a new key must be
+  shown on every staff, and naturals cancel a key only after a double barline.
+- **Staffs of chord notes.** All notes on one stem go to the staff most of them were read on,
+  and moved notes are re-measured on it (oemer kept their old line number, so bass notes moved
+  to the treble staff came out a sixth or more off). Notes go to the vertically nearest staff
+  segment (oemer used the distance to segment centers, x included). A clef label that
+  contradicts its glyph's height is corrected toward the staff's usual clef.
+- **Chord order.** Chord notes are written lowest first, and `result.notes` lists each chord
+  from its lowest note up, with a shared `chord` index.
+
+These are checked by `CorrectionTests`; there is no ground-truth score in the repo, so the
+accuracy figures above are oemer's and were not re-measured with the corrections.
+
 ## Verification
 
 What has been verified (on Linux with Swift 6.1, since no Mac was available while porting):
 
-- **Engine = Python, byte for byte.** `tools/golden_export.py` runs the original pipeline on
+- **Engine = Python, byte for byte** (with `pythonParity`). `tools/golden_export.py` runs the original pipeline on
   saved model outputs and dumps every intermediate result; `oemer-check` runs the Swift engine
   on the same inputs; `tools/compare_golden.py` compares staffs, notes, groups, barlines,
   clefs, accidentals, rests and the MusicXML bytes. `tools/parity_suite.sh` does this for

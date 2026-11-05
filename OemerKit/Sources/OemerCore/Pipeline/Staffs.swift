@@ -122,8 +122,10 @@ struct StaffLayout {
 extension OMRContext {
     // MARK: - utils.py
 
-    /// `find_closest_staffs(x, y)`
+    /// `find_closest_staffs(x, y)`: the staff nearest to the point and the next one on the
+    /// point's side of it (the same staff twice if there is none).
     func findClosestStaffs(_ x: Double, _ y: Double) -> (Staff, Staff) {
+        if !pythonParity, let pair = closestStaffsVertically(x, y) { return pair }
         let flat = staffsFlat
         var keyed: [(idx: Int, dist: Double)] = []
         keyed.reserveCapacity(flat.count)
@@ -146,15 +148,56 @@ extension OMRContext {
         }
     }
 
-    /// `get_unit_size(x, y)` (keeps the original's interpolation weights).
+    /// Corrected staff lookup: oemer measures the Euclidean distance to each staff segment's
+    /// center, so a segment whose lines were detected over a different x range can win over a
+    /// staff that is vertically closer. Here only the segment of each staff row at the point's x
+    /// counts, and the distance is vertical, from the staff's outer lines, in its own staff
+    /// spaces; a point between two systems therefore goes to the nearer one (the boundary is the
+    /// middle of the gap), and deep ledger notes stay with their own system.
+    private func closestStaffsVertically(_ x: Double, _ y: Double) -> (Staff, Staff)? {
+        let grid = staffLayout.grid
+        guard let rowCount = grid.first?.count, rowCount > 0, grid.allSatisfy({ $0.count == rowCount }) else {
+            return nil
+        }
+        // the segment of every staff row at x (the one covering x, else the nearest)
+        let rows: [Staff] = (0..<rowCount).map { r in
+            let segs = grid.map { $0[r] }
+            if let s = segs.first(where: { $0.xLeft <= x && x <= $0.xRight }) { return s }
+            return segs.min { abs($0.xCenter - x) < abs($1.xCenter - x) }!
+        }.sorted { $0.yCenter < $1.yCenter }
+        func gap(_ st: Staff) -> Double {
+            let d = max(st.yUpper - y, y - st.yLower, 0)
+            let u = st.unitSize
+            return u > 0 && u.isFinite ? d / u : d
+        }
+        var best = 0
+        for i in 1..<rows.count where gap(rows[i]) < gap(rows[best]) { best = i }
+        let first = rows[best]
+        let below = y > first.yCenter
+        let neighbour = below ? best + 1 : best - 1
+        let second = rows.indices.contains(neighbour) ? rows[neighbour] : first
+        return (first, second)
+    }
+
+    /// The segment of the staff `(group, track)` nearest to `x`.
+    func staffSegment(group: Int, track: Int, x: Double) -> Staff? {
+        let own = staffsFlat.filter { $0.group == group && $0.track == track }
+        if let s = own.first(where: { $0.xLeft <= x && x <= $0.xRight }) { return s }
+        return own.min { abs($0.xCenter - x) < abs($1.xCenter - x) }
+    }
+
+    /// `get_unit_size(x, y)`. Between two staffs the original weights each staff by its own
+    /// distance (the farther one counts more); outside parity mode the nearer one counts more.
     func unitSize(_ x: Double, _ y: Double) -> Double {
         let (st1, st2) = findClosestStaffs(x, y)
         if st1.yCenter == st2.yCenter { return st1.unitSize }
         if st1.yUpper <= y && y <= st1.yLower { return st1.unitSize }
         let dist1 = abs(y - st1.yCenter)
         let dist2 = abs(y - st2.yCenter)
+        guard dist1 + dist2 > 0 else { return st1.unitSize }
         let w1 = dist1 / (dist1 + dist2)
         let w2 = dist2 / (dist1 + dist2)
+        if !pythonParity { return w2 * st1.unitSize + w1 * st2.unitSize }
         return w1 * st1.unitSize + w2 * st2.unitSize
     }
 
