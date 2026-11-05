@@ -150,17 +150,17 @@ final class SegmentationModel: @unchecked Sendable {
     }
 
     private func predict(_ inputs: [MLFeatureProvider]) async throws -> MLBatchProvider {
-        let batch = MLArrayBatchProvider(array: inputs)
-        let model = self.model
-        return try await withCheckedThrowingContinuation { cont in
+        let job = PredictionJob(model: model, batch: MLArrayBatchProvider(array: inputs))
+        let result: PredictionResult = try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    cont.resume(returning: try model.predictions(from: batch, options: MLPredictionOptions()))
+                    cont.resume(returning: try job.run())
                 } catch {
                     cont.resume(throwing: error)
                 }
             }
         }
+        return result.outputs
     }
 
     /// Reads probs[0, y, x, c] honoring the array's strides (outputs can be padded).
@@ -239,6 +239,23 @@ final class SegmentationModel: @unchecked Sendable {
             }
         }
     }
+}
+
+/// One batch prediction handed to a GCD queue. MLModel predictions are thread-safe (Core ML
+/// documentation) and the batch is created for this call only and not touched elsewhere, so
+/// moving them to another thread is safe even though the Core ML classes aren't marked Sendable.
+private struct PredictionJob: @unchecked Sendable {
+    let model: MLModel
+    let batch: MLArrayBatchProvider
+
+    func run() throws -> PredictionResult {
+        PredictionResult(outputs: try model.predictions(from: batch, options: MLPredictionOptions()))
+    }
+}
+
+/// The outputs of one batch, owned by the single task that awaits them.
+private struct PredictionResult: @unchecked Sendable {
+    let outputs: MLBatchProvider
 }
 
 /// Reusable BGRA pixel buffers for model input tiles.
