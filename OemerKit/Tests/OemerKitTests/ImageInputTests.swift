@@ -128,6 +128,7 @@ final class ImageInputTests: XCTestCase {
         let a = try await recognizer.recognize(imageData: Self.encode(up, orientation: 1, type: "public.tiff"))
         let b = try await recognizer.recognize(imageData: Self.encode(Self.stored(up, orientation: 6), orientation: 6, type: "public.tiff"))
         assertSameNotes(b, a, "recognize(imageData:) EXIF 6")
+        assertNotesMatchMusicXML(a, "upright")
         assertStaffGeometry(a, "upright")
         assertStaffGeometry(b, "EXIF 6")
     }
@@ -211,6 +212,26 @@ final class ImageInputTests: XCTestCase {
         print("\(label): \(got.notes.count) notes vs \(expected.notes.count) upright, \(unmatched) upright notes not matched")
         XCTAssertLessThanOrEqual(abs(got.notes.count - expected.notes.count), expected.notes.count / 100, label, file: file, line: line)
         XCTAssertLessThanOrEqual(unmatched, expected.notes.count / 100, label, file: file, line: line)
+    }
+
+    /// `result.notes` is in the MusicXML's order (apps pair them with its <note> elements by
+    /// index), and each chord goes from its lowest note up.
+    func assertNotesMatchMusicXML(_ result: SheetMusicResult, _ label: String,
+                                  file: StaticString = #filePath, line: UInt = #line)
+    {
+        let pitched = result.musicXML.components(separatedBy: "<note>").dropFirst().compactMap { n -> String? in
+            func value(_ tag: String) -> String? {
+                guard let r = n.range(of: "<\(tag)>"), let e = n.range(of: "</\(tag)>", range: r.upperBound..<n.endIndex) else { return nil }
+                return String(n[r.upperBound..<e.lowerBound])
+            }
+            guard let step = value("step"), let octave = value("octave") else { return nil }
+            let alter = ["1": "#", "-1": "b"][value("alter") ?? "0"] ?? ""
+            return step + alter + octave
+        }
+        XCTAssertEqual(result.notes.map(\.name), pitched, label, file: file, line: line)
+        for (_, chord) in Dictionary(grouping: result.notes, by: \.chord) where chord.count > 1 {
+            XCTAssertEqual(chord.map(\.midi), chord.map(\.midi).sorted(), label, file: file, line: line)
+        }
     }
 
     /// Each note's staff spans about 4 line distances, and the note sits on it or on nearby
