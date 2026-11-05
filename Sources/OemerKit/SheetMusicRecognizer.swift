@@ -32,12 +32,22 @@ public struct LocatedNote: Sendable {
     public let staffTop: Double
     public let staffBottom: Double
     public let staffSpace: Double
+    /// Index of the chord (onset) the note belongs to, from 0 in document order; the notes of
+    /// one chord share it.
+    public let chord: Int
+
+    /// MIDI note number (C4 = 60).
+    public var midi: Int {
+        let semitone = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11][step] ?? 0
+        return (octave + 1) * 12 + semitone + alter
+    }
 }
 
 public struct SheetMusicResult: Sendable {
     /// MusicXML 4.0 (partwise) — the same format the oemer command line writes.
     public let musicXML: String
-    /// Notes in MusicXML order, with their positions on the photo.
+    /// Notes in MusicXML order, each chord from its lowest note up, with their positions on the
+    /// photo.
     public let notes: [LocatedNote]
     /// Size of the upright original image in pixels.
     public let imageSize: CGSize
@@ -64,6 +74,10 @@ public final class SheetMusicRecognizer: @unchecked Sendable {
         public var stitching: TileStitching = .centerCrop
         /// Title written into the MusicXML.
         public var title: String = "Score"
+        /// Reproduce the Python oemer pipeline exactly, its recognition bugs included (dropped
+        /// or misplaced accidentals, lost key signatures, chord notes read on the wrong staff).
+        /// Leave off except to compare with the Python reference.
+        public var pythonParity: Bool = false
 
         public init() {}
     }
@@ -165,13 +179,13 @@ public final class SheetMusicRecognizer: @unchecked Sendable {
         let maps = SegmentationMaps(staff: staff, symbols: symbols, stemsRests: stems, notehead: heads, clefsKeys: clefs)
 
         let result = try OMREngine.transcribe(maps, classifiers: classifiers,
-                                              options: OMROptions(deskew: cfg.deskew, title: cfg.title))
+                                              options: OMROptions(deskew: cfg.deskew, title: cfg.title, pythonParity: cfg.pythonParity))
         for (stage, secs) in result.timings { timings[stage] = secs }
         progress?(1)
 
         // map note boxes back to the original photo
         let sx = image.scaleX, sy = image.scaleY
-        let notes: [LocatedNote] = result.notes.map { n in
+        let located: [LocatedNote] = result.notes.map { n in
             let b = n.bbox
             var y1 = Double(b.y1), y2 = Double(b.y2)
             var staffTop = n.staffTop, staffBottom = n.staffBottom
@@ -190,8 +204,17 @@ public final class SheetMusicRecognizer: @unchecked Sendable {
             return LocatedNote(name: n.name, step: n.step, alter: n.alter, octave: n.octave, staff: n.staff,
                                type: n.type, dotted: n.dotted, rect: rect, system: n.system,
                                staffTop: staffTop / sy, staffBottom: staffBottom / sy,
-                               staffSpace: n.staffSpace * stretch / sy)
+                               staffSpace: n.staffSpace * stretch / sy, chord: n.chord)
         }
+        // document order, and within a chord from the lowest note up (by pitch, then lower on the
+        // page first), so apps can map chord tones to keys and labels one to one
+        let notes = located.enumerated().sorted { a, b in
+            let x = a.element, y = b.element
+            if x.chord != y.chord { return x.chord < y.chord }
+            if x.midi != y.midi { return x.midi < y.midi }
+            if x.rect.midY != y.rect.midY { return x.rect.midY > y.rect.midY }
+            return a.offset < b.offset
+        }.map(\.element)
         return SheetMusicResult(musicXML: result.musicXML, notes: notes,
                                 imageSize: CGSize(width: image.originalWidth, height: image.originalHeight),
                                 timings: timings)
