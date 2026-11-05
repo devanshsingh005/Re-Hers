@@ -28,7 +28,7 @@ final class EndToEndTests: XCTestCase {
         let (maps, deskew) = try Self.loadMaps(dir.appendingPathComponent("\(name).omrmaps"))
         let expected = try String(contentsOf: dir.appendingPathComponent("\(name).musicxml"), encoding: .utf8)
         let classifiers = try XCTUnwrap(Self.classifiers, "classifiers.bin not found")
-        let result = try OMREngine.transcribe(maps, classifiers: classifiers, options: OMROptions(deskew: deskew))
+        let result = try OMREngine.transcribe(maps, classifiers: classifiers, options: OMROptions(deskew: deskew, pythonParity: true))
         if result.musicXML != expected {
             let a = result.musicXML.split(separator: "\n", omittingEmptySubsequences: false)
             let b = expected.split(separator: "\n", omittingEmptySubsequences: false)

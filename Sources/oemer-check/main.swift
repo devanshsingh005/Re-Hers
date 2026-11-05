@@ -86,7 +86,7 @@ do {
     var result: OMRResult? = nil
     for _ in 0..<repeatCount {
         let t1 = Date()
-        result = try OMREngine.transcribe(maps, classifiers: classifiers, options: OMROptions(deskew: deskew), debug: true)
+        result = try OMREngine.transcribe(maps, classifiers: classifiers, options: OMROptions(deskew: deskew, pythonParity: true), debug: true)
         let stages = result!.timings.map { String(format: "%@ %.2fs", $0.stage, $0.seconds) }.joined(separator: ", ")
         print(String(format: "transcribed in %.2fs (%@)", Date().timeIntervalSince(t1), stages))
     }

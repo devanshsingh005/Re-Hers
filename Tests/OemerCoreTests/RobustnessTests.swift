@@ -9,13 +9,25 @@ final class RobustnessTests: XCTestCase {
     static let classifiers: SymbolClassifiers? = try? SymbolClassifiers(data: Data(contentsOf:
         EndToEndTests.packageDir.appendingPathComponent("Sources/OemerKit/Resources/classifiers.bin")))
 
+    /// Runs the engine with the corrections (returned) and in Python parity mode; both must
+    /// finish, with the same outcome (a result, or the same error).
     private func run(_ maps: SegmentationMaps, deskew: Bool) throws -> Result<OMRResult, OMRError> {
         let classifiers = try XCTUnwrap(Self.classifiers, "classifiers.bin not found")
-        do {
-            return .success(try OMREngine.transcribe(maps, classifiers: classifiers, options: OMROptions(deskew: deskew)))
-        } catch let e as OMRError {
-            return .failure(e)
+        func attempt(_ parity: Bool) throws -> Result<OMRResult, OMRError> {
+            do {
+                return .success(try OMREngine.transcribe(maps, classifiers: classifiers,
+                                                         options: OMROptions(deskew: deskew, pythonParity: parity)))
+            } catch let e as OMRError {
+                return .failure(e)
+            }
         }
+        let corrected = try attempt(false)
+        switch (corrected, try attempt(true)) {
+        case (.success, .success): break
+        case (.failure(let a), .failure(let b)): XCTAssertEqual(a.description, b.description)
+        default: XCTFail("the two modes disagree on whether this input can be read")
+        }
+        return corrected
     }
 
     private func uniform(width: Int, height: Int, value: UInt8) -> SegmentationMaps {

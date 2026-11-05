@@ -42,6 +42,9 @@ final class Sfn: MeasureSymbol {
     var label: SfnType = .sharp
     var noteId: Int? = nil
     var isKey: Bool? = nil
+    /// Line/space position of the pitch it alters on its staff (see `staffLinePosition`);
+    /// set outside parity mode.
+    var linePos: Int? = nil
 }
 
 final class Rest: MeasureSymbol {
@@ -227,8 +230,46 @@ extension OMRContext {
         return (valid, labels)
     }
 
+    /// Height of the pitch an accidental marks: a flat's is its bowl, half a staff space above
+    /// its bottom (the stem rises above it); sharps and naturals are centered on it.
+    func accidentalPitchY(_ b: BBox, _ label: SfnType) -> Double {
+        let mid = Double(b.y1 + b.y2) / 2
+        guard label == .flat else { return mid }
+        let u = unitSize(b.center)
+        return u > 0 && u.isFinite ? max(Double(b.y2) - u / 2, mid) : mid
+    }
+
+    /// The note an accidental belongs to. oemer scans a single row (the accidental's middle)
+    /// for one staff space to the right, which misses noteheads a little above or below it and
+    /// picks an arbitrary chord tone. Outside parity mode the window reaches 2.5 staff spaces to
+    /// the right and 0.75 above and below, and among the noteheads in it the one whose middle is
+    /// nearest the accidental's pitch height wins (then the nearest to the left).
+    func nearbyNoteId(_ b: BBox, label: SfnType) -> Int? {
+        if pythonParity { return nearbyNoteIdPython(b) }
+        let u = unitSize(b.center)
+        guard u > 0, u.isFinite else { return nil }
+        let x1 = max(b.x2, 0), x2 = min(b.x2 + Int(2.5 * u), width)
+        let y1 = max(b.y1 - Int(0.75 * u), 0), y2 = min(b.y2 + Int(0.75 * u), height - 1)
+        guard x1 < x2, y1 <= y2 else { return nil }
+        var found = Set<Int>()
+        for y in y1...y2 {
+            for x in x1..<x2 {
+                let v = Int(noteIdMap[y, x])
+                if v >= 0 && v < notes.count && !notes[v].invalid { found.insert(v) }
+            }
+        }
+        let pitchY = accidentalPitchY(b, label)
+        return found.min { a, c in
+            let na = notes[a].bbox, nc = notes[c].bbox
+            let da = abs(Double(na.y1 + na.y2) / 2 - pitchY), dc = abs(Double(nc.y1 + nc.y2) / 2 - pitchY)
+            if da != dc { return da < dc }
+            if na.x1 != nc.x1 { return na.x1 < nc.x1 }
+            return a < c
+        }
+    }
+
     /// `get_nearby_note_id(box, note_id_map)`
-    private func nearbyNoteId(_ b: BBox) -> Int? {
+    private func nearbyNoteIdPython(_ b: BBox) -> Int? {
         let c = b.center
         let u = pyRound(unitSize(c))
         if u <= 0 { return nil }
@@ -258,15 +299,20 @@ extension OMRContext {
             let st = findClosestStaffs(Double(b.center.x), Double(b.center.y)).0
             c.track = st.track
             c.group = st.group
+            if !pythonParity { c.label = checkedClefLabel(c.label, box: b, staff: st) }
             return c
         }
         sfns = zip(keyBox, keyLabel).map { b, l in
             let s = Sfn(bbox: b)
             s.label = l == "sharp" ? .sharp : (l == "flat" ? .flat : .natural)
             let st = findClosestStaffs(Double(b.center.x), Double(b.center.y)).0
-            s.noteId = nearbyNoteId(b)
+            s.noteId = nearbyNoteId(b, label: s.label)
             s.track = st.track
             s.group = st.group
+            if !pythonParity {
+                bindAccidental(s, staff: st)
+                return s
+            }
             if let nid = s.noteId {
                 let note = notes[nid]
                 if s.track != note.track {
@@ -282,7 +328,46 @@ extension OMRContext {
         }
 
         let (restBox, restLabel) = try parseRests(lineBox: lineBox, unitSize: u)
-        rests = zip(restBox, restLabel).map { b, l in
+        rests = makeRests(restBox, restLabel)
+    }
+
+    /// Outside parity mode: an accidental next to a note of its system alters that note; when
+    /// its own nearest staff is the other staff of the system (it sits between them), it takes
+    /// the note's staff. oemer instead invalidated (dropped) the note in that case. Its pitch
+    /// position is recorded either way, for key signatures and for binding it later.
+    private func bindAccidental(_ s: Sfn, staff st: Staff) {
+        if let nid = s.noteId {
+            let note = notes[nid]
+            if note.group == s.group {
+                s.track = note.track
+                note.sfn = s.label
+                s.isKey = false
+            } else {
+                s.noteId = nil
+            }
+        }
+        let cx = Double(s.bbox.center.x)
+        let staff = staffSegment(group: s.group, track: s.track, x: cx) ?? st
+        s.linePos = staffLinePosition(accidentalPitchY(s.bbox, s.label), on: staff)
+    }
+
+    /// The classifier only returns a label; the glyph's height is a second opinion. A G clef
+    /// reaches well above and below the staff (about 7 staff spaces), an F clef sits in its upper
+    /// part (about 3.5). The height may only move a clef toward its staff's usual one (G on even
+    /// tracks, F on odd: treble and bass on piano), so a G clef that is short because part of it
+    /// was lost is not turned into an F clef, while a short "G" on the bass staff is.
+    private func checkedClefLabel(_ label: ClefType, box b: BBox, staff st: Staff) -> ClefType {
+        let u = st.unitSize
+        guard u > 0, u.isFinite else { return label }
+        let spaces = Double(b.y2 - b.y1) / u
+        let usual: ClefType = st.track % 2 == 0 ? .gClef : .fClef
+        if usual == .fClef && label == .gClef && spaces <= 4.5 { return .fClef }
+        if usual == .gClef && label == .fClef && spaces >= 5.5 { return .gClef }
+        return label
+    }
+
+    private func makeRests(_ restBox: [BBox], _ restLabel: [String]) -> [Rest] {
+        return zip(restBox, restLabel).map { b, l in
             let r = Rest(bbox: b)
             switch l {
             case "rest_whole": r.label = .wholeHalf

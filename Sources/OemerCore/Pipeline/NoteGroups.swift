@@ -217,6 +217,39 @@ extension OMRContext {
         return top?.0 ?? bottom?.0
     }
 
+    /// Puts all notes of one stem group (a chord) on one staff. oemer picks the staff nearest
+    /// the group's box, which includes the stem, and moves the notes without re-reading their
+    /// line positions, so a bass note written to the treble staff kept its bass line number and
+    /// was decoded with the treble clef (wrong step and octave). Here the staff most noteheads
+    /// were read on wins (ties: the one nearest the noteheads' middle), and every moved note's
+    /// line position is measured again on that staff, so its pitch is kept.
+    func unifyStaff(of nids: [Int]) -> (group: Int, track: Int) {
+        struct Key: Hashable { let group: Int; let track: Int }
+        var counts: [Key: Int] = [:]
+        for nid in nids { counts[Key(group: notes[nid].group, track: notes[nid].track), default: 0] += 1 }
+        let midY = npMean(nids.map { Double(notes[$0].bbox.y1 + notes[$0].bbox.y2) / 2 })
+        let midX = npMean(nids.map { Double(notes[$0].bbox.x1 + notes[$0].bbox.x2) / 2 })
+        func distance(_ k: Key) -> Double {
+            staffSegment(group: k.group, track: k.track, x: midX).map { abs($0.yCenter - midY) } ?? .infinity
+        }
+        let target = counts.keys.max { a, b in
+            if counts[a]! != counts[b]! { return counts[a]! < counts[b]! }
+            let da = distance(a), db = distance(b)
+            if da != db { return da > db }
+            return (a.group, a.track) > (b.group, b.track)
+        }!
+        for nid in nids where notes[nid].group != target.group || notes[nid].track != target.track {
+            let n = notes[nid]
+            let c = n.bbox.center  // the point gen_notes measured from
+            if let st = staffSegment(group: target.group, track: target.track, x: Double(c.x)) {
+                n.staffLinePos = staffLinePosition(Double(c.y), on: st)
+            }
+            n.group = target.group
+            n.track = target.track
+        }
+        return (target.group, target.track)
+    }
+
     /// `note_group_extraction.extract()` — sets `groups` and `groupMap`.
     func extractNoteGroups(toleranceRatio: Double = 0.2, maxXDiffRatio: Double = 0.5) {
         var (groups, gmap) = groupNoteheads()
@@ -309,7 +342,7 @@ extension OMRContext {
             var tarGroup = notes[nids[0]].group
             let sameTrack = nids.allSatisfy { notes[$0].track == tarTrack }
             let sameGroup = nids.allSatisfy { notes[$0].group == tarGroup }
-            if !(sameTrack && sameGroup) {
+            if !(sameTrack && sameGroup) && pythonParity {
                 let (st, _) = findClosestStaffs(Double(gbox.x1 + gbox.x2) / 2, Double(gbox.y1 + gbox.y2) / 2)
                 tarTrack = st.track
                 tarGroup = st.group
@@ -317,6 +350,8 @@ extension OMRContext {
                     notes[nid].track = st.track
                     notes[nid].group = st.group
                 }
+            } else if !(sameTrack && sameGroup) {
+                (tarGroup, tarTrack) = unifyStaff(of: nids)
             }
             ng.track = tarTrack
             ng.group = tarGroup
