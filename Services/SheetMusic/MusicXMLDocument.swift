@@ -82,8 +82,27 @@ nonisolated enum MusicXMLDocument {
     /// `{"score-partwise": {...}}`, attributes as `"@name"`, a child that occurs more than once
     /// as an array, text-only elements as strings, text next to attributes as `"#text"`, and
     /// empty elements such as `<chord/>` or `<dot/>` as `null`.
+    ///
+    /// Grouping repeated children loses their order, which a measure needs: a `<backup>` or
+    /// `<forward>` moves the time of the notes after it. Each measure therefore also lists its
+    /// children's names in order under `#order` (ScoreTimeline replays them), and the root
+    /// carries `#format` so older JSON can be told apart and rebuilt.
     static func jsonObject(_ root: XMLElementNode) -> [String: Any] {
-        [root.name: jsonValue(root)]
+        var value = jsonValue(root)
+        if var dict = value as? [String: Any] {
+            dict["#format"] = currentFormat
+            value = dict
+        }
+        return [root.name: value]
+    }
+
+    /// 2: measures keep their element order; uploads carry the tempo printed on the sheet.
+    static let currentFormat = 2
+
+    /// Whether `json` was written by the current `jsonObject` (see `currentFormat`).
+    static func isCurrentFormat(_ json: [String: Any]) -> Bool {
+        guard let score = json["score-partwise"] as? [String: Any] else { return false }
+        return (score["#format"] as? Int ?? 0) >= currentFormat
     }
 
     // MARK: - Private
@@ -106,6 +125,7 @@ nonisolated enum MusicXMLDocument {
             dict[name] = values.count == 1 ? values[0] : values
         }
         if !text.isEmpty { dict["#text"] = text }
+        if e.name == "measure" { dict["#order"] = e.children.map(\.name) }
         return dict
     }
 

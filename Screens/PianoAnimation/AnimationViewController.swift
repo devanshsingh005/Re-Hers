@@ -3,13 +3,15 @@ import UIKit
 // MARK: - AnimationViewController
 //
 // Production-ready landscape animation screen.
-// Fixes:
-//   1. Forced landscape — view overrides orientation + SongDetailsPage forces rotation on push
-//   2. Keyboard gap — piano fills to physical bottom edge via bottomAnchor
-//   3. Sheet music — rendered in landscape frame with correct spacing
-//   4. Backward seek — elapsedTotal is recomputed from chordIndex after seek
-//   5. Tempo sync — progress fraction denominator is totalDuration / tempoMultiplier
-//   6. iOS-native aesthetic — liquid glass nav, clean layout
+//
+// Playback follows the score note by note: the score is parsed once into a ScoreTimeline
+// (shared with the sheet view), and every struck note of the performance — repeats taken,
+// 1st / 2nd endings chosen, D.C. / D.S. followed — becomes a PlayNote with its own start and
+// release in seconds (tempo map, fermatas and ties applied; staccato shortens, slurs and
+// tenuto hold) and a velocity from the dynamics. A display-link clock moves `position` through
+// the performance. Each frame starts the notes whose time has come and releases the ones that
+// have ended, so held notes keep sounding (and their keys stay down) under moving ones. The
+// clock adds up real frame times × tempo, so the song never drifts from its tempo.
 
 final class AnimationViewController: UIViewController, UIGestureRecognizerDelegate {
 
@@ -19,17 +21,26 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     var songTitle: String = "Animation"
 
     // MARK: - Playback State
-    private var allChords:       [SongChord] = []
-    private var chordIndex:      Int    = 0
-    private var elapsedInChord:  Double = 0   // seconds elapsed in current chord (real time)
-    private var isNewChord:      Bool   = true
+
+    /// One struck note of the performance, in seconds at 1× tempo.
+    private struct PlayNote {
+        let midi: Int
+        let isLeft: Bool
+        let velocity: Int
+        let start: Double
+        let release: Double   // by its articulation; ordinary notes leave a hair of silence
+    }
+
+    private var timeline:        ScoreTimeline?
+    private var playNotes:       [PlayNote] = []   // sorted by start
+    private var position:        Double = 0        // seconds into the score at 1×
+    private var nextNoteIndex:   Int    = 0
+    private var holding:         [Int]  = []       // playNotes whose keys are down
+    private var lastFrameTime:   CFTimeInterval?
     private var isPlaying:       Bool   = false
     private var tempoMultiplier: Double = 1.0
     private var displayLink:     CADisplayLink?
-    private var totalDuration:   Double = 0   // natural (1×) total duration in seconds
-
-    // elapsedTotal tracks real-wall time elapsed so progress stays in sync with tempo
-    private var elapsedTotal:    Double = 0
+    private var totalDuration:   Double = 0        // 1× length of the score in seconds
 
     // MARK: - Child Views
     private let pianoVC   = PianoAnimationkeyboardViewController()
@@ -37,9 +48,16 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     private let navBar    = LessonNavBarView()
     private let overlay   = PlaybackOverlay()
 
-    private let kPianoH: CGFloat = 170  // visual height of piano pane
-    private let kNavH:   CGFloat = 54
+    // nav bar, sheet and keyboard share one column, stacked with small even gaps; the
+    // keyboard takes about a third of the height, the rest goes to the music
+    private let kPianoShare: CGFloat = 0.33
+    private let kNavH:   CGFloat = 40
+    private let kGap:    CGFloat = 6
     private var navBarTopConstraint: NSLayoutConstraint?
+    private var pianoHeightConstraint: NSLayoutConstraint?
+    private let column = UILayoutGuide()
+    private var columnLeading: NSLayoutConstraint?
+    private var columnTrailing: NSLayoutConstraint?
 
     // MARK: - Overlay timers
     private var overlayHideTimer: Timer?
@@ -83,13 +101,23 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         super.viewDidLayoutSubviews()
         // Ensure no safe-area gap remains from portrait transition
         additionalSafeAreaInsets = .zero
+        // the column's sides: clear of the Dynamic Island / notch, not the whole landscape
+        // safe area (which leaves wide empty bands), and the same on both sides
+        let side = max(view.safeAreaInsets.left, view.safeAreaInsets.right)
+        let margin = side > 0 ? max(8, side - 10) : 8
+        if columnLeading?.constant != margin {
+            columnLeading?.constant = margin
+            columnTrailing?.constant = -margin
+        }
+        let pianoHeight = (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
+        if pianoHeightConstraint?.constant != pianoHeight { pianoHeightConstraint?.constant = pianoHeight }
         
         // Center keyboard on C4 exactly once after layout is done
         if !didCenterKeyboard && pianoVC.view.bounds.width > 0 {
             didCenterKeyboard = true
             pianoVC.centerOnMiddleC()
         }
-        if overlay.alpha == 0 && !allChords.isEmpty {
+        if overlay.alpha == 0 && !playNotes.isEmpty {
             setOverlay(visible: true, animated: false)
         }
     }
@@ -146,7 +174,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
 
     // MARK: - Layout
     private func buildLayout() {
-        // Sheet card: top → bottom - kPianoH (safe area top respected)
+        // Sheet card: under the nav bar, down to the keyboard
         sheetCard.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(sheetCard)
 
@@ -160,21 +188,30 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         navBar.alpha = 1
         view.addSubview(navBar)
 
-        let topC = navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12)
+        view.addLayoutGuide(column)
+        let topC = navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: kGap)
         navBarTopConstraint = topC
+        columnLeading = column.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 52)
+        columnTrailing = column.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -52)
+
+        sheetCard.layer.cornerRadius = 12
+        sheetCard.layer.cornerCurve = .continuous
 
         NSLayoutConstraint.activate([
+            columnLeading!, columnTrailing!,
+            column.topAnchor.constraint(equalTo: view.topAnchor),
+            column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
             // Nav bar pinned to top safe area
             topC,
-            navBar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            navBar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            navBar.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: column.trailingAnchor),
             navBar.heightAnchor.constraint(equalToConstant: kNavH),
 
-            // Sheet card starts under nar bar
-            sheetCard.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
-            sheetCard.leadingAnchor.constraint(equalTo: navBar.leadingAnchor),
-            sheetCard.trailingAnchor.constraint(equalTo: navBar.trailingAnchor),
-            sheetCard.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -(kPianoH + 10)),
+            // Sheet card starts under nar bar (its bottom follows the keyboard, see embedPiano)
+            sheetCard.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: kGap),
+            sheetCard.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            sheetCard.trailingAnchor.constraint(equalTo: column.trailingAnchor),
 
             // Overlay = full screen
             overlay.topAnchor.constraint(equalTo: view.topAnchor),
@@ -215,11 +252,19 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         view.addSubview(pianoVC.view)
 
        NSLayoutConstraint.activate([
-            pianoVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            pianoVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pianoVC.view.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            pianoVC.view.trailingAnchor.constraint(equalTo: column.trailingAnchor),
             pianoVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            pianoVC.view.heightAnchor.constraint(equalToConstant: kPianoH)
+            sheetCard.bottomAnchor.constraint(equalTo: pianoVC.view.topAnchor, constant: -kGap)
         ])
+        // the keyboard is the bottom of the column: rounded like the sheet above it
+        pianoVC.view.layer.cornerRadius = 12
+        pianoVC.view.layer.cornerCurve = .continuous
+        pianoVC.view.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        pianoVC.view.clipsToBounds = true
+        let height = pianoVC.view.heightAnchor.constraint(equalToConstant: 112)
+        height.isActive = true
+        pianoHeightConstraint = height
         pianoVC.didMove(toParent: self)
         pianoVC.setAnimationMode()
 
@@ -246,31 +291,76 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         }
     }
 
-    // MARK: - Chord Loading
+    // MARK: - Score Loading
     private func loadChords() {
-        let mgr: PianoDemoManager
-        if let data = sheetMusicData {
-            mgr = PianoDemoManager(withData: data)
-        } else {
-            #if DEBUG
-            mgr = PianoDemoManager()
-            #else
-            allChords = []
-            totalDuration = 0
-            sheetCard.setChordCount(0)
+        var data = sheetMusicData
+        #if DEBUG
+        if data == nil, let url = Bundle.main.url(forResource: "sheet_test", withExtension: "json") {
+            data = try? Data(contentsOf: url)
+        }
+        #endif
+        guard let data else {
             debugLog("⚠️ [Animation] No sheet data provided")
             return
-            #endif
         }
-        mgr.loadSong(tempoBPM: 84)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let parsed = try? ScoreTimeline.parse(data: data)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard let parsed else {
+                    debugLog("❌ [Animation] Could not read the score")
+                    return
+                }
+                self.apply(parsed)
+            }
+        }
+    }
 
-        var arr: [SongChord] = []
-        while let c = mgr.next() { arr.append(c) }
-        allChords     = arr
-        totalDuration = arr.reduce(0) { $0 + $1.duration }
-        sheetCard.setChordCount(allChords.count)
-        if let data = sheetMusicData { sheetCard.loadData(data) }
-        debugLog("🎵 \(allChords.count) chords  ~\(String(format: "%.1f", totalDuration))s")
+    private func apply(_ timeline: ScoreTimeline) {
+        self.timeline = timeline
+        playNotes = Self.playNotes(in: timeline)
+        totalDuration = timeline.performanceSeconds
+        pianoVC.setHandPerformance(playNotes.map {
+            HandNote(midi: $0.midi, isLeft: $0.isLeft, start: $0.start, release: $0.release)
+        })
+        pianoVC.showHands(at: 0)
+        position = 0
+        nextNoteIndex = 0
+        holding = []
+        sheetCard.load(timeline: timeline)
+        sheetCard.updateToTick(0)
+        navBar.updateProgress(0)
+        if overlay.alpha == 0 { setOverlay(visible: true, animated: true) }
+        debugLog("🎵 \(playNotes.count) notes, \(timeline.measures.count) measures (\(timeline.performance.count) played), "
+                 + "~\(String(format: "%.1f", totalDuration))s, \(String(format: "%g", timeline.tempos.first?.bpm ?? 0)) BPM"
+                 + (timeline.keepsElementOrder ? "" : " (no element order: timing per staff and voice)"))
+    }
+
+    private static func playNotes(in timeline: ScoreTimeline) -> [PlayNote] {
+        var byMeasure: [Int: [ScoreNote]] = [:]
+        for note in timeline.notes where note.isStruck { byMeasure[note.measureIndex, default: []].append(note) }
+        let time = timeline.performanceTime
+        var notes: [PlayNote] = []
+        for performed in timeline.performance {
+            let measureStart = timeline.measures[performed.measureIndex].startTick
+            for note in byMeasure[performed.measureIndex] ?? [] {
+                guard let midi = note.midi else { continue }
+                let from = Double(performed.tick + note.startTick - measureStart)
+                let start = time.seconds(atTick: from)
+                let end = time.seconds(atTick: from + Double(note.soundingTicks))
+                let release: Double
+                if let held = note.heldFraction {
+                    // staccato & co. shorten the note; tenuto and slurs hold it to the next one
+                    release = held >= 1 ? end - 0.004 : start + max(0.06, (end - start) * held)
+                } else {
+                    // a short gap so a repeated key is struck again; long notes keep almost all their length
+                    release = end - min(0.05, (end - start) * 0.12)
+                }
+                notes.append(PlayNote(midi: midi, isLeft: note.isLeftHand, velocity: note.velocity,
+                                      start: start, release: max(start + 0.03, release)))
+            }
+        }
+        return notes.sorted { $0.start < $1.start }
     }
 
     // MARK: - Gestures
@@ -315,11 +405,12 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
 
     // MARK: - Playback
     private func startPlayback() {
-        guard !allChords.isEmpty else { return }
-        if chordIndex >= allChords.count {
-            chordIndex = 0; elapsedInChord = 0; elapsedTotal = 0; isNewChord = true
-        }
+        guard !playNotes.isEmpty else { return }
+        if position >= totalDuration { position = 0 }
+        // keys of notes already held at this point light up again (silently)
+        seek(to: position)
         isPlaying = true
+        lastFrameTime = nil
         overlay.setPlaying(true)
         displayLink?.invalidate()
         displayLink = CADisplayLink(target: self, selector: #selector(tick(_:)))
@@ -330,12 +421,13 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     private func stopPlayback(reset: Bool) {
         isPlaying = false
         displayLink?.invalidate(); displayLink = nil
-        AudioEngineManager.shared.stopAllNotes()
+        releaseAllNotes()
         if reset {
-            pianoVC.resetKeyboard()
-            chordIndex = 0; elapsedInChord = 0; elapsedTotal = 0
-            isNewChord = true
+            position = 0
+            nextNoteIndex = 0
             sheetCard.resetProgress()
+            navBar.updateProgress(0)
+            pianoVC.showHands(at: 0)
         }
         overlay.setPlaying(false)
         setOverlay(visible: true, animated: true)
@@ -351,160 +443,82 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         pianoVC.resetKeyboard()
     }
 
-    // MARK: - Fix 4: Seek (backward and forward)
+    private func releaseAllNotes() {
+        holding = []
+        pianoVC.resetKeyboard()
+    }
+
+    // MARK: - Seek (backward and forward)
     private func seekBy(_ sec: Double) {
         guard totalDuration > 0 else { return }
-
-        // Compute current absolute time from chord index + elapsed-in-chord
-        var t = 0.0
-        for i in 0..<chordIndex { t += allChords[i].duration }
-        t += elapsedInChord * tempoMultiplier   // convert chord-local time to real-wall time
-
-        let newT = max(0, min(totalDuration, t + sec))
-
-        // Walk chords to find new index
-        var acc = 0.0
-        var found = false
-        for i in 0..<allChords.count {
-            let d = allChords[i].duration
-            if acc + d > newT {
-                chordIndex    = i
-                // Fix 4: elapsedInChord in chord-local time units
-                elapsedInChord = (newT - acc) / tempoMultiplier
-                found = true
-                break
-            }
-            acc += d
-        }
-        if !found {
-            chordIndex    = allChords.count - 1
-            elapsedInChord = 0
-        }
-
-        // Fix 4: recompute elapsedTotal from new chordIndex so progress is consistent
-        elapsedTotal = 0
-        for i in 0..<chordIndex { elapsedTotal += allChords[i].duration }
-        elapsedTotal += elapsedInChord * tempoMultiplier
-
-        isNewChord = true
-        AudioEngineManager.shared.stopAllNotes()
-        pianoVC.resetKeyboard()
-
-        // Sync sheet directly to the exact interpolated tick
-        let cTick = Double(allChords[chordIndex].globalTick)
-        let nTick = chordIndex + 1 < allChords.count ? Double(allChords[chordIndex + 1].globalTick) : cTick
-        let adjDur = allChords[chordIndex].duration / tempoMultiplier
-        let fraction = adjDur > 0 ? min(elapsedInChord / adjDur, 1.0) : 0
-        sheetCard.updateToTick(cTick + (nTick - cTick) * fraction)
-        
-        if totalDuration > 0 {
-            navBar.updateProgress(newT / totalDuration)
-        }
+        seek(to: position + sec)
     }
 
     private func seekToProgress(_ p: CGFloat) {
         guard totalDuration > 0 else { return }
-        let targetTime = totalDuration * Double(max(0, min(1, p)))
-        
-        // Find chord index
-        var acc = 0.0
-        var foundIdx = 0
-        var foundElapsed = 0.0
-        
-        for i in 0..<allChords.count {
-            let d = allChords[i].duration
-            if acc + d > targetTime {
-                foundIdx = i
-                foundElapsed = (targetTime - acc) / tempoMultiplier
-                break
-            }
-            acc += d
-            if i == allChords.count - 1 {
-                foundIdx = i
-                foundElapsed = 0
-            }
-        }
-        
-        chordIndex = foundIdx
-        elapsedInChord = foundElapsed
-        
-        // Match Fix 4 logic for consistency
-        elapsedTotal = 0
-        for i in 0..<chordIndex { elapsedTotal += allChords[i].duration }
-        elapsedTotal += elapsedInChord * tempoMultiplier
-        
-        isNewChord = true
-        AudioEngineManager.shared.stopAllNotes()
-        pianoVC.resetKeyboard()
-        
-        // Update sheet
-        let cTick = Double(allChords[chordIndex].globalTick)
-        let nTick = chordIndex + 1 < allChords.count ? Double(allChords[chordIndex + 1].globalTick) : cTick
-        let adjDur = allChords[chordIndex].duration / tempoMultiplier
-        let fraction = adjDur > 0 ? min(elapsedInChord / adjDur, 1.0) : 0
-        sheetCard.updateToTick(cTick + (nTick - cTick) * fraction)
-        
-        navBar.updateProgress(Double(p))
-        
-        // If we were playing, keep playhead logic moving
+        seek(to: totalDuration * Double(max(0, min(1, p))))
         if isPlaying {
-            // briefly show overlay to confirm interaction
             showOverlayBriefly()
         } else {
             setOverlay(visible: true, animated: true)
         }
     }
 
-    // MARK: - Fix 5: Tick — tempo-aware progress
+    /// Jumps to `seconds`: nothing sounds until the next note starts, but keys of notes held
+    /// across that point are shown down.
+    private func seek(to seconds: Double) {
+        position = max(0, min(totalDuration, seconds))
+        releaseAllNotes()
+        var lo = 0, hi = playNotes.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            // a note starting exactly here is still to come, so playing from here strikes it
+            if playNotes[mid].start < position { lo = mid + 1 } else { hi = mid }
+        }
+        nextNoteIndex = lo
+        for i in 0..<nextNoteIndex where playNotes[i].release > position {
+            pianoVC.noteOn(midi: playNotes[i].midi, isLeft: playNotes[i].isLeft, velocity: playNotes[i].velocity, sound: false)
+            holding.append(i)
+        }
+        syncViews()
+    }
+
+    private func syncViews() {
+        guard let timeline else { return }
+        let performed = timeline.performanceTime.tick(atSeconds: position)
+        sheetCard.updateToTick(timeline.scoreTick(atPerformanceTick: performed))
+        pianoVC.showHands(at: position)
+        if totalDuration > 0 {
+            navBar.updateProgress(position / totalDuration)
+        }
+    }
+
+    // MARK: - Clock
     @objc private func tick(_ link: CADisplayLink) {
-        guard isPlaying, chordIndex < allChords.count else {
-            if isPlaying { stopPlayback(reset: true) }
-            return
+        guard isPlaying else { return }
+        // real time since the last frame (capped after a stall), scaled by the tempo setting
+        let now = link.timestamp
+        if let last = lastFrameTime {
+            position += min(now - last, 0.1) * tempoMultiplier
         }
+        lastFrameTime = now
 
-        let chord = allChords[chordIndex]
-        // Adjusted chord duration at current tempo
-        let adjDuration = chord.duration / tempoMultiplier
-
-        if isNewChord {
-            isNewChord = false
-            pianoVC.playChord(left: chord.leftHandNotes, right: chord.rightHandNotes, duration: adjDuration)
+        // releases first, so a key struck again in the same frame goes down again
+        holding.removeAll { i in
+            guard playNotes[i].release <= position else { return false }
+            pianoVC.noteOff(midi: playNotes[i].midi, isLeft: playNotes[i].isLeft)
+            return true
         }
-
-        elapsedInChord += link.duration   // real-wall time elapsed in this chord
-        elapsedTotal   += link.duration   // real-wall total (at whatever tempo)
-
-        // Perfect Sync: Interpolate exact tick position and map directly to sheet
-        let currentTick = Double(chord.globalTick)
-        let nextTick: Double
-        if chordIndex + 1 < allChords.count {
-            nextTick = Double(allChords[chordIndex + 1].globalTick)
-        } else {
-            nextTick = currentTick + (chord.duration * 10.0) // pad end
+        while nextNoteIndex < playNotes.count && playNotes[nextNoteIndex].start <= position {
+            let note = playNotes[nextNoteIndex]
+            pianoVC.noteOn(midi: note.midi, isLeft: note.isLeft, velocity: note.velocity, sound: true)
+            holding.append(nextNoteIndex)
+            nextNoteIndex += 1
         }
-        
-        let fraction = min(elapsedInChord / adjDuration, 1.0)
-        let exactTick = currentTick + (nextTick - currentTick) * fraction
-        
-        sheetCard.updateToTick(exactTick)
-        
-        if totalDuration > 0 {
-            navBar.updateProgress(elapsedTotal / totalDuration)
-        }
+        syncViews()
 
-        // Safely determine global percentage across the whole song
-        if totalDuration > 0 {
-            var acc = 0.0
-            for i in 0..<chordIndex { acc += allChords[i].duration }
-            let absoluteTimeVal = acc + (elapsedInChord * tempoMultiplier)
-            let overallProgress = absoluteTimeVal / totalDuration
-            navBar.updateProgress(overallProgress)
-        }
-
-        if elapsedInChord >= adjDuration {
-            elapsedInChord = 0
-            isNewChord = true
-            chordIndex += 1
+        if position >= totalDuration && holding.isEmpty {
+            stopPlayback(reset: true)
         }
     }
 

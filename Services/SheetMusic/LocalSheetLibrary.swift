@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import PDFKit
 import Supabase
 
 @MainActor
@@ -92,10 +93,26 @@ final class LocalSheetLibrary {
     func labeledPDF(id: UUID) -> Data? { try? Data(contentsOf: file("labeled.pdf", of: id, owner: owner)) }
     func musicXML(id: UUID) -> String? { try? String(contentsOf: file("score.musicxml", of: id, owner: owner), encoding: .utf8) }
 
-    /// The converted score in the JSON shape Play Along and Animation read.
+    /// The converted score in the JSON shape Play Along and Animation read. JSON from an older
+    /// converter is rebuilt once from the upload's MusicXML (keeping the measures' element order)
+    /// with the tempo printed on the sheet, when its PDF has one as text.
     func scoreJSON(id: UUID) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: file("output.json", of: id, owner: owner)) else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let url = file("output.json", of: id, owner: owner)
+        guard let data = try? Data(contentsOf: url),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        guard !MusicXMLDocument.isCurrentFormat(json),
+              let xml = musicXML(id: id),
+              let root = try? MusicXMLDocument.parse(xml) else { return json }
+        if let pdf = inputPDF(id: id).flatMap(PDFDocument.init(data:)), let tempo = PrintedTempo.find(in: pdf) {
+            PrintedTempo.apply(tempo, to: root)
+            try? MusicXMLDocument.serialize(root).write(to: file("score.musicxml", of: id, owner: owner),
+                                                        atomically: true, encoding: .utf8)
+        }
+        let rebuilt = MusicXMLDocument.jsonObject(root)
+        if let rebuiltData = try? JSONSerialization.data(withJSONObject: rebuilt) {
+            try? rebuiltData.write(to: url, options: .atomic)
+        }
+        return rebuilt
     }
 
     /// `base`, or `base 2`, `base 3`, … if that title is taken.

@@ -171,8 +171,12 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
 
     private var whiteKeys: [AnimatedPianoKeyView] = []
     private var blackKeys: [AnimatedPianoKeyView] = []
+    private var keysByMidi: [Int: AnimatedPianoKeyView] = [:]
     private let scrollView  = UIScrollView()
     private let contentView = UIView()
+
+    private let hands = GhostHandsView()
+    private var lastLayoutSize = CGSize.zero
 
     private var whiteKeyW: CGFloat {
         guard !whiteKeys.isEmpty, bounds.width > 0 else { return 38 }
@@ -185,6 +189,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
         super.init(frame: frame)
         buildScrollView()
         buildKeys()
+        buildHands()
         updateInteraction()
         isMultipleTouchEnabled = true
     }
@@ -194,7 +199,8 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     private func buildScrollView() {
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.bounces = true
-        scrollView.alwaysBounceHorizontal = true
+        scrollView.alwaysBounceHorizontal = false
+        scrollView.isScrollEnabled = false   // all 88 keys fit the width
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scrollView)
@@ -229,6 +235,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     }
 
     private func wire(_ key: AnimatedPianoKeyView) {
+        keysByMidi[Int(key.midiNote)] = key
         key.onTouchStateChanged = { [weak self, weak key] midi, pressed in
             guard let self, let key else { return }
             self.onKeyPressed?(key.noteName, pressed)
@@ -241,6 +248,10 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     private func updateInteraction() {
         let enabled = mode == .playAlong
         (whiteKeys + blackKeys).forEach { $0.isUserInteractionEnabled = enabled }
+    }
+
+    private func buildHands() {
+        contentView.addSubview(hands)
     }
 
     // MARK: - Layout
@@ -266,15 +277,42 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
                 contentView.bringSubviewToFront(black)
             }
         }
+
+        hands.frame = contentView.bounds
+        contentView.bringSubviewToFront(hands)
+        if bounds.size != lastLayoutSize {
+            lastLayoutSize = bounds.size
+            hands.keyWidth = whiteKeyW
+        }
     }
+
+    // MARK: - Ghost hands
+
+    /// Fingers the performance for the ghost hands (Animation).
+    func setHandPerformance(_ notes: [HandNote]) {
+        hands.setPerformance(notes)
+    }
+
+    /// Poses the ghost hands for second `time` of the performance.
+    func showHands(at time: Double) {
+        hands.show(time: time)
+    }
+
 
     // MARK: - Public API
 
-    /// Highlight keys — left=blue, right=cyan-blue (all look blue as in Image 2)
-    func playChord(leftHand: [String], rightHand: [String]) {
-        resetAllKeys()
-        for n in leftHand  { findKey(n)?.animatePress(color: AnimatedPianoKeyView.leftColor) }
-        for n in rightHand { findKey(n)?.animatePress(color: AnimatedPianoKeyView.rightColor) }
+    /// Holds a key down in its hand's colour (left blue, right red) until `release`.
+    func press(midi: Int, isLeft: Bool) {
+        key(midi: midi)?.animatePress(color: isLeft ? AnimatedPianoKeyView.leftColor : AnimatedPianoKeyView.rightColor)
+    }
+
+    func release(midi: Int) {
+        key(midi: midi)?.animateRelease()
+    }
+
+    private func key(midi: Int) -> AnimatedPianoKeyView? {
+        guard (21...108).contains(midi) else { return nil }
+        return keysByMidi[midi]
     }
 
     func showHints(leftHand: [String], rightHand: [String]) {

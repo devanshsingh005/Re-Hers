@@ -8,8 +8,6 @@ final class PianoAnimationkeyboardViewController: UIViewController {
     private let rightLabel    = UILabel()
 
     // MARK: - State
-    private var pendingNoteOff: DispatchWorkItem?
-    private var lastLeadNote: String?
     private var hasAudioPlaybackSession = false
 
     // MARK: - Orientation
@@ -38,8 +36,6 @@ final class PianoAnimationkeyboardViewController: UIViewController {
     }
 
     deinit {
-        pendingNoteOff?.cancel()
-        pendingNoteOff = nil
         AudioEngineManager.shared.stopAllNotes()
         releaseAudioPlaybackSession()
     }
@@ -160,59 +156,68 @@ final class PianoAnimationkeyboardViewController: UIViewController {
         pianoKeyboard.centerOn(note: "C4")
     }
 
-    // MARK: - Play Chord
-    func playChord(left: [String], right: [String], duration: Double) {
-        // ✅ FIX 1: Stop the pending note-off timer AND flush active notes immediately.
-        // Old code cancelled the work item silently, leaving previous notes ringing.
-        if let pending = pendingNoteOff {
-            pending.cancel()
-            pendingNoteOff = nil
+    // MARK: - Notes
+    //
+    // Animation turns notes on and off one by one, each for as long as it sounds. A key held by
+    // two voices at once stays down until both let go.
+
+    private var heldCounts: [Int: Int] = [:]          // midi → notes holding the key
+    private var heldLeft = 0
+    private var heldRight = 0
+
+    /// Presses the key in its hand's colour and, unless `sound` is false (after a seek or on
+    /// resume), plays it at `velocity` (from the score's dynamics).
+    func noteOn(midi: Int, isLeft: Bool, velocity: Int, sound: Bool) {
+        heldCounts[midi, default: 0] += 1
+        if isLeft { heldLeft += 1 } else { heldRight += 1 }
+        if sound, let m = UInt8(exactly: midi) {
+            AudioEngineManager.shared.startNote(midi: m, velocity: UInt8(max(1, min(127, velocity))))
         }
-        // Stop whatever is currently sounding before starting the new chord
-        AudioEngineManager.shared.stopAllNotes()
+        pianoKeyboard.press(midi: midi, isLeft: isLeft)
+        updateHandLabels()
+    }
 
-        // Highlight keys
-        pianoKeyboard.playChord(leftHand: left, rightHand: right)
-
-        let all = (left + right).filter { !$0.isEmpty }
-        guard !all.isEmpty else { return }
-
-        // ✅ FIX 2: Small pre-attack gap so the audio engine fully releases
-        // previous resonance before the new chord sounds. Avoids muddy chord blending.
-        let attackDelay = 0.015
-        DispatchQueue.main.asyncAfter(deadline: .now() + attackDelay) {
-            for n in all {
-                if let m = AudioEngineManager.shared.midiNumber(from: n) {
-                    AudioEngineManager.shared.startNote(midi: m)
-                }
-            }
+    func noteOff(midi: Int, isLeft: Bool) {
+        guard let count = heldCounts[midi] else { return }
+        if isLeft { heldLeft = max(0, heldLeft - 1) } else { heldRight = max(0, heldRight - 1) }
+        if count > 1 {
+            heldCounts[midi] = count - 1
+        } else {
+            heldCounts[midi] = nil
+            if let m = UInt8(exactly: midi) { AudioEngineManager.shared.stopNote(midi: m) }
+            pianoKeyboard.release(midi: midi)
         }
+        updateHandLabels()
+    }
 
-        // Show hand labels
+    private func updateHandLabels() {
+        let showLeft = heldLeft > 0, showRight = heldRight > 0
+        guard (leftLabel.alpha > 0) != showLeft || (rightLabel.alpha > 0) != showRight else { return }
         UIView.animate(withDuration: 0.10) {
-            self.leftLabel.alpha  = left.isEmpty  ? 0 : 1
-            self.rightLabel.alpha = right.isEmpty ? 0 : 1
+            self.leftLabel.alpha  = showLeft ? 1 : 0
+            self.rightLabel.alpha = showRight ? 1 : 0
         }
+    }
 
-        // ✅ FIX 3: Note-off timing — use 85% of duration for crisp articulation.
-        // For very short notes (< 0.15s) use 80% so fast runs don't blur together.
-        let noteFraction: Double = duration < 0.15 ? 0.80 : 0.85
-        let stopAt = max(0.05, duration * noteFraction)
+    // MARK: - Ghost hands
 
-        let work = DispatchWorkItem { [weak self] in
-            AudioEngineManager.shared.stopAllNotes()
-            self?.pendingNoteOff = nil
-        }
-        pendingNoteOff = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + attackDelay + stopAt, execute: work)
+    /// Fingers the performance for the ghost hands.
+    func setHandPerformance(_ notes: [HandNote]) {
+        pianoKeyboard.setHandPerformance(notes)
+    }
+
+    /// Poses the ghost hands for second `time` of the performance (at 1× tempo).
+    func showHands(at time: Double) {
+        pianoKeyboard.showHands(at: time)
     }
 
     // MARK: - Reset
     func resetKeyboard() {
-        pendingNoteOff?.cancel(); pendingNoteOff = nil
+        heldCounts = [:]
+        heldLeft = 0
+        heldRight = 0
         AudioEngineManager.shared.stopAllNotes()
         pianoKeyboard.resetAllKeys()
-        lastLeadNote = nil
         UIView.animate(withDuration: 0.2) {
             self.leftLabel.alpha  = 0
             self.rightLabel.alpha = 0

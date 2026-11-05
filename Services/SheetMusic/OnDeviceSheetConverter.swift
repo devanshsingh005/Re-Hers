@@ -88,9 +88,17 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
                 let result = try await recognizer.recognize(cgImage: image) { p in
                     progress((Double(index) + p) / Double(pageCount))
                 }
-                scores.append(try MusicXMLDocument.parse(result.musicXML))
-                labels[index] = NoteLabelRenderer.layout(result.notes)
-                noteCount += result.notes.count
+                let pageScore = try MusicXMLDocument.parse(result.musicXML)
+                var notes = result.notes
+                if let mark = PrintedTempo.markBounds(on: page) {
+                    let rects = notes.map { CGRect(x: $0.rect.minX / scale, y: $0.rect.minY / scale,
+                                                   width: $0.rect.width / scale, height: $0.rect.height / scale) }
+                    let hidden = PrintedTempo.hideNotes(under: mark, at: rects, in: pageScore)
+                    notes = notes.enumerated().filter { !hidden.contains($0.offset) }.map(\.element)
+                }
+                scores.append(pageScore)
+                labels[index] = NoteLabelRenderer.layout(notes)
+                noteCount += notes.count
             } catch let error as OMRError {
                 switch error {
                 case .noStaffFound, .imageTooNoisy, .inconsistentStaffs, .imageDecodingFailed:
@@ -106,6 +114,7 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
 
         guard let score = MusicXMLDocument.merge(pages: scores) else { throw SheetConversionError.noMusicFound }
         score.firstChild(named: "work")?.firstChild(named: "work-title")?.text = title
+        if let tempo = PrintedTempo.find(in: document) { PrintedTempo.apply(tempo, to: score) }
         let json = MusicXMLDocument.jsonObject(score)
         let jsonData = try JSONSerialization.data(withJSONObject: json)
         let labeledPDF = Self.labeledPDF(document, labels: labels, scales: scales)
@@ -177,5 +186,172 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
                 NoteLabelRenderer.draw(labels[index], scale: 1 / scales[index])
             }
         }
+    }
+}
+
+// MARK: - Printed tempo
+
+/// The tempo printed on the sheet, read from the PDF's text layer. PDFs exported by notation
+/// programs keep "♩ = 108" (the note as a music-font glyph) or "Allegro" as text; the
+/// recognizer only sees the image, so without this every upload plays at its default 90.
+/// Scans and photos have no text layer and keep the default.
+nonisolated enum PrintedTempo {
+    struct Mark: Equatable {
+        let perMinute: Double
+        let beatUnit: String       // MusicXML <beat-unit>: "quarter", "half", "eighth", …
+        let dots: Int
+        let words: String?         // "Alla marcia", "Allegro", …
+
+        /// Quarter notes per minute.
+        var quarterBPM: Double {
+            let quarters: Double = ["whole": 4, "half": 2, "quarter": 1, "eighth": 0.5, "16th": 0.25][beatUnit] ?? 1
+            return perMinute * quarters * (dots > 0 ? 1.5 : 1)
+        }
+    }
+
+    static func find(in document: PDFDocument) -> Mark? {
+        for index in 0..<min(document.pageCount, 2) {
+            if let text = document.page(at: index)?.string, let mark = find(in: text) { return mark }
+        }
+        return nil
+    }
+
+    /// A metronome mark (a note glyph, then "= 108") anywhere in `text`, else a tempo word on
+    /// a short line of its own.
+    static func find(in text: String) -> Mark? {
+        let lines = text.components(separatedBy: .newlines)
+        for line in lines {
+            if let mark = metronome(in: line) { return mark }
+        }
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard (3...40).contains(trimmed.count), let bpm = ScoreTimeline.tempo(forWords: trimmed) else { continue }
+            return Mark(perMinute: bpm, beatUnit: "quarter", dots: 0, words: trimmed)
+        }
+        return nil
+    }
+
+    /// A metronome mark on one line of text: a note glyph, optional dots, "=", a number.
+    private static func metronome(in line: String) -> Mark? {
+        guard let equals = line.range(of: #"=\s*\d{2,3}"#, options: .regularExpression) else { return nil }
+        let number = line[equals].filter(\.isNumber)
+        guard let perMinute = Double(number), (20...320).contains(perMinute) else { return nil }
+        var scalars = Array(line[..<equals.lowerBound].unicodeScalars)
+        while let last = scalars.last, CharacterSet.whitespaces.contains(last) { scalars.removeLast() }
+        var dots = 0
+        while let last = scalars.last, last == "." || last.value == 0xECB7 || last.value == 0x1D16D {
+            dots += 1
+            scalars.removeLast()
+            while let l = scalars.last, CharacterSet.whitespaces.contains(l) { scalars.removeLast() }
+        }
+        guard let glyph = scalars.last, let unit = beatUnit(glyph) else { return nil }
+        scalars.removeLast()
+        let words = String(String.UnicodeScalarView(scalars))
+            .trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: "(")))
+            .filter { !$0.unicodeScalars.contains { (0xE000...0xF8FF).contains($0.value) } }
+        return Mark(perMinute: perMinute, beatUnit: unit, dots: min(dots, 1),
+                    words: words.contains(where: \.isLetter) ? words : nil)
+    }
+
+    /// Where the metronome mark is printed on `page`, in the page's points from its top-left
+    /// corner (the coordinates the page is rendered in for recognition).
+    static func markBounds(on page: PDFPage) -> CGRect? {
+        guard page.rotation % 360 == 0, let text = page.string else { return nil }
+        let string = text as NSString
+        var range: NSRange?
+        string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: .byLines) { line, lineRange, _, stop in
+            if let line, metronome(in: line) != nil {
+                range = lineRange
+                stop.pointee = true
+            }
+        }
+        guard let range, let bounds = page.selection(for: range)?.bounds(for: page), !bounds.isEmpty else { return nil }
+        let box = page.bounds(for: .cropBox)
+        return CGRect(x: bounds.minX - box.minX, y: box.maxY - bounds.maxY, width: bounds.width, height: bounds.height)
+    }
+
+    /// The recognizer can read the note of a metronome mark ("♩ = 48") as a note of the music,
+    /// which then sounds at the start of the piece. Notes read inside `mark` become hidden rests
+    /// (a chord tone is removed), so the measure keeps the timing the recognizer gave it.
+    /// `rects`: the noteheads of the score's pitched notes in order, in page points. Returns
+    /// the indices of the notes hidden.
+    static func hideNotes(under mark: CGRect, at rects: [CGRect], in score: XMLElementNode) -> Set<Int> {
+        var pitched: [(measure: XMLElementNode, note: XMLElementNode)] = []
+        for part in score.children(named: "part") {
+            for measure in part.children(named: "measure") {
+                for note in measure.children(named: "note") where note.firstChild(named: "pitch") != nil {
+                    pitched.append((measure, note))
+                }
+            }
+        }
+        guard pitched.count == rects.count else { return [] }
+        let area = mark.insetBy(dx: -3, dy: -3)
+        var hiddenIndices = Set<Int>()
+        for (index, element) in pitched.enumerated() where area.intersects(rects[index]) {
+            hiddenIndices.insert(index)
+            if element.note.firstChild(named: "chord") != nil {
+                element.measure.children.removeAll { $0 === element.note }
+            } else {
+                let hidden: Set<String> = ["pitch", "stem", "accidental", "tie", "notations", "beam"]
+                if let i = element.note.children.firstIndex(where: { $0.name == "pitch" }) {
+                    element.note.children[i] = XMLElementNode(name: "rest")
+                }
+                element.note.children.removeAll { hidden.contains($0.name) }
+                element.note.setAttribute("print-object", "no")
+            }
+        }
+        return hiddenIndices
+    }
+
+    private static func beatUnit(_ glyph: Unicode.Scalar) -> String? {
+        switch glyph.value {
+        case 0xECA2, 0x1D15D:                   return "whole"
+        case 0xECA3, 0xECA4, 0x1D15E:           return "half"
+        case 0xECA5, 0xECA6, 0x2669, 0x1D15F:   return "quarter"
+        case 0xECA7, 0xECA8, 0x266A, 0x1D160:   return "eighth"
+        case 0xECA9, 0xECAA, 0x1D161:           return "16th"
+        default:
+            // text fonts for music ("q = 108" in Maestro-style fonts)
+            switch glyph { case "q": return "quarter"; case "h": return "half"; case "e": return "eighth"; default: return nil }
+        }
+    }
+
+    /// Sets the part's tempo and prints the mark over the first measure (once).
+    static func apply(_ mark: Mark, to score: XMLElementNode) {
+        guard let part = score.firstChild(named: "part") else { return }
+        let bpm = String(format: "%g", mark.quarterBPM)
+        if let sound = part.firstChild(named: "sound") {
+            sound.setAttribute("tempo", bpm)
+        } else {
+            part.children.insert(XMLElementNode(name: "sound", attributes: [("tempo", bpm)]), at: 0)
+        }
+        guard let measure = part.firstChild(named: "measure"),
+              !measure.children(named: "direction").contains(where: { direction in
+                  direction.children(named: "direction-type").contains { $0.firstChild(named: "metronome") != nil }
+              }) else { return }
+
+        let direction = XMLElementNode(name: "direction", attributes: [("placement", "above")])
+        if let words = mark.words {
+            let type = XMLElementNode(name: "direction-type")
+            let text = XMLElementNode(name: "words")
+            text.text = words
+            type.children.append(text)
+            direction.children.append(type)
+        }
+        let type = XMLElementNode(name: "direction-type")
+        let metronome = XMLElementNode(name: "metronome")
+        let unit = XMLElementNode(name: "beat-unit")
+        unit.text = mark.beatUnit
+        metronome.children.append(unit)
+        if mark.dots > 0 { metronome.children.append(XMLElementNode(name: "beat-unit-dot")) }
+        let perMinute = XMLElementNode(name: "per-minute")
+        perMinute.text = String(format: "%g", mark.perMinute)
+        metronome.children.append(perMinute)
+        type.children.append(metronome)
+        direction.children.append(type)
+        direction.children.append(XMLElementNode(name: "sound", attributes: [("tempo", bpm)]))
+
+        let after = (measure.children.lastIndex { $0.name == "attributes" || $0.name == "print" } ?? -1) + 1
+        measure.children.insert(direction, at: after)
     }
 }

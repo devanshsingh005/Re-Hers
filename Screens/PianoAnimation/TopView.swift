@@ -40,7 +40,7 @@ final class LessonNavBarView: UIView {
         backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: backCfg), for: .normal)
         backBtn.tintColor = .label
         backBtn.addTarget(self, action: #selector(didBack), for: .touchUpInside)
-        let bPill = makePill(for: backBtn, insets: .zero, cornerRadius: 22)
+        let bPill = makePill(for: backBtn, insets: .zero, cornerRadius: 20)
         addSubview(bPill)
 
         // ── 2. Progress pill (Center) ───────────────────────────────────────────
@@ -54,7 +54,7 @@ final class LessonNavBarView: UIView {
         progressSlider.addTarget(self, action: #selector(sliderChanged), for: .valueChanged)
         progressSlider.addTarget(self, action: #selector(sliderEnded), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         
-        let pPill = makePill(for: progressSlider, insets: UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16), cornerRadius: 18)
+        let pPill = makePill(for: progressSlider, insets: UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16), cornerRadius: 17)
         self.progressPill = pPill
         addSubview(pPill)
 
@@ -66,29 +66,30 @@ final class LessonNavBarView: UIView {
         menuBtn.widthAnchor.constraint(equalToConstant: 44).isActive = true
         menuBtn.heightAnchor.constraint(equalToConstant: 44).isActive = true
 
-        let rPill = makePill(for: menuBtn, insets: .zero, cornerRadius: 22)
+        let rPill = makePill(for: menuBtn, insets: .zero, cornerRadius: 20)
         self.rightPill = rPill
         addSubview(rPill)
 
         // ── Constraints ─────────────────────────────────────────────────────────
         NSLayoutConstraint.activate([
             // Back
-            bPill.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            // the bar spans the screen's content column; its owner sets the margins
+            bPill.leadingAnchor.constraint(equalTo: leadingAnchor),
             bPill.centerYAnchor.constraint(equalTo: centerYAnchor),
-            bPill.widthAnchor.constraint(equalToConstant: 44),
-            bPill.heightAnchor.constraint(equalToConstant: 44),
+            bPill.widthAnchor.constraint(equalToConstant: 40),
+            bPill.heightAnchor.constraint(equalToConstant: 40),
 
             // Menu
-            rPill.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            rPill.trailingAnchor.constraint(equalTo: trailingAnchor),
             rPill.centerYAnchor.constraint(equalTo: centerYAnchor),
-            rPill.widthAnchor.constraint(equalToConstant: 44),
-            rPill.heightAnchor.constraint(equalToConstant: 44),
+            rPill.widthAnchor.constraint(equalToConstant: 40),
+            rPill.heightAnchor.constraint(equalToConstant: 40),
 
             // Progress stretches between Back and Menu
             pPill.centerYAnchor.constraint(equalTo: centerYAnchor),
-            pPill.heightAnchor.constraint(equalToConstant: 36),
-            pPill.leadingAnchor.constraint(equalTo: bPill.trailingAnchor, constant: 16),
-            pPill.trailingAnchor.constraint(equalTo: rPill.leadingAnchor, constant: -16)
+            pPill.heightAnchor.constraint(equalToConstant: 34),
+            pPill.leadingAnchor.constraint(equalTo: bPill.trailingAnchor, constant: 8),
+            pPill.trailingAnchor.constraint(equalTo: rPill.leadingAnchor, constant: -8)
         ])
     }
 

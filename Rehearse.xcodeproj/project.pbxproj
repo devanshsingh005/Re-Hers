@@ -7,15 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0E0E0E0E0000000000000200 /* Services/SheetMusic/LocalSheetLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000100 /* Services/SheetMusic/LocalSheetLibrary.swift */; };
-		0E0E0E0E0000000000000201 /* Services/SheetMusic/MusicXMLDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000101 /* Services/SheetMusic/MusicXMLDocument.swift */; };
-		0E0E0E0E0000000000000202 /* Services/SheetMusic/NoteLabelRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000102 /* Services/SheetMusic/NoteLabelRenderer.swift */; };
-		0E0E0E0E0000000000000203 /* Services/SheetMusic/OnDeviceSheetConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */; };
-		0E0E0E0E0000000000000003 /* OemerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0E0E0E0E0000000000000002 /* OemerKit */; };
 		01C024616C4FA0D954572620 /* PianoDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B6FEB9F6EB754D1A71C261 /* PianoDataManager.swift */; };
 		023DE4629610C8A12123D2B3 /* Utilities/ImageValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C2F87BF97279AD445EDEC9 /* Utilities/ImageValidator.swift */; };
 		0B0EB6BD83244673A67A1EF3 /* ProfileSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F9A2026097A49989982BECB /* ProfileSkeletonView.swift */; };
 		0BD43206D9864744BB0899D9 /* HomeSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4786C84972594262BE118A6C /* HomeSkeletonView.swift */; };
+		0E0E0E0E0000000000000003 /* OemerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0E0E0E0E0000000000000002 /* OemerKit */; };
+		0E0E0E0E0000000000000200 /* Services/SheetMusic/LocalSheetLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000100 /* Services/SheetMusic/LocalSheetLibrary.swift */; };
+		0E0E0E0E0000000000000201 /* Services/SheetMusic/MusicXMLDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000101 /* Services/SheetMusic/MusicXMLDocument.swift */; };
+		0E0E0E0E0000000000000202 /* Services/SheetMusic/NoteLabelRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000102 /* Services/SheetMusic/NoteLabelRenderer.swift */; };
+		0E0E0E0E0000000000000203 /* Services/SheetMusic/OnDeviceSheetConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */; };
 		101937717093B5F2B827C2A5 /* Extensions/SemanticColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96828E2565ADBC7928754914 /* Extensions/SemanticColors.swift */; };
 		11FB4CA7CD04FA54DBDA02BB /* Services/ChapterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E50AFDC930C89541BB9E7D9 /* Services/ChapterService.swift */; };
 		1D7E8172A189BBA38D63E27F /* Utilities/InputValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509234426D5547366E16566E /* Utilities/InputValidator.swift */; };
@@ -77,7 +77,8 @@
 		84ADF6992F5EAABA009F3D7D /* SongChord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6922F5EAABA009F3D7D /* SongChord.swift */; };
 		84ADF69A2F5EAABA009F3D7D /* PianoAnimationkeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68B2F5EAABA009F3D7D /* PianoAnimationkeyboardViewController.swift */; };
 		84ADF69B2F5EAABA009F3D7D /* PianoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68E2F5EAABA009F3D7D /* PianoView.swift */; };
-		84ADF69C2F5EAABA009F3D7D /* PianoDemoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68C2F5EAABA009F3D7D /* PianoDemoManager.swift */; };
+		84ADF69C2F5EAABA009F3D7D /* ScoreTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68C2F5EAABA009F3D7D /* ScoreTimeline.swift */; };
+		5A1D0E0F2F60000100000001 /* GhostHands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1D0E0F2F60000100000002 /* GhostHands.swift */; };
 		84ADF69E2F5EAABA009F3D7D /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6932F5EAABA009F3D7D /* TopView.swift */; };
 		84ADF69F2F5EAABA009F3D7D /* SheetMusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6912F5EAABA009F3D7D /* SheetMusicView.swift */; };
 		84ADF6A02F5EAABA009F3D7D /* MusicJSONLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF68A2F5EAABA009F3D7D /* MusicJSONLoader.swift */; };
@@ -104,10 +105,10 @@
 		D43A2B6F10FE84F8308C1918 /* Services/SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFC9321FE800128237EB674 /* Services/SupabaseManager.swift */; };
 		E438A7DD0481CF66A15CDF27 /* Services/SignedAssetResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E1436314D3F8A7BCE90C95 /* Services/SignedAssetResolver.swift */; };
 		E46A4473B5F3365A0E8BBA49 /* Screens/LearningCurve/SupabaseProgressManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A26932362D885CCD690BA77 /* Screens/LearningCurve/SupabaseProgressManager.swift */; };
+		E819137328B509AC1149A19B /* test_db.swift in Sources */ = {isa = PBXBuildFile; fileRef = E819137328B509AC1149A19A /* test_db.swift */; };
 		F043D9643D57E1C2BE993CE2 /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = 344E0886BE37590B2CF6E687 /* Song.swift */; };
 		F40798569DB3CF8CB113E078 /* Services/AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5D556F9727BE03E27BD881 /* Services/AnalyticsManager.swift */; };
 		FAE563E76BD5F5BCA26661A2 /* App/SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35B27609B726A2FAD4A8E336 /* App/SceneDelegate.swift */; };
-		E819137328B509AC1149A19B /* test_db.swift in Sources */ = {isa = PBXBuildFile; fileRef = E819137328B509AC1149A19A /* test_db.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,13 +122,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		027315FF15B94D5F94BA2547 /* Screens/LearningCurve/L2ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/LearningCurve/L2ViewController.swift; sourceTree = SOURCE_ROOT; };
+		02C2F87BF97279AD445EDEC9 /* Utilities/ImageValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities/ImageValidator.swift; sourceTree = SOURCE_ROOT; };
+		03C6AE1CE6E5F7EDC767AFEA /* Screens/Legal/LegalScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Legal/LegalScreenView.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000100 /* Services/SheetMusic/LocalSheetLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/LocalSheetLibrary.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000101 /* Services/SheetMusic/MusicXMLDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/MusicXMLDocument.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000102 /* Services/SheetMusic/NoteLabelRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/NoteLabelRenderer.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/OnDeviceSheetConverter.swift; sourceTree = SOURCE_ROOT; };
-		027315FF15B94D5F94BA2547 /* Screens/LearningCurve/L2ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/LearningCurve/L2ViewController.swift; sourceTree = SOURCE_ROOT; };
-		02C2F87BF97279AD445EDEC9 /* Utilities/ImageValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities/ImageValidator.swift; sourceTree = SOURCE_ROOT; };
-		03C6AE1CE6E5F7EDC767AFEA /* Screens/Legal/LegalScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Legal/LegalScreenView.swift; sourceTree = SOURCE_ROOT; };
 		1181E23E135543AD8D4F3DA8 /* PDFSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFSkeletonView.swift; path = Screens/Playlist/PDFSkeletonView.swift; sourceTree = "<group>"; };
 		1CFC9321FE800128237EB674 /* Services/SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SupabaseManager.swift; sourceTree = SOURCE_ROOT; };
 		236CF2DD2EBE33E100DE5E71 /* MainPlayListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayListScreen.swift; sourceTree = "<group>"; };
@@ -194,7 +195,8 @@
 		84ADF6892F5EAABA009F3D7D /* AudioEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineManager.swift; sourceTree = "<group>"; };
 		84ADF68A2F5EAABA009F3D7D /* MusicJSONLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicJSONLoader.swift; sourceTree = "<group>"; };
 		84ADF68B2F5EAABA009F3D7D /* PianoAnimationkeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoAnimationkeyboardViewController.swift; sourceTree = "<group>"; };
-		84ADF68C2F5EAABA009F3D7D /* PianoDemoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoDemoManager.swift; sourceTree = "<group>"; };
+		84ADF68C2F5EAABA009F3D7D /* ScoreTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreTimeline.swift; sourceTree = "<group>"; };
+		5A1D0E0F2F60000100000002 /* GhostHands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhostHands.swift; sourceTree = "<group>"; };
 		84ADF68E2F5EAABA009F3D7D /* PianoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoView.swift; sourceTree = "<group>"; };
 		84ADF6902F5EAABA009F3D7D /* sheet_test.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sheet_test.json; sourceTree = "<group>"; };
 		84ADF6912F5EAABA009F3D7D /* SheetMusicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetMusicView.swift; sourceTree = "<group>"; };
@@ -222,9 +224,9 @@
 		C95CF8C92BB945A3830CB4C1 /* Screens/Legal/LegalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Legal/LegalViewModel.swift; sourceTree = SOURCE_ROOT; };
 		D0075E0D1147B387FDAD9185 /* Screens/Auth/OTPVerificationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Auth/OTPVerificationViewController.swift; sourceTree = SOURCE_ROOT; };
 		DFE55467143C308902EDA1BC /* Services/GuestFeatureAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/GuestFeatureAccessPolicy.swift; sourceTree = SOURCE_ROOT; };
+		E819137328B509AC1149A19A /* test_db.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = test_db.swift; sourceTree = "<group>"; };
 		F3367193AA38D44495E77159 /* Extensions/BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions/BrandColors.swift; sourceTree = SOURCE_ROOT; };
 		FAA5A780090055590BBFB73D /* Components/TopNavBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/TopNavBar.swift; sourceTree = SOURCE_ROOT; };
-		E819137328B509AC1149A19A /* test_db.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = test_db.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -411,7 +413,8 @@
 				84ADF6892F5EAABA009F3D7D /* AudioEngineManager.swift */,
 				84ADF68A2F5EAABA009F3D7D /* MusicJSONLoader.swift */,
 				84ADF68B2F5EAABA009F3D7D /* PianoAnimationkeyboardViewController.swift */,
-				84ADF68C2F5EAABA009F3D7D /* PianoDemoManager.swift */,
+				84ADF68C2F5EAABA009F3D7D /* ScoreTimeline.swift */,
+				5A1D0E0F2F60000100000002 /* GhostHands.swift */,
 				84ADF68E2F5EAABA009F3D7D /* PianoView.swift */,
 				84ADF6902F5EAABA009F3D7D /* sheet_test.json */,
 				84ADF6912F5EAABA009F3D7D /* SheetMusicView.swift */,
@@ -751,7 +754,8 @@
 				84ADF6992F5EAABA009F3D7D /* SongChord.swift in Sources */,
 				84ADF69A2F5EAABA009F3D7D /* PianoAnimationkeyboardViewController.swift in Sources */,
 				84ADF69B2F5EAABA009F3D7D /* PianoView.swift in Sources */,
-				84ADF69C2F5EAABA009F3D7D /* PianoDemoManager.swift in Sources */,
+				84ADF69C2F5EAABA009F3D7D /* ScoreTimeline.swift in Sources */,
+				5A1D0E0F2F60000100000001 /* GhostHands.swift in Sources */,
 				84ADF69E2F5EAABA009F3D7D /* TopView.swift in Sources */,
 				84ADF69F2F5EAABA009F3D7D /* SheetMusicView.swift in Sources */,
 				84ADF6A02F5EAABA009F3D7D /* MusicJSONLoader.swift in Sources */,

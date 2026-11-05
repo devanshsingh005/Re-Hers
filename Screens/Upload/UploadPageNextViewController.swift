@@ -367,10 +367,11 @@ final class UploadPageNextViewController: UIViewController {
     }
 
     private func keyFromFifths(_ fifths: Int) -> String {
+        // 0…7 sharps, then 1…7 flats
         let major = ["C Major","G Major","D Major","A Major","E Major","B Major",
                      "F♯ Major","C♯ Major","F Major","B♭ Major",
-                     "E♭ Major","A♭ Major","D♭ Major"]
-        let idx = fifths >= 0 ? fifths : (8 + (-fifths))
+                     "E♭ Major","A♭ Major","D♭ Major","G♭ Major","C♭ Major"]
+        let idx = fifths >= 0 ? fifths : (7 + (-fifths))
         return (0..<major.count).contains(idx) ? major[idx] : "C Major"
     }
 
