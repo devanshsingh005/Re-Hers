@@ -562,14 +562,7 @@ final class UploadPageNextViewController: UIViewController {
             guard let self = self else { return }
             guard !self.presentGuestPlayAlongGateIfNeeded() else { return }
             guard let json = self.validSheetMusicJSON(orPresentingFor: "Play Along") else { return }
-            
-            let a = UIAlertController(
-                title: "Play Along",
-                message: "Start practice session for this piece?\nTempo: \(self.tempo)",
-                preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "Start",  style: .default)  { _ in self.startPlayAlong(with: json) })
-            a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            self.present(a, animated: true)
+            self.startPlayAlong(with: json)
         }
     }
 

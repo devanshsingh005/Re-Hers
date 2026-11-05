@@ -151,6 +151,25 @@ final class PianoAnimationkeyboardViewController: UIViewController {
     // MARK: - Mode
     func setAnimationMode() { pianoKeyboard.mode = .animation }
 
+    /// Play Along: the keys can be played (they sound, and `onKey` gets the MIDI number).
+    func setPlayAlongMode(onKey: @escaping (Int) -> Void) {
+        pianoKeyboard.mode = .playAlong
+        pianoKeyboard.onKeyPressed = { name, pressed in
+            guard pressed, let midi = AudioEngineManager.shared.midiNumber(from: name) else { return }
+            onKey(Int(midi))
+        }
+    }
+
+    /// Play Along: the keys of the current step, in their hand's colour.
+    func showExpected(left: [Int], right: [Int]) {
+        pianoKeyboard.hint(left: left, right: right)
+    }
+
+    /// Play Along: a played key flashes green (right) or red (wrong).
+    func flash(midi: Int, correct: Bool) {
+        pianoKeyboard.flash(midi: midi, color: correct ? .systemGreen : .systemRed)
+    }
+
     // MARK: - Center keyboard on C4 (middle C)
     func centerOnMiddleC() {
         pianoKeyboard.centerOn(note: "C4")

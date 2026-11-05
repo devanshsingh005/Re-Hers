@@ -205,7 +205,8 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scrollView)
 
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+        // laid out by hand in layoutSubviews (with Auto Layout and no constraints its frame
+        // collapsed to zero: the keys still drew, but no touch could reach them)
         scrollView.addSubview(contentView)
 
         NSLayoutConstraint.activate([
@@ -333,6 +334,27 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
                 key.isHinted = false
             }
         }
+    }
+
+    /// Play Along: the keys to play, in their hand's colour (others cleared).
+    func hint(left: [Int], right: [Int]) {
+        let l = Set(left), r = Set(right)
+        for (midi, key) in keysByMidi {
+            if l.contains(midi) {
+                key.currentHand = .left; key.isHinted = true
+            } else if r.contains(midi) {
+                key.currentHand = .right; key.isHinted = true
+            } else if key.isHinted {
+                key.currentHand = nil; key.isHinted = false
+            }
+        }
+    }
+
+    /// Play Along: a key flashes (green right, red wrong) and goes back to its hint.
+    func flash(midi: Int, color: UIColor) {
+        guard let key = key(midi: midi) else { return }
+        key.animatePress(color: color)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak key] in key?.animateRelease() }
     }
 
     func resetAllKeys() {

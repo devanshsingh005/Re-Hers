@@ -103,6 +103,7 @@ final class LocalSheetLibrary {
         guard !MusicXMLDocument.isCurrentFormat(json),
               let xml = musicXML(id: id),
               let root = try? MusicXMLDocument.parse(xml) else { return json }
+        ScoreCleanup.clean(root)
         if let pdf = inputPDF(id: id).flatMap(PDFDocument.init(data:)), let tempo = PrintedTempo.find(in: pdf) {
             PrintedTempo.apply(tempo, to: root)
             try? MusicXMLDocument.serialize(root).write(to: file("score.musicxml", of: id, owner: owner),

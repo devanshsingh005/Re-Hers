@@ -33,15 +33,18 @@ nonisolated enum NoteLabelRenderer {
     static let halfWidthScale: CGFloat = 0.9
     static let clearanceScale: CGFloat = 0.95
 
-    /// Lays out one label per note: "A4", "G#5", "Bb4" (the name OemerKit reports).
-    static func layout(_ notes: [LocatedNote]) -> [Label] {
+    /// Lays out one label per note: "A4", "G#5", "Bb4" — the name OemerKit reports, or the one
+    /// `names` gives for that note (its index in `notes`) once the score has been corrected.
+    static func layout(_ notes: [LocatedNote], names: [Int: String] = [:]) -> [Label] {
         struct StaffKey: Hashable { let system: Int; let staff: Int }
         var labels: [Label] = []
-        let byStaff = Dictionary(grouping: notes) { StaffKey(system: $0.system, staff: $0.staff) }
+        let indexed = notes.enumerated().map { (index: $0.offset, note: $0.element) }
+        let byStaff = Dictionary(grouping: indexed) { StaffKey(system: $0.note.system, staff: $0.note.staff) }
         for key in byStaff.keys.sorted(by: { ($0.system, $0.staff) < ($1.system, $1.staff) }) {
-            let staffNotes = byStaff[key]!.sorted(by: { $0.rect.midX < $1.rect.midX })
+            let entries = byStaff[key]!.sorted(by: { $0.note.rect.midX < $1.note.rect.midX })
+            let staffNotes = entries.map(\.note)
             var placed: [(x: CGFloat, y: CGFloat)] = []
-            for note in staffNotes {
+            for (index, note) in entries {
                 let space = CGFloat(note.staffSpace)
                 guard space > 0, space.isFinite else { continue }
                 let fontSize = space * fontScale
@@ -58,7 +61,7 @@ nonisolated enum NoteLabelRenderer {
                     y = p.y + lineHeight
                 }
                 placed.append((x, y))
-                labels.append(Label(text: note.name, x: x, baseline: y, fontSize: fontSize))
+                labels.append(Label(text: names[index] ?? note.name, x: x, baseline: y, fontSize: fontSize))
             }
         }
         return labels

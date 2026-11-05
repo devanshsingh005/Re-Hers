@@ -28,6 +28,10 @@ nonisolated final class XMLElementNode {
         children.filter { $0.name == name }
     }
 
+    func attribute(_ name: String) -> String? {
+        attributes.first { $0.name == name }?.value
+    }
+
     func setAttribute(_ name: String, _ value: String) {
         if let i = attributes.firstIndex(where: { $0.name == name }) {
             attributes[i].value = value
@@ -97,7 +101,8 @@ nonisolated enum MusicXMLDocument {
     }
 
     /// 2: measures keep their element order; uploads carry the tempo printed on the sheet.
-    static let currentFormat = 2
+    /// 3: false clef and key changes from recognition are undone (ScoreCleanup).
+    static let currentFormat = 3
 
     /// Whether `json` was written by the current `jsonObject` (see `currentFormat`).
     static func isCurrentFormat(_ json: [String: Any]) -> Bool {

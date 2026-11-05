@@ -70,6 +70,9 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
 
         var scores: [XMLElementNode] = []
         var labels: [[NoteLabelRenderer.Label]] = Array(repeating: [], count: pageCount)
+        // each page's recognized notes with their MusicXML elements, for labels made after the
+        // score is corrected (ScoreCleanup changes pitches in place)
+        var pageNotes: [(index: Int, notes: [LocatedNote], elements: [XMLElementNode]?)] = []
         var scales: [CGFloat] = Array(repeating: 1, count: pageCount)
         var skipped: [Int] = []
         var noteCount = 0
@@ -97,7 +100,8 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
                     notes = notes.enumerated().filter { !hidden.contains($0.offset) }.map(\.element)
                 }
                 scores.append(pageScore)
-                labels[index] = NoteLabelRenderer.layout(notes)
+                let elements = PrintedTempo.pitchedNotes(in: pageScore)
+                pageNotes.append((index, notes, elements.count == notes.count ? elements : nil))
                 noteCount += notes.count
             } catch let error as OMRError {
                 switch error {
@@ -114,6 +118,17 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
 
         guard let score = MusicXMLDocument.merge(pages: scores) else { throw SheetConversionError.noMusicFound }
         score.firstChild(named: "work")?.firstChild(named: "work-title")?.text = title
+        let cleanup = ScoreCleanup.clean(score)
+        if cleanup != ScoreCleanup.Report() {
+            debugLog("[OnDevice] undid \(cleanup.clefs) false clef change(s), \(cleanup.keys) false key change(s)")
+        }
+        for page in pageNotes {
+            var names: [Int: String] = [:]
+            for (i, element) in (page.elements ?? []).enumerated() {
+                if let name = Self.noteName(element) { names[i] = name }
+            }
+            labels[page.index] = NoteLabelRenderer.layout(page.notes, names: names)
+        }
         if let tempo = PrintedTempo.find(in: document) { PrintedTempo.apply(tempo, to: score) }
         let json = MusicXMLDocument.jsonObject(score)
         let jsonData = try JSONSerialization.data(withJSONObject: json)
@@ -125,6 +140,14 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
     }
 
     // MARK: - Private
+
+    /// "Eb4" from a MusicXML <note>.
+    private static func noteName(_ note: XMLElementNode) -> String? {
+        guard let pitch = note.firstChild(named: "pitch"), let step = pitch.firstChild(named: "step")?.text,
+              let octave = pitch.firstChild(named: "octave")?.text else { return nil }
+        let alter = ["1": "#", "-1": "b", "2": "##", "-2": "bb"][pitch.firstChild(named: "alter")?.text ?? "0"] ?? ""
+        return step + alter + octave
+    }
 
     private func loadedRecognizer() throws -> SheetMusicRecognizer {
         lock.lock()
@@ -223,6 +246,15 @@ nonisolated enum PrintedTempo {
         for line in lines {
             if let mark = metronome(in: line) { return mark }
         }
+        // the note and "=" drawn as shapes: a tempo word ("Sentimentally") over a lone number
+        let head = lines.prefix(10).map { $0.trimmingCharacters(in: .whitespaces) }
+        for k in head.indices.dropFirst() {
+            guard let perMinute = Double(head[k]), (30...240).contains(perMinute), head[k].allSatisfy(\.isNumber) else { continue }
+            let words = head[k - 1]
+            let wordCount = words.split(separator: " ").count
+            guard (1...3).contains(wordCount), words.contains(where: \.isLetter), !words.contains(where: \.isNumber) else { continue }
+            return Mark(perMinute: perMinute, beatUnit: "quarter", dots: 0, words: words)
+        }
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard (3...40).contains(trimmed.count), let bpm = ScoreTimeline.tempo(forWords: trimmed) else { continue }
@@ -275,7 +307,12 @@ nonisolated enum PrintedTempo {
     /// (a chord tone is removed), so the measure keeps the timing the recognizer gave it.
     /// `rects`: the noteheads of the score's pitched notes in order, in page points. Returns
     /// the indices of the notes hidden.
-    static func hideNotes(under mark: CGRect, at rects: [CGRect], in score: XMLElementNode) -> Set<Int> {
+    /// The score's pitched notes in order — the order the recognizer reports their positions in.
+    static func pitchedNotes(in score: XMLElementNode) -> [XMLElementNode] {
+        pitchedNoteRefs(in: score).map(\.note)
+    }
+
+    private static func pitchedNoteRefs(in score: XMLElementNode) -> [(measure: XMLElementNode, note: XMLElementNode)] {
         var pitched: [(measure: XMLElementNode, note: XMLElementNode)] = []
         for part in score.children(named: "part") {
             for measure in part.children(named: "measure") {
@@ -284,6 +321,11 @@ nonisolated enum PrintedTempo {
                 }
             }
         }
+        return pitched
+    }
+
+    static func hideNotes(under mark: CGRect, at rects: [CGRect], in score: XMLElementNode) -> Set<Int> {
+        let pitched = pitchedNoteRefs(in: score)
         guard pitched.count == rects.count else { return [] }
         let area = mark.insetBy(dx: -3, dy: -3)
         var hiddenIndices = Set<Int>()

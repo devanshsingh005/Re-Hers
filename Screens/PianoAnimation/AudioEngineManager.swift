@@ -47,6 +47,10 @@ final class AudioEngineManager {
     private var toneNodes: [UInt8: AVAudioPlayerNode] = [:]
     private var useFallback = false
 
+    /// Set while the microphone listens (Play Along, chord recognition): playback then keeps the
+    /// record-capable audio session instead of switching it to playback only.
+    var microphoneIsActive = false
+
     private var activeNotes: Set<UInt8> = []
     private var samplerChannelsByNote: [UInt8: UInt8] = [:]
     private(set) var isStarted = false
@@ -157,6 +161,7 @@ final class AudioEngineManager {
 
         stopAllNotes()
         teardownGraph()
+        guard !microphoneIsActive else { return }
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
@@ -167,7 +172,9 @@ final class AudioEngineManager {
         guard let engine else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            if !microphoneIsActive {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
             try session.setActive(true)
             try engine.start()
             isStarted = true
