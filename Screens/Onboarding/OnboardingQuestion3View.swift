@@ -112,7 +112,7 @@ struct OnboardingQuestion3View: View {
                     Group {
                         if viewModel.isSaving {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                                .progressViewStyle(CircularProgressViewStyle(tint: Color(SemanticColors.Text.onBrand)))
                         } else {
                             Text("Finish setup")
                                 .font(.system(size: 16, weight: .bold))
@@ -126,20 +126,7 @@ struct OnboardingQuestion3View: View {
                 }
                 .disabled(viewModel.isSaving)
                 
-                Button("Skip") {
-                    if GuestSessionManager.shared.isGuest() {
-                        viewModel.skipOnboarding()
-                    } else {
-                        Task {
-                            do {
-                                let session = try await SupabaseManager.shared.client.auth.session
-                                viewModel.skipOnboarding(userId: session.user.id.uuidString)
-                            } catch {
-                                viewModel.skipOnboarding() // Fallback to non-persistent if auth fails
-                            }
-                        }
-                    }
-                }
+                Button("Skip") { viewModel.skip() }
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(Color(SemanticColors.Text.brand))
             }

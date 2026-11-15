@@ -361,6 +361,15 @@ class PlaylistViewController: UIViewController {
     }
 
     private func fetchPlaylists() {
+        // Guests have no account to keep playlists in: show the sign-up prompt, not a load error.
+        if GuestSessionManager.shared.isGuest() {
+            loadedPlaylists = []
+            playlistLoadErrorMessage = nil
+            collectionView.reloadData()
+            updateEmptyState()
+            refreshControl.endRefreshing()
+            return
+        }
         let shouldShowOverlayLoader = loadedPlaylists.isEmpty && !refreshControl.isRefreshing
         if shouldShowOverlayLoader {
             activityIndicator.startAnimating()
@@ -405,6 +414,24 @@ class PlaylistViewController: UIViewController {
 
     private func updateEmptyState() {
         guard let collectionView else { return }
+
+        if loadedPlaylists.isEmpty, GuestSessionManager.shared.isGuest() {
+            var config = UIContentUnavailableConfiguration.empty()
+            config.image = UIImage(systemName: "music.note.list")
+            config.text = "Keep songs together in playlists"
+            config.secondaryText = "Create a free account to make playlists and keep them on all your devices."
+            var button = UIButton.Configuration.filled()
+            button.title = "Create Free Account"
+            button.baseBackgroundColor = BrandColors.brand
+            button.cornerStyle = .capsule
+            config.button = button
+            config.buttonProperties.primaryAction = UIAction { [weak self] _ in
+                self?.presentAuthentication(mode: .signUp)
+            }
+            let empty = UIContentUnavailableView(configuration: config)
+            collectionView.backgroundView = empty
+            return
+        }
 
         if loadedPlaylists.isEmpty {
             let message = playlistLoadErrorMessage ?? "No playlists yet.\nCreate one to get started."
@@ -555,6 +582,8 @@ extension PlaylistViewController: UICollectionViewDelegate,
     func collectionView(_ collectionView: UICollectionView,
                         layout collectionViewLayout: UICollectionViewLayout,
                         referenceSizeForFooterInSection section: Int) -> CGSize {
+        // Guests see the sign-up prompt instead of "Create New Playlist".
+        guard !GuestSessionManager.shared.isGuest() else { return .zero }
         return CGSize(width: collectionView.bounds.width, height: 84)
     }
 

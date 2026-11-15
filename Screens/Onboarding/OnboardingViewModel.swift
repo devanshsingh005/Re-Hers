@@ -44,7 +44,8 @@ class OnboardingViewModel: ObservableObject {
         let randomIcon = generateRandomIcon()
 
         GuestSessionManager.shared.saveGuestOnboardingData([
-            "level": level,
+            // Stored as the database value, since it is copied to the account at sign-up.
+            "level": OnboardingViewModel.levelDBMap[level] ?? level,
             "genres": genres,
             "practice_mins": mins,
             "avatar_url": randomIcon
@@ -53,6 +54,18 @@ class OnboardingViewModel: ObservableObject {
         navigateToHome()
     }
     
+    /// Skips the rest of setup from any question, keeping what was already chosen.
+    func skip() {
+        guard !GuestSessionManager.shared.isGuest() else {
+            skipOnboarding()
+            return
+        }
+        Task {
+            let userId = try? await SupabaseManager.shared.client.auth.session.user.id.uuidString
+            skipOnboarding(userId: userId)
+        }
+    }
+
     func skipOnboarding(userId: String? = nil) {
         if GuestSessionManager.shared.isGuest() {
             let level = selectedLevel ?? "skipped"

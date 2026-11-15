@@ -239,9 +239,22 @@ class HomeViewController: UIViewController {
         }
     }
 
+    /// True the first time this account (or guest) sees Home, so it says "Welcome", not "Welcome back".
+    private lazy var isFirstHomeVisit: Bool = {
+        let owner = SupabaseManager.shared.client.auth.currentUser?.id.uuidString.lowercased() ?? "guest"
+        let key = "home.visited.\(owner)"
+        // Anyone with uploads or a last-played sheet has been here before this marker existed.
+        let returning = UserDefaults.standard.bool(forKey: key)
+            || !LocalSheetLibrary.shared.uploads().isEmpty
+            || LastPlayedStore.shared.current != nil
+        UserDefaults.standard.set(true, forKey: key)
+        return !returning
+    }()
+
     private func setGreeting(name: String?) {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let text = trimmed.isEmpty ? "Welcome back" : "Welcome back, \(trimmed)"
+        let opening = isFirstHomeVisit ? "Welcome" : "Welcome back"
+        let text = trimmed.isEmpty ? opening : "\(opening), \(trimmed)"
         header.subtitleLabel.text = text
         inlineSubtitleLabel?.text = text
     }
@@ -431,10 +444,28 @@ class HomeViewController: UIViewController {
         section.axis = .vertical
         section.spacing = 10
         contentStack.addArrangedSubview(section)
+        showPlaylistPlaceholders()
 
         // Tiles plus their caption; resized for the caption's Dynamic Type size.
         let captionHeight = UIFont.preferredFont(forTextStyle: .footnote).lineHeight + 8
         tiles.heightAnchor.constraint(equalToConstant: Constants.playlistTileSize + captionHeight).isActive = true
+    }
+
+    /// Shimmering tiles until the first fetch answers, so a signed-in user's row doesn't flash
+    /// "New Playlist" first. Guests have no playlists to wait for.
+    private func showPlaylistPlaceholders() {
+        guard !GuestSessionManager.shared.isGuest() else {
+            showPlaylists([])
+            return
+        }
+        playlistTilesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for _ in 0..<3 {
+            let tile = SkeletonBox(height: Constants.playlistTileSize, cornerRadius: 14)
+            tile.widthAnchor.constraint(equalToConstant: Constants.playlistTileSize).isActive = true
+            tile.isAccessibilityElement = false
+            playlistTilesStack.addArrangedSubview(tile)
+            DispatchQueue.main.async { tile.startShimmering() }
+        }
     }
 
     private func loadPlaylists() {

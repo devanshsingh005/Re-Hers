@@ -74,7 +74,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         _ = guestSessionManager.getOrCreateGuestID()
-        showMainApp()
+
+        // A brand-new install: the welcome card, then the three setup questions, then Home.
+        // (Someone who already used the app as a guest before this flow existed isn't stopped.)
+        let isFirstLaunch = !guestSessionManager.hasSeenInfoCard
+            && !UserDefaults.standard.bool(forKey: guestSessionManager.kHasCompletedOnboarding)
+        if isFirstLaunch {
+            setRootViewController(UIHostingController(rootView: OnboardingFlowRoot()))
+        } else {
+            showMainApp()
+        }
 
         if !guestSessionManager.hasSeenInfoCard {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in

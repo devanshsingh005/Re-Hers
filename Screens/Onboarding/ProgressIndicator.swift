@@ -44,8 +44,11 @@ struct CustomOnboardingNavBar: View {
                 
                 Spacer()
             }
+            // Same height with or without Back, so the progress bar and title don't jump
+            // between step 1 and the others.
+            .frame(height: 44)
             .padding(.horizontal, 24)
-            .padding(.bottom, 16)
+            .padding(.bottom, 8)
 
             ProgressIndicator(step: step)
         }

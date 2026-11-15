@@ -20,6 +20,8 @@ enum SkeletonTokens {
     static let duration: CFTimeInterval = 1.4
     /// Fade transition when skeleton appears / disappears
     static let fadeDuration: TimeInterval = 0.28
+    /// Loads that finish sooner than this (cached data) never show a skeleton, so it can't flash.
+    static let appearDelay: TimeInterval = 0.15
 }
 
 // MARK: - ShimmerLayer
@@ -204,6 +206,8 @@ final class SkeletonLineGroup: UIStackView {
 /// A full-screen overlay that holds skeleton subviews.
 /// Call `show(in:)` to mount it, `hide()` to fade out and remove.
 class SkeletonContainerView: UIView {
+    /// Bumped by every show/hide, so a delayed fade-in that is no longer wanted is dropped.
+    private var visibilityGeneration = 0
 
     // MARK: Init
     init() {
@@ -229,7 +233,7 @@ class SkeletonContainerView: UIView {
             return
         }
         alpha = 0
-        isHidden = false
+        isHidden = true
         if let below = belowView {
             parent.insertSubview(self, belowSubview: below)
         } else {
@@ -241,22 +245,39 @@ class SkeletonContainerView: UIView {
             trailingAnchor.constraint(equalTo: parent.trailingAnchor),
             bottomAnchor.constraint(equalTo: parent.bottomAnchor),
         ])
-        startAllShimmering()
-        UIView.animate(withDuration: SkeletonTokens.fadeDuration) { self.alpha = 1 }
+        appearAfterDelay()
+    }
+
+    /// Fades in after `SkeletonTokens.appearDelay`, unless `hide()` comes first.
+    private func appearAfterDelay() {
+        visibilityGeneration += 1
+        let generation = visibilityGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + SkeletonTokens.appearDelay) { [weak self] in
+            guard let self, self.visibilityGeneration == generation else { return }
+            self.isHidden = false
+            self.startAllShimmering()
+            UIView.animate(withDuration: SkeletonTokens.fadeDuration) { self.alpha = 1 }
+        }
     }
 
     /// Show a skeleton that is **already pinned** in the view hierarchy
     /// (e.g. PDF skeleton pre-constrained alongside the PDFView).
     func showInPlace() {
-        isHidden = false
+        isHidden = true
         alpha = 0
-        startAllShimmering()
-        UIView.animate(withDuration: SkeletonTokens.fadeDuration) { self.alpha = 1 }
+        appearAfterDelay()
     }
 
     /// Fade out. If the skeleton was added via `show(in:)` it is removed from superview;
     /// if it was pre-positioned (`showInPlace`) it is hidden in place instead.
     func hide(completion: (() -> Void)? = nil) {
+        visibilityGeneration += 1
+        guard !isHidden else {
+            // Never appeared (the data came quickly): nothing to fade.
+            alpha = 0
+            completion?()
+            return
+        }
         UIView.animate(withDuration: SkeletonTokens.fadeDuration, animations: {
             self.alpha = 0
         }, completion: { _ in

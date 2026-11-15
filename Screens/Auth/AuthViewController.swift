@@ -1330,8 +1330,10 @@ extension AuthViewController {
                 }
 
                 // Query user_onboarding
+                // `level` is text ("beginner", …); decoding it as a number failed every time,
+                // which sent people who had already answered back through onboarding.
                 struct OnboardingRow: Decodable {
-                    let level: Int?
+                    let level: String?
                     let genres: [String]?
                 }
 

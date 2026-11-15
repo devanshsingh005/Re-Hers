@@ -10,9 +10,24 @@ import UIKit
 
 final class DiscoverSkeletonView: SkeletonContainerView {
 
+    /// Where the real search bar starts; the Library header above it stays visible.
+    private static let contentTop: CGFloat = 194
+
     override init() {
         super.init()
-        backgroundColor = ComponentColors.DiscoverScreen.background
+        // Only the area below the header is covered, and touches pass through to the header.
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        let cover = UIView()
+        cover.backgroundColor = ComponentColors.DiscoverScreen.background
+        cover.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(cover)
+        NSLayoutConstraint.activate([
+            cover.topAnchor.constraint(equalTo: topAnchor, constant: Self.contentTop - 8),
+            cover.leadingAnchor.constraint(equalTo: leadingAnchor),
+            cover.trailingAnchor.constraint(equalTo: trailingAnchor),
+            cover.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
         build()
     }
 
@@ -26,13 +41,13 @@ final class DiscoverSkeletonView: SkeletonContainerView {
         addSubview(stack)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 180), // below nav + header
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: Self.contentTop),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
         ])
 
         // Search bar placeholder
-        stack.addArrangedSubview(SkeletonBox(height: 46, cornerRadius: 14))
+        stack.addArrangedSubview(SkeletonBox(height: 44, cornerRadius: 22))
 
         // Filter row
         stack.addArrangedSubview(makeFilterRow())
@@ -51,12 +66,12 @@ final class DiscoverSkeletonView: SkeletonContainerView {
         row.axis = .horizontal
         row.spacing = 12
         row.translatesAutoresizingMaskIntoConstraints = false
-        row.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        row.heightAnchor.constraint(equalToConstant: 44).isActive = true
 
-        let btn1 = SkeletonBox(height: 40, cornerRadius: 14)
-        btn1.widthAnchor.constraint(equalToConstant: 100).isActive = true
-        let btn2 = SkeletonBox(height: 40, cornerRadius: 14)
-        btn2.widthAnchor.constraint(equalToConstant: 100).isActive = true
+        let btn1 = SkeletonBox(height: 44, cornerRadius: 14)
+        btn1.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        let btn2 = SkeletonBox(height: 44, cornerRadius: 14)
+        btn2.widthAnchor.constraint(equalToConstant: 112).isActive = true
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -88,21 +103,16 @@ final class DiscoverSkeletonView: SkeletonContainerView {
         row.translatesAutoresizingMaskIntoConstraints = false
         row.heightAnchor.constraint(equalToConstant: 72).isActive = true
 
-        // Album art thumbnail
+        // Cover art
         let thumb = SkeletonBox(height: nil, cornerRadius: 10)
-        thumb.widthAnchor.constraint(equalToConstant: 54).isActive = true
-        thumb.heightAnchor.constraint(equalToConstant: 54).isActive = true
+        thumb.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        thumb.heightAnchor.constraint(equalToConstant: 58).isActive = true
 
-        // Title + composer lines
-        let text = SkeletonLineGroup(lines: 2, lineHeight: 13, spacing: 6)
-
-        // Duration pill
-        let dur = SkeletonBox(height: 24, cornerRadius: 12)
-        dur.widthAnchor.constraint(equalToConstant: 42).isActive = true
+        // Title, composer and the level/tempo/hands tags
+        let text = SkeletonLineGroup(lines: 3, lineHeight: 12, spacing: 8, lastLineWidthRatio: 0.7)
 
         row.addArrangedSubview(thumb)
         row.addArrangedSubview(text)
-        row.addArrangedSubview(dur)
         return row
     }
 }
