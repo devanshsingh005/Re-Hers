@@ -876,28 +876,16 @@ class HomeViewController: UIViewController {
         let popup = UploadQuizPopup()
         popup.delegate = self
         
-        if #available(iOS 16.0, *) {
-            popup.modalPresentationStyle = .pageSheet
-            if let sheet = popup.sheetPresentationController {
-                // Custom detent at ~65% of screen height for a "bigger" feel than medium
-                let customDetent = UISheetPresentationController.Detent.custom { context in
-                    return context.maximumDetentValue * 0.65
-                }
-                sheet.detents = [customDetent, .large()]
-                sheet.prefersGrabberVisible = true
-                sheet.preferredCornerRadius = 32
-                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+        popup.modalPresentationStyle = .pageSheet
+        if let sheet = popup.sheetPresentationController {
+            // Custom detent at ~65% of screen height for a "bigger" feel than medium
+            let customDetent = UISheetPresentationController.Detent.custom { context in
+                context.maximumDetentValue * 0.65
             }
-        } else if #available(iOS 15.0, *) {
-            popup.modalPresentationStyle = .pageSheet
-            if let sheet = popup.sheetPresentationController {
-                sheet.detents = [.medium(), .large()]
-                sheet.prefersGrabberVisible = true
-                sheet.preferredCornerRadius = 32
-            }
-        } else {
-            popup.modalPresentationStyle = .overFullScreen
-            popup.modalTransitionStyle = .coverVertical
+            sheet.detents = [customDetent, .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 32
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = false
         }
         
         activeQuizPopup = popup
@@ -1242,7 +1230,7 @@ private extension UIImage {
     /// VisionKit scan pages often carry non-up orientations; drawing them
     /// directly into the PDF context without normalization produces rotated pages.
     func normalizedOrientation() -> UIImage {
-        guard imageOrientation != .up, let cgImage else { return self }
+        guard imageOrientation != .up, cgImage != nil else { return self }
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: size))

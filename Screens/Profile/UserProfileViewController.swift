@@ -747,12 +747,17 @@ final class UserProfileViewController: UIViewController {
     }
 
     private func makeLegalRowButton(title: String, action: Selector) -> UIButton {
-        let button = UIButton(type: .system)
-        button.setTitle(title, for: .normal)
-        button.setTitleColor(ComponentColors.ProfileScreen.userName, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
-        button.contentHorizontalAlignment = .left
-        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
+        var config = UIButton.Configuration.plain()
+        config.title = title
+        config.baseForegroundColor = ComponentColors.ProfileScreen.userName
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = .systemFont(ofSize: 16, weight: .medium)
+            return attrs
+        }
+        let button = UIButton(configuration: config)
+        button.contentHorizontalAlignment = .leading
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: action, for: .touchUpInside)
 

@@ -49,10 +49,12 @@ public final class NavigationBarHelper {
         }
         
         private func setup() {
-            let chevronCfg = UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
-            setImage(UIImage(systemName: "chevron.backward", withConfiguration: chevronCfg), for: .normal)
-            tintColor = .label
-            contentEdgeInsets = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 10)
+            var config = UIButton.Configuration.plain()
+            config.image = UIImage(systemName: "chevron.backward")
+            config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
+            config.baseForegroundColor = .label
+            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 10)
+            configuration = config
             
             // Remove Shadow (Reset to default)
             layer.shadowColor = UIColor.clear.cgColor

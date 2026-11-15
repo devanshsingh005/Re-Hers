@@ -874,19 +874,18 @@ class CreatePlaylistFooterView: UICollectionReusableView {
     private var dashedLayer: CAShapeLayer?
 
     private let button: UIButton = {
-        let img = UIImage(
-            systemName: "plus.circle.fill",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
-        )
-        let btn = UIButton(type: .system)
-        btn.setImage(img, for: .normal)
-        btn.setTitle("Create New Playlist", for: .normal)
-        btn.setTitleColor(BrandColors.brand, for: .normal)
-        btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
-        btn.tintColor = BrandColors.brand
-        btn.semanticContentAttribute = .forceLeftToRight
-        btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
-        btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: -4)
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: "plus.circle.fill")
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        config.title = "Create New Playlist"
+        config.imagePadding = 8
+        config.baseForegroundColor = BrandColors.brand
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = .boldSystemFont(ofSize: 16)
+            return attrs
+        }
+        let btn = UIButton(configuration: config)
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()

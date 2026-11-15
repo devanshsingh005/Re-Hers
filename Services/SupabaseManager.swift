@@ -111,12 +111,13 @@ final class SupabaseManager {
         return try await client.auth.session.accessToken
     }
 
+    /// The auth client is an actor; these hop onto it rather than calling it synchronously.
     func startAutoRefresh() {
-        client.auth.startAutoRefresh()
+        Task { await client.auth.startAutoRefresh() }
     }
 
     func stopAutoRefresh() {
-        client.auth.stopAutoRefresh()
+        Task { await client.auth.stopAutoRefresh() }
     }
 
     private static func resolveSupabaseURL() -> String {

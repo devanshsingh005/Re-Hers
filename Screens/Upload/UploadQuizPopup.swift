@@ -446,12 +446,13 @@ class UploadQuizPopup: UIViewController {
         doneSubLabel.translatesAutoresizingMaskIntoConstraints = false
         doneOverlay.addSubview(doneSubLabel)
 
-        let closeDoneBtn = UIButton(type: .system)
-        closeDoneBtn.setTitle("Done", for: .normal)
-        closeDoneBtn.setTitleColor(.white, for: .normal)
-        closeDoneBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        closeDoneBtn.layer.cornerRadius = 24
-        closeDoneBtn.contentEdgeInsets = UIEdgeInsets(top: 12, left: 40, bottom: 12, right: 40)
+        var doneConfig = UIButton.Configuration.filled()
+        doneConfig.title = "Done"
+        doneConfig.baseForegroundColor = .white
+        doneConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        doneConfig.background.cornerRadius = 24
+        doneConfig.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 40, bottom: 12, trailing: 40)
+        let closeDoneBtn = UIButton(configuration: doneConfig)
         closeDoneBtn.translatesAutoresizingMaskIntoConstraints = false
         closeDoneBtn.addTarget(self, action: #selector(dismissButtonTapped), for: .touchUpInside)
         doneOverlay.addSubview(closeDoneBtn)

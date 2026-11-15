@@ -11,13 +11,12 @@ public enum PlaylistError: Error {
     case invalidName
 }
 
+/// Runs on the main actor (the project default), which serializes all access to its caches.
 public final class PlaylistsManager {
     public static let shared = PlaylistsManager()
     private let playlistCoverBucket = "PlayListCover"
     private let coverSignedURLTTL = 60 * 60
-    private let resolvedCoverURLCacheLock = NSLock()
     private var resolvedCoverURLCache: [String: (url: String, expiresAt: Date)] = [:]
-    private let playlistCacheLock = NSLock()
     private var playlistCache: [PlaylistData] = []
     private var playlistCacheWarmTask: Task<Void, Never>?
     
@@ -96,31 +95,21 @@ public final class PlaylistsManager {
     }
 
     public func cachedPlaylistsSnapshot() -> [PlaylistData] {
-        playlistCacheLock.lock()
-        defer { playlistCacheLock.unlock() }
         return playlistCache
     }
 
     public func prewarmPlaylistCacheIfNeeded() {
-        playlistCacheLock.lock()
         let hasCachedPlaylists = !playlistCache.isEmpty
         let hasWarmTask = playlistCacheWarmTask != nil
-        playlistCacheLock.unlock()
 
         guard !hasCachedPlaylists, !hasWarmTask else { return }
 
         let warmTask = Task { [weak self] in
-            defer {
-                self?.playlistCacheLock.lock()
-                self?.playlistCacheWarmTask = nil
-                self?.playlistCacheLock.unlock()
-            }
+            defer { self?.playlistCacheWarmTask = nil }
             _ = try? await self?.fetchRemotePlaylists()
         }
 
-        playlistCacheLock.lock()
         playlistCacheWarmTask = warmTask
-        playlistCacheLock.unlock()
     }
     
     // MARK: - Fetch Tracks for a Specific Playlist
@@ -550,8 +539,6 @@ public final class PlaylistsManager {
     }
 
     private func cachedResolvedCoverURL(for storedValue: String) -> String? {
-        resolvedCoverURLCacheLock.lock()
-        defer { resolvedCoverURLCacheLock.unlock() }
 
         guard let cachedEntry = resolvedCoverURLCache[storedValue] else { return nil }
         if cachedEntry.expiresAt <= Date() {
@@ -562,8 +549,6 @@ public final class PlaylistsManager {
     }
 
     private func cacheResolvedCoverURL(_ url: String, for storedValue: String) {
-        resolvedCoverURLCacheLock.lock()
-        defer { resolvedCoverURLCacheLock.unlock() }
 
         resolvedCoverURLCache[storedValue] = (
             url: url,
@@ -572,8 +557,6 @@ public final class PlaylistsManager {
     }
 
     private func cachePlaylists(_ playlists: [PlaylistData]) {
-        playlistCacheLock.lock()
-        defer { playlistCacheLock.unlock() }
         playlistCache = playlists
     }
 }

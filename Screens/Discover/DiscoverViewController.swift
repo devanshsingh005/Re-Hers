@@ -390,12 +390,11 @@ final class DiscoverViewController: UIViewController {
         let orange = ComponentColors.HomeScreen.actionButtonFill
 
         func updateBtn(_ btn: UIButton, active: Bool, label: String) {
-            btn.setTitle("\(label)  ▾", for: .normal)
-            btn.backgroundColor = active
+            btn.configuration?.title = "\(label)  ▾"
+            btn.configuration?.background.backgroundColor = active
                 ? orange.withAlphaComponent(0.15)
                 : ComponentColors.DiscoverScreen.chipBackgroundDefault
-            btn.setTitleColor(active ? orange : ComponentColors.DiscoverScreen.chipTextDefault, for: .normal)
-            btn.tintColor = active ? orange : ComponentColors.DiscoverScreen.chipTextDefault
+            btn.configuration?.baseForegroundColor = active ? orange : ComponentColors.DiscoverScreen.chipTextDefault
         }
 
         updateBtn(levelButton,
@@ -491,19 +490,20 @@ final class DiscoverViewController: UIViewController {
     // MARK: Helpers
 
     private func makeFilterButton(icon: String, title: String) -> UIButton {
-        let btn = UIButton(type: .system)
-        btn.setImage(UIImage(systemName: icon), for: .normal)
-        btn.setTitle("\(title)  ▾", for: .normal)
-        btn.setTitleColor(ComponentColors.DiscoverScreen.chipTextDefault, for: .normal)
-        btn.tintColor = ComponentColors.DiscoverScreen.chipTextDefault
-        btn.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
-        btn.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        btn.layer.cornerRadius = 14
-        btn.clipsToBounds = true
-        btn.contentEdgeInsets = UIEdgeInsets(top: 10, left: 16, bottom: 10, right: 14)
-        btn.semanticContentAttribute = .forceLeftToRight
-        btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
-        btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: -4)
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: icon)
+        config.title = "\(title)  ▾"
+        config.imagePadding = 8
+        config.baseForegroundColor = ComponentColors.DiscoverScreen.chipTextDefault
+        config.background.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
+        config.background.cornerRadius = 14
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 18)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = .systemFont(ofSize: 15, weight: .semibold)
+            return attrs
+        }
+        let btn = UIButton(configuration: config)
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }

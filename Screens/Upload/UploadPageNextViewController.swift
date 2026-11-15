@@ -763,13 +763,18 @@ final class UploadPageNextViewController: UIViewController {
         sheetHeaderLabel.textColor = .label
         sheetHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        previewButton.setTitle("Preview", for: .normal)
-        previewButton.setTitleColor(.white, for: .normal)
-        previewButton.backgroundColor    = ComponentColors.HomeScreen.actionButtonFill
-        previewButton.titleLabel?.font   = .systemFont(ofSize: 14, weight: .semibold)
-        previewButton.contentEdgeInsets  = UIEdgeInsets(top: 7, left: 18, bottom: 7, right: 18)
-        previewButton.layer.cornerRadius = 16
-        previewButton.clipsToBounds      = true
+        var previewConfig = UIButton.Configuration.filled()
+        previewConfig.title = "Preview"
+        previewConfig.baseForegroundColor = .white
+        previewConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        previewConfig.background.cornerRadius = 16
+        previewConfig.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
+        previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = .systemFont(ofSize: 14, weight: .semibold)
+            return attrs
+        }
+        previewButton.configuration = previewConfig
         previewButton.translatesAutoresizingMaskIntoConstraints = false
 
         sheetPDFView.autoScales          = true

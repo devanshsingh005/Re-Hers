@@ -612,15 +612,15 @@ class DiscoverSongDetailViewController: UIViewController {
     private func loadOriginalPDF() async {
         let originalPath = song?.originalPdfPath
         guard let originalPath, !originalPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            print("[DiscoverDetail] ℹ️ No original PDF path")
+            debugLog("[DiscoverDetail] ℹ️ No original PDF path")
             return
         }
 
         do {
             let data = try await fetchRemoteData(from: originalPath, fallbackBucket: "pdf_uploads")
-            print("[DiscoverDetail] ✅ Fetched Original PDF: \(data.count) bytes")
+            debugLog("[DiscoverDetail] ✅ Fetched Original PDF: \(data.count) bytes")
             guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
-                print("[DiscoverDetail] ❌ Failed to create PDFDocument from data")
+                debugLog("[DiscoverDetail] ❌ Failed to create PDFDocument from data")
                 return
             }
             await MainActor.run {
@@ -630,22 +630,22 @@ class DiscoverSongDetailViewController: UIViewController {
                 }
             }
         } catch {
-            print("[DiscoverDetail] ❌ Original PDF fetch error: \(error)")
+            debugLog("[DiscoverDetail] ❌ Original PDF fetch error: \(error)")
         }
     }
 
     private func loadConvertedPDF() async {
         guard let pdfSource = song?.discoverPDFSource else {
-            print("[DiscoverDetail] ℹ️ No converted PDF path")
+            debugLog("[DiscoverDetail] ℹ️ No converted PDF path")
             await MainActor.run { self.showPDFError() }
             return
         }
 
         do {
             let data = try await fetchRemoteData(from: pdfSource.rawValue, fallbackBucket: pdfSource.fallbackBucket)
-            print("[DiscoverDetail] ✅ Fetched Converted PDF: \(data.count) bytes")
+            debugLog("[DiscoverDetail] ✅ Fetched Converted PDF: \(data.count) bytes")
             guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
-                print("[DiscoverDetail] ❌ Failed to create PDFDocument from converted data")
+                debugLog("[DiscoverDetail] ❌ Failed to create PDFDocument from converted data")
                 await MainActor.run { self.showPDFError() }
                 return
             }
@@ -656,7 +656,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 }
             }
         } catch {
-            print("[DiscoverDetail] ❌ PDF fetch error: \(error)")
+            debugLog("[DiscoverDetail] ❌ PDF fetch error: \(error)")
             await MainActor.run {
                 if self.sheetToggle.selectedSegmentIndex == 1 {
                     self.showPDFError()
@@ -667,7 +667,7 @@ class DiscoverSongDetailViewController: UIViewController {
 
     private func loadConvertedJSON() async {
         guard let song else {
-            print("[DiscoverDetail] ℹ️ No song available for JSON fetch")
+            debugLog("[DiscoverDetail] ℹ️ No song available for JSON fetch")
             return
         }
 
@@ -676,16 +676,16 @@ class DiscoverSongDetailViewController: UIViewController {
         )
 
         guard !jsonSources.isEmpty else {
-            print("[DiscoverDetail] ℹ️ No JSON path")
+            debugLog("[DiscoverDetail] ℹ️ No JSON path")
             return
         }
 
         for jsonSource in jsonSources {
             do {
                 let data = try await fetchRemoteData(from: jsonSource.rawValue, fallbackBucket: jsonSource.fallbackBucket)
-                print("[DiscoverDetail] ✅ Fetched JSON: \(data.count) bytes from \(jsonSource.rawValue)")
+                debugLog("[DiscoverDetail] ✅ Fetched JSON: \(data.count) bytes from \(jsonSource.rawValue)")
                 guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                    print("[DiscoverDetail] ❌ Failed to parse JSON data from \(jsonSource.rawValue)")
+                    debugLog("[DiscoverDetail] ❌ Failed to parse JSON data from \(jsonSource.rawValue)")
                     continue
                 }
                 await MainActor.run {
@@ -694,7 +694,7 @@ class DiscoverSongDetailViewController: UIViewController {
                 }
                 return
             } catch {
-                print("[DiscoverDetail] ❌ JSON fetch error from \(jsonSource.rawValue): \(error)")
+                debugLog("[DiscoverDetail] ❌ JSON fetch error from \(jsonSource.rawValue): \(error)")
             }
         }
     }

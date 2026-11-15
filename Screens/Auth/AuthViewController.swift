@@ -803,11 +803,7 @@ extension AuthViewController {
 
 }
 
-extension AuthViewController: UITextViewDelegate {
-    func textView(_ textView: UITextView, shouldInteractWith url: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
-        return true
-    }
-}
+extension AuthViewController: UITextViewDelegate {}
 
 private extension AuthViewController {
     struct AuthPayload {

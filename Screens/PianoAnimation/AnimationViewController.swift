@@ -544,7 +544,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         card.onTempoChanged = { [weak self] newT in
             self?.tempoMultiplier = newT
         }
-        card.onInstrumentChanged = { [weak self] inst in
+        card.onInstrumentChanged = { inst in
             AudioEngineManager.shared.switchInstrument(to: inst)
         }
         

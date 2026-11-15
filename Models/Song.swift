@@ -95,11 +95,14 @@ extension Song {
         discoverJSONSources().first
     }
 
+    /// Main-actor isolated because the default resolver comes from `SupabaseManager.shared`.
+    @MainActor
     func resolvedCoverImageURL(
-        using resolver: SignedAssetResolver = SupabaseManager.shared.signedAssetResolver,
+        using resolver: SignedAssetResolver? = nil,
         fallbackBucket: String? = nil
     ) async throws -> URL? {
-        try await resolver.maybeSignedURL(
+        let resolver = resolver ?? SupabaseManager.shared.signedAssetResolver
+        return try await resolver.maybeSignedURL(
             for: coverImageUrl,
             fallbackBucket: fallbackBucket ?? discoverCoverFallbackBucket
         )

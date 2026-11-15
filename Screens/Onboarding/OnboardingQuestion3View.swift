@@ -79,7 +79,7 @@ struct OnboardingQuestion3View: View {
                                 viewModel.practiceMins = currentMins
                             }
                             .accentColor(Color(SemanticColors.DataViz.progressFill))
-                            .onChange(of: sliderIndex) { _ in
+                            .onChange(of: sliderIndex) {
                                 viewModel.practiceMins = currentMins
                             }
 
