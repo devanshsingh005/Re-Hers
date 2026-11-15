@@ -68,15 +68,22 @@ final class UserProfileViewController: UIViewController {
     // MARK: - Skeleton
     private let profileSkeleton = ProfileSkeletonView()
 
+    // The Settings tab's header, the same as Home's and Library's, with the ••• menu beside it.
+    private let menuButton = TabRootHeaderView.glassButton(systemName: "ellipsis", accessibilityLabel: "Account")
+    private lazy var tabHeader = TabRootHeaderView(title: "Settings", subtitle: "Profile, practice and preferences",
+                                                   accessory: menuButton)
+    private let navBackgroundView = UIVisualEffectView(effect: nil)
+    private let navShadowLayer = UIView()
+
     // MARK: - Init
+    // Settings is a tab root, so it keeps the tab bar; AppNavigationController hides the bar
+    // when this screen is pushed from somewhere else.
     init() {
         super.init(nibName: nil, bundle: nil)
-        self.hidesBottomBarWhenPushed = true
     }
-    
+
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        self.hidesBottomBarWhenPushed = true
     }
 
     private func practiceEventDate(from rawValue: String) -> Date? {
@@ -99,35 +106,75 @@ final class UserProfileViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.ProfileScreen.background
         
-        title = ""
         navigationController?.setNavigationBarHidden(false, animated: false)
-        navigationController?.navigationBar.prefersLargeTitles = false
-        navigationItem.largeTitleDisplayMode = .never
-        
-        let navBar = navigationController?.navigationBar
-        navBar?.titleTextAttributes = [
-            .foregroundColor: UIColor.white,
-            .font: UIFont.systemFont(ofSize: 17, weight: .bold)
-        ]
-        navBar?.tintColor = .white
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "ellipsis"),
-            menu: buildProfileMenu()
-        )
+        if isTabRoot {
+            // The Settings tab: the shared header scrolls away and the small title fades in.
+            _ = NavigationBarHelper.configureInlineNavigationBar(
+                for: self, title: "Settings", subtitle: "Profile, practice and preferences"
+            )
+            navigationItem.titleView?.alpha = 0
+            menuButton.showsMenuAsPrimaryAction = true
+            menuButton.menu = buildProfileMenu()
+        } else {
+            title = ""
+            navigationController?.navigationBar.prefersLargeTitles = false
+            navigationItem.largeTitleDisplayMode = .never
+
+            let navBar = navigationController?.navigationBar
+            navBar?.titleTextAttributes = [
+                .foregroundColor: UIColor.white,
+                .font: UIFont.systemFont(ofSize: 17, weight: .bold)
+            ]
+            navBar?.tintColor = .white
+        }
+        if !isTabRoot {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                image: UIImage(systemName: "ellipsis"),
+                menu: buildProfileMenu()
+            )
+        }
         
         setupUI()
+        if isTabRoot {
+            NavigationBarHelper.updateNavigationBackgroundAppearance(
+                navBackgroundView, shadowView: navShadowLayer, traitCollection: traitCollection
+            )
+            NavigationBarHelper.installNavigationBackground(navBackgroundView, shadowView: navShadowLayer, in: view)
+        }
         // Show skeleton while data loads
         profileSkeleton.show(in: view)
         loadData()
     }
 
 
+    /// Settings is a tab now; other screens may still push it.
+    private var isTabRoot: Bool {
+        navigationController?.viewControllers.first === self
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationItem.rightBarButtonItem?.menu = buildProfileMenu()
+        menuButton.menu = buildProfileMenu()
+        syncNavBarAlpha()
         updateAppearanceValueLabel()
         updateSignInOutButton()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        guard isTabRoot else { return }
+        // The page runs under the bars; leave room to scroll past the tab bar and mini player.
+        scrollView.contentInset.bottom = view.safeAreaInsets.bottom
+        scrollView.verticalScrollIndicatorInsets.bottom = view.safeAreaInsets.bottom
+    }
+
+    private func syncNavBarAlpha() {
+        guard isTabRoot else { return }
+        NavigationBarHelper.syncNavigationBarAlpha(
+            scrollView: scrollView, navigationItem: navigationItem, navBackgroundView: navBackgroundView
+        )
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -146,16 +193,18 @@ final class UserProfileViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.alwaysBounceVertical = true
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.delegate = self
+        if isTabRoot { scrollView.contentInsetAdjustmentBehavior = .never }
         view.addSubview(scrollView)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
@@ -164,9 +213,18 @@ final class UserProfileViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
 
+        if isTabRoot {
+            contentView.addSubview(tabHeader)
+            NSLayoutConstraint.activate([
+                tabHeader.topAnchor.constraint(equalTo: contentView.topAnchor, constant: TabRootHeaderView.topOffset),
+                tabHeader.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                tabHeader.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            ])
+        }
         buildHeaderSection()
         buildStatsSection()
         buildPracticeProgressSection()
+        buildPracticeLinksSection()
         buildAppearanceSection()
         buildLegalSection()
         buildSignOutSection()
@@ -219,7 +277,9 @@ final class UserProfileViewController: UIViewController {
         contentView.addSubview(usernameLabel)
 
         NSLayoutConstraint.activate([
-            ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
+            isTabRoot
+                ? ringView.topAnchor.constraint(equalTo: tabHeader.bottomAnchor, constant: 12)
+                : ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
             ringView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             ringView.widthAnchor.constraint(equalToConstant: ringSize),
             ringView.heightAnchor.constraint(equalToConstant: ringSize),
@@ -424,6 +484,121 @@ final class UserProfileViewController: UIViewController {
         chartView.weeklyData = stats.weeklyData
         chartView.tag = 9901 // so we can find and update it
         return chartView
+    }
+
+    // MARK: - PRACTICE (lessons used to be a tab)
+    private func buildPracticeLinksSection() {
+        let card = UIView()
+        card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
+        card.layer.cornerRadius = 20
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.06
+        card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        card.layer.shadowRadius = 16
+        card.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(card)
+
+        let sectionTitle = UILabel()
+        sectionTitle.text = "Practice"
+        sectionTitle.font = .systemFont(ofSize: 20, weight: .bold)
+        sectionTitle.textColor = ComponentColors.ProfileScreen.userName
+        sectionTitle.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(sectionTitle)
+
+        let lessons = makeLinkRow(title: "Practice Lessons", symbolName: "map") { [weak self] in
+            self?.perform(.practice)
+        }
+        let notifications = makeLinkRow(title: "Notifications", symbolName: "bell") { [weak self] in
+            self?.navigationController?.pushViewController(NotificationsViewController(), animated: true)
+        }
+        let divider = UIView()
+        divider.backgroundColor = ComponentColors.ProfileScreen.statCardBorder
+        divider.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = UIStackView(arrangedSubviews: [lessons, divider, notifications])
+        stack.axis = .vertical
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let previousView = contentView.subviews.last(where: { $0 != card })!
+
+        NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: 20),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+
+            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+
+            stack.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: 10),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+
+            lessons.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
+            notifications.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
+            divider.heightAnchor.constraint(equalToConstant: 0.5)
+        ])
+    }
+
+    private func makeLinkRow(title: String, symbolName: String, action: @escaping () -> Void) -> UIButton {
+        var config = UIButton.Configuration.plain()
+        config.title = title
+        config.image = UIImage(systemName: symbolName)
+        config.imagePadding = 12
+        config.baseForegroundColor = ComponentColors.ProfileScreen.userName
+        config.imageColorTransformer = UIConfigurationColorTransformer { _ in BrandColors.brand }
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 44)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = UIFont.preferredFont(forTextStyle: .body)
+            return attrs
+        }
+        let button = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
+        button.tintColor = BrandColors.brand
+        button.contentHorizontalAlignment = .leading
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+        chevron.tintColor = ComponentColors.ProfileScreen.statLabel
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(chevron)
+        NSLayoutConstraint.activate([
+            chevron.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -20)
+        ])
+        return button
+    }
+
+    // MARK: - Shortcuts (from Search)
+
+    enum SettingsShortcut {
+        case appearance, dailyGoal, editProfile, terms, privacy, practice
+    }
+
+    func perform(_ shortcut: SettingsShortcut) {
+        loadViewIfNeeded()
+        switch shortcut {
+        case .practice:
+            navigationController?.pushViewController(LessonMapViewController(), animated: true)
+        case .appearance:
+            openAppearancePicker()
+        case .dailyGoal:
+            showDailyGoalPicker()
+        case .editProfile:
+            let sheet = UIAlertController(title: "Edit Profile", message: nil, preferredStyle: .actionSheet)
+            sheet.addAction(UIAlertAction(title: "Edit Name", style: .default) { [weak self] _ in self?.showNameEditor() })
+            sheet.addAction(UIAlertAction(title: "Edit Username", style: .default) { [weak self] _ in self?.showUsernameEditor() })
+            sheet.addAction(UIAlertAction(title: "Change Photo", style: .default) { [weak self] _ in self?.changeAvatarTapped() })
+            sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            sheet.popoverPresentationController?.sourceView = profileImageView
+            present(sheet, animated: true)
+        case .terms:
+            openTermsOfService()
+        case .privacy:
+            openPrivacyPolicy()
+        }
     }
 
     private func buildAppearanceSection() {
@@ -1734,3 +1909,9 @@ extension UIView {
     }
 }
 
+
+extension UserProfileViewController: UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        syncNavBarAlpha()
+    }
+}

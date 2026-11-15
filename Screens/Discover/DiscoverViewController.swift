@@ -34,7 +34,7 @@ final class DiscoverViewController: UIViewController {
 
     private let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
     private let navShadowLayer = UIView()
-    private let largeProfileButton = UIButton(type: .custom)
+    private let notificationsButton = NotificationBellButton()
     private let largeSubtitleLabel = UILabel()
     private var inlineSubtitleLabel: UILabel?
 
@@ -146,20 +146,6 @@ final class DiscoverViewController: UIViewController {
         setupNavBackground()
         buildFilterMenus()
         fetchSongs()
-        fetchProfileData()
-        
-        if #available(iOS 17.0, *) {
-            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
-                self.updateProfileButtonBorder()
-            }
-        }
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleProfileUpdate),
-            name: NavigationBarHelper.profileDidUpdateNotification,
-            object: nil
-        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -178,22 +164,6 @@ final class DiscoverViewController: UIViewController {
         updateScrollInsets()
     }
 
-    @objc private func handleProfileUpdate() {
-        fetchProfileData()
-    }
-
-    @available(iOS, deprecated: 17.0)
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
-            updateProfileButtonBorder()
-        }
-    }
-
-    private func updateProfileButtonBorder() {
-        largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
-    }
-
     override func viewWillTransition(to size: CGSize,
                                      with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
@@ -205,8 +175,8 @@ final class DiscoverViewController: UIViewController {
     private func setupNavBar() {
         inlineSubtitleLabel = NavigationBarHelper.configureInlineNavigationBar(
             for: self,
-            title: "Discover",
-            subtitle: "Find new music"
+            title: "Library",
+            subtitle: "Songs to learn and play"
         )
         navigationItem.rightBarButtonItems = nil
     }
@@ -234,11 +204,11 @@ final class DiscoverViewController: UIViewController {
         labelStack.translatesAutoresizingMaskIntoConstraints = false
         
         let titleLabel = UILabel()
-        titleLabel.text = "Discover"
+        titleLabel.text = "Library"
         titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
         titleLabel.textColor = ComponentColors.NavBar.title
         
-        largeSubtitleLabel.text = "Find new music"
+        largeSubtitleLabel.text = "Songs to learn and play"
         largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
         largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
         
@@ -246,19 +216,9 @@ final class DiscoverViewController: UIViewController {
         labelStack.addArrangedSubview(largeSubtitleLabel)
         headerContainer.addSubview(labelStack)
         
-        largeProfileButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
-        largeProfileButton.layer.cornerRadius = 20
-        largeProfileButton.layer.masksToBounds = true
-        largeProfileButton.clipsToBounds = true
-        largeProfileButton.layer.borderWidth = 1.0
-        largeProfileButton.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.white : UIColor.black).cgColor
-        largeProfileButton.imageView?.contentMode = .scaleAspectFill
-        largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-        largeProfileButton.tintColor = .secondaryLabel
-        largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
-        largeProfileButton.addTarget(self, action: #selector(handleProfileTap), for: .touchUpInside)
+        notificationsButton.translatesAutoresizingMaskIntoConstraints = false
         
-        headerContainer.addSubview(largeProfileButton)
+        headerContainer.addSubview(notificationsButton)
         
         NSLayoutConstraint.activate([
             headerContainer.heightAnchor.constraint(equalToConstant: 80),
@@ -266,18 +226,14 @@ final class DiscoverViewController: UIViewController {
             labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 20),
             labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
             
-            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
-            largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
-            largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
-            largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
+            notificationsButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
+            notificationsButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
+            notificationsButton.widthAnchor.constraint(equalToConstant: 44),
+            notificationsButton.heightAnchor.constraint(equalToConstant: 44)
         ])
         return headerContainer
     }
     
-    @objc private func handleProfileTap() {
-        push(UserProfileViewController())
-    }
-
     // MARK: Layout
 
     private func setupLayout() {
@@ -598,67 +554,6 @@ final class DiscoverViewController: UIViewController {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
-    }
-
-    private func fetchProfileData() {
-        Task { [weak self] in
-            guard let self = self,
-                  let user = SupabaseManager.shared.client.auth.currentUser else {
-                await MainActor.run {
-                    self?.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                    self?.largeProfileButton.tintColor = .secondaryLabel
-                }
-                return
-            }
-            
-            do {
-                let profile: UserProfile = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .select()
-                    .eq("id", value: user.id)
-                    .single()
-                    .execute()
-                    .value
-                
-                if let avatarUrl = profile.avatar_url, !avatarUrl.isEmpty {
-                    await self.loadAndSetProfileImage(from: avatarUrl)
-                } else {
-                    await MainActor.run {
-                        self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                        self.largeProfileButton.tintColor = .secondaryLabel
-                    }
-                }
-            } catch {
-                debugLog("Error fetching profile: \(error)")
-                await MainActor.run {
-                    self.largeProfileButton.setImage(UIImage(systemName: "person.fill"), for: .normal)
-                    self.largeProfileButton.tintColor = .secondaryLabel
-                }
-            }
-        }
-    }
-
-    private func loadAndSetProfileImage(from urlString: String) async {
-        if urlString.starts(with: "icon_") {
-            await MainActor.run {
-                if let img = UIImage(named: urlString) {
-                    largeProfileButton.setImage(img, for: .normal)
-                    largeProfileButton.tintColor = .clear
-                }
-            }
-            return
-        }
-        
-        guard let finalURL = await NavigationBarHelper.signedProfileURLString(from: urlString),
-              URL(string: finalURL) != nil else { return }
-
-        ImageLoader.shared.loadImage(from: finalURL) { [weak self] img in
-            guard let self = self, let img = img else { return }
-            DispatchQueue.main.async {
-                self.largeProfileButton.setImage(img, for: .normal)
-                self.largeProfileButton.tintColor = .clear
-            }
-        }
     }
 
     private func syncNavBarAlpha() {

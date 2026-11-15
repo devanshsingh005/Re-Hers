@@ -27,6 +27,10 @@ final class UploadPageNextViewController: UIViewController {
     private var loadedPDFData:     Data?
     private var jobLoadTask:      Task<Void, Never>?
     private var trackedPracticeSessionStartedAt: Date?
+    /// Set by the mini player's play button: open this mode as soon as the sheet is ready.
+    var autoStartMode: LastPlayedItem.Mode?
+    /// True between viewDidAppear and viewWillDisappear, so nothing is presented mid-push.
+    private var isOnScreen = false
 
     // MARK: - Scroll
     private let scrollView  = UIScrollView()
@@ -90,8 +94,34 @@ final class UploadPageNextViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        isOnScreen = true
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         presentUnavailableReasonIfNeeded()
+        // Next run loop: the push transition has fully finished by then.
+        DispatchQueue.main.async { [weak self] in self?.performAutoStartIfReady() }
+    }
+
+    /// Resumes Play Along or Animation for the mini player, once the sheet has loaded and this
+    /// screen is on screen (not mid-push).
+    private func performAutoStartIfReady() {
+        guard let mode = autoStartMode, isOnScreen, presentedViewController == nil,
+              !isProcessing, sheetMusicJSON != nil else { return }
+        autoStartMode = nil
+        switch mode {
+        case .playAlong:
+            guard !presentGuestPlayAlongGateIfNeeded(),
+                  let json = validSheetMusicJSON(orPresentingFor: "Play Along") else { return }
+            startPlayAlong(with: json)
+        case .animation:
+            guard !presentGuestAnimationGateIfNeeded(), canPresentAnimation(),
+                  let json = validSheetMusicJSON(orPresentingFor: "Animation") else { return }
+            navigateToAnimation(withJSON: json)
+        }
+    }
+
+    private func recordLastPlayed(_ mode: LastPlayedItem.Mode) {
+        guard let jobId, let upload = LocalSheetLibrary.shared.upload(id: jobId) else { return }
+        LastPlayedStore.shared.record(upload: upload, mode: mode, tempo: tempo)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -103,6 +133,7 @@ final class UploadPageNextViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        isOnScreen = false
         jobLoadTask?.cancel()
 
         let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
@@ -460,6 +491,7 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.isHidden   = true
         refreshButton.isHidden = true
         onDataReady?()
+        performAutoStartIfReady()
     }
 
     private func showErrorState(error: String) {
@@ -581,6 +613,7 @@ final class UploadPageNextViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+        recordLastPlayed(.playAlong)
     }
 
     @discardableResult
@@ -685,6 +718,7 @@ final class UploadPageNextViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+        recordLastPlayed(.animation)
     }
 
     private func canPresentAnimation() -> Bool {

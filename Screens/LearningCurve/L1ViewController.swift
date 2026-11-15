@@ -519,8 +519,8 @@ class LessonMapViewController: UIViewController {
         largeProfileButton.translatesAutoresizingMaskIntoConstraints = false
         largeProfileButton.addTarget(self, action: #selector(didTapProfile), for: .touchUpInside)
         headerContainer.addSubview(largeProfileButton)
-        
-        NavigationBarHelper.loadProfileImage(into: largeProfileButton)
+        // Practice opens from Settings now, so there's no profile shortcut here.
+        largeProfileButton.isHidden = true
         
         NSLayoutConstraint.activate([
             headerContainer.topAnchor.constraint(equalTo: contentView.topAnchor),

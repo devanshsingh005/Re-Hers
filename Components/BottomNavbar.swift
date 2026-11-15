@@ -8,201 +8,262 @@
 import Foundation
 import UIKit
 
-final class AppNavigationController: UINavigationController {
+final class AppNavigationController: UINavigationController, UINavigationControllerDelegate {
+    /// Called as a screen is about to show, with whether it is this tab's root.
+    var onWillShow: ((_ isRoot: Bool) -> Void)?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        delegate = self
+    }
+
+    func navigationController(_ navigationController: UINavigationController,
+                              willShow viewController: UIViewController, animated: Bool) {
+        onWillShow?(viewController === viewControllers.first)
+        // An interactive back swipe that is cancelled leaves the pushed screen showing.
+        transitionCoordinator?.notifyWhenInteractionChanges { [weak self] context in
+            guard context.isCancelled, let self else { return }
+            self.onWillShow?(self.topViewController === self.viewControllers.first)
+        }
+    }
+
     override func pushViewController(_ viewController: UIViewController, animated: Bool) {
         if !viewControllers.isEmpty {
             viewController.hidesBottomBarWhenPushed = true
+            // Only tab roots use large titles; pushed screens keep their own headers.
+            if viewController.navigationItem.largeTitleDisplayMode == .automatic {
+                viewController.navigationItem.largeTitleDisplayMode = .never
+            }
         }
         super.pushViewController(viewController, animated: animated)
     }
 }
 
+/// Home, Library and Settings, plus Search as its own tab (iOS 26 shows it apart, Apple Music style).
+/// The last-played sheet rides above the tab bar as a mini player.
 class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
-    private weak var activeGuestGateModal: GuestFeatureGateModal?
-    
+
+    enum TabID: String {
+        case home, library, settings, search
+    }
+
+    private lazy var homeNav     = makeNav(HomeViewController())
+    private lazy var libraryNav  = makeNav(DiscoverViewController())
+    private lazy var settingsNav = makeNav(UserProfileViewController())
+    private lazy var searchNav   = makeNav(AppSearchViewController())
+
+    private let miniPlayer = MiniPlayerView()
+    /// Pre-iOS 26 the mini player floats above the tab bar in this container.
+    private var legacyMiniPlayerContainer: UIVisualEffectView?
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        if #available(iOS 18.0, *) {
-            self.mode = .tabBar
-        }
         delegate = self
+        if #available(iOS 18.0, *) {
+            mode = .tabBar
+        }
         setupTabs()
         setupAppearance()
-    }
-    
-    private func setupTabs() {
-        // Home Tab
-        let homeVC = HomeViewController()
-        let homeNav = AppNavigationController(rootViewController: homeVC)
-        homeNav.tabBarItem = UITabBarItem(
-            title: "Home",
-            image: UIImage(systemName: "house"),
-            selectedImage: UIImage(systemName: "house.fill")
-        )
-        
-        // Upload Tab
-        let uploadVC = UploadScreen()
-        let uploadNav = AppNavigationController(rootViewController: uploadVC)
-        uploadNav.tabBarItem = UITabBarItem(
-            title: "Upload",
-            image: UIImage(systemName: "plus.square"),
-            selectedImage: UIImage(systemName: "plus.square.fill")
-        )
-        
-        // Practice Tab
-        let practiceVC = LessonMapViewController()
-        let practiceNav = AppNavigationController(rootViewController: practiceVC)
-        practiceNav.tabBarItem = UITabBarItem(
-            title: "Practice",
-            image: UIImage(systemName: "map"),
-            selectedImage: UIImage(systemName: "map.fill")
-        )
+        setupMiniPlayer()
 
-        // Search Tab
-        let searchVC = DiscoverViewController()
-        let searchNav = AppNavigationController(rootViewController: searchVC)
-        searchNav.tabBarItem = UITabBarItem(
-            title: "Discover",
-            image: UIImage(systemName: "magnifyingglass"),
-            selectedImage: UIImage(systemName: "magnifyingglass")
-        )
-        
-        // Set all view controllers in the new order: Home, Upload, Practice, Search
-        viewControllers = [homeNav, uploadNav, practiceNav, searchNav]
-    }
-    
-    private func setupAppearance() {
-        tabBar.tintColor              = ComponentColors.TabBar.activeIcon
-        tabBar.unselectedItemTintColor = ComponentColors.TabBar.inactiveIcon
-
-        // Apply to the global UITabBar appearance proxy so ANY system redraw
-        // (trait change, orientation etc.) picks up the correct attributes.
-        let globalAppearance = UITabBarAppearance()
-        globalAppearance.configureWithDefaultBackground()
-        UITabBar.appearance().standardAppearance   = globalAppearance
-        if #available(iOS 15.0, *) {
-            UITabBar.appearance().scrollEdgeAppearance = globalAppearance
+        InAppNotificationStore.shared.start()
+        Task {
+            guard let songs = try? await SongService.shared.fetchSongs() else { return }
+            InAppNotificationStore.shared.noteLibrarySongs(songs)
         }
 
-        reapplyTabBarAppearance()
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshMiniPlayer),
+                                               name: LastPlayedStore.didChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshMiniPlayer),
+                                               name: LocalSheetLibrary.didChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshMiniPlayer),
+                                               name: SupabaseManager.authStatusChangedNotification, object: nil)
     }
 
-    /// Reapplies the full tab bar appearance. Called on init and after every selection
-    /// to prevent the OS from resetting labels when a tab is tapped.
-    private func reapplyTabBarAppearance() {
-        let normalAttrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: ComponentColors.TabBar.inactiveIcon,
-            .font: UIFont.systemFont(ofSize: 10, weight: .medium)
-        ]
-        let selectedAttrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: ComponentColors.TabBar.activeIcon,
-            .font: UIFont.systemFont(ofSize: 10, weight: .bold)
-        ]
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
 
+    private func makeNav(_ root: UIViewController) -> AppNavigationController {
+        let nav = AppNavigationController(rootViewController: root)
+        nav.onWillShow = { [weak self, weak nav] _ in
+            guard let self, let nav, nav === self.selectedViewController else { return }
+            self.refreshMiniPlayer()
+        }
+        return nav
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        refreshMiniPlayer()
+    }
+
+    @available(iOS 18.0, *)
+    func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
+        refreshMiniPlayer()
+    }
+
+    /// Pushed screens hide the tab bar; the mini player goes with it so it never covers their buttons.
+    private var isShowingTabRoot: Bool {
+        guard let nav = selectedViewController as? UINavigationController else { return true }
+        // During a push the new screen is already on the stack; during a pop it's already off.
+        return nav.viewControllers.count <= 1
+    }
+
+    // MARK: - Tabs
+
+    private func setupTabs() {
+        if #available(iOS 18.0, *) {
+            let home = UITab(title: "Home", image: UIImage(systemName: "house.fill"),
+                             identifier: TabID.home.rawValue) { [unowned self] _ in self.homeNav }
+            let library = UITab(title: "Library", image: UIImage(systemName: "music.note.list"),
+                                identifier: TabID.library.rawValue) { [unowned self] _ in self.libraryNav }
+            let settings = UITab(title: "Settings", image: UIImage(systemName: "gearshape.fill"),
+                                 identifier: TabID.settings.rawValue) { [unowned self] _ in self.settingsNav }
+            let search = UISearchTab { [unowned self] _ in self.searchNav }
+            if #available(iOS 26.0, *) {
+                search.automaticallyActivatesSearch = true
+            }
+            tabs = [home, library, settings, search]
+        } else {
+            homeNav.tabBarItem = UITabBarItem(title: "Home", image: UIImage(systemName: "house"),
+                                              selectedImage: UIImage(systemName: "house.fill"))
+            libraryNav.tabBarItem = UITabBarItem(title: "Library", image: UIImage(systemName: "music.note.list"), tag: 1)
+            settingsNav.tabBarItem = UITabBarItem(title: "Settings", image: UIImage(systemName: "gearshape"),
+                                                  selectedImage: UIImage(systemName: "gearshape.fill"))
+            searchNav.tabBarItem = UITabBarItem(tabBarSystemItem: .search, tag: 3)
+            viewControllers = [homeNav, libraryNav, settingsNav, searchNav]
+        }
+    }
+
+    /// Switches to a tab and returns its navigation controller, popped to the root.
+    @discardableResult
+    func select(_ tab: TabID, popToRoot: Bool = true) -> UINavigationController {
+        let nav: UINavigationController
+        switch tab {
+        case .home:     nav = homeNav
+        case .library:  nav = libraryNav
+        case .settings: nav = settingsNav
+        case .search:   nav = searchNav
+        }
+        if #available(iOS 18.0, *), let uiTab = self.tab(forIdentifier: tab.rawValue) {
+            selectedTab = uiTab
+        } else {
+            selectedViewController = nav
+        }
+        if popToRoot { nav.popToRootViewController(animated: false) }
+        return nav
+    }
+
+    private func setupAppearance() {
+        tabBar.tintColor = ComponentColors.TabBar.activeIcon
+        if #available(iOS 26.0, *) {
+            // Liquid Glass tab bar: let the system draw it and fold it away while scrolling down.
+            tabBarMinimizeBehavior = .onScrollDown
+            return
+        }
+        tabBar.unselectedItemTintColor = ComponentColors.TabBar.inactiveIcon
         let appearance = UITabBarAppearance()
         appearance.configureWithDefaultBackground()
-        appearance.shadowColor = ComponentColors.TabBar.separator
-
-        // Stacked (default iPhone portrait)
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes   = normalAttrs
-        appearance.stackedLayoutAppearance.normal.iconColor             = ComponentColors.TabBar.inactiveIcon
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttrs
-        appearance.stackedLayoutAppearance.selected.iconColor           = ComponentColors.TabBar.activeIcon
-
-        // Inline (iPad / landscape)
-        appearance.inlineLayoutAppearance.normal.titleTextAttributes    = normalAttrs
-        appearance.inlineLayoutAppearance.selected.titleTextAttributes  = selectedAttrs
-
-        // Compact inline (iPhone landscape)
-        appearance.compactInlineLayoutAppearance.normal.titleTextAttributes    = normalAttrs
-        appearance.compactInlineLayoutAppearance.selected.titleTextAttributes  = selectedAttrs
-
         tabBar.standardAppearance = appearance
-        if #available(iOS 15.0, *) {
-            tabBar.scrollEdgeAppearance = appearance
+        tabBar.scrollEdgeAppearance = appearance
+    }
+
+    // MARK: - Mini player
+
+    private func setupMiniPlayer() {
+        miniPlayer.onOpen = { [weak self] in self?.openLastPlayed(resume: false) }
+        miniPlayer.onResume = { [weak self] in self?.openLastPlayed(resume: true) }
+
+        if #unavailable(iOS 26.0) {
+            let container = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+            container.layer.cornerRadius = 16
+            container.layer.cornerCurve = .continuous
+            container.clipsToBounds = true
+            container.translatesAutoresizingMaskIntoConstraints = false
+            miniPlayer.translatesAutoresizingMaskIntoConstraints = false
+            container.contentView.addSubview(miniPlayer)
+            view.insertSubview(container, belowSubview: tabBar)
+            NSLayoutConstraint.activate([
+                container.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+                container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+                container.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -8),
+                container.heightAnchor.constraint(equalToConstant: 56),
+                miniPlayer.leadingAnchor.constraint(equalTo: container.contentView.leadingAnchor),
+                miniPlayer.trailingAnchor.constraint(equalTo: container.contentView.trailingAnchor),
+                miniPlayer.topAnchor.constraint(equalTo: container.contentView.topAnchor),
+                miniPlayer.bottomAnchor.constraint(equalTo: container.contentView.bottomAnchor),
+            ])
+            legacyMiniPlayerContainer = container
         }
-        tabBar.isTranslucent = true
-    }
-    
-    override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-        // Reapply appearance to prevent iOS from clearing labels after selection
-        reapplyTabBarAppearance()
+        refreshMiniPlayer()
     }
 
-    func attemptSelectUploadTab() -> Bool {
-        guard let viewControllers, viewControllers.indices.contains(1) else { return false }
+    @objc private func refreshMiniPlayer() {
+        let item = LastPlayedStore.shared.current
+        if let item { miniPlayer.configure(with: item) }
 
-        let uploadController = viewControllers[1]
-        guard shouldAllowSelection(of: uploadController) else { return false }
-
-        selectedIndex = 1
-        return true
-    }
-
-    func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
-        shouldAllowSelection(of: viewController)
-    }
-
-    private func shouldAllowSelection(of viewController: UIViewController) -> Bool {
-        guard isUploadTab(viewController) else { return true }
-        guard GuestSessionManager.shared.isGuest() else { return true }
-        guard !GuestFeatureAccessPolicy.allowsUploadTab else { return true }
-
-        presentUploadGuestGateIfNeeded()
-        return false
-    }
-
-    private func isUploadTab(_ viewController: UIViewController) -> Bool {
-        guard let viewControllers, viewControllers.indices.contains(1) else { return false }
-        return viewControllers[1] === viewController
-    }
-
-    private func presentUploadGuestGateIfNeeded() {
-        guard activeGuestGateModal == nil else { return }
-        guard presentedViewController == nil else { return }
-
-        let gateModal = GuestFeatureGateModal(
-            featureName: "sheet music upload",
-            onSignUp: { [weak self] in
-                self?.presentAuth(mode: .signUp)
-            },
-            onLogIn: { [weak self] in
-                self?.presentAuth(mode: .logIn)
+        if #available(iOS 26.0, *) {
+            let wantsAccessory = item != nil && isShowingTabRoot
+            if wantsAccessory, bottomAccessory == nil {
+                setBottomAccessory(UITabAccessory(contentView: miniPlayer), animated: viewIfLoaded?.window != nil)
+            } else if !wantsAccessory, bottomAccessory != nil {
+                setBottomAccessory(nil, animated: viewIfLoaded?.window != nil)
             }
-        )
-
-        activeGuestGateModal = gateModal
-        gateModal.presentationController?.delegate = self
-        present(gateModal, animated: true)
-    }
-
-    private func presentAuth(mode: AuthViewController.AuthMode) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.activeGuestGateModal = nil
-            guard self.presentedViewController == nil else { return }
-
-            let authViewController = AuthViewController(initialMode: mode)
-            let authNavigationController = UINavigationController(rootViewController: authViewController)
-            authNavigationController.modalPresentationStyle = .fullScreen
-            self.present(authNavigationController, animated: true)
+        } else {
+            legacyMiniPlayerContainer?.isHidden = item == nil || !isShowingTabRoot
+            for nav in [homeNav, libraryNav, settingsNav, searchNav] {
+                nav.additionalSafeAreaInsets.bottom = item == nil ? 0 : 64
+            }
         }
     }
-    
+
+    /// Opens the last-played sheet on the current tab. With `resume`, it goes straight back into
+    /// Play Along or Animation once the sheet has loaded.
+    func openLastPlayed(resume: Bool) {
+        guard let item = LastPlayedStore.shared.current else {
+            refreshMiniPlayer()
+            return
+        }
+        let nav = (selectedViewController as? UINavigationController) ?? homeNav
+        nav.presentedViewController?.dismiss(animated: false)
+
+        let detail: UIViewController
+        if let uploadId = item.uploadId {
+            let vc = UploadPageNextViewController()
+            vc.jobId = uploadId
+            vc.autoStartMode = resume ? item.mode : nil
+            detail = vc
+        } else if let song = item.song {
+            let vc = DiscoverSongDetailViewController()
+            vc.song = song
+            vc.autoStartMode = resume ? item.mode : nil
+            detail = vc
+        } else {
+            return
+        }
+        nav.pushViewController(detail, animated: true)
+    }
+
     // MARK: - Orientation Delegation
 
+    /// On iPhone the tabs are portrait-only; Play Along and Animation are presented full screen
+    /// with their own landscape mask, and closing them rotates the app back to portrait.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        if traitCollection.userInterfaceIdiom == .phone { return .portrait }
         return selectedViewController?.supportedInterfaceOrientations ?? .portrait
     }
-    
+
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        if traitCollection.userInterfaceIdiom == .phone { return .portrait }
         return selectedViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
     }
 }
 
-extension MainTabBarController: UIAdaptivePresentationControllerDelegate {
-    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        activeGuestGateModal = nil
+extension UIViewController {
+    /// The app's tab bar controller, from any screen inside it.
+    var mainTabBarController: MainTabBarController? {
+        (tabBarController as? MainTabBarController)
+            ?? (view.window?.rootViewController as? MainTabBarController)
     }
 }
 

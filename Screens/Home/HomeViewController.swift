@@ -2,87 +2,141 @@
 //  HomeViewController.swift
 //  Re-Hearse_v1
 //
+//  Home: scan or upload a sheet, your playlists and your recent uploads (Home and Upload used
+//  to be separate tabs). The upload pipeline — scanner, pickers, quiz popup and on-device
+//  conversion — lives here too.
+//
 
 import UIKit
+import AVFoundation
+import PhotosUI
+import VisionKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import Supabase
+import Auth
+internal import PostgREST
 
-class HomeViewController: UIViewController, UIScrollViewDelegate {
+class HomeViewController: UIViewController {
 
-    // MARK: - Native Nav Bar Architecture
-    let navBackgroundView = UIVisualEffectView(effect: nil)
-    let navShadowLayer = UIView()
-    let largeSubtitleLabel = UILabel()
-    var inlineSubtitleLabel: UILabel?
-    
-    // Header specific elements
-    let largeProfileButton = UIButton(type: .custom)
+    // MARK: - Constants
+    private enum Constants {
+        static let horizontalPadding: CGFloat = 20
+        static let sectionSpacing:    CGFloat = 32
+        static let recentUploadsShown = 3
+        static let playlistTileSize:  CGFloat = 140
+        static let pdfPageSize = CGSize(width: 612, height: 792)
+        static let maxUploadSizeBytes = 10 * 1024 * 1024
+    }
 
-    let scrollView   = UIScrollView()
-    let contentView  = UIView()
-    let mainStackView = UIStackView()
-    var playlistStackView:     UIStackView?
-    var playlistSectionHeightConstraint: NSLayoutConstraint?
-    var recentsStackView:      UIStackView?
-    var topCardTitleLabel:     UILabel?
-    var topCardTagsStack:      UIStackView?
-    var topCardDetailsStack:   UIStackView?
-    var topCardImageView:      UIImageView?
-    var topCardContainer:      UIView?
-    
-    // Store the top song for navigation
-    var topSong: Song?
+    // MARK: - State
+    private var uploadTitle: String = DateFormatter.shortDate.string(from: Date())
+    private let defaultUploadTitleBase = "Untitled Sheet"
 
-    // MARK: - Skeleton
-    private let homeSkeleton = HomeSkeletonView()
-    /// Tracks how many of the 4 initial fetches have finished.
-    private var fetchesRemaining = 0
+    /// Unique filename per upload, e.g. "SheetMusic_2026-03-08_064025.pdf".
+    /// Stored internally for the file payload so uploads always remain unique.
+    private func generateTimestampFilename() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd_HHmmss"
+        return "SheetMusic_\(f.string(from: Date())).pdf"
+    }
 
+    private func generateUniqueUploadTitle() -> String {
+        LocalSheetLibrary.shared.uniqueTitle(base: defaultUploadTitleBase)
+    }
+    private var currentUploadData: Data?
+    private var currentFileName  = ""
+    private var currentFileType  = ""
+    private var activeQuizPopup: UploadQuizPopup?
+    private weak var activeDocumentPicker: UIDocumentPickerViewController?
+    private weak var activeDocumentScanner: VNDocumentCameraViewController?
+    private weak var activePhotoPicker: PHPickerViewController?
+    private weak var activeCameraController: UploadCameraCaptureViewController?
+    private var profileFetchTask: Task<Void, Never>?
+    private var playlistFetchTask: Task<Void, Never>?
+    private var renameTask: Task<Void, Never>?
+    private var uploadTask: Task<Void, Never>?
+    private var currentUploadSource = "unknown"
+    private var latestRecentUploads: [LocalSheetLibrary.Upload] = []
+
+    // MARK: - UI
+    private let scrollView   = UIScrollView()
+    private let contentStack = UIStackView()
+    /// "Home" and the greeting with the bell beside them, the same header as the other tabs.
+    private let header = TabRootHeaderView(title: "Home", subtitle: "Welcome back",
+                                           accessory: NotificationBellButton())
+    private let navBackgroundView = UIVisualEffectView(effect: nil)
+    private let navShadowLayer = UIView()
+    private var inlineSubtitleLabel: UILabel?
+    private let playlistTilesStack = UIStackView()
+    private let recentUploadsStack = UIStackView()
+
+    /// The theme's card surface, as on the other screens.
+    static let cardColor = ComponentColors.HomeScreen.cardBackground
+
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        scrollView.delegate = self
-        setupUI()
+        view.backgroundColor = ComponentColors.HomeScreen.background
+        setupNavigationBar()
+        setupScrollView()
+        setupNavBackground()
+        buildScanSection()
+        buildPlaylistSection()
+        buildRecentUploadsSection()
+        loadRecentUploads()
+        loadPlaylists()
+        loadGreeting()
 
-        // Show skeleton immediately before any network call
-        showHomeSkeleton(fetchCount: 4)
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(handleProfileUpdate),
+                           name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleLibraryChange),
+                           name: LocalSheetLibrary.didChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleAuthStatusChanged),
+                           name: SupabaseManager.authStatusChangedNotification, object: nil)
 
-        Task {
-            await DailyGoalManager.shared.refreshFromSupabase()
+        // Sheets are converted on this device: finish any conversion the app was closed during,
+        // and load the recognition models now so the first upload doesn't wait for them.
+        LocalSheetLibrary.shared.resumeInterruptedConversions()
+        Task.detached(priority: .utility) { await OnDeviceSheetConverter.shared.prepare() }
+    }
+
+    @objc private func handleLibraryChange(_ note: Notification) {
+        // progress ticks don't change the list; status, title and membership do
+        guard let id = note.userInfo?["id"] as? UUID else {
+            loadRecentUploads()
+            return
         }
-        fetchPlaylists()
-        fetchTopSong()
-        fetchRecents()
-        fetchProfileData()
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleProfileUpdate),
-            name: NavigationBarHelper.profileDidUpdateNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleRecentPlaysUpdated),
-            name: RecentPlayService.recentPlaysUpdatedNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAuthStatusChanged),
-            name: SupabaseManager.authStatusChangedNotification,
-            object: nil
-        )
+        let current = LocalSheetLibrary.shared.upload(id: id)
+        let shown = latestRecentUploads.first { $0.id == id }
+        if current?.status != shown?.status || current?.title != shown?.title || (current == nil) != (shown == nil) {
+            loadRecentUploads()
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        cancelPendingTasks()
+        clearUploadState()
+        releaseTransientPickers()
+    }
+
+    @objc private func handleProfileUpdate() {
+        loadGreeting()
+    }
+
+    @objc private func handleAuthStatusChanged() {
+        loadGreeting()
+        loadPlaylists()
+        loadRecentUploads()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        updateNavBackgroundAppearance()
         syncNavBarAlpha()
-        Task {
-            await DailyGoalManager.shared.refreshFromSupabase()
-        }
-        fetchPlaylists()
-        fetchRecents()
-        fetchTopSong()
+        loadRecentUploads()
+        loadPlaylists()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -90,305 +144,1486 @@ class HomeViewController: UIViewController, UIScrollViewDelegate {
         syncNavBarAlpha()
     }
 
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // Content runs under the bars; leave room to scroll past the tab bar and mini player.
+        scrollView.contentInset.bottom = view.safeAreaInsets.bottom + 16
+        scrollView.verticalScrollIndicatorInsets.bottom = view.safeAreaInsets.bottom
+    }
 
-        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
-        updateNavBackgroundAppearance()
+    func startUploadFlow() {
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
+        presentVisionKitScanner()
+    }
+
+    @discardableResult
+    private func presentSheetUploadGuestGateIfNeeded() -> Bool {
+        guard GuestFeatureAccessPolicy.shouldGateSheetUploadActions(
+            forGuest: GuestSessionManager.shared.isGuest()
+        ) else { return false }
+        guard let presenter = guestGatePresenter(), presenter.presentedViewController == nil else { return true }
+
+        let gateModal = GuestFeatureGateModal(
+            featureName: "sheet music upload",
+            onSignUp: { [weak self] in
+                self?.scheduleAuthPresentation(mode: .signUp)
+            },
+            onLogIn: { [weak self] in
+                self?.scheduleAuthPresentation(mode: .logIn)
+            }
+        )
+
+        gateModal.presentationController?.delegate = self
+        presenter.present(gateModal, animated: true)
+        return true
+    }
+
+    private func scheduleAuthPresentation(mode: AuthViewController.AuthMode) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let presenter = self.guestGatePresenter(), presenter.presentedViewController == nil else { return }
+
+            let authViewController = AuthViewController(initialMode: mode)
+            let authNavigationController = UINavigationController(rootViewController: authViewController)
+            authNavigationController.modalPresentationStyle = .fullScreen
+            presenter.present(authNavigationController, animated: true)
+        }
+    }
+
+    private func guestGatePresenter() -> UIViewController? {
+        if let navigationController = tabBarController?.selectedViewController as? UINavigationController {
+            return navigationController.visibleViewController ?? navigationController.topViewController ?? navigationController
+        }
+
+        return tabBarController?.selectedViewController ?? tabBarController
+    }
+
+    // MARK: - Navigation bar
+
+    private func setupNavigationBar() {
+        inlineSubtitleLabel = NavigationBarHelper.configureInlineNavigationBar(
+            for: self, title: "Home", subtitle: "Welcome back"
+        )
+        navigationItem.titleView?.alpha = 0
+        navigationItem.rightBarButtonItems = nil
+    }
+
+    private func setupNavBackground() {
+        NavigationBarHelper.updateNavigationBackgroundAppearance(
+            navBackgroundView, shadowView: navShadowLayer, traitCollection: traitCollection
+        )
+        NavigationBarHelper.installNavigationBackground(navBackgroundView, shadowView: navShadowLayer, in: view)
+    }
+
+    /// Fades the small title and bar background in once the header has scrolled away.
+    private func syncNavBarAlpha() {
+        NavigationBarHelper.syncNavigationBarAlpha(
+            scrollView: scrollView, navigationItem: navigationItem, navBackgroundView: navBackgroundView
+        )
+    }
+
+    /// "Welcome back, Alex" under the title.
+    private func loadGreeting() {
+        profileFetchTask?.cancel()
+        if GuestSessionManager.shared.isGuest() {
+            setGreeting(name: GuestSessionManager.shared.guestDisplayName())
+            return
+        }
+        guard let user = SupabaseManager.shared.client.auth.currentUser else {
+            setGreeting(name: nil)
+            return
+        }
+        profileFetchTask = Task { [weak self] in
+            let profile: UserProfile? = try? await SupabaseManager.shared.client
+                .from("profiles").select().eq("id", value: user.id).single().execute().value
+            guard let self, !Task.isCancelled else { return }
+            let fullName = profile?.full_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let firstName = fullName.split(separator: " ").first.map(String.init)
+            self.setGreeting(name: firstName ?? profile?.username)
+        }
+    }
+
+    private func setGreeting(name: String?) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = trimmed.isEmpty ? "Welcome back" : "Welcome back, \(trimmed)"
+        header.subtitleLabel.text = text
+        inlineSubtitleLabel?.text = text
+    }
+
+    // MARK: - Scroll + Content Stack
+
+    private func setupScrollView() {
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.delegate = self
+        view.addSubview(scrollView)
+        // The navigation bar collapses its large title, and on iOS 26 the tab bar minimizes,
+        // as this scrolls.
+        setContentScrollView(scrollView)
+
+        contentStack.axis = .vertical
+        contentStack.spacing = Constants.sectionSpacing
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentStack)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor,
+                                              constant: TabRootHeaderView.topOffset),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -8),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
+        ])
+
+        contentStack.addArrangedSubview(header)
+        contentStack.setCustomSpacing(12, after: header)
+    }
+
+    /// Wraps a view in the screen's side margins.
+    private func padded(_ content: UIView) -> UIView {
+        let wrapper = UIView()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            content.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+            content.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: Constants.horizontalPadding),
+            content.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -Constants.horizontalPadding),
+        ])
+        return wrapper
+    }
+
+    private func sectionHeader(_ title: String, seeMore: @escaping () -> Void) -> UIView {
+        let label = UILabel()
+        label.text = title
+        label.font = UIFont.preferredFont(forTextStyle: .title3).withWeight(.bold)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .label
+        label.accessibilityTraits = .header
+
+        var config = UIButton.Configuration.plain()
+        config.title = "See more"
+        config.image = UIImage(systemName: "chevron.forward")
+        config.imagePlacement = .trailing
+        config.imagePadding = 4
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .caption1, scale: .small)
+            .applying(UIImage.SymbolConfiguration(weight: .semibold))
+        config.baseForegroundColor = BrandColors.brand
+        config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 0)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = UIFont.preferredFont(forTextStyle: .subheadline)
+            return attrs
+        }
+        let button = UIButton(configuration: config, primaryAction: UIAction { _ in seeMore() })
+        button.accessibilityLabel = "See more \(title)"
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let row = UIStackView(arrangedSubviews: [label, button])
+        row.axis = .horizontal
+        row.alignment = .firstBaseline
+        row.spacing = 8
+        return padded(row)
+    }
+
+    // MARK: - Scan section
+
+    private func buildScanSection() {
+        let card = ScanCardView()
+        card.addAction(UIAction { [weak self] _ in self?.scanTapped() }, for: .touchUpInside)
+
+        var scanConfig: UIButton.Configuration
+        if #available(iOS 26.0, *) {
+            scanConfig = .prominentGlass()
+        } else {
+            scanConfig = .filled()
+            scanConfig.cornerStyle = .capsule
+            scanConfig.baseBackgroundColor = BrandColors.brand
+        }
+        scanConfig.title = "Scan to Play"
+        scanConfig.image = UIImage(systemName: "camera")
+        scanConfig.imagePadding = 8
+        scanConfig.baseForegroundColor = .black
+        scanConfig.buttonSize = .large
+        scanConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = UIFont.preferredFont(forTextStyle: .headline)
+            return attrs
+        }
+        let scanButton = UIButton(configuration: scanConfig, primaryAction: UIAction { [weak self] _ in
+            self?.scanTapped()
+        })
+        scanButton.tintColor = BrandColors.brand
+        scanButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
+
+        var uploadConfig = UIButton.Configuration.plain()
+        uploadConfig.title = "Upload Music Sheet"
+        uploadConfig.image = UIImage(systemName: "icloud.and.arrow.up")
+        uploadConfig.imagePadding = 8
+        uploadConfig.baseForegroundColor = BrandColors.brand
+        uploadConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.semibold)
+            return attrs
+        }
+        let uploadButton = UIButton(configuration: uploadConfig)
+        uploadButton.showsMenuAsPrimaryAction = true
+        uploadButton.menu = UIMenu(children: [
+            UIAction(title: "Choose from Files", image: UIImage(systemName: "folder")) { [weak self] _ in
+                self?.uploadFileTapped()
+            },
+            UIAction(title: "Choose from Photos", image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in
+                self?.uploadPhotoTapped()
+            },
+        ])
+
+        let stack = UIStackView(arrangedSubviews: [card, scanButton, uploadButton])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.setCustomSpacing(8, after: scanButton)
+        contentStack.addArrangedSubview(padded(stack))
+    }
+
+    @objc private func scanTapped() {
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
+        presentVisionKitScanner()
+    }
+
+    @objc private func uploadFileTapped() {
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
+        openFileManager()
+    }
+
+    private func uploadPhotoTapped() {
+        guard !presentSheetUploadGuestGateIfNeeded() else { return }
+        presentPhotoLibraryPicker()
+    }
+
+    // MARK: - Playlist section
+
+    private func buildPlaylistSection() {
+        let header = sectionHeader("Your Playlist") { [weak self] in
+            PlaylistsManager.shared.prewarmPlaylistCacheIfNeeded()
+            self?.navigationController?.pushViewController(PlaylistViewController(), animated: true)
+        }
+
+        let tiles = UIScrollView()
+        tiles.showsHorizontalScrollIndicator = false
+        tiles.alwaysBounceHorizontal = true
+        tiles.contentInset = UIEdgeInsets(top: 0, left: Constants.horizontalPadding, bottom: 0,
+                                          right: Constants.horizontalPadding)
+        tiles.translatesAutoresizingMaskIntoConstraints = false
+        playlistTilesStack.axis = .horizontal
+        playlistTilesStack.spacing = 12
+        playlistTilesStack.alignment = .top
+        playlistTilesStack.translatesAutoresizingMaskIntoConstraints = false
+        tiles.addSubview(playlistTilesStack)
+        NSLayoutConstraint.activate([
+            playlistTilesStack.topAnchor.constraint(equalTo: tiles.contentLayoutGuide.topAnchor),
+            playlistTilesStack.bottomAnchor.constraint(equalTo: tiles.contentLayoutGuide.bottomAnchor),
+            playlistTilesStack.leadingAnchor.constraint(equalTo: tiles.contentLayoutGuide.leadingAnchor),
+            playlistTilesStack.trailingAnchor.constraint(equalTo: tiles.contentLayoutGuide.trailingAnchor),
+            playlistTilesStack.heightAnchor.constraint(equalTo: tiles.frameLayoutGuide.heightAnchor),
+        ])
+
+        let section = UIStackView(arrangedSubviews: [header, tiles])
+        section.axis = .vertical
+        section.spacing = 10
+        contentStack.addArrangedSubview(section)
+
+        // Tiles plus their caption; resized for the caption's Dynamic Type size.
+        let captionHeight = UIFont.preferredFont(forTextStyle: .footnote).lineHeight + 8
+        tiles.heightAnchor.constraint(equalToConstant: Constants.playlistTileSize + captionHeight).isActive = true
+    }
+
+    private func loadPlaylists() {
+        playlistFetchTask?.cancel()
+        playlistFetchTask = Task { [weak self] in
+            let playlists = try? await PlaylistService.shared.fetchPlaylists()
+            guard let self, !Task.isCancelled else { return }
+            self.showPlaylists(playlists ?? [])
+        }
+    }
+
+    private func showPlaylists(_ playlists: [Playlist]) {
+        playlistTilesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if playlists.isEmpty {
+            playlistTilesStack.addArrangedSubview(makeNewPlaylistTile())
+            return
+        }
+        for playlist in playlists {
+            playlistTilesStack.addArrangedSubview(makePlaylistTile(playlist))
+        }
+    }
+
+    private func makePlaylistTile(_ playlist: Playlist) -> UIView {
+        let tile = PlaylistTileView(title: playlist.name, playlistId: playlist.id,
+                                    coverUrl: playlist.coverImageURL, size: Constants.playlistTileSize)
+        tile.addAction(UIAction { [weak self] _ in
+            let vc = PlaylistDetailViewController()
+            vc.passedTitle    = playlist.name
+            vc.passedArtist   = playlist.description ?? "Custom Playlist"
+            vc.playlistId     = playlist.id
+            vc.passedCoverUrl = playlist.coverImageURL
+            self?.navigationController?.pushViewController(vc, animated: true)
+        }, for: .touchUpInside)
+        return tile
+    }
+
+    private func makeNewPlaylistTile() -> UIView {
+        let tile = PlaylistTileView(title: "New Playlist", colors: [.tertiarySystemFill, .tertiarySystemFill],
+                                    symbolName: "plus", size: Constants.playlistTileSize)
+        tile.addAction(UIAction { [weak self] _ in
+            PlaylistsManager.shared.prewarmPlaylistCacheIfNeeded()
+            self?.navigationController?.pushViewController(PlaylistViewController(), animated: true)
+        }, for: .touchUpInside)
+        return tile
+    }
+
+    // MARK: - Recent Uploads Section
+
+    private func buildRecentUploadsSection() {
+        let header = sectionHeader("Recent Uploads") { [weak self] in self?.seeMoreTapped() }
+        recentUploadsStack.axis = .vertical
+        recentUploadsStack.spacing = 10
+        let section = UIStackView(arrangedSubviews: [header, padded(recentUploadsStack)])
+        section.axis = .vertical
+        section.spacing = 10
+        contentStack.addArrangedSubview(section)
+    }
+
+    // MARK: - Load & Display Recent Uploads
+    private func loadRecentUploads() {
+        let uploads = Array(LocalSheetLibrary.shared.uploads().prefix(Constants.recentUploadsShown))
+        latestRecentUploads = uploads
+        displayRecentUploads(uploads)
+    }
+
+    private func displayRecentUploads(_ uploads: [LocalSheetLibrary.Upload]) {
+        uploadTitle = DateFormatter.shortDate.string(from: Date())
+        recentUploadsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if uploads.isEmpty {
+            recentUploadsStack.addArrangedSubview(makeEmptyUploadsView())
+            return
+        }
+        for upload in uploads {
+            recentUploadsStack.addArrangedSubview(makeUploadRow(upload))
+        }
+    }
+
+    /// "Mar 31, 2026 · 44 KB", or the conversion state while it isn't finished.
+    private func uploadMeta(_ upload: LocalSheetLibrary.Upload) -> String {
+        switch upload.status {
+        case .processing: return "Converting on device…"
+        case .failed:     return "Conversion failed"
+        case .completed:
+            return [relativeDate(upload.uploadedAt), formatBytes(upload.fileSizeBytes)].joined(separator: " · ")
+        }
+    }
+
+    private func makeEmptyUploadsView() -> UIView {
+        let container = UIView()
+        container.backgroundColor = Self.cardColor
+        container.layer.cornerRadius = 14
+        container.layer.cornerCurve = .continuous
+
+        let title = UILabel()
+        title.text = "No uploads yet"
+        title.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.semibold)
+        title.adjustsFontForContentSizeCategory = true
+        title.textColor = .label
+        let body = UILabel()
+        body.text = "Scan or upload a page of sheet music and it shows up here."
+        body.font = .preferredFont(forTextStyle: .footnote)
+        body.adjustsFontForContentSizeCategory = true
+        body.textColor = .secondaryLabel
+        body.numberOfLines = 0
+        let stack = UIStackView(arrangedSubviews: [title, body])
+        stack.axis = .vertical
+        stack.spacing = 2
+        stack.alignment = .center
+        body.textAlignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -18),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+        ])
+        return container
+    }
+
+    private func makeUploadRow(_ upload: LocalSheetLibrary.Upload) -> UIView {
+        let row = UploadRowView()
+        row.configure(title: upload.title, meta: uploadMeta(upload), failed: upload.status == .failed)
+        row.moreButton.menu = UIMenu(children: [
+            UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { [weak self, weak row] _ in
+                self?.showRenameAlert(for: upload.scanId, currentTitle: row?.titleLabel.text ?? upload.title,
+                                      titleLabel: row?.titleLabel)
+            },
+            UIAction(title: "Delete Upload", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self, weak row] _ in
+                self?.confirmDeleteScan(id: upload.scanId, title: row?.titleLabel.text ?? upload.title)
+            },
+        ])
+
+        // ── Tap: open the result screen; while the sheet is still converting it shows the
+        //   progress and fills in by itself. A failed conversion can be retried. ──
+        row.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            guard let current = LocalSheetLibrary.shared.upload(id: upload.id) else {
+                self.loadRecentUploads()
+                return
+            }
+            if current.status == .failed {
+                self.presentFailedUploadAlert(current)
+                return
+            }
+            let vc   = UploadPageNextViewController()
+            vc.jobId = current.id
+            debugLog("[RowTap] upload=\(current.id.uuidString.lowercased()) status=\(current.status.rawValue)")
+            self.navigationController?.pushViewController(vc, animated: true)
+        }, for: .touchUpInside)
+        return row
+    }
+
+    private func presentFailedUploadAlert(_ upload: LocalSheetLibrary.Upload) {
+        let alert = UIAlertController(
+            title: "Conversion Failed",
+            message: upload.errorMessage ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Try Again", style: .default) { [weak self] _ in
+            LocalSheetLibrary.shared.retry(id: upload.id)
+            let vc   = UploadPageNextViewController()
+            vc.jobId = upload.id
+            self?.navigationController?.pushViewController(vc, animated: true)
+        })
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    // MARK: - Row Options
+    private func showRowOptions(for scanId: Int64, currentTitle: String, titleLabel: UILabel?) {
+        let ac = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        ac.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
+            self?.showRenameAlert(for: scanId, currentTitle: currentTitle, titleLabel: titleLabel)
+        })
+        ac.addAction(UIAlertAction(title: "Delete Upload", style: .destructive) { [weak self] _ in
+            self?.confirmDeleteScan(id: scanId, title: currentTitle)
+        })
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let pop = ac.popoverPresentationController {
+            pop.sourceView             = view
+            pop.sourceRect             = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            pop.permittedArrowDirections = []
+        }
+        present(ac, animated: true)
+    }
+
+    private func showRenameAlert(for scanId: Int64, currentTitle: String, titleLabel: UILabel?) {
+        let alert = UIAlertController(title: "Rename File", message: nil, preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.text                  = currentTitle
+            tf.placeholder           = "Enter new name"
+            tf.clearButtonMode       = .whileEditing
+            tf.autocapitalizationType = .words
+        }
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            guard let self else { return }
+            let name = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert.textFields?.first?.text ?? ""),
+                maxLength: InputValidator.nameMaxLength
+            )
+            guard InputValidator.validateRequired(name, message: "File name is required.") == nil else {
+                self.presentAlert(title: "Error", message: "File name is required.")
+                return
+            }
+            titleLabel?.text = name
+            self.renameTask?.cancel()
+            self.renameTask = Task { [weak self] in
+                guard let self else { return }
+                await self.renameScan(id: scanId, newTitle: name)
+            }
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func renameScan(id scanId: Int64, newTitle: String) async {
+        let sanitizedTitle = InputValidator.limit(
+            InputValidator.trimOnSubmit(newTitle),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(sanitizedTitle, message: "File name is required.") == nil else {
+            await MainActor.run {
+                self.presentAlert(title: "Error", message: "File name is required.")
+            }
+            return
+        }
+
+        do {
+            try LocalSheetLibrary.shared.rename(scanId: scanId, to: sanitizedTitle)
+            debugLog("[Rename] upload \(scanId) → \(sanitizedTitle)")
+        } catch {
+            debugLog("[Rename] failed: \(error)")
+            let message = AppUserFacingError.message(
+                for: "rename that upload",
+                error: error,
+                fallback: "We couldn't rename that file right now. Please try again."
+            )
+            await MainActor.run {
+                self.loadRecentUploads()
+                self.presentAlert(title: AppUserFacingError.title(for: error), message: message)
+            }
+        }
+    }
+
+    private func confirmDeleteScan(id scanId: Int64, title: String) {
+        let alert = UIAlertController(
+            title: "Delete Upload?",
+            message: "This will remove \"\(title)\" from your uploads list.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.deleteScanTask(id: scanId)
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func deleteScanTask(id scanId: Int64) {
+        Task { [weak self] in
+            guard let self else { return }
+            await self.deleteScan(id: scanId)
+        }
+    }
+
+    private func deleteScan(id scanId: Int64) async {
+        do {
+            try LocalSheetLibrary.shared.delete(scanId: scanId)
+            loadRecentUploads()
+        } catch {
+            debugLog("[Delete] failed: \(error)")
+            let message = AppUserFacingError.message(
+                for: "delete that upload",
+                error: error,
+                fallback: "We couldn't delete this upload. Please try again."
+            )
+            await MainActor.run {
+                let alert = UIAlertController(
+                    title: AppUserFacingError.title(for: error),
+                    message: message,
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
+    }
+
+    // MARK: - Formatting
+    private func formatBytes(_ bytes: Int) -> String {
+        let kb = Double(bytes) / 1024.0
+        return kb < 1024 ? String(format: "%.0f KB", kb)
+                         : String(format: "%.1f MB", kb / 1024.0)
+    }
+
+    private func relativeDate(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        return DateFormatter.shortDate.string(from: date)
+    }
+
+    // MARK: - Upload Pipeline
+    /// Saves the PDF on this device and starts converting it there (OemerKit: Core ML + the
+    /// oemer engine); nothing is uploaded. The result screen shows progress until it's done.
+    private func saveUploadToDatabase(imageData: Data, fileName: String,
+                                       fileType: String, popup: UploadQuizPopup) async throws {
+        debugLog("[Upload] size=\(imageData.count) bytes, converting on device")
+
+        let friendlyTitle = generateUniqueUploadTitle()
+        uploadTitle = friendlyTitle
+        let upload = try LocalSheetLibrary.shared.add(pdfData: imageData, title: friendlyTitle,
+                                                       originalFilename: fileName)
+
+        AnalyticsManager.logUploadCompleted(
+            source: currentUploadSource,
+            fileType: fileType,
+            fileSizeBytes: imageData.count
+        )
+        loadRecentUploads()
+        clearUploadState()
+        let vc       = UploadPageNextViewController()
+        vc.jobId     = upload.id
+        vc.onDataReady = {
+            popup.notifyUploadComplete()
+        }
+        debugLog("[Navigate] upload=\(upload.id.uuidString)")
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    // MARK: - Document Scanner (VisionKit)
+    private func presentVisionKitScanner() {
+        guard VNDocumentCameraViewController.isSupported else {
+            presentAlert(title: "Scanner Unavailable",
+                         message: "Document scanning is not supported on this device.")
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showDocumentScanner()
+        case .notDetermined:
+            presentScannerCameraAccessRationale()
+        case .denied, .restricted:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to scan sheet music pages for upload."
+            )
+        @unknown default:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to scan sheet music pages for upload."
+            )
+        }
+    }
+
+    private func showDocumentScanner() {
+        let scanner = VNDocumentCameraViewController()
+        scanner.delegate = self
+        activeDocumentScanner = scanner
+        present(scanner, animated: true)
+    }
+
+    private func presentScannerCameraAccessRationale() {
+        let alert = UIAlertController(
+            title: "Use Camera to Scan Sheet Music",
+            message: "Re-Hearse uses the camera only when you choose Scan so you can capture sheet music pages for upload and analysis.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    granted ? self.showDocumentScanner() : self.presentSettingsRedirectAlert(
+                        title: "Camera Access Needed",
+                        message: "Allow camera access in Settings to scan sheet music pages for upload."
+                    )
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func dismissDocumentScanner(_ scanner: VNDocumentCameraViewController,
+                                        completion: (() -> Void)? = nil) {
+        scanner.delegate = nil
+        activeDocumentScanner = nil
+        guard scanner.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        scanner.dismiss(animated: true, completion: completion)
+    }
+
+    private func presentUploadCamera() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showUploadCamera()
+        case .notDetermined:
+            presentCameraAccessRationale()
+        case .denied, .restricted:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to capture sheet music pages for upload."
+            )
+        @unknown default:
+            presentSettingsRedirectAlert(
+                title: "Camera Access Needed",
+                message: "Allow camera access in Settings to capture sheet music pages for upload."
+            )
+        }
+    }
+
+    private func presentPhotoLibraryPicker() {
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        configuration.preferredAssetRepresentationMode = .current
+
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        activePhotoPicker = picker
+        present(picker, animated: true)
+    }
+
+    private func showUploadCamera() {
+        let cameraVC = UploadCameraCaptureViewController()
+        cameraVC.delegate = self
+        cameraVC.modalPresentationStyle = .fullScreen
+        activeCameraController = cameraVC
+        present(cameraVC, animated: true)
+    }
+
+    private func presentCameraAccessRationale() {
+        let alert = UIAlertController(
+            title: "Capture Sheet Music",
+            message: "Re-Hearse uses the camera only when you choose Camera so you can photograph sheet music pages for upload and analysis.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    granted ? self.showUploadCamera() : self.presentSettingsRedirectAlert(
+                        title: "Camera Access Needed",
+                        message: "Allow camera access in Settings to capture sheet music pages for upload."
+                    )
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentSettingsRedirectAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
+        })
+        present(alert, animated: true)
+    }
+
+    private func createPDF(from images: [UIImage]) -> Data? {
+        guard !images.isEmpty else { return nil }
+        let pdf = NSMutableData()
+        UIGraphicsBeginPDFContextToData(pdf, CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
+        for (index, image) in images.enumerated() {
+            autoreleasepool {
+                // Normalize orientation — VisionKit images can arrive rotated
+                let normalized = image.normalizedOrientation()
+                UIGraphicsBeginPDFPageWithInfo(
+                    CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
+                // Scale to fit the page, no 1.0 cap — scanner images are always high-res
+                let scale = min(Constants.pdfPageSize.width  / normalized.size.width,
+                                Constants.pdfPageSize.height / normalized.size.height)
+                let w = normalized.size.width  * scale
+                let h = normalized.size.height * scale
+                let rect = CGRect(x: (Constants.pdfPageSize.width  - w) / 2,
+                                  y: (Constants.pdfPageSize.height - h) / 2,
+                                  width: w, height: h)
+                normalized.draw(in: rect)
+                // Page number
+                let txt = "\(index + 1)"
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 10),
+                    .foregroundColor: UIColor.gray
+                ]
+                let sz = txt.size(withAttributes: attrs)
+                txt.draw(in: CGRect(x: (Constants.pdfPageSize.width - sz.width) / 2,
+                                    y: 10, width: sz.width, height: sz.height),
+                         withAttributes: attrs)
+            }
+        }
+        // ⚠️ MUST call EndPDFContext BEFORE reading pdf data.
+        // Swift evaluates `return pdf as Data` (copies NSMutableData → Data)
+        // BEFORE a `defer` fires, so the PDF trailer would never be written.
+        UIGraphicsEndPDFContext()
+
+        guard pdf.length > 4 else { return nil }
+        return pdf as Data
+    }
+
+    // MARK: - Quiz Popup
+    private func showQuizPopup() -> UploadQuizPopup {
+        let popup = UploadQuizPopup()
+        popup.delegate = self
+        
+        if #available(iOS 16.0, *) {
+            popup.modalPresentationStyle = .pageSheet
+            if let sheet = popup.sheetPresentationController {
+                // Custom detent at ~65% of screen height for a "bigger" feel than medium
+                let customDetent = UISheetPresentationController.Detent.custom { context in
+                    return context.maximumDetentValue * 0.65
+                }
+                sheet.detents = [customDetent, .large()]
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = 32
+                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+            }
+        } else if #available(iOS 15.0, *) {
+            popup.modalPresentationStyle = .pageSheet
+            if let sheet = popup.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = 32
+            }
+        } else {
+            popup.modalPresentationStyle = .overFullScreen
+            popup.modalTransitionStyle = .coverVertical
+        }
+        
+        activeQuizPopup = popup
+        present(popup, animated: true)
+        return popup
+    }
+
+    // MARK: - Error Presentation
+    private func presentAlert(title: String, message: String) {
+        let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+
+    private func handleUploadError(_ error: Error, popup: UploadQuizPopup) {
+        AnalyticsManager.logUploadFailed(
+            source: currentUploadSource,
+            reason: error.localizedDescription
+        )
+        clearUploadState()
+        activeQuizPopup = nil
+        let title = AppUserFacingError.title(for: error)
+        let message = AppUserFacingError.message(
+            for: "finish this upload",
+            error: error,
+            fallback: "We couldn't save this sheet on your device. Please check your free storage and try again."
+        )
+        popup.dismiss(animated: true) { [weak self] in
+            self?.presentAlert(title: title, message: message)
+        }
+    }
+
+    private func validateUploadSize(_ data: Data, title: String = "Upload Too Large") -> Bool {
+        guard data.count <= Constants.maxUploadSizeBytes else {
+            presentAlert(title: title, message: "Files must be under 10 MB.")
+            return false
+        }
+        return true
+    }
+
+    private func clearUploadState() {
+        currentUploadData = nil
+        currentFileName = ""
+        currentFileType = ""
+        currentUploadSource = "unknown"
+    }
+
+    private func cancelPendingTasks() {
+        profileFetchTask?.cancel()
+        renameTask?.cancel()
+        uploadTask?.cancel()
+    }
+
+    private func releaseTransientPickers() {
+        activeDocumentPicker?.delegate  = nil
+        activePhotoPicker?.delegate     = nil
+        activeCameraController?.delegate = nil
+        activeDocumentScanner?.delegate = nil
+        activeDocumentPicker   = nil
+        activePhotoPicker      = nil
+        activeCameraController = nil
+        activeDocumentScanner  = nil
+    }
+
+    private func dismissDocumentPicker(_ controller: UIDocumentPickerViewController,
+                                       completion: (() -> Void)? = nil) {
+        activeDocumentPicker = nil
+        controller.delegate = nil
+        guard controller.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        controller.dismiss(animated: true, completion: completion)
+    }
+
+    private func dismissPhotoPicker(_ picker: PHPickerViewController,
+                                    completion: (() -> Void)? = nil) {
+        activePhotoPicker = nil
+        picker.delegate = nil
+        guard picker.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        picker.dismiss(animated: true, completion: completion)
+    }
+
+    private func dismissUploadCamera(_ controller: UploadCameraCaptureViewController,
+                                     completion: (() -> Void)? = nil) {
+        activeCameraController = nil
+        controller.delegate = nil
+        guard controller.presentingViewController != nil else {
+            completion?()
+            return
+        }
+        controller.dismiss(animated: true, completion: completion)
+    }
+
+    private func beginUpload(with image: UIImage) {
+        switch validateAndPrepareImage(image) {
+        case .failure(let error):
+            presentAlert(title: "Scan Failed", message: error.userMessage)
+            return
+        case .success(let preparedImage):
+            guard let pdfData = createPDF(from: [preparedImage]) else {
+                presentAlert(title: "Scan Failed", message: "Could not prepare the captured image for upload.")
+                return
+            }
+            guard validateUploadSize(pdfData) else { return }
+
+            currentUploadData = pdfData
+            currentFileName = generateTimestampFilename()
+            currentFileType = "application/pdf"
+            currentUploadSource = "image_capture"
+
+            let popup = showQuizPopup()
+            AnalyticsManager.logUploadStarted(source: currentUploadSource, fileType: currentFileType)
+            uploadTask?.cancel()
+            uploadTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.saveUploadToDatabase(imageData: pdfData,
+                                                        fileName: self.currentFileName,
+                                                        fileType: self.currentFileType,
+                                                        popup: popup)
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { self.handleUploadError(error, popup: popup) }
+                }
+            }
+        }
+    }
+
+    private func validateAndPrepareImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
+        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
+            return .failure(.processingFailed)
+        }
+
+        switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+        case .success(let prepared):
+            guard let preparedImage = UIImage(data: prepared.data) else {
+                return .failure(.processingFailed)
+            }
+            return .success(preparedImage)
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+}
+
+protocol UploadCameraCaptureViewControllerDelegate: AnyObject {
+    func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
+                                           didCapture image: UIImage)
+    func uploadCameraCaptureViewControllerDidCancel(_ controller: UploadCameraCaptureViewController)
+}
+
+final class UploadCameraCaptureViewController: UIViewController {
+    weak var delegate: UploadCameraCaptureViewControllerDelegate?
+
+    private let session = AVCaptureSession()
+    private let photoOutput = AVCapturePhotoOutput()
+    private let sessionQueue = DispatchQueue(label: "com.rehearse.upload.camera.session")
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var isSessionConfigured = false
+
+    private let shutterButton = UIButton(type: .system)
+    private let closeButton = UIButton(type: .system)
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        buildUI()
+        configureSession()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        startSessionIfNeeded()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopSession()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
-    @objc private func handleProfileUpdate() {
-        fetchProfileData()
+        stopSession()
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
     }
 
-    @objc private func handleAuthStatusChanged() {
-        // Only refresh if we now have a user
-        if SupabaseManager.shared.client.auth.currentUser != nil {
-            Task {
-                await DailyGoalManager.shared.refreshFromSupabase()
+    private func buildUI() {
+        let preview = AVCaptureVideoPreviewLayer(session: session)
+        preview.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(preview)
+        previewLayer = preview
+
+        shutterButton.translatesAutoresizingMaskIntoConstraints = false
+        shutterButton.backgroundColor = .white
+        shutterButton.layer.cornerRadius = 36
+        shutterButton.layer.borderWidth = 6
+        shutterButton.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
+        shutterButton.addTarget(self, action: #selector(capturePhoto), for: .touchUpInside)
+        view.addSubview(shutterButton)
+
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        closeButton.tintColor = .white
+        closeButton.addTarget(self, action: #selector(cancelCapture), for: .touchUpInside)
+        view.addSubview(closeButton)
+
+        NSLayoutConstraint.activate([
+            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            shutterButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            shutterButton.widthAnchor.constraint(equalToConstant: 72),
+            shutterButton.heightAnchor.constraint(equalToConstant: 72),
+
+            closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeButton.widthAnchor.constraint(equalToConstant: 36),
+            closeButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+    }
+
+    private func configureSession() {
+        sessionQueue.async { [weak self] in
+            guard let self, !self.isSessionConfigured else { return }
+
+            self.session.beginConfiguration()
+            self.session.sessionPreset = .photo
+
+            defer {
+                self.session.commitConfiguration()
             }
-            fetchPlaylists()
-            fetchRecents()
-            fetchTopSong()
-            fetchProfileData()
+
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let input = try? AVCaptureDeviceInput(device: device),
+                  self.session.canAddInput(input),
+                  self.session.canAddOutput(self.photoOutput) else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.presentAlert(message: "Camera is unavailable on this device.")
+                }
+                return
+            }
+
+            self.session.addInput(input)
+            self.session.addOutput(self.photoOutput)
+            self.photoOutput.isHighResolutionCaptureEnabled = true
+            self.isSessionConfigured = true
         }
     }
 
-    @objc private func handleRecentPlaysUpdated() {
-        fetchRecents()
-        fetchTopSong()
+    private func startSessionIfNeeded() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.isSessionConfigured, !self.session.isRunning else { return }
+            self.session.startRunning()
+        }
     }
 
-    private func setupUI() {
-        // Background and navigation bar — tokens handle light/dark automatically
-        view.backgroundColor = ComponentColors.HomeScreen.background
-        
-        // Ensure nav bar title is clear
-        navigationController?.navigationBar.largeTitleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
-        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: ComponentColors.NavBar.title]
-        
-        setupNavBar()
-        syncNavBarAlpha()
-        setupScrollView()
-        setupNavBackground()
-        
-        let card = addTopPracticeCardView()
-        self.topCardContainer = card
-        mainStackView.addArrangedSubview(card)
-
-        mainStackView.addArrangedSubview(addUploadSectionView())
-        mainStackView.addArrangedSubview(addPlaylistSectionView())
-        mainStackView.addArrangedSubview(addRecentsSectionView())
+    private func stopSession() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            self.session.stopRunning()
+        }
     }
-    
+
+    @objc private func capturePhoto() {
+        let settings = AVCapturePhotoSettings()
+        settings.isHighResolutionPhotoEnabled = true
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    @objc private func cancelCapture() {
+        delegate?.uploadCameraCaptureViewControllerDidCancel(self)
+    }
+
+    private func presentAlert(message: String) {
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(title: "Camera Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.delegate?.uploadCameraCaptureViewControllerDidCancel(self)
+        })
+        present(alert, animated: true)
+    }
+}
+
+extension UploadCameraCaptureViewController: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto,
+                     error: Error?) {
+        if let error {
+            debugLog("[UploadCamera] capture failed: \(error)")
+            DispatchQueue.main.async { [weak self] in
+                self?.presentAlert(message: "We couldn't capture that photo. Please try again.")
+            }
+            return
+        }
+
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            autoreleasepool {
+                guard let data = photo.fileDataRepresentation(),
+                      let image = UIImage(data: data) else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.presentAlert(message: "Could not decode captured photo.")
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.delegate?.uploadCameraCaptureViewController(self, didCapture: image)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - VNDocumentCameraViewControllerDelegate
+extension HomeViewController: VNDocumentCameraViewControllerDelegate {
+
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                      didFinishWith scan: VNDocumentCameraScan) {
+        dismissDocumentScanner(controller) { [weak self] in
+            guard let self else { return }
+            // Collect all scanned pages — VisionKit already removes shadows
+            // and corrects perspective. We then apply Apple's built-in
+            // CIPhotoEffectNoir filter for a pure B&W scanned-document look.
+            var pages: [UIImage] = []
+            for index in 0 ..< scan.pageCount {
+                autoreleasepool {
+                    let raw = scan.imageOfPage(at: index)
+                    let styled = raw.applyDocumentStyle()
+                    if case let .success(preparedPage) = self.validateAndPrepareImage(styled) {
+                        pages.append(preparedPage)
+                    }
+                }
+            }
+            guard !pages.isEmpty else {
+                self.presentAlert(title: "Scan Empty",
+                                  message: "No pages were captured. Please try again.")
+                return
+            }
+            // Convert pages → PDF, then run the standard upload pipeline
+            guard let pdfData = self.createPDF(from: pages) else {
+                self.presentAlert(title: "Scan Failed",
+                                  message: "Could not create a PDF from the scanned pages.")
+                return
+            }
+            self.currentUploadData = pdfData
+            self.currentFileName   = self.generateTimestampFilename()
+            self.currentFileType   = "application/pdf"
+            self.currentUploadSource = "document_scanner"
+            let popup = self.showQuizPopup()
+            AnalyticsManager.logUploadStarted(source: self.currentUploadSource, fileType: self.currentFileType)
+            self.uploadTask?.cancel()
+            self.uploadTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.saveUploadToDatabase(imageData: pdfData,
+                                                        fileName: self.currentFileName,
+                                                        fileType: self.currentFileType,
+                                                        popup: popup)
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { self.handleUploadError(error, popup: popup) }
+                }
+            }
+        }
+    }
+
+    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+        dismissDocumentScanner(controller)
+    }
+
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                      didFailWithError error: Error) {
+        dismissDocumentScanner(controller) { [weak self] in
+            self?.presentAlert(title: "Scan Failed", message: "We couldn't scan that document. Please try again.")
+        }
+    }
+}
+
+// MARK: - UIDocumentPickerDelegate + Upload Delegates
+extension HomeViewController: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
+                        PHPickerViewControllerDelegate, UploadCameraCaptureViewControllerDelegate {
+
+    func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) { activeQuizPopup = nil }
+
+    func openFileManager() {
+        // Restrict to PDF only at the picker level
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [.pdf], asCopy: true)
+        picker.delegate                = self
+        picker.allowsMultipleSelection = false
+        activeDocumentPicker = picker
+        present(picker, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let fileURL = urls.first else { return }
+        dismissDocumentPicker(controller) { [weak self] in
+            guard let self else { return }
+
+            let validatedFile: ValidatedFile
+            switch FileValidator.validateDocument(at: fileURL) {
+            case .success(let file):
+                validatedFile = file
+            case .failure(let error):
+                self.presentAlert(
+                    title: "Invalid File",
+                    message: error.userMessage
+                )
+                return
+            }
+
+            do {
+                guard validatedFile.sizeInBytes <= Int64(Constants.maxUploadSizeBytes) else {
+                    self.presentAlert(title: "Upload Too Large", message: "Files must be under 10 MB.")
+                    return
+                }
+
+                let data = try Data(contentsOf: validatedFile.url)
+                guard self.validateUploadSize(data) else { return }
+
+                // ── Layer 2: magic-byte check (%PDF) ─────────────────────────
+                let pdfMagic: [UInt8] = [0x25, 0x50, 0x44, 0x46]   // %PDF
+                guard data.count > 4,
+                      data.prefix(4).elementsEqual(pdfMagic) else {
+                    self.presentAlert(
+                        title: "Invalid File",
+                        message: "The selected file does not appear to be a valid PDF."
+                    )
+                    return
+                }
+
+                self.currentUploadData = data
+                self.currentFileName   = self.generateTimestampFilename()
+                self.currentFileType   = "application/pdf"
+                self.currentUploadSource = "document_picker"
+                let popup = self.showQuizPopup()
+                AnalyticsManager.logUploadStarted(source: self.currentUploadSource, fileType: self.currentFileType)
+                self.uploadTask?.cancel()
+                self.uploadTask = Task { [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await self.saveUploadToDatabase(imageData: data,
+                                                            fileName: self.currentFileName,
+                                                            fileType: self.currentFileType,
+                                                            popup: popup)
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run { self.handleUploadError(error, popup: popup) }
+                    }
+                }
+            } catch {
+                self.presentAlert(title: "Error", message: "We couldn't read that file. Please try another PDF.")
+            }
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        dismissDocumentPicker(controller)
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        dismissPhotoPicker(picker) { [weak self] in
+            guard let self else { return }
+            guard let result = results.first else { return }
+            let itemProvider = result.itemProvider
+            let typeIdentifier = ImageValidator.preferredSupportedTypeIdentifier(from: itemProvider.registeredTypeIdentifiers)
+            guard let typeIdentifier else {
+                self.presentAlert(title: "Import Failed", message: "The selected item is not a supported image.")
+                return
+            }
+
+            itemProvider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, _ in
+                guard let self else { return }
+                guard let data else {
+                    DispatchQueue.main.async {
+                        self.presentAlert(title: "Import Failed", message: "We couldn't import that image. Please try another one.")
+                    }
+                    return
+                }
+
+                switch ImageValidator.validateAndPrepareImageData(data, typeIdentifier: typeIdentifier) {
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        self.presentAlert(title: "Import Failed", message: error.userMessage)
+                    }
+                case .success(let prepared):
+                    guard let image = UIImage(data: prepared.data) else {
+                        DispatchQueue.main.async {
+                            self.presentAlert(title: "Import Failed", message: "We couldn't prepare that image. Please try another one.")
+                        }
+                        return
+                    }
+
+                    DispatchQueue.main.async {
+                        self.currentUploadSource = "photo_picker"
+                        self.beginUpload(with: image)
+                    }
+                }
+            }
+        }
+    }
+
+    func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
+                                           didCapture image: UIImage) {
+        dismissUploadCamera(controller) { [weak self] in
+            self?.currentUploadSource = "camera_capture"
+            self?.beginUpload(with: image)
+        }
+    }
+
+    func uploadCameraCaptureViewControllerDidCancel(_ controller: UploadCameraCaptureViewController) {
+        dismissUploadCamera(controller)
+    }
+
+    @objc private func seeMoreTapped() {
+        navigationController?.pushViewController(AllUploadsViewController(), animated: true)
+    }
+}
+
+// MARK: - UIColor Hex
+extension UIColor {
+    convenience init(hex: String) {
+        let s = hex.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        var rgb: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&rgb)
+        self.init(red:   CGFloat((rgb & 0xFF0000) >> 16) / 255,
+                  green: CGFloat((rgb & 0x00FF00) >>  8) / 255,
+                  blue:  CGFloat( rgb & 0x0000FF)         / 255, alpha: 1)
+    }
+}
+
+// MARK: - GradientView
+private class GradientView: UIView {
+    private let gl = CAGradientLayer()
+    init(colors: [UIColor]) {
+        super.init(frame: .zero)
+        gl.colors     = colors.map { $0.cgColor }
+        gl.startPoint = CGPoint(x: 0, y: 0)
+        gl.endPoint   = CGPoint(x: 0.5, y: 1)
+        layer.addSublayer(gl)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() { super.layoutSubviews(); gl.frame = bounds }
+}
+
+// MARK: - UIImage Orientation Normalization + Document Style
+private extension UIImage {
+    /// Redraws the image into a new context so imageOrientation == .up.
+    /// VisionKit scan pages often carry non-up orientations; drawing them
+    /// directly into the PDF context without normalization produces rotated pages.
+    func normalizedOrientation() -> UIImage {
+        guard imageOrientation != .up, let cgImage else { return self }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    /// Converts a VisionKit scanned page to a pure B&W document image.
+    /// Pipeline (all Apple-native Core Image, no custom processing):
+    ///   1. CIPhotoEffectNoir  — desaturates + applies film-noir contrast curve
+    ///   2. CIColorControls    — boosts contrast further so stave lines are crisp black
+    /// The shared CIContext is GPU-backed and reused across pages to avoid
+    /// re-allocating the Metal pipeline on every call (memory-safe).
+    func applyDocumentStyle() -> UIImage {
+        guard let ciInput = CIImage(image: self) else { return self }
+
+        // Step 1 — B&W via Apple's built-in Noir filter
+        let noir = CIFilter.photoEffectNoir()
+        noir.inputImage = ciInput
+        guard let noirOutput = noir.outputImage else { return self }
+
+        // Step 2 — Boost contrast so music notation lines are razor-sharp
+        let controls = CIFilter.colorControls()
+        controls.inputImage  = noirOutput
+        controls.saturation  = 0.0   // ensure fully desaturated
+        controls.contrast    = 1.4   // crisp stave lines
+        controls.brightness  = 0.05  // lift shadows slightly so paper stays white
+        guard let finalCI = controls.outputImage else { return self }
+
+        // Render using a shared GPU-backed context (no memory leak — static let)
+        let cgResult = UIImage.ciContext.createCGImage(finalCI, from: finalCI.extent)
+        guard let cgResult else { return self }
+
+        let rendered = UIGraphicsImageRenderer(size: size).image { _ in
+            UIImage(cgImage: cgResult, scale: scale, orientation: imageOrientation)
+                .draw(in: CGRect(origin: .zero, size: size))
+        }
+        return rendered
+    }
+
+    /// Shared Metal-backed CIContext. Creating one per page would re-allocate
+    /// the GPU pipeline on every call — a significant memory/perf leak.
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+}
+
+// MARK: - UILabel Tracking
+private extension UILabel {
+    func letterSpacing(_ spacing: CGFloat) {
+        guard let text else { return }
+        let a = NSMutableAttributedString(string: text)
+        a.addAttribute(.kern, value: spacing, range: NSRange(location: 0, length: text.count))
+        attributedText = a
+    }
+}
+
+// MARK: - DateFormatter Convenience
+private extension DateFormatter {
+    static let shortDate: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d, yyyy"; return f
+    }()
+}
+
+// MARK: - NSLayoutConstraint Helpers
+private extension NSLayoutConstraint {
+    static func pin(_ view: UIView, to other: UIView) -> [NSLayoutConstraint] {
+        [view.topAnchor.constraint(equalTo: other.topAnchor),
+         view.leadingAnchor.constraint(equalTo: other.leadingAnchor),
+         view.trailingAnchor.constraint(equalTo: other.trailingAnchor),
+         view.bottomAnchor.constraint(equalTo: other.bottomAnchor)]
+    }
+}
+
+private extension UIView {
+    func pinEdges(to other: UIView) -> [NSLayoutConstraint] {
+        NSLayoutConstraint.pin(self, to: other)
+    }
+}
+
+// MARK: - Data Append Helper
+private extension Data {
+    mutating func append(_ string: String) {
+        if let d = string.data(using: .utf8) { append(d) }
+    }
+}
+
+extension HomeViewController: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        // No additional state to reset for the guest upload gate.
+    }
+}
+
+extension HomeViewController: UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         syncNavBarAlpha()
-    }
-
-    private func fetchPlaylists() {
-        PlaylistsManager.shared.prewarmPlaylistCacheIfNeeded()
-        Task {
-            do {
-                let list = try await PlaylistService.shared.fetchPlaylists()
-                await MainActor.run {
-                    self.populatePlaylists(list)
-                    self.fetchDidFinish()
-                }
-            } catch {
-                debugLog("Error fetching playlists: \(error)")
-                await MainActor.run { self.fetchDidFinish() }
-            }
-        }
-    }
-    
-    private func fetchTopSong() {
-        Task {
-            defer { Task { await MainActor.run { self.fetchDidFinish() } } }
-            do {
-                // 1. Try from recents first!
-                let recents = try await RecentPlayService.shared.fetchRecents(limit: 1)
-                if let mostRecent = recents.first {
-                    await MainActor.run {
-                        self.topCardContainer?.isHidden = false
-                        self.updateHeroCard(with: mostRecent.songs)
-                    }
-                    return
-                }
-                
-                // 2. NEW USER Logic: Try levels from onboarding
-                guard let user = SupabaseManager.shared.client.auth.currentUser else {
-                    return try await self.fallbackToDiscover()
-                }
-                
-                struct Onboarding: Decodable { let level: String? }
-                let onboarding: Onboarding? = try? await SupabaseManager.shared.client
-                    .from("user_onboarding")
-                    .select("level")
-                    .eq("id", value: user.id)
-                    .single()
-                    .execute()
-                    .value
-                    
-                let textLevel = onboarding?.level ?? "beginner"
-                var targetLevel: Int = 1
-                switch textLevel {
-                case "beginner": targetLevel = 1
-                case "some_basics": targetLevel = 2
-                case "intermediate": targetLevel = 3
-                case "advanced": targetLevel = 4
-                default: targetLevel = 1
-                }
-                
-                // Query songs WHERE level = targetLevel AND is_active = true
-                let recommendedSongs: [Song] = try await SupabaseManager.shared.client
-                    .from("songs")
-                    .select()
-                    .eq("level", value: targetLevel)
-                    .eq("is_active", value: true)
-                    .limit(1)
-                    .execute()
-                    .value
-                
-                if let song = recommendedSongs.first {
-                    await MainActor.run {
-                        self.topCardContainer?.isHidden = false
-                        self.updateHeroCard(with: song)
-                    }
-                    return
-                }
-
-                try await self.fallbackToDiscover()
-            } catch {
-                debugLog("Error fetching top song: \(error)")
-            }
-        }
-    }
-
-    private func fallbackToDiscover() async throws {
-        // 3. Fallback to discover songs (fetched by SongService)
-        let songs = try await SongService.shared.fetchSongs()
-        if let song = songs.first {
-            await MainActor.run {
-                self.topCardContainer?.isHidden = false
-                self.updateHeroCard(with: song)
-            }
-        } else {
-            // If absolutely nothing, hide the card
-            await MainActor.run {
-                self.topCardContainer?.isHidden = true
-            }
-        }
-    }
-
-    private func updateHeroCard(with song: Song) {
-        self.topSong = song
-        self.topCardTitleLabel?.text = song.title
-
-        // ── Cover Image ─────────────────────────────────────────────
-        if let coverImageView = view.viewWithTag(9910) as? UIImageView {
-            let placeholder = UIImage(named: "trackimage_1")
-            coverImageView.image = placeholder
-            Task { [weak coverImageView] in
-                if let url = try? await song.resolvedCoverImageURL() {
-                    ImageLoader.shared.loadImage(from: url.absoluteString) { [weak coverImageView] img in
-                        if let img = img { coverImageView?.image = img }
-                    }
-                    return
-                }
-
-                if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
-                    await MainActor.run {
-                        coverImageView?.image = UIImage(named: coverUrl) ?? placeholder
-                    }
-                }
-            }
-        }
-
-        // ── Tags ─────────────────────────────────────────────────────
-        if let stack = self.topCardTagsStack {
-            stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            let tags = ["LEVEL \(song.level)", song.hands.uppercased()]
-            for text in tags {
-                stack.addArrangedSubview(makePillTag(text: text))
-            }
-        }
-        
-        // ── Details ──────────────────────────────────────────────────
-        if let stack = self.topCardDetailsStack {
-            stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            let levelText = song.level <= 3 ? "Beginner" : (song.level <= 6 ? "Intermediate" : "Advanced")
-            stack.addArrangedSubview(self.makeDetailItem(icon: "gauge.with.needle", text: levelText))
-            stack.addArrangedSubview(self.makeDetailItem(icon: "person.fill", text: song.composer))
-            stack.addArrangedSubview(self.makeDetailItem(icon: "metronome", text: song.tempo))
-        }
-
-        // ── Gradient Background ──────────────────────────────────────
-        if let wrapper = view.viewWithTag(991) as? PracticeCardBackgroundView {
-            let theme = PracticeCardTheme.theme(for: song.title)
-            wrapper.updateColors(start: theme.start, end: theme.end)
-        }
-
-        self.topCardTitleLabel?.superview?.layoutIfNeeded()
-    }
-
-    func makeDetailItem(icon: String, text: String) -> UIView {
-        let stack = UIStackView()
-        stack.axis = .horizontal; stack.spacing = 6
-        let img = UIImageView(image: UIImage(systemName: icon))
-        img.tintColor = .white.withAlphaComponent(0.6)
-        img.contentMode = .scaleAspectFit
-        img.widthAnchor.constraint(equalToConstant: 14).isActive = true
-        img.heightAnchor.constraint(equalToConstant: 14).isActive = true
-        
-        let lbl = UILabel()
-        lbl.text = text
-        lbl.font = .systemFont(ofSize: 13, weight: .medium)
-        lbl.textColor = .white.withAlphaComponent(0.9)
-        
-        stack.addArrangedSubview(img)
-        stack.addArrangedSubview(lbl)
-        return stack
-    }
-
-    private func populatePlaylists(_ playlists: [Playlist]) {
-        guard let stack = playlistStackView else { return }
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-
-        if playlists.isEmpty {
-            playlistSectionHeightConstraint?.constant = 128
-            stack.addArrangedSubview(createEmptyPlaylistCard())
-            return
-        }
-
-        playlistSectionHeightConstraint?.constant = 200
-        let images = ["trackimage_1", "trackimage_2", "trackimage_3"]
-        for (i, p) in playlists.enumerated() {
-            stack.addArrangedSubview(createPlaylistCard(playlist: p, imageName: images[i % images.count]))
-        }
-    }
-
-    private func fetchRecents() {
-        Task {
-            do {
-                let recents = try await RecentPlayService.shared.fetchRecents(limit: 4)
-                await MainActor.run {
-                    self.populateRecents(recents)
-                    self.fetchDidFinish()
-                }
-            } catch {
-                debugLog("Error fetching recents: \(error)")
-                await MainActor.run { self.fetchDidFinish() }
-            }
-        }
-    }
-
-    // MARK: - Skeleton helpers
-
-    private func showHomeSkeleton(fetchCount: Int) {
-        fetchesRemaining = fetchCount
-        homeSkeleton.show(in: view)
-    }
-
-    private func fetchDidFinish() {
-        guard fetchesRemaining > 0 else { return }
-        fetchesRemaining -= 1
-        if fetchesRemaining == 0 {
-            homeSkeleton.hide()
-        }
-    }
-
-    private func populateRecents(_ recents: [RecentPlay]) {
-        guard let stack = recentsStackView else { return }
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        guard !recents.isEmpty else {
-            stack.addArrangedSubview(createEmptyRecentsView())
-            return
-        }
-
-        let visibleRecents = recents.count > 1 ? Array(recents.dropFirst()) : recents
-        
-        for recent in visibleRecents {
-            // Stable image from title hash so it doesn't flicker on refresh
-            let hash = abs(recent.songs.title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
-            let imgName = "trackimage_\((hash % 16) + 1)"
-            let timeAgo = Self.timeAgoString(from: recent.lastPlayedAt)
-            stack.addArrangedSubview(createRecentRow(song: recent.songs, timeAgo: timeAgo, imageName: imgName))
-        }
-    }
-
-    private static func timeAgoString(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
-        let minutes = seconds / 60
-        if minutes < 60 { return "\(minutes)m ago" }
-        let hours = minutes / 60
-        if hours < 24 { return "\(hours)h ago" }
-        let days = hours / 24
-        return "\(days)d ago"
     }
 }

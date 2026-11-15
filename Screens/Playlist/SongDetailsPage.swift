@@ -252,6 +252,16 @@ class PlaylistSongDetailViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+        recordLastPlayed(.playAlong)
+    }
+
+    /// Remembers the underlying upload or Library song for the mini player.
+    private func recordLastPlayed(_ mode: LastPlayedItem.Mode) {
+        if case .localUpload(let id) = sourceContext, let upload = LocalSheetLibrary.shared.upload(id: id) {
+            LastPlayedStore.shared.record(upload: upload, mode: mode, tempo: nil)
+        } else if let song = loadedDiscoverSong {
+            LastPlayedStore.shared.record(song: song, mode: mode)
+        }
     }
 
     @discardableResult
@@ -307,6 +317,7 @@ class PlaylistSongDetailViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+        recordLastPlayed(.animation)
     }
 
     @discardableResult

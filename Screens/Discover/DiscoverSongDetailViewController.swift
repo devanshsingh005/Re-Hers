@@ -26,6 +26,10 @@ class DiscoverSongDetailViewController: UIViewController {
     var song: Song?
     var passedImage: UIImage?
     var onUserBlocked: ((UUID) -> Void)?
+    /// Set by the mini player's play button: open this mode as soon as the sheet is ready.
+    var autoStartMode: LastPlayedItem.Mode?
+    /// True between viewDidAppear and viewWillDisappear, so nothing is presented mid-push.
+    private var isOnScreen = false
 
     // MARK: - Private State
     private var originalPDFDocument: PDFDocument?
@@ -112,7 +116,25 @@ class DiscoverSongDetailViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        isOnScreen = true
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
+        // Next run loop: the push transition has fully finished by then.
+        DispatchQueue.main.async { [weak self] in self?.performAutoStartIfReady() }
+    }
+
+    /// Resumes Play Along or Animation for the mini player once the song's data has loaded.
+    private func performAutoStartIfReady() {
+        guard let mode = autoStartMode, isOnScreen, presentedViewController == nil, sheetMusicJSON != nil else { return }
+        autoStartMode = nil
+        switch mode {
+        case .playAlong: openPlayAlongVC()
+        case .animation: didTapAnimation()
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isOnScreen = false
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -448,6 +470,7 @@ class DiscoverSongDetailViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+        if let song { LastPlayedStore.shared.record(song: song, mode: .playAlong) }
     }
 
     @discardableResult
@@ -504,6 +527,7 @@ class DiscoverSongDetailViewController: UIViewController {
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
+        if let song { LastPlayedStore.shared.record(song: song, mode: .animation) }
     }
 
     @discardableResult
@@ -664,7 +688,10 @@ class DiscoverSongDetailViewController: UIViewController {
                     print("[DiscoverDetail] ❌ Failed to parse JSON data from \(jsonSource.rawValue)")
                     continue
                 }
-                await MainActor.run { self.sheetMusicJSON = parsed }
+                await MainActor.run {
+                    self.sheetMusicJSON = parsed
+                    self.performAutoStartIfReady()
+                }
                 return
             } catch {
                 print("[DiscoverDetail] ❌ JSON fetch error from \(jsonSource.rawValue): \(error)")
