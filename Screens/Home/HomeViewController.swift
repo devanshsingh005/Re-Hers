@@ -838,7 +838,7 @@ class HomeViewController: UIViewController {
         for (index, image) in images.enumerated() {
             autoreleasepool {
                 // Normalize orientation — VisionKit images can arrive rotated
-                let normalized = image.normalizedOrientation()
+                let normalized = image.normalized()
                 UIGraphicsBeginPDFPageWithInfo(
                     CGRect(origin: .zero, size: Constants.pdfPageSize), nil)
                 // Scale to fit the page, no 1.0 cap — scanner images are always high-res
@@ -1004,7 +1004,7 @@ class HomeViewController: UIViewController {
     }
 
     private func validateAndPrepareImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
-        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalizedImageData(jpegQuality: 1.0) else {
             return .failure(.processingFailed)
         }
 
@@ -1226,16 +1226,6 @@ extension UIColor {
 
 // MARK: - UIImage Orientation Normalization + Document Style
 private extension UIImage {
-    /// Redraws the image into a new context so imageOrientation == .up.
-    /// VisionKit scan pages often carry non-up orientations; drawing them
-    /// directly into the PDF context without normalization produces rotated pages.
-    func normalizedOrientation() -> UIImage {
-        guard imageOrientation != .up, cgImage != nil else { return self }
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in
-            draw(in: CGRect(origin: .zero, size: size))
-        }
-    }
 
     /// Converts a VisionKit scanned page to a pure B&W document image.
     /// Pipeline (all Apple-native Core Image, no custom processing):

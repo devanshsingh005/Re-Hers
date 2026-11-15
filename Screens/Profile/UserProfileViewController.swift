@@ -796,7 +796,7 @@ final class UserProfileViewController: UIViewController {
 
         if GuestSessionManager.shared.isGuest() {
             let signInAction = UIAction(title: "Sign In", image: UIImage(systemName: "person.crop.circle.badge.plus")) { [weak self] _ in
-                self?.presentAuthScreen(mode: .logIn)
+                self?.presentAuthentication(mode: .logIn)
             }
             return UIMenu(title: "", children: [
                 editSection,
@@ -1010,7 +1010,7 @@ final class UserProfileViewController: UIViewController {
                 }
             }
 
-            let today = DateFormatter().string(from: now, format: "yyyy-MM-dd")
+            let today = DailyGoalManager.dayString(for: now)
             let profilePracticeMinutesToday = currentProfile?.last_practice_date == today
                 ? (currentProfile?.practice_mins_today ?? 0)
                 : 0
@@ -1089,7 +1089,7 @@ final class UserProfileViewController: UIViewController {
     }
 
     @objc private func signInTapped() {
-        presentAuthScreen(mode: .logIn)
+        presentAuthentication(mode: .logIn)
     }
 
     private func performSignOut() {
@@ -1263,13 +1263,6 @@ final class UserProfileViewController: UIViewController {
     }
 
     // MARK: - Edit Profile
-    private func presentAuthScreen(mode: AuthViewController.AuthMode) {
-        guard presentedViewController == nil else { return }
-        let authVC = AuthViewController(initialMode: mode)
-        let nav = UINavigationController(rootViewController: authVC)
-        nav.modalPresentationStyle = .fullScreen
-        present(nav, animated: true)
-    }
 
     private func showNameEditor() {
         let currentName = GuestSessionManager.shared.isGuest()
@@ -1324,7 +1317,7 @@ final class UserProfileViewController: UIViewController {
 
     private func showPasswordEditor() {
         guard !GuestSessionManager.shared.isGuest() else {
-            presentAuthScreen(mode: .logIn)
+            presentAuthentication(mode: .logIn)
             return
         }
 
@@ -1491,7 +1484,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
 
     @objc func changeAvatarTapped() {
         guard !GuestSessionManager.shared.isGuest() else {
-            presentAuthScreen(mode: .signUp)
+            presentAuthentication(mode: .signUp)
             return
         }
 
@@ -1514,7 +1507,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
             return
         }
 
-        switch photoLibraryAuthorizationStatus() {
+        switch PhotoLibraryAccess.status {
         case .authorized, .limited:
             presentProfilePhotoLibraryPicker()
         case .notDetermined:
@@ -1525,7 +1518,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
-                self?.requestPhotoLibraryAccess { status in
+                PhotoLibraryAccess.request { status in
                     DispatchQueue.main.async {
                         switch status {
                         case .authorized, .limited:
@@ -1622,21 +1615,6 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
         present(alert, animated: true)
     }
 
-    private func photoLibraryAuthorizationStatus() -> PHAuthorizationStatus {
-        if #available(iOS 14, *) {
-            return PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        }
-        return PHPhotoLibrary.authorizationStatus()
-    }
-
-    private func requestPhotoLibraryAccess(_ completion: @escaping (PHAuthorizationStatus) -> Void) {
-        if #available(iOS 14, *) {
-            PHPhotoLibrary.requestAuthorization(for: .readWrite, handler: completion)
-        } else {
-            PHPhotoLibrary.requestAuthorization(completion)
-        }
-    }
-
     private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {
         activeImagePicker = nil
         picker.delegate = nil
@@ -1664,7 +1642,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     }
 
     private func prepareUserSelectedImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
-        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalizedImageData(jpegQuality: 1.0) else {
             return .failure(.processingFailed)
         }
 
@@ -1682,7 +1660,7 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
     func uploadAvatarImage(_ image: UIImage) {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser,
-                  let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else { return }
+                  let sourceData = image.normalizedImageData(jpegQuality: 1.0) else { return }
 
             let prepared: PreparedImage
             switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {

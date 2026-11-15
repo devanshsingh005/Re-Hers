@@ -67,7 +67,7 @@ class DailyGoalManager {
     }
 
     func checkAndResetIfNewDay() {
-        let today = DateFormatter().string(from: Date(), format: "yyyy-MM-dd")
+        let today = DailyGoalManager.dayString(for: Date())
         if let lastDate = lastPracticeDateString, lastDate != today {
             practiceTimeMinutesToday = 0
             _practiceMins = 0
@@ -109,7 +109,7 @@ class DailyGoalManager {
             await MainActor.run {
                 self._dailyGoal = profile.daily_goal_minutes ?? self._dailyGoal
 
-                let today = DateFormatter().string(from: Date(), format: "yyyy-MM-dd")
+                let today = DailyGoalManager.dayString(for: Date())
                 if profile.last_practice_date == today {
                     let remotePracticeMins = profile.practice_mins_today ?? 0
                     self._practiceMins = max(remotePracticeMins, self._practiceMins)
@@ -129,7 +129,7 @@ class DailyGoalManager {
     private func syncToSupabase() {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
-            let today = DateFormatter().string(from: Date(), format: "yyyy-MM-dd")
+            let today = DailyGoalManager.dayString(for: Date())
 
             struct DailyGoalProfileUpdate: Encodable {
                 let daily_goal_minutes: Int
@@ -156,10 +156,16 @@ class DailyGoalManager {
     }
 }
 
-extension DateFormatter {
-    func string(from date: Date, format: String) -> String {
-        self.dateFormat = format
-        return self.string(from: date)
+extension DailyGoalManager {
+    /// "2026-11-16" for `date`, in the user's calendar; one shared formatter.
+    static func dayString(for date: Date) -> String {
+        dayFormatter.string(from: date)
     }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 }
 

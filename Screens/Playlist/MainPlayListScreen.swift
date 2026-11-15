@@ -495,23 +495,16 @@ class PlaylistViewController: UIViewController {
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Sign up", style: .default) { [weak self] _ in
-            self?.presentAuthScreen(mode: .signUp)
+            self?.presentAuthentication(mode: .signUp)
         })
         alert.addAction(UIAlertAction(title: "Log in", style: .default) { [weak self] _ in
-            self?.presentAuthScreen(mode: .logIn)
+            self?.presentAuthentication(mode: .logIn)
         })
         alert.addAction(UIAlertAction(title: "Maybe later", style: .cancel))
         present(alert, animated: true)
         return true
     }
 
-    private func presentAuthScreen(mode: AuthViewController.AuthMode) {
-        guard presentedViewController == nil else { return }
-        let authVC = AuthViewController(initialMode: mode)
-        let nav = UINavigationController(rootViewController: authVC)
-        nav.modalPresentationStyle = .fullScreen
-        present(nav, animated: true)
-    }
 }
 
 // MARK: - UICollectionViewDelegate, DataSource, FlowLayout
@@ -1109,7 +1102,7 @@ class AddPlaylistViewController: UIViewController,
             return
         }
 
-        switch photoLibraryAuthorizationStatus() {
+        switch PhotoLibraryAccess.status {
         case .authorized, .limited:
             presentPhotoLibraryPicker()
         case .notDetermined:
@@ -1120,7 +1113,7 @@ class AddPlaylistViewController: UIViewController,
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
-                self?.requestPhotoLibraryAccess { status in
+                PhotoLibraryAccess.request { status in
                     DispatchQueue.main.async {
                         switch status {
                         case .authorized, .limited:
@@ -1176,21 +1169,6 @@ class AddPlaylistViewController: UIViewController,
             UIApplication.shared.open(settingsURL)
         })
         present(alert, animated: true)
-    }
-
-    private func photoLibraryAuthorizationStatus() -> PHAuthorizationStatus {
-        if #available(iOS 14, *) {
-            return PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        }
-        return PHPhotoLibrary.authorizationStatus()
-    }
-
-    private func requestPhotoLibraryAccess(_ completion: @escaping (PHAuthorizationStatus) -> Void) {
-        if #available(iOS 14, *) {
-            PHPhotoLibrary.requestAuthorization(for: .readWrite, handler: completion)
-        } else {
-            PHPhotoLibrary.requestAuthorization(completion)
-        }
     }
 
     private func dismissImagePicker(_ picker: UIImagePickerController, completion: (() -> Void)? = nil) {
@@ -1263,7 +1241,7 @@ class AddPlaylistViewController: UIViewController,
     }
 
     private func prepareUserSelectedImage(_ image: UIImage) -> Result<UIImage, ImageValidationError> {
-        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalizedImageData(jpegQuality: 1.0) else {
             return .failure(.processingFailed)
         }
 

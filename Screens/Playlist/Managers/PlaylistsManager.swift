@@ -253,8 +253,11 @@ public final class PlaylistsManager {
 
     private static func relativeUploadDate(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) { return "Today" }
-        let f = DateFormatter(); f.dateFormat = "MMM d"; return f.string(from: date)
+        return shortDateFormatter.string(from: date)
     }
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
     private static func formatUploadSize(fileSizeBytes: Int?) -> String {
         guard let b = fileSizeBytes else { return "" }
         let kb = Double(b) / 1024.0
@@ -388,7 +391,7 @@ public final class PlaylistsManager {
     // MARK: - Image Upload
     
     private func uploadImageToStorage(image: UIImage, userId: UUID) async throws -> String {
-        guard let sourceData = image.normalized().pngData() ?? image.normalized().jpegData(compressionQuality: 1.0) else {
+        guard let sourceData = image.normalizedImageData(jpegQuality: 1.0) else {
             throw PlaylistError.invalidData
         }
 

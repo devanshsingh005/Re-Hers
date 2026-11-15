@@ -376,8 +376,11 @@ class AllUploadsViewController: UIViewController {
     // MARK: - Formatting Helpers
     private func relativeDate(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) { return "Today" }
-        let f = DateFormatter(); f.dateFormat = "MMM d"; return f.string(from: date)
+        return Self.shortDateFormatter.string(from: date)
     }
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
 
     private func formatSize(_ bytes: Int) -> String {
         let kb = Double(bytes) / 1024.0

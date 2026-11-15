@@ -11,6 +11,8 @@
 		0B0EB6BD83244673A67A1EF3 /* ProfileSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F9A2026097A49989982BECB /* ProfileSkeletonView.swift */; };
 		0E0E0E0E0000000000000003 /* OemerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0E0E0E0E0000000000000002 /* OemerKit */; };
 		0E0E0E0E0000000000000200 /* Services/SheetMusic/LocalSheetLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000100 /* Services/SheetMusic/LocalSheetLibrary.swift */; };
+		0E0E0E0E0000000000000408 /* Components/ViewControllerPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */; };
+		0E0E0E0E0000000000000407 /* Extensions/UIImage+Normalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B21B7FD3E9474336B214FA /* Extensions/UIImage+Normalization.swift */; };
 		0E0E0E0E0000000000000406 /* Components/TabRootHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */; };
 		0E0E0E0E0000000000000400 /* Services/LastPlayedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */; };
 		0E0E0E0E0000000000000401 /* Services/InAppNotificationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */; };
@@ -126,6 +128,7 @@
 		02C2F87BF97279AD445EDEC9 /* Utilities/ImageValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities/ImageValidator.swift; sourceTree = SOURCE_ROOT; };
 		03C6AE1CE6E5F7EDC767AFEA /* Screens/Legal/LegalScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Legal/LegalScreenView.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000100 /* Services/SheetMusic/LocalSheetLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/LocalSheetLibrary.swift; sourceTree = SOURCE_ROOT; };
+		0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ViewControllerPresentation.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/TabRootHeaderView.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LastPlayedStore.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/InAppNotificationStore.swift; sourceTree = SOURCE_ROOT; };
@@ -510,6 +513,7 @@
 			isa = PBXGroup;
 			children = (
 				0E0E0E0E0000000000000100 /* Services/SheetMusic/LocalSheetLibrary.swift */,
+				0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */,
 				0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */,
 				0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */,
 				0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */,
@@ -713,6 +717,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0E0E0E0E0000000000000200 /* Services/SheetMusic/LocalSheetLibrary.swift in Sources */,
+				0E0E0E0E0000000000000408 /* Components/ViewControllerPresentation.swift in Sources */,
+				0E0E0E0E0000000000000407 /* Extensions/UIImage+Normalization.swift in Sources */,
 				0E0E0E0E0000000000000406 /* Components/TabRootHeaderView.swift in Sources */,
 				0E0E0E0E0000000000000400 /* Services/LastPlayedStore.swift in Sources */,
 				0E0E0E0E0000000000000401 /* Services/InAppNotificationStore.swift in Sources */,

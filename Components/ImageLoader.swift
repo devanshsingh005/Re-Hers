@@ -1,101 +1,107 @@
 import UIKit
 import CryptoKit
 
-public class ImageLoader {
+/// Loads remote images with a memory cache, a disk cache and at most one download per URL.
+///
+/// Disk reads, downloads and decoding all happen off the main thread; every completion runs on
+/// the main queue. Callers asking for an image that is already downloading wait for that same
+/// download instead of cancelling it.
+nonisolated public final class ImageLoader: @unchecked Sendable {
     public static let shared = ImageLoader()
+
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
         return URLSession(configuration: config)
     }()
-    private var cache = NSCache<NSString, UIImage>()
-    private var loadingTasks: [String: URLSessionDataTask] = [:]
-    private let loadingTasksQueue = DispatchQueue(label: "com.rehers.imageloader.tasks")
-    private let diskCacheQueue = DispatchQueue(label: "com.rehers.imageloader.disk")
+
+    /// Thread-safe on its own.
+    private let cache = NSCache<NSString, UIImage>()
+    /// Owns `waiters`, `tasks` and `tokens`, and does the disk work.
+    private let queue = DispatchQueue(label: "com.rehers.imageloader", qos: .userInitiated)
+    private var waiters: [String: [(UIImage?) -> Void]] = [:]
+    private var tasks: [String: URLSessionDataTask] = [:]
+    /// Identifies the current download per key, so a cancelled one can't answer a newer request.
+    private var tokens: [String: UUID] = [:]
     private let diskCacheDirectory: URL
-    
+
     private init() {
         let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         diskCacheDirectory = cachesDirectory.appendingPathComponent("RehearseImageCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
     }
-    
+
     public func loadImage(from urlString: String, completion: @escaping (UIImage?) -> Void) {
-        let cacheKey = canonicalCacheKey(for: urlString)
-
-        // Check cache first
-        if let cachedImage = cache.object(forKey: cacheKey as NSString) {
-            DispatchQueue.main.async {
-                completion(cachedImage)
-            }
+        let key = canonicalCacheKey(for: urlString)
+        if let image = cache.object(forKey: key as NSString) {
+            DispatchQueue.main.async { completion(image) }
             return
         }
 
-        if let cachedImage = cachedDiskImage(for: cacheKey) {
-            cache.setObject(cachedImage, forKey: cacheKey as NSString)
-            DispatchQueue.main.async {
-                completion(cachedImage)
+        queue.async { [self] in
+            // Already on its way: wait for it.
+            if waiters[key] != nil {
+                waiters[key]?.append(completion)
+                return
             }
-            return
-        }
-        
-        guard let url = URL(string: urlString) else {
-            DispatchQueue.main.async {
-                completion(nil)
+            waiters[key] = [completion]
+
+            if let data = try? Data(contentsOf: diskCacheFileURL(for: key)), let image = decoded(data) {
+                cache.setObject(image, forKey: key as NSString)
+                finish(key, with: image)
+                return
             }
-            return
-        }
-        
-        loadingTasksQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Cancel existing task for this URL if any
-            self.loadingTasks[cacheKey]?.cancel()
-            
-            // Create new download task
-            let task = ImageLoader.session.dataTask(with: url) { [weak self] data, response, error in
-                guard let self = self else { return }
-                
-                self.loadingTasksQueue.async {
-                    // Remove task from dictionary
-                    self.loadingTasks.removeValue(forKey: cacheKey)
-                    
-                    guard let httpResponse = response as? HTTPURLResponse,
-                          httpResponse.statusCode == 200,
-                          let data = data,
-                          let image = UIImage(data: data),
-                          error == nil else {
-                        DispatchQueue.main.async {
-                            completion(nil)
-                        }
-                        return
-                    }
-                    
-                    // Cache the image
-                    self.cache.setObject(image, forKey: cacheKey as NSString)
-                    self.storeDiskImageData(data, for: cacheKey)
-                    
-                    DispatchQueue.main.async {
-                        completion(image)
-                    }
+            guard let url = URL(string: urlString) else {
+                finish(key, with: nil)
+                return
+            }
+
+            let token = UUID()
+            let task = Self.session.dataTask(with: url) { [self] data, response, error in
+                var image: UIImage?
+                if error == nil, (response as? HTTPURLResponse)?.statusCode == 200,
+                   let data, let decodedImage = decoded(data) {
+                    image = decodedImage
+                    cache.setObject(decodedImage, forKey: key as NSString)
+                    queue.async { [self] in try? data.write(to: diskCacheFileURL(for: key), options: [.atomic]) }
+                }
+                queue.async { [self] in
+                    guard tokens[key] == token else { return }   // cancelled, or superseded
+                    tokens[key] = nil
+                    tasks[key] = nil
+                    finish(key, with: image)
                 }
             }
-            
-            // Store and start task
-            self.loadingTasks[cacheKey] = task
+            tokens[key] = token
+            tasks[key] = task
             task.resume()
         }
     }
-    
+
+    /// Stops loading `urlString`; its pending completions are dropped.
     public func cancelLoad(for urlString: String) {
-        let cacheKey = canonicalCacheKey(for: urlString)
-        loadingTasksQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.loadingTasks[cacheKey]?.cancel()
-            self.loadingTasks.removeValue(forKey: cacheKey)
+        let key = canonicalCacheKey(for: urlString)
+        queue.async { [self] in
+            tasks[key]?.cancel()
+            tasks[key] = nil
+            tokens[key] = nil
+            waiters[key] = nil
         }
+    }
+
+    // MARK: - Private (call on `queue`)
+
+    private func finish(_ key: String, with image: UIImage?) {
+        let callbacks = waiters.removeValue(forKey: key) ?? []
+        DispatchQueue.main.async { callbacks.forEach { $0(image) } }
+    }
+
+    /// Decodes now, off the main thread, so drawing the image later doesn't stall scrolling.
+    private func decoded(_ data: Data) -> UIImage? {
+        guard let image = UIImage(data: data) else { return nil }
+        return image.preparingForDisplay() ?? image
     }
 
     private func canonicalCacheKey(for urlString: String) -> String {
@@ -105,48 +111,8 @@ public class ImageLoader {
         return components.string ?? urlString
     }
 
-    private func cachedDiskImage(for cacheKey: String) -> UIImage? {
-        diskCacheQueue.sync {
-            let fileURL = diskCacheFileURL(for: cacheKey)
-            guard let data = try? Data(contentsOf: fileURL),
-                  let image = UIImage(data: data) else {
-                return nil
-            }
-            return image
-        }
-    }
-
-    private func storeDiskImageData(_ data: Data, for cacheKey: String) {
-        diskCacheQueue.async { [diskCacheDirectory] in
-            let fileURL = diskCacheDirectory.appendingPathComponent(Self.diskCacheFileName(for: cacheKey))
-            try? data.write(to: fileURL, options: [.atomic])
-        }
-    }
-
     private func diskCacheFileURL(for cacheKey: String) -> URL {
-        diskCacheDirectory.appendingPathComponent(Self.diskCacheFileName(for: cacheKey))
-    }
-
-    private static func diskCacheFileName(for cacheKey: String) -> String {
         let digest = SHA256.hash(data: Data(cacheKey.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-}
-
-public extension UIImage {
-    /// Normalizes the image's orientation to `.up` by redrawing it.
-    /// This fixes issues where EXIF orientation is stripped during `jpegData` or `pngData` extraction, 
-    /// which commonly causes uploaded images to appear rotated by 90 degrees.
-    func normalized() -> UIImage {
-        if self.imageOrientation == .up {
-            return self
-        }
-
-        UIGraphicsBeginImageContextWithOptions(self.size, false, self.scale)
-        self.draw(in: CGRect(origin: .zero, size: self.size))
-        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-
-        return normalizedImage ?? self
+        return diskCacheDirectory.appendingPathComponent(digest.map { String(format: "%02x", $0) }.joined())
     }
 }

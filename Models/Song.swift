@@ -109,15 +109,40 @@ extension Song {
     }
 }
 
+/// The Library's song list. Launch, Library, Search and Notifications all ask for it, so it is
+/// kept for a few minutes and concurrent requests share one fetch. Signing in or out clears it.
 final class SongService {
     static let shared = SongService()
-    private init() {}
+    private static let maxAge: TimeInterval = 5 * 60
 
-    func fetchSongs() async throws -> [Song] {
-        try await SupabaseManager.shared.client
-            .from("songs").select()
-            .order("level", ascending: true)
-            .order("sort_order", ascending: true)
-            .execute().value
+    private var cached: (songs: [Song], fetchedAt: Date)?
+    private var inFlight: Task<[Song], Error>?
+
+    private init() {
+        NotificationCenter.default.addObserver(
+            forName: SupabaseManager.authStatusChangedNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cached = nil }
+        }
+    }
+
+    func fetchSongs(forceRefresh: Bool = false) async throws -> [Song] {
+        if !forceRefresh, let cached, Date().timeIntervalSince(cached.fetchedAt) < Self.maxAge {
+            return cached.songs
+        }
+        if let inFlight { return try await inFlight.value }
+
+        let task = Task {
+            try await SupabaseManager.shared.client
+                .from("songs").select()
+                .order("level", ascending: true)
+                .order("sort_order", ascending: true)
+                .execute().value as [Song]
+        }
+        inFlight = task
+        defer { inFlight = nil }
+        let songs = try await task.value
+        cached = (songs, Date())
+        return songs
     }
 }

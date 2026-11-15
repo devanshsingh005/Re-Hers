@@ -610,29 +610,8 @@ final class UploadPageNextViewController: UIViewController {
         guard !GuestFeatureAccessPolicy.allowsPlayAlong else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
-        let modal = GuestFeatureGateModal(
-            featureName: "play along",
-            onSignUp: { [weak self] in
-                self?.presentGuestAuth(mode: .signUp)
-            },
-            onLogIn: { [weak self] in
-                self?.presentGuestAuth(mode: .logIn)
-            }
-        )
-
-        present(modal, animated: true)
+        presentGuestGate(featureName: "play along")
         return true
-    }
-
-    private func presentGuestAuth(mode: AuthViewController.AuthMode) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.presentedViewController == nil else { return }
-
-            let authVC = AuthViewController(initialMode: mode)
-            let nav = UINavigationController(rootViewController: authVC)
-            nav.modalPresentationStyle = .fullScreen
-            self.present(nav, animated: true)
-        }
     }
 
     @objc private func didTapAnimation() {
@@ -684,17 +663,7 @@ final class UploadPageNextViewController: UIViewController {
         guard !GuestFeatureAccessPolicy.allowsAnimation else { return false }
         guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
 
-        let modal = GuestFeatureGateModal(
-            featureName: "animation",
-            onSignUp: { [weak self] in
-                self?.presentGuestAuth(mode: .signUp)
-            },
-            onLogIn: { [weak self] in
-                self?.presentGuestAuth(mode: .logIn)
-            }
-        )
-
-        present(modal, animated: true)
+        presentGuestGate(featureName: "animation")
         return true
     }
 

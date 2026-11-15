@@ -1,19 +1,22 @@
 import UIKit
 
 public extension UIImage {
-    /// Normalizes the image's orientation to `.up` by redrawing it.
-    /// This fixes issues where EXIF orientation is stripped during `jpegData` or `pngData` extraction, 
-    /// which commonly causes uploaded images to appear rotated by 90 degrees.
+    /// The image redrawn so `imageOrientation` is `.up`, at the same size and scale.
+    ///
+    /// Camera and scanner images carry their rotation as EXIF metadata, which `pngData()`,
+    /// `jpegData()` and PDF drawing drop; without this, uploads can come out rotated 90°.
     func normalized() -> UIImage {
-        if self.imageOrientation == .up {
-            return self
+        guard imageOrientation != .up else { return self }
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.scale = scale
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
         }
+    }
 
-        UIGraphicsBeginImageContextWithOptions(self.size, false, self.scale)
-        self.draw(in: CGRect(origin: .zero, size: self.size))
-        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-
-        return normalizedImage ?? self
+    /// PNG data of the upright image, or JPEG when PNG encoding fails, drawing it only once.
+    func normalizedImageData(jpegQuality: CGFloat = 1.0) -> Data? {
+        let upright = normalized()
+        return upright.pngData() ?? upright.jpegData(compressionQuality: jpegQuality)
     }
 }
