@@ -21,7 +21,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     var passedImage: UIImage? {
         didSet {
             guard isViewLoaded else { return }
-            let placeholder = playlistId.map { albumPlaceholder(for: $0) } ?? UIImage(systemName: "music.note.list")
+            let placeholder = resolvePlaylistCoverImage(playlistId: playlistId, coverUrl: passedCoverUrl)
             let img = passedImage ?? placeholder
             albumArtBackgroundView.image = img
             albumArtCardView.image = img
@@ -128,11 +128,16 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
             albumArtBackgroundView.image = img
             albumArtCardView.image = img
         } else {
+            // The wide backdrop shows a photo cover too, but a gradient without its glyph
+            // (blown up, the glyph would fill the banner).
+            let backdrop = PlaylistCover.isUserPhoto(passedCoverUrl)
+                ? placeholder
+                : PlaylistCover.image(forPlaylist: playlistId, reference: passedCoverUrl, glyph: false)
             loadPlaylistCoverImage(
                 into: albumArtBackgroundView,
                 playlistId: playlistId,
                 coverUrl: passedCoverUrl,
-                fallbackImage: placeholder
+                fallbackImage: backdrop
             )
             loadPlaylistCoverImage(
                 into: albumArtCardView,

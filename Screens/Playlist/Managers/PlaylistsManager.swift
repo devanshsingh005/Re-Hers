@@ -7,7 +7,6 @@ internal import PostgREST
 public enum PlaylistError: Error {
     case invalidData
     case uploadFailed
-    case missingDefaultArtwork
     case invalidName
 }
 
@@ -65,7 +64,9 @@ public final class PlaylistsManager {
             var displayImageUrl = storedCoverReference
             var displayImageData: Data? = nil
             
-            if let path = storedCoverReference {
+            // Only photos the user picked are fetched; gradients and the old stock artwork
+            // draw as the playlist's gradient.
+            if let path = storedCoverReference, PlaylistCover.isUserPhoto(path) {
                 if path.hasPrefix("doc_") {
                     // Local document storage fallback
                     if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
@@ -321,7 +322,7 @@ public final class PlaylistsManager {
     
     // MARK: - Create Playlist
     
-    public func createPlaylist(name: String, image: UIImage?) async throws -> UUID {
+    func createPlaylist(name: String, cover: PlaylistCoverChoice) async throws -> UUID {
         let session = try await SupabaseManager.shared.client.auth.session
         let userId = session.user.id
 
@@ -333,29 +334,16 @@ public final class PlaylistsManager {
             throw PlaylistError.invalidName
         }
 
-        var coverImageUrl: String? = nil
-        
-        // Use provided image or fallback to a default app asset
-        let finalImage: UIImage
-        if let userImg = image {
-            finalImage = userImg
-        } else {
-            let defaultNames = (1...16).map { "trackimage_\($0)" }
-            guard let randomName = defaultNames.randomElement() else {
-                throw PlaylistError.missingDefaultArtwork
-            }
-            guard let fallbackImage = UIImage(named: randomName) ?? UIImage(named: "trackimage_1") else {
-                throw PlaylistError.missingDefaultArtwork
-            }
-            finalImage = fallbackImage
-        }
-
-        do {
-            coverImageUrl = try await uploadImageToStorage(image: finalImage, userId: userId)
-        } catch {
-            debugLog("⚠️ Image upload failed, falling back to local cache")
-            if let localFile = saveImageToDocuments(image: finalImage) {
-                coverImageUrl = localFile
+        var coverImageUrl: String?
+        switch cover {
+        case .gradient(let style):
+            coverImageUrl = PlaylistCover.reference(forStyle: style)
+        case .photo(let image):
+            do {
+                coverImageUrl = try await uploadImageToStorage(image: image, userId: userId)
+            } catch {
+                debugLog("⚠️ Image upload failed, falling back to local cache")
+                coverImageUrl = saveImageToDocuments(image: image)
             }
         }
 
@@ -403,7 +391,7 @@ public final class PlaylistsManager {
             throw PlaylistError.invalidData
         }
         
-        let fileName = "\(UUID().uuidString).\(prepared.fileExtension)"
+        let fileName = "\(PlaylistCover.photoFilePrefix)\(UUID().uuidString).\(prepared.fileExtension)"
         let storagePath = "\(userId.uuidString)/\(fileName)"
         
         let client = SupabaseManager.shared.client.storage.from(playlistCoverBucket)
@@ -424,7 +412,7 @@ public final class PlaylistsManager {
     
     private func saveImageToDocuments(image: UIImage) -> String? {
         guard let data = image.normalized().pngData() else { return nil }
-        let filename = "doc_\(UUID().uuidString).png"
+        let filename = "doc_\(PlaylistCover.photoFilePrefix)\(UUID().uuidString).png"
         guard let documentsURL = FileManager.default.urls(for: .documentDirectory,
                                                           in: .userDomainMask).first else {
             return nil

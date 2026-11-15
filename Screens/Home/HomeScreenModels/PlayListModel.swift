@@ -59,10 +59,11 @@ final class PlaylistService {
 
         for p in dbPlaylists {
             var updated = p
+            // Only a photo the user picked needs a signed URL; other covers draw as gradients.
             if let urlStr = updated.coverImageURL,
+               PlaylistCover.isUserPhoto(urlStr),
                !urlStr.contains("://"),
-               !urlStr.hasPrefix("doc_"),
-               !urlStr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+               !urlStr.hasPrefix("doc_") {
                 do {
                     updated.coverImageURL = try await PlaylistsManager.shared.resolveCoverImageURL(from: urlStr)
                 } catch {

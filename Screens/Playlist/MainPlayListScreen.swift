@@ -8,35 +8,21 @@ import Photos
 import PhotosUI
 import ObjectiveC
 
-// MARK: - Album Placeholder Helper
-func albumPlaceholder(for id: UUID) -> UIImage {
-    let index = abs(id.hashValue) % 16 + 1
-    return UIImage(named: "album_\(index)") ?? UIImage()
-}
+// MARK: - Playlist covers
 
+/// What a playlist's cover shows straight away: its gradient, or a photo the user picked that is
+/// stored on this device. Photos stored remotely load on top through `loadPlaylistCoverImage`.
 func resolvePlaylistCoverImage(playlistId: UUID?, coverUrl: String?) -> UIImage? {
-    if let coverUrl, !coverUrl.isEmpty {
-        if coverUrl.hasPrefix("doc_") {
-            let docURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-                .first?
-                .appendingPathComponent(coverUrl)
-            if let docURL, let data = try? Data(contentsOf: docURL), let image = UIImage(data: data) {
-                return image
-            }
-        }
-
-        if !coverUrl.hasPrefix("http"), let asset = UIImage(named: coverUrl) {
-            return asset
-        }
+    if let coverUrl, coverUrl.hasPrefix("doc_"), PlaylistCover.isUserPhoto(coverUrl),
+       let docURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+        .appendingPathComponent(coverUrl),
+       let data = try? Data(contentsOf: docURL), let image = UIImage(data: data) {
+        return image
     }
-
-    if let playlistId {
-        return albumPlaceholder(for: playlistId)
-    }
-
-    return UIImage(systemName: "music.note.list")
+    return PlaylistCover.image(forPlaylist: playlistId, reference: coverUrl)
 }
 
+/// Shows the playlist's cover in `imageView`, then swaps in the user's photo once it downloads.
 func loadPlaylistCoverImage(
     into imageView: UIImageView,
     playlistId: UUID?,
@@ -47,12 +33,10 @@ func loadPlaylistCoverImage(
     imageView.image = placeholder
     imageView.rehearseCoverRequestURL = coverUrl
 
-    guard let coverUrl, !coverUrl.isEmpty, coverUrl.hasPrefix("http") else { return }
+    guard let coverUrl, coverUrl.hasPrefix("http"), PlaylistCover.isUserPhoto(coverUrl) else { return }
     ImageLoader.shared.loadImage(from: coverUrl) { [weak imageView] image in
-        DispatchQueue.main.async {
-            guard let imageView, imageView.rehearseCoverRequestURL == coverUrl else { return }
-            imageView.image = image ?? placeholder
-        }
+        guard let imageView, imageView.rehearseCoverRequestURL == coverUrl else { return }
+        imageView.image = image ?? placeholder
     }
 }
 
@@ -302,8 +286,8 @@ class PlaylistViewController: UIViewController {
         guard !presentGuestPlaylistCreationGateIfNeeded() else { return }
 
         let addVC = AddPlaylistViewController()
-        addVC.onSave = { [weak self] name, pickedImage in
-            self?.addPlaylist(name: name, image: pickedImage)
+        addVC.onSave = { [weak self] name, cover in
+            self?.addPlaylist(name: name, cover: cover)
         }
         addVC.modalPresentationStyle = .overFullScreen
         addVC.modalTransitionStyle   = .crossDissolve
@@ -439,13 +423,13 @@ class PlaylistViewController: UIViewController {
         debugLog("Playlists loaded.")
     }
 
-    private func addPlaylist(name: String, image: UIImage?) {
+    private func addPlaylist(name: String, cover: PlaylistCoverChoice) {
         guard !presentGuestPlaylistCreationGateIfNeeded() else { return }
 
         showLoading(true)
         Task {
             do {
-                let _ = try await PlaylistsManager.shared.createPlaylist(name: name, image: image)
+                let _ = try await PlaylistsManager.shared.createPlaylist(name: name, cover: cover)
                 DispatchQueue.main.async { [weak self] in
                     AnalyticsManager.logPlaylistCreated()
                     self?.showLoading(false)
@@ -772,7 +756,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
         subtitleLabel.text = "\(playlist.trackCount) Tracks · \(playlist.tags)"
         currentRemoteCoverURL = playlist.imageUrl?.hasPrefix("http") == true ? playlist.imageUrl : nil
 
-        let placeholder = albumPlaceholder(for: playlist.id)
+        let placeholder = PlaylistCover.image(forPlaylist: playlist.id, reference: playlist.imageUrl)
         if let imageData = playlist.imageData, let image = UIImage(data: imageData) {
             playlistImageView.image = image
             playlistImageView.rehearseCoverRequestURL = nil
@@ -922,7 +906,7 @@ class AddPlaylistViewController: UIViewController,
                                   UINavigationControllerDelegate,
                                   UITextFieldDelegate {
 
-    var onSave: ((_ name: String, _ image: UIImage?) -> Void)?
+    var onSave: ((_ name: String, _ cover: PlaylistCoverChoice) -> Void)?
     private let isPad = UIDevice.current.userInterfaceIdiom == .pad
     private weak var activeImagePicker: UIImagePickerController?
 
@@ -979,13 +963,28 @@ class AddPlaylistViewController: UIViewController,
     }()
 
     private let pickImageButton: UIButton = {
-        let b = UIButton(type: .system)
-        b.setTitle("Choose Image", for: .normal)
-        b.titleLabel?.font = UIDevice.current.userInterfaceIdiom == .pad
-            ? .systemFont(ofSize: 18)
-            : .systemFont(ofSize: 16)
-        return b
+        var config = UIButton.Configuration.plain()
+        config.title = "Upload Photo"
+        config.image = UIImage(systemName: "photo.on.rectangle")
+        config.imagePadding = 6
+        config.baseForegroundColor = BrandColors.brand
+        return UIButton(configuration: config)
     }()
+
+    /// One tappable swatch per gradient; the selected one gets a ring.
+    private let swatchStack: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 10
+        return stack
+    }()
+    private let swatchScroll: UIScrollView = {
+        let scroll = UIScrollView()
+        scroll.showsHorizontalScrollIndicator = false
+        return scroll
+    }()
+    /// The gradient chosen (a random one to start); ignored once a photo is picked.
+    private var selectedStyle = Int.random(in: 0..<PlaylistCover.styles.count)
 
     private let saveButton: UIButton = {
         let b = UIButton(type: .system)
@@ -1015,15 +1014,44 @@ class AddPlaylistViewController: UIViewController,
         nameField.addTarget(self, action: #selector(nameFieldDidEndEditing), for: .editingDidEnd)
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissSelf))
         dimView.addGestureRecognizer(tap)
-        setRandomAlbumPlaceholder()
+        buildSwatches()
+        selectGradient(selectedStyle)
         updateSaveButtonState()
     }
 
-    private func setRandomAlbumPlaceholder() {
-        let idx = Int.random(in: 1...16)
-        if let img = UIImage(named: "album_\(idx)") {
-            pickedImage = img
-            imageViewPreview.image = img
+    private func buildSwatches() {
+        for index in PlaylistCover.styles.indices {
+            var config = UIButton.Configuration.plain()
+            config.background.image = PlaylistCover.image(style: index, side: 88)
+            config.background.imageContentMode = .scaleAspectFill
+            config.background.cornerRadius = 10
+            let swatch = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
+                self?.selectGradient(index)
+            })
+            swatch.tag = index
+            swatch.layer.cornerRadius = 12
+            swatch.layer.borderColor = BrandColors.brand.cgColor
+            swatch.accessibilityLabel = "Gradient \(index + 1)"
+            swatch.translatesAutoresizingMaskIntoConstraints = false
+            swatch.widthAnchor.constraint(equalToConstant: 44).isActive = true
+            swatch.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            swatchStack.addArrangedSubview(swatch)
+        }
+    }
+
+    /// Uses gradient `index` as the cover (replacing any picked photo).
+    private func selectGradient(_ index: Int) {
+        selectedStyle = index
+        pickedImage = nil
+        imageViewPreview.image = PlaylistCover.image(style: index)
+        updateSwatchSelection()
+    }
+
+    private func updateSwatchSelection() {
+        for case let swatch as UIButton in swatchStack.arrangedSubviews {
+            let selected = pickedImage == nil && swatch.tag == selectedStyle
+            swatch.layer.borderWidth = selected ? 2.5 : 0
+            swatch.accessibilityTraits = selected ? [.button, .selected] : .button
         }
     }
 
@@ -1034,7 +1062,7 @@ class AddPlaylistViewController: UIViewController,
         dimView.translatesAutoresizingMaskIntoConstraints = false
         cardView.translatesAutoresizingMaskIntoConstraints = false
 
-        [titleLabel, nameField, nameErrorLabel, imageViewPreview,
+        [titleLabel, nameField, nameErrorLabel, imageViewPreview, swatchScroll,
          pickImageButton, saveButton, cancelButton].forEach {
             cardView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -1076,8 +1104,13 @@ class AddPlaylistViewController: UIViewController,
             imageViewPreview.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
             imageViewPreview.heightAnchor.constraint(equalToConstant: imgH),
 
-            pickImageButton.topAnchor.constraint(equalTo: imageViewPreview.bottomAnchor,
-                                                  constant: spacing),
+            swatchScroll.topAnchor.constraint(equalTo: imageViewPreview.bottomAnchor, constant: spacing),
+            swatchScroll.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: hPad),
+            swatchScroll.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
+            swatchScroll.heightAnchor.constraint(equalToConstant: 48),
+
+            pickImageButton.topAnchor.constraint(equalTo: swatchScroll.bottomAnchor,
+                                                  constant: spacing / 2),
             pickImageButton.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
 
             saveButton.topAnchor.constraint(equalTo: pickImageButton.bottomAnchor, constant: spacing),
@@ -1089,6 +1122,14 @@ class AddPlaylistViewController: UIViewController,
             cancelButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
             cancelButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -vPad),
             cancelButton.heightAnchor.constraint(equalToConstant: btnH),
+        ])
+
+        swatchStack.translatesAutoresizingMaskIntoConstraints = false
+        swatchScroll.addSubview(swatchStack)
+        NSLayoutConstraint.activate([
+            swatchStack.leadingAnchor.constraint(equalTo: swatchScroll.contentLayoutGuide.leadingAnchor, constant: 2),
+            swatchStack.trailingAnchor.constraint(equalTo: swatchScroll.contentLayoutGuide.trailingAnchor, constant: -2),
+            swatchStack.centerYAnchor.constraint(equalTo: swatchScroll.frameLayoutGuide.centerYAnchor),
         ])
 
         pickImageButton.addTarget(self, action: #selector(pickImage), for: .touchUpInside)
@@ -1191,7 +1232,7 @@ class AddPlaylistViewController: UIViewController,
             return
         }
         nameErrorLabel.isHidden = true
-        onSave?(name, pickedImage)
+        onSave?(name, pickedImage.map { .photo($0) } ?? .gradient(selectedStyle))
         dismiss(animated: true)
     }
 
@@ -1227,8 +1268,9 @@ class AddPlaylistViewController: UIViewController,
             case .success(let preparedImage):
                 self.pickedImage = preparedImage
                 self.imageViewPreview.image = preparedImage
+                self.updateSwatchSelection()
             case .failure(let error):
-                self.pickedImage = nil
+                self.selectGradient(self.selectedStyle)
                 let alert = UIAlertController(title: "Image Not Supported", message: error.userMessage, preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default))
                 self.present(alert, animated: true)
