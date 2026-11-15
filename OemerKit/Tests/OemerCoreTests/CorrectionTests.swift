@@ -162,6 +162,41 @@ final class CorrectionTests: XCTestCase {
         XCTAssertEqual(s.ctx.nearbyNoteId(BBox(100, 95, 108, 120), label: .flat), 0)    // bowl at 115
     }
 
+    /// A glyph over a notehead's left part is not that note's accidental (an accidental stands
+    /// before its note): a second chord head the classifier took for a natural, for one.
+    func testAccidentalOverlappingANoteheadIsNotItsAccidental() throws {
+        let s = try Score(parity: false)
+        let n = NoteHead(bbox: BBox(100, 121, 112, 129))
+        n.id = 0
+        s.ctx.notes = [n]
+        for y in 121...129 { for x in 100...112 { s.ctx.noteIdMap[y, x] = 0 } }
+        XCTAssertNil(s.ctx.nearbyNoteId(BBox(102, 105, 114, 125), label: .natural))
+        XCTAssertEqual(s.ctx.nearbyNoteId(BBox(86, 113, 96, 137), label: .natural), 0)
+    }
+
+    /// A loose glyph lying on a notehead alters no later note either.
+    func testGlyphOnANoteheadAltersNothing() throws {
+        let s = try Score(parity: false)
+        s.chord(x: 100, ys: [115], track: 0)                 // C5
+        s.accidental(.sharp, x: 102, pitchY: 125, track: 0)  // over the C5 head, at A4's height
+        s.chord(x: 130, ys: [125], track: 0)                 // A4
+        XCTAssertEqual(s.transcribe().notes.map(\.name), ["C5", "A4"])
+        let t = try Score(parity: false)                     // the same glyph clear of the head
+        t.chord(x: 100, ys: [115], track: 0)
+        t.accidental(.sharp, x: 115, pitchY: 125, track: 0)
+        t.chord(x: 130, ys: [125], track: 0)
+        XCTAssertEqual(t.transcribe().notes.map(\.name), ["C5", "A#4"])
+    }
+
+    /// A loose accidental alters a note right after it, not one much further on.
+    func testLooseAccidentalDoesNotReachAFarNote() throws {
+        let s = try Score(parity: false)
+        s.chord(x: 100, ys: [125], track: 0)                 // A4
+        s.accidental(.sharp, x: 150, pitchY: 115, track: 0)  // sharp at C5, unbound
+        s.chord(x: 400, ys: [115], track: 0)                 // C5, 24 staff spaces on
+        XCTAssertEqual(s.transcribe().notes.map(\.name), ["A4", "C5"])
+    }
+
     /// An accidental no note claimed alters the next note on its staff at its position.
     func testLooseAccidentalAltersTheNextNoteOfItsPitch() throws {
         for parity in [false, true] {
@@ -238,6 +273,98 @@ final class CorrectionTests: XCTestCase {
         let r = s.transcribe()
         XCTAssertEqual(Self.fifths(r.xml), [0, 1])
         XCTAssertEqual(r.notes.map(\.name), ["A4", "B2", "F#4", "B2"])
+    }
+
+    /// Three evenly spaced key glyphs, the third a flat the classifier called a natural (read
+    /// two steps high, as a natural is measured at its middle): three flats, as the bass shows.
+    /// Taking it for the fourth flat with one missing in between read E-flat major as A-flat
+    /// major (The Christmas Song).
+    func testMisreadThirdFlatIsNotAMissingGlyph() throws {
+        let s = try Score(parity: false)
+        s.accidental(.flat, x: 40, pitchY: 120, track: 0)     // Bb4
+        s.accidental(.flat, x: 52, pitchY: 105, track: 0)     // Eb5
+        s.accidental(.natural, x: 64, pitchY: 115, track: 0)  // the Ab4 flat, read two steps high
+        for (i, y) in [230, 215, 235].enumerated() { s.accidental(.flat, x: 40 + 12 * i, pitchY: y, track: 1) }
+        s.chord(x: 100, ys: [110], track: 0)  // D5
+        s.chord(x: 100, ys: [235], track: 1)  // A2
+        let r = s.transcribe()
+        XCTAssertEqual(Self.fifths(r.xml), [-3])
+        XCTAssertEqual(r.notes.map(\.name), ["D5", "Ab2"])
+    }
+
+    /// The score's first key, with every flat read as a natural one step high: still a key
+    /// (there is no key yet that naturals could cancel).
+    func testFirstKeyWhoseFlatsCameOutAsNaturals() throws {
+        let s = try Score(parity: false)
+        for (track, ys) in [(0, [115, 100]), (1, [225, 210])] {  // Bb and Eb, one step high
+            for (i, y) in ys.enumerated() { s.accidental(.natural, x: 40 + 12 * i, pitchY: y, track: track) }
+        }
+        s.chord(x: 100, ys: [120], track: 0)  // B4
+        s.chord(x: 100, ys: [215], track: 1)  // E3
+        let r = s.transcribe()
+        XCTAssertEqual(Self.fifths(r.xml), [-2])
+        XCTAssertEqual(r.notes.map(\.name), ["Bb4", "Eb3"])
+    }
+
+    /// A system's key reminder whose first flat came out as a natural is still the reminder,
+    /// and its glyphs do not alter the system's first notes (Perfect, bars 7 and 11).
+    func testReminderStartingWithMisreadFlat() throws {
+        let s = try Score(parity: false, systems: 2)
+        for (track, ys) in [(0, [120, 105]), (1, [230, 215])] {
+            for (i, y) in ys.enumerated() { s.accidental(.flat, x: 40 + 12 * i, pitchY: y, track: track) }
+        }
+        s.chord(x: 100, ys: [120], track: 0)
+        s.chord(x: 100, ys: [230], track: 1)
+        for (track, ys) in [(0, [415, 405]), (1, [525, 515])] {  // natural (Bb, one step high), flat (Eb)
+            s.accidental(.natural, x: 40, pitchY: ys[0], track: track, group: 1)
+            s.accidental(.flat, x: 52, pitchY: ys[1], track: track, group: 1)
+        }
+        s.chord(x: 80, ys: [420], track: 0, group: 1)  // B4
+        s.chord(x: 80, ys: [515], track: 1, group: 1)  // E3
+        let r = s.transcribe()
+        XCTAssertEqual(Self.fifths(r.xml), [-2], "no key change")
+        XCTAssertEqual(r.notes.map(\.name), ["Bb4", "Bb2", "Bb4", "Eb3"])
+    }
+
+    /// Naturals after a double barline at the start of a system cancel the key.
+    func testNaturalsCancelKeyAfterDoubleBarline() throws {
+        let s = try Score(parity: false, systems: 2)
+        for (track, ys) in [(0, [120, 105]), (1, [230, 215])] {
+            for (i, y) in ys.enumerated() { s.accidental(.flat, x: 40 + 12 * i, pitchY: y, track: track) }
+        }
+        s.chord(x: 100, ys: [120], track: 0)
+        s.chord(x: 100, ys: [230], track: 1)
+        s.barline(x: 300)
+        s.barline(x: 306)
+        for (track, ys) in [(0, [420, 405]), (1, [530, 515])] {  // naturals where the flats were
+            for (i, y) in ys.enumerated() { s.accidental(.natural, x: 40 + 12 * i, pitchY: y, track: track, group: 1) }
+        }
+        s.chord(x: 100, ys: [420], track: 0, group: 1)  // B4
+        s.chord(x: 100, ys: [530], track: 1, group: 1)  // B2
+        let r = s.transcribe()
+        XCTAssertEqual(Self.fifths(r.xml), [-2, 0])
+        XCTAssertEqual(r.notes.map(\.name), ["Bb4", "Bb2", "B4", "B2"])
+    }
+
+    /// At a system start, a staff's header glyphs that stand under the other staff's key
+    /// signature belong to the key even when they cannot be read as one; they never alter the
+    /// staff's first notes.
+    func testHeaderGlyphsUnderTheKeyAreKeyGlyphs() throws {
+        let s = try Score(parity: false, systems: 2)
+        for (track, ys) in [(0, [120, 105]), (1, [230, 215])] {
+            for (i, y) in ys.enumerated() { s.accidental(.flat, x: 40 + 12 * i, pitchY: y, track: track) }
+        }
+        s.chord(x: 100, ys: [120], track: 0)
+        s.chord(x: 100, ys: [230], track: 1)
+        s.accidental(.flat, x: 40, pitchY: 420, track: 0, group: 1)
+        s.accidental(.flat, x: 52, pitchY: 405, track: 0, group: 1)
+        s.accidental(.natural, x: 40, pitchY: 530, track: 1, group: 1)  // unreadable glyphs under them
+        s.accidental(.natural, x: 52, pitchY: 515, track: 1, group: 1)
+        s.chord(x: 80, ys: [405], track: 0, group: 1)  // E5
+        s.chord(x: 80, ys: [530], track: 1, group: 1)  // B2
+        let r = s.transcribe()
+        XCTAssertEqual(Self.fifths(r.xml), [-2])
+        XCTAssertEqual(r.notes.map(\.name), ["Bb4", "Bb2", "Eb5", "Bb2"])
     }
 
     // MARK: - Task 3: staffs of chord notes, clefs, staff lookup

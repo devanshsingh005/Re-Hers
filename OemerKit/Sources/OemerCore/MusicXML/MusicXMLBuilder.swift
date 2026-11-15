@@ -189,16 +189,30 @@ final class Measure {
     /// a system, where a key signature is expected, positions may be one off and accidentals a
     /// note claimed count too, and so does a glyph the classifier called a natural once the run
     /// has begun (it confuses a key's flats with naturals); elsewhere positions must be exact and
-    /// claimed ones are left to their notes. The staff showing the most accidentals of the agreed
-    /// kind gives the key.
+    /// claimed ones are left to their notes. When the staffs disagree, the one whose key rests
+    /// on more glyphs actually classified as the key's kind gives it (then the larger count).
+    ///
+    /// The classifier also calls a key's flats naturals. A natural's height is read at its middle
+    /// and a flat's at its belly, so such a glyph stands one or two positions above the flat it
+    /// is; in a flat key's run a natural may stand there. At the start of a system a run may
+    /// also start with one: in the score's first measure (`firstOfScore`), where there is no key
+    /// to cancel, always (a key whose glyphs all came out as naturals is still read); later only
+    /// when the run holds at least as many real flats as naturals, since naturals there may be
+    /// cancelling the key.
+    /// At the start of a system the staffs' key signatures stand one above the other: a glyph in
+    /// a staff's header at the same place as a key glyph read on another staff is a key glyph
+    /// too (it is never an accidental of the staff's first note), even when that staff's own
+    /// run could not be read.
     /// Nothing is changed yet: the builder decides whether this is a key signature at all.
-    func readKeyHeader() {
+    func readKeyHeader(firstOfScore: Bool = false) {
         let n = ctx.totalTrackNums
         let unit = ctx.globalUnitSize
         let tolerance = atBeginning ? 1 : 0
         var perTrack = [Int?](repeating: nil, count: n)
+        var support = [Int](repeating: 0, count: n)   // glyphs classified as the key's kind
         var naturalsOnly = [Bool](repeating: false, count: n)
         var used: [Sfn] = []
+        var heads = [[Sfn]](repeating: [], count: n)
         for t in 0..<n {
             let firstEvent = symbols.filter { ($0 is Voice || $0 is Rest) && $0.track == t }.map { $0.xCenter }.min()
                 ?? .infinity
@@ -206,12 +220,19 @@ final class Measure {
                 $0.track == t && $0.xCenter < firstEvent && $0.linePos != nil && (atBeginning || $0.noteId == nil)
             }
             if head.isEmpty { continue }
+            heads[t] = head
             let clef = clefs.last(where: { $0.track == t })?.label ?? defaultClef(track: t)
             var best: (label: SfnType, run: [Sfn]) = (.sharp, [])
             for label in [SfnType.sharp, .flat] {
                 let cands = head.filter { $0.label == label || (atBeginning && $0.label == .natural) }
-                let run = Measure.keyRun(cands, keyPositions(label, clef), unit: unit, tolerance: tolerance,
-                                         label: label)
+                var run = Measure.keyRun(cands, keyPositions(label, clef), unit: unit, tolerance: tolerance,
+                                         label: label, naturalStart: atBeginning)
+                // past the first measure, naturals may also cancel a key: a run that starts with
+                // one holds only when real flats outnumber or match the naturals in it
+                if !firstOfScore, let first = run.first, first.label != label,
+                   run.filter({ $0.label == label }).count < run.filter({ $0.label != label }).count {
+                    run = Measure.keyRun(cands, keyPositions(label, clef), unit: unit, tolerance: tolerance, label: label)
+                }
                 if run.count > best.run.count { best = (label, run) }
             }
             if best.run.isEmpty {
@@ -219,8 +240,10 @@ final class Measure {
                 if naturalsOnly[t] { perTrack[t] = 0 }
                 continue
             }
-            let count = Measure.keyCount(best.run, keyPositions(best.label, clef), tolerance: tolerance)
+            let count = Measure.keyCount(best.run, keyPositions(best.label, clef), tolerance: tolerance,
+                                         label: best.label)
             perTrack[t] = best.label == .flat ? -count : count
+            support[t] = best.run.filter { $0.label == best.label }.count
             used += best.run
         }
         keyPerTrack = perTrack
@@ -231,8 +254,23 @@ final class Measure {
         } else {
             let sharps = signed.filter { $0 > 0 }, flats = signed.filter { $0 < 0 }
             let useFlats = flats.reduce(0) { $0 - $1 } > sharps.reduce(0, +)
-            keyFifths = useFlats ? max(-7, flats.min()!) : min(7, sharps.max()!)
+            // the staffs of the agreed kind: the best supported reading, then the larger count
+            let readings = (0..<n).compactMap { t -> (fifths: Int, support: Int)? in
+                guard let k = perTrack[t], k != 0, (k < 0) == useFlats else { return nil }
+                return (k, support[t])
+            }
+            let chosen = readings.max { a, b in
+                a.support != b.support ? a.support < b.support : abs(a.fifths) < abs(b.fifths)
+            }!.fifths
+            keyFifths = max(-7, min(7, chosen))
             keyCancels = false
+            if atBeginning && unit > 0 {
+                let keyXs = used.map(\.xCenter)
+                for s in heads.joined() where !used.contains(where: { $0 === s })
+                    && keyXs.contains(where: { abs($0 - s.xCenter) <= 0.5 * unit }) {
+                    used.append(s)
+                }
+            }
         }
         keySfns = used
     }
@@ -250,20 +288,25 @@ final class Measure {
     }
 
     /// The leading accidentals that follow `canonical` (close together, within `tolerance`
-    /// positions, one gap).
+    /// positions, one gap where a glyph is missing). `naturalStart`: the run may start with a
+    /// natural standing where a flat of the key would be read as one (see `readKeyHeader`).
     private static func keyRun(_ cands: [Sfn], _ canonical: [Int], unit: Double, tolerance: Int,
-                               label: SfnType) -> [Sfn] {
+                               label: SfnType, naturalStart: Bool = false) -> [Sfn] {
         let sorted = cands.sorted { $0.xCenter < $1.xCenter }
         var run: [Sfn] = []
         var k = 0
         var skipped = false
         for s in sorted {
-            guard k < canonical.count, let p = s.linePos else { break }
-            if run.isEmpty && s.label != label { break }  // the run starts with a real one
+            guard k < canonical.count, s.linePos != nil else { break }
+            if run.isEmpty && s.label != label && !(naturalStart && label == .flat && s.label == .natural) {
+                break  // the run starts with a real one
+            }
             if let last = run.last, unit > 0, Double(s.bbox.x1 - last.bbox.x2) > 1.5 * unit { break }
-            if abs(p - canonical[k]) <= tolerance {
+            if fits(s, canonical[k], tolerance: tolerance, label: label) {
                 k += 1
-            } else if !skipped && !run.isEmpty && k + 1 < canonical.count && abs(p - canonical[k + 1]) <= tolerance {
+            } else if !skipped && !run.isEmpty && k + 1 < canonical.count
+                        && fits(s, canonical[k + 1], tolerance: tolerance, label: label)
+                        && leavesGap(before: s, in: run, unit: unit) {
                 k += 2
                 skipped = true
             } else {
@@ -274,23 +317,58 @@ final class Measure {
         return run
     }
 
+    /// Whether `s` stands where the key's next accidental (at `position`) stands. A natural in a
+    /// flat key may be a flat read one or two positions high.
+    private static func fits(_ s: Sfn, _ position: Int, tolerance: Int, label: SfnType) -> Bool {
+        guard let p = s.linePos else { return false }
+        if label == .flat && s.label == .natural { return p - position >= -tolerance && p - position <= 2 + tolerance }
+        return abs(p - position) <= tolerance
+    }
+
+    /// Whether there is room for a missing glyph between the run's last accidental and `s`: their
+    /// centres stand clearly further apart than the run's spacing so far (a staff space when
+    /// the run has one glyph).
+    private static func leavesGap(before s: Sfn, in run: [Sfn], unit: Double) -> Bool {
+        guard let last = run.last else { return false }
+        let spacing: Double
+        if run.count >= 2 {
+            spacing = (last.xCenter - run[0].xCenter) / Double(run.count - 1)
+        } else {
+            spacing = unit
+        }
+        return spacing > 0 && s.xCenter - last.xCenter >= 1.6 * spacing
+    }
+
     /// Number of accidentals in a key run, counting a glyph skipped inside it.
-    private static func keyCount(_ run: [Sfn], _ canonical: [Int], tolerance: Int) -> Int {
+    private static func keyCount(_ run: [Sfn], _ canonical: [Int], tolerance: Int, label: SfnType) -> Int {
         var k = 0
         for s in run {
-            guard let p = s.linePos, k < canonical.count else { break }
-            if abs(p - canonical[k]) <= tolerance { k += 1 } else { k += 2 }
+            guard k < canonical.count else { break }
+            if fits(s, canonical[k], tolerance: tolerance, label: label) { k += 1 } else { k += 2 }
         }
         return min(k, 7)
     }
 
     /// Outside parity mode: an accidental in the measure that no note claimed alters the next
     /// note on its staff at its line position (oemer drops it). Exact position first; failing
-    /// that, a note one position off in the very next chord.
+    /// that, a note one position off in the very next chord. Only notes that start within six
+    /// staff spaces after it: an accidental stands before its note (a column of a chord's
+    /// accidentals can reach a few spaces to the left), not far from it. A glyph lying on a
+    /// notehead (its middle within the head's width, at most two spaces above or below) is no
+    /// accidental, such as a chord's second head taken for one, and alters nothing.
     func bindLooseAccidentals() {
+        let unit = ctx.globalUnitSize
         for s in sfns where s.noteId == nil && s.isKey != true {
             guard let pos = s.linePos else { continue }
-            let following = voices.filter { $0.track == s.track && $0.xCenter > s.xCenter }
+            let cx = Double(s.bbox.x1 + s.bbox.x2) / 2, cy = Double(s.bbox.y1 + s.bbox.y2) / 2
+            if unit > 0, ctx.notes.contains(where: { n in
+                !n.invalid && n.track == s.track && Double(n.bbox.x1) <= cx && cx <= Double(n.bbox.x2)
+                    && abs(Double(n.bbox.y1 + n.bbox.y2) / 2 - cy) <= 2 * unit
+            }) { continue }
+            let following = voices.filter { v in
+                v.track == s.track && v.xCenter > s.xCenter
+                    && (unit <= 0 || v.noteIds.contains { Double(ctx.notes[$0].bbox.x1 - s.bbox.x2) <= 6 * unit })
+            }
             var target: NoteHead? = nil
             for v in following {
                 if let nid = v.noteIds.first(where: { ctx.notes[$0].staffLinePos == pos && ctx.notes[$0].sfn == nil }) {
@@ -624,7 +702,7 @@ final class MusicXMLBuilder {
         if ctx.pythonParity {
             _ = m.getKey()
         } else {
-            m.readKeyHeader()
+            m.readKeyHeader(firstOfScore: keyWhileGenerating == nil)
             if let current = keyWhileGenerating {
                 if let k = acceptedKeyChange(m, current: current,
                                              afterDoubleBarline: doubleBarline || afterSystemDoubleBarline) {
