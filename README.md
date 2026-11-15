@@ -166,13 +166,19 @@ oemer gets several things wrong on multi-staff piano music. OemerKit corrects th
   to the right and 0.75 above and below (oemer: one pixel row, one space), choosing the
   notehead at the accidental's pitch height (a flat's bowl); an accidental between the staffs
   no longer deletes its note; one no note claimed alters the next note of its pitch on its
-  staff; and an accidental holds for its own staff and octave until the barline (oemer shared
-  it across both hands and all octaves).
+  staff (within six staff spaces); and an accidental holds for its own staff and octave until
+  the barline (oemer shared it across both hands and all octaves). A glyph lying on a
+  notehead (a chord's second head taken for an accidental) belongs to no note.
 - **Key signatures.** Read per staff from the accidentals before the first note, which must
-  stand where a key signature's accidentals stand for that clef; the staff showing the most
-  gives the key (oemer averaged the staffs, and lost the key when one staff showed none). The
-  key persists: the reminder at the start of each system cannot change it, a new key must be
-  shown on every staff, and naturals cancel a key only after a double barline.
+  stand where a key signature's accidentals stand for that clef; when the staffs disagree, the
+  one whose key rests on more glyphs of the key's kind gives it (oemer averaged the staffs,
+  and lost the key when one staff showed none). A slot counts as a missing glyph only where
+  the spacing leaves room for one. Flats the classifier called naturals (read one or two steps
+  high) still count; at the start of the score a key may consist of them only, later it needs
+  as many real flats. At a system start, header glyphs standing under another staff's key
+  glyphs are key glyphs, never accidentals of the first notes. The key persists: the reminder
+  at the start of each system cannot change it, a new key must be shown on every staff, and
+  naturals cancel a key only after a double barline.
 - **Staffs of chord notes.** All notes on one stem go to the staff most of them were read on,
   and moved notes are re-measured on it (oemer kept their old line number, so bass notes moved
   to the treble staff came out a sixth or more off). Notes go to the vertically nearest staff

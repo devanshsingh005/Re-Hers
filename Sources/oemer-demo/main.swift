@@ -5,7 +5,7 @@ import OemerKit
 // Command-line demo for macOS (Apple Silicon recommended): runs the full on-device pipeline —
 // image loading, both Core ML models, the Swift engine — on an image file.
 //
-//   swift run -c release oemer-demo <image> [output.musicxml] [--no-deskew] [--gpu] [--repeat N]
+//   swift run -c release oemer-demo <image> [output.musicxml] [--no-deskew] [--gpu] [--parity] [--repeat N]
 //   swift run -c release oemer-demo --selftest
 //
 // Writes the MusicXML (default: next to the image) and prints timings and the recognized notes.
@@ -13,13 +13,14 @@ import OemerKit
 let args = Array(CommandLine.arguments.dropFirst())
 
 func usage() -> Never {
-    print("usage: oemer-demo <image> [output.musicxml] [--no-deskew] [--gpu] [--repeat N]\n       oemer-demo --selftest")
+    print("usage: oemer-demo <image> [output.musicxml] [--no-deskew] [--gpu] [--parity] [--repeat N]\n       oemer-demo --selftest")
     exit(2)
 }
 
 var config = SheetMusicRecognizer.Configuration()
 if args.contains("--no-deskew") { config.deskew = false }
 if args.contains("--gpu") { config.computeUnits = .all }
+if args.contains("--parity") { config.pythonParity = true }   // the engine as the Python reference reads
 var repeats = 1
 if let i = args.firstIndex(of: "--repeat"), i + 1 < args.count, let n = Int(args[i + 1]) { repeats = max(1, n) }
 

@@ -243,7 +243,9 @@ extension OMRContext {
     /// for one staff space to the right, which misses noteheads a little above or below it and
     /// picks an arbitrary chord tone. Outside parity mode the window reaches 2.5 staff spaces to
     /// the right and 0.75 above and below, and among the noteheads in it the one whose middle is
-    /// nearest the accidental's pitch height wins (then the nearest to the left).
+    /// nearest the accidental's pitch height wins (then the nearest to the left). An accidental
+    /// stands before its note: a notehead that starts left of the glyph's middle (one it
+    /// overlaps, such as a chord's second head the classifier took for an accidental) is not it.
     func nearbyNoteId(_ b: BBox, label: SfnType) -> Int? {
         if pythonParity { return nearbyNoteIdPython(b) }
         let u = unitSize(b.center)
@@ -252,10 +254,11 @@ extension OMRContext {
         let y1 = max(b.y1 - Int(0.75 * u), 0), y2 = min(b.y2 + Int(0.75 * u), height - 1)
         guard x1 < x2, y1 <= y2 else { return nil }
         var found = Set<Int>()
+        let middle = Double(b.x1 + b.x2) / 2
         for y in y1...y2 {
             for x in x1..<x2 {
                 let v = Int(noteIdMap[y, x])
-                if v >= 0 && v < notes.count && !notes[v].invalid { found.insert(v) }
+                if v >= 0 && v < notes.count && !notes[v].invalid && Double(notes[v].bbox.x1) > middle { found.insert(v) }
             }
         }
         let pitchY = accidentalPitchY(b, label)
