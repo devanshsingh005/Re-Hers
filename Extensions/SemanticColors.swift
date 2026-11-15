@@ -54,25 +54,12 @@ public enum SemanticColors {
         /// Background for disabled buttons and controls.
         public static let disabledButton: UIColor = BrandColors.disabledFill
 
-        /// Background for success alert banners / toast views.
-        public static let successBanner: UIColor = BrandColors.successSubtle
-
-        /// Background for error alert banners / toast views.
-        public static let errorBanner: UIColor = BrandColors.errorSubtle
-
-        /// Background for warning alert banners / toast views.
-        public static let warningBanner: UIColor = BrandColors.warningSubtle
-
         /// Base layer for skeleton loading placeholders.
         public static let skeletonBase: UIColor = BrandColors.skeletonBase
-
-        /// Highlight layer that sweeps across skeleton placeholders (animate this).
-        public static let skeletonHighlight: UIColor = BrandColors.skeletonHighlight
 
         /// Very subtle brand-tinted background — graph area fills, soft chips.
         public static let brandTint: UIColor = BrandColors.brandSubtle
     }
-
 
     // =========================================================
     // MARK: Text
@@ -95,29 +82,16 @@ public enum SemanticColors {
         /// Text on orange / filled brand buttons. Always white.
         public static let onBrand: UIColor = BrandColors.textInverted
 
-        /// Text on dark filled surfaces (dark cards in Dark Mode). Always near-white.
-        public static let inverted: UIColor = BrandColors.textInverted
-
         /// Stat numbers (e.g., "42.5h"), active filter labels, links.
         public static let brand: UIColor = BrandColors.textBrand
 
         /// Text on disabled buttons or controls.
         public static let disabled: UIColor = BrandColors.disabledText
 
-        /// Success message text.
-        public static let success: UIColor = BrandColors.success
-
-        /// Error message text.
-        public static let error: UIColor = BrandColors.error
-
-        /// Warning message text.
-        public static let warning: UIColor = BrandColors.warning
-
         /// Sheet music notation, staff lines, note heads.
         /// Uses primary text to give an "ink on paper" look — never pure black.
         public static let musicNotation: UIColor = BrandColors.textPrimary
     }
-
 
     // =========================================================
     // MARK: Icon
@@ -134,16 +108,10 @@ public enum SemanticColors {
         /// Unselected / idle icon in tab bar or toolbar.
         public static let inactive: UIColor = BrandColors.iconInactive
 
-        /// Icon on a filled orange button (e.g., scan button).
-        public static let onBrand: UIColor = BrandColors.textInverted
-
         /// Standard icon next to list items or labels.
         public static let `default`: UIColor = BrandColors.textSecondary
 
-        /// Disabled icon.
-        public static let disabled: UIColor = BrandColors.disabledText
     }
-
 
     // =========================================================
     // MARK: Border & Stroke
@@ -168,7 +136,6 @@ public enum SemanticColors {
         public static let error: UIColor = BrandColors.error
     }
 
-
     // =========================================================
     // MARK: States
     // =========================================================
@@ -187,19 +154,7 @@ public enum SemanticColors {
         /// Wrong answer background tint.
         public static let incorrectSubtle: UIColor = BrandColors.errorSubtle
 
-        /// Warning / caution state.
-        public static let warning: UIColor = BrandColors.warning
-
-        /// Warning background tint.
-        public static let warningSubtle: UIColor = BrandColors.warningSubtle
-
-        /// Pressed / ripple tint for brand buttons.
-        public static let brandPressed: UIColor = BrandColors.brandPressed
-
-        /// Disabled control fill.
-        public static let disabled: UIColor = BrandColors.disabledFill
     }
-
 
     // =========================================================
     // MARK: Progress & Data Viz
@@ -213,19 +168,10 @@ public enum SemanticColors {
         /// Progress bar track (unfilled portion).
         public static let progressTrack: UIColor = BrandColors.disabledFill
 
-        /// Graph line color.
-        public static let graphLine: UIColor = BrandColors.brand
-
-        /// Graph area fill (10% opacity orange).
-        public static let graphAreaFill: UIColor = BrandColors.brandSubtle
-
         /// Axis tick labels on charts.
         public static let axisLabel: UIColor = BrandColors.textTertiary
 
-        /// Grid lines on charts.
-        public static let gridLine: UIColor = BrandColors.stroke
     }
-
 
     // =========================================================
     // MARK: Shadow
@@ -246,7 +192,6 @@ public enum SemanticColors {
         public static let level3: UIColor = BrandColors.shadowLevel3
     }
 }
-
 
 // MARK: - UIView Shadow Helper
 

@@ -30,7 +30,6 @@ class HomeViewController: UIViewController {
     }
 
     // MARK: - State
-    private var uploadTitle: String = DateFormatter.shortDate.string(from: Date())
     private let defaultUploadTitleBase = "Untitled Sheet"
 
     /// Unique filename per upload, e.g. "SheetMusic_2026-03-08_064025.pdf".
@@ -44,14 +43,12 @@ class HomeViewController: UIViewController {
     private func generateUniqueUploadTitle() -> String {
         LocalSheetLibrary.shared.uniqueTitle(base: defaultUploadTitleBase)
     }
-    private var currentUploadData: Data?
     private var currentFileName  = ""
     private var currentFileType  = ""
     private var activeQuizPopup: UploadQuizPopup?
     private weak var activeDocumentPicker: UIDocumentPickerViewController?
     private weak var activeDocumentScanner: VNDocumentCameraViewController?
     private weak var activePhotoPicker: PHPickerViewController?
-    private weak var activeCameraController: UploadCameraCaptureViewController?
     private var profileFetchTask: Task<Void, Never>?
     private var playlistFetchTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
@@ -504,7 +501,6 @@ class HomeViewController: UIViewController {
     }
 
     private func displayRecentUploads(_ uploads: [LocalSheetLibrary.Upload]) {
-        uploadTitle = DateFormatter.shortDate.string(from: Date())
         recentUploadsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if uploads.isEmpty {
             recentUploadsStack.addArrangedSubview(makeEmptyUploadsView())
@@ -608,22 +604,6 @@ class HomeViewController: UIViewController {
     }
 
     // MARK: - Row Options
-    private func showRowOptions(for scanId: Int64, currentTitle: String, titleLabel: UILabel?) {
-        let ac = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        ac.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
-            self?.showRenameAlert(for: scanId, currentTitle: currentTitle, titleLabel: titleLabel)
-        })
-        ac.addAction(UIAlertAction(title: "Delete Upload", style: .destructive) { [weak self] _ in
-            self?.confirmDeleteScan(id: scanId, title: currentTitle)
-        })
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let pop = ac.popoverPresentationController {
-            pop.sourceView             = view
-            pop.sourceRect             = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
-            pop.permittedArrowDirections = []
-        }
-        present(ac, animated: true)
-    }
 
     private func showRenameAlert(for scanId: Int64, currentTitle: String, titleLabel: UILabel?) {
         let alert = UIAlertController(title: "Rename File", message: nil, preferredStyle: .alert)
@@ -746,7 +726,6 @@ class HomeViewController: UIViewController {
         debugLog("[Upload] size=\(imageData.count) bytes, converting on device")
 
         let friendlyTitle = generateUniqueUploadTitle()
-        uploadTitle = friendlyTitle
         let upload = try LocalSheetLibrary.shared.add(pdfData: imageData, title: friendlyTitle,
                                                        originalFilename: fileName)
 
@@ -830,25 +809,6 @@ class HomeViewController: UIViewController {
         scanner.dismiss(animated: true, completion: completion)
     }
 
-    private func presentUploadCamera() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            showUploadCamera()
-        case .notDetermined:
-            presentCameraAccessRationale()
-        case .denied, .restricted:
-            presentSettingsRedirectAlert(
-                title: "Camera Access Needed",
-                message: "Allow camera access in Settings to capture sheet music pages for upload."
-            )
-        @unknown default:
-            presentSettingsRedirectAlert(
-                title: "Camera Access Needed",
-                message: "Allow camera access in Settings to capture sheet music pages for upload."
-            )
-        }
-    }
-
     private func presentPhotoLibraryPicker() {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
         configuration.filter = .images
@@ -859,35 +819,6 @@ class HomeViewController: UIViewController {
         picker.delegate = self
         activePhotoPicker = picker
         present(picker, animated: true)
-    }
-
-    private func showUploadCamera() {
-        let cameraVC = UploadCameraCaptureViewController()
-        cameraVC.delegate = self
-        cameraVC.modalPresentationStyle = .fullScreen
-        activeCameraController = cameraVC
-        present(cameraVC, animated: true)
-    }
-
-    private func presentCameraAccessRationale() {
-        let alert = UIAlertController(
-            title: "Capture Sheet Music",
-            message: "Re-Hearse uses the camera only when you choose Camera so you can photograph sheet music pages for upload and analysis.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Not Now", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    granted ? self.showUploadCamera() : self.presentSettingsRedirectAlert(
-                        title: "Camera Access Needed",
-                        message: "Allow camera access in Settings to capture sheet music pages for upload."
-                    )
-                }
-            }
-        })
-        present(alert, animated: true)
     }
 
     private func presentSettingsRedirectAlert(title: String, message: String) {
@@ -1008,7 +939,6 @@ class HomeViewController: UIViewController {
     }
 
     private func clearUploadState() {
-        currentUploadData = nil
         currentFileName = ""
         currentFileType = ""
         currentUploadSource = "unknown"
@@ -1023,11 +953,9 @@ class HomeViewController: UIViewController {
     private func releaseTransientPickers() {
         activeDocumentPicker?.delegate  = nil
         activePhotoPicker?.delegate     = nil
-        activeCameraController?.delegate = nil
         activeDocumentScanner?.delegate = nil
         activeDocumentPicker   = nil
         activePhotoPicker      = nil
-        activeCameraController = nil
         activeDocumentScanner  = nil
     }
 
@@ -1053,17 +981,6 @@ class HomeViewController: UIViewController {
         picker.dismiss(animated: true, completion: completion)
     }
 
-    private func dismissUploadCamera(_ controller: UploadCameraCaptureViewController,
-                                     completion: (() -> Void)? = nil) {
-        activeCameraController = nil
-        controller.delegate = nil
-        guard controller.presentingViewController != nil else {
-            completion?()
-            return
-        }
-        controller.dismiss(animated: true, completion: completion)
-    }
-
     private func beginUpload(with image: UIImage) {
         switch validateAndPrepareImage(image) {
         case .failure(let error):
@@ -1076,7 +993,6 @@ class HomeViewController: UIViewController {
             }
             guard validateUploadSize(pdfData) else { return }
 
-            currentUploadData = pdfData
             currentFileName = generateTimestampFilename()
             currentFileType = "application/pdf"
             currentUploadSource = "image_capture"
@@ -1116,183 +1032,6 @@ class HomeViewController: UIViewController {
     }
 }
 
-protocol UploadCameraCaptureViewControllerDelegate: AnyObject {
-    func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
-                                           didCapture image: UIImage)
-    func uploadCameraCaptureViewControllerDidCancel(_ controller: UploadCameraCaptureViewController)
-}
-
-final class UploadCameraCaptureViewController: UIViewController {
-    weak var delegate: UploadCameraCaptureViewControllerDelegate?
-
-    private let session = AVCaptureSession()
-    private let photoOutput = AVCapturePhotoOutput()
-    private let sessionQueue = DispatchQueue(label: "com.rehearse.upload.camera.session")
-    private var previewLayer: AVCaptureVideoPreviewLayer?
-    private var isSessionConfigured = false
-
-    private let shutterButton = UIButton(type: .system)
-    private let closeButton = UIButton(type: .system)
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .black
-        buildUI()
-        configureSession()
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        startSessionIfNeeded()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopSession()
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        previewLayer?.frame = view.bounds
-    }
-
-    deinit {
-        stopSession()
-        previewLayer?.removeFromSuperlayer()
-        previewLayer = nil
-    }
-
-    private func buildUI() {
-        let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(preview)
-        previewLayer = preview
-
-        shutterButton.translatesAutoresizingMaskIntoConstraints = false
-        shutterButton.backgroundColor = .white
-        shutterButton.layer.cornerRadius = 36
-        shutterButton.layer.borderWidth = 6
-        shutterButton.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
-        shutterButton.addTarget(self, action: #selector(capturePhoto), for: .touchUpInside)
-        view.addSubview(shutterButton)
-
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        closeButton.tintColor = .white
-        closeButton.addTarget(self, action: #selector(cancelCapture), for: .touchUpInside)
-        view.addSubview(closeButton)
-
-        NSLayoutConstraint.activate([
-            shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            shutterButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            shutterButton.widthAnchor.constraint(equalToConstant: 72),
-            shutterButton.heightAnchor.constraint(equalToConstant: 72),
-
-            closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            closeButton.widthAnchor.constraint(equalToConstant: 36),
-            closeButton.heightAnchor.constraint(equalToConstant: 36)
-        ])
-    }
-
-    private func configureSession() {
-        sessionQueue.async { [weak self] in
-            guard let self, !self.isSessionConfigured else { return }
-
-            self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
-
-            defer {
-                self.session.commitConfiguration()
-            }
-
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-                  let input = try? AVCaptureDeviceInput(device: device),
-                  self.session.canAddInput(input),
-                  self.session.canAddOutput(self.photoOutput) else {
-                DispatchQueue.main.async { [weak self] in
-                    self?.presentAlert(message: "Camera is unavailable on this device.")
-                }
-                return
-            }
-
-            self.session.addInput(input)
-            self.session.addOutput(self.photoOutput)
-            self.photoOutput.isHighResolutionCaptureEnabled = true
-            self.isSessionConfigured = true
-        }
-    }
-
-    private func startSessionIfNeeded() {
-        sessionQueue.async { [weak self] in
-            guard let self, self.isSessionConfigured, !self.session.isRunning else { return }
-            self.session.startRunning()
-        }
-    }
-
-    private func stopSession() {
-        sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            self.session.stopRunning()
-        }
-    }
-
-    @objc private func capturePhoto() {
-        let settings = AVCapturePhotoSettings()
-        settings.isHighResolutionPhotoEnabled = true
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            self.photoOutput.capturePhoto(with: settings, delegate: self)
-        }
-    }
-
-    @objc private func cancelCapture() {
-        delegate?.uploadCameraCaptureViewControllerDidCancel(self)
-    }
-
-    private func presentAlert(message: String) {
-        guard presentedViewController == nil else { return }
-        let alert = UIAlertController(title: "Camera Error", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
-            guard let self else { return }
-            self.delegate?.uploadCameraCaptureViewControllerDidCancel(self)
-        })
-        present(alert, animated: true)
-    }
-}
-
-extension UploadCameraCaptureViewController: AVCapturePhotoCaptureDelegate {
-    func photoOutput(_ output: AVCapturePhotoOutput,
-                     didFinishProcessingPhoto photo: AVCapturePhoto,
-                     error: Error?) {
-        if let error {
-            debugLog("[UploadCamera] capture failed: \(error)")
-            DispatchQueue.main.async { [weak self] in
-                self?.presentAlert(message: "We couldn't capture that photo. Please try again.")
-            }
-            return
-        }
-
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            autoreleasepool {
-                guard let data = photo.fileDataRepresentation(),
-                      let image = UIImage(data: data) else {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.presentAlert(message: "Could not decode captured photo.")
-                    }
-                    return
-                }
-
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.delegate?.uploadCameraCaptureViewController(self, didCapture: image)
-                }
-            }
-        }
-    }
-}
-
 // MARK: - VNDocumentCameraViewControllerDelegate
 extension HomeViewController: VNDocumentCameraViewControllerDelegate {
 
@@ -1324,7 +1063,6 @@ extension HomeViewController: VNDocumentCameraViewControllerDelegate {
                                   message: "Could not create a PDF from the scanned pages.")
                 return
             }
-            self.currentUploadData = pdfData
             self.currentFileName   = self.generateTimestampFilename()
             self.currentFileType   = "application/pdf"
             self.currentUploadSource = "document_scanner"
@@ -1360,7 +1098,7 @@ extension HomeViewController: VNDocumentCameraViewControllerDelegate {
 
 // MARK: - UIDocumentPickerDelegate + Upload Delegates
 extension HomeViewController: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
-                        PHPickerViewControllerDelegate, UploadCameraCaptureViewControllerDelegate {
+                        PHPickerViewControllerDelegate {
 
     func uploadQuizPopupDidClose(_ popup: UploadQuizPopup) { activeQuizPopup = nil }
 
@@ -1411,7 +1149,6 @@ extension HomeViewController: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                     return
                 }
 
-                self.currentUploadData = data
                 self.currentFileName   = self.generateTimestampFilename()
                 self.currentFileType   = "application/pdf"
                 self.currentUploadSource = "document_picker"
@@ -1482,18 +1219,6 @@ extension HomeViewController: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
         }
     }
 
-    func uploadCameraCaptureViewController(_ controller: UploadCameraCaptureViewController,
-                                           didCapture image: UIImage) {
-        dismissUploadCamera(controller) { [weak self] in
-            self?.currentUploadSource = "camera_capture"
-            self?.beginUpload(with: image)
-        }
-    }
-
-    func uploadCameraCaptureViewControllerDidCancel(_ controller: UploadCameraCaptureViewController) {
-        dismissUploadCamera(controller)
-    }
-
     @objc private func seeMoreTapped() {
         navigationController?.pushViewController(AllUploadsViewController(), animated: true)
     }
@@ -1509,20 +1234,6 @@ extension UIColor {
                   green: CGFloat((rgb & 0x00FF00) >>  8) / 255,
                   blue:  CGFloat( rgb & 0x0000FF)         / 255, alpha: 1)
     }
-}
-
-// MARK: - GradientView
-private class GradientView: UIView {
-    private let gl = CAGradientLayer()
-    init(colors: [UIColor]) {
-        super.init(frame: .zero)
-        gl.colors     = colors.map { $0.cgColor }
-        gl.startPoint = CGPoint(x: 0, y: 0)
-        gl.endPoint   = CGPoint(x: 0.5, y: 1)
-        layer.addSublayer(gl)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-    override func layoutSubviews() { super.layoutSubviews(); gl.frame = bounds }
 }
 
 // MARK: - UIImage Orientation Normalization + Document Style
@@ -1576,44 +1287,11 @@ private extension UIImage {
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 }
 
-// MARK: - UILabel Tracking
-private extension UILabel {
-    func letterSpacing(_ spacing: CGFloat) {
-        guard let text else { return }
-        let a = NSMutableAttributedString(string: text)
-        a.addAttribute(.kern, value: spacing, range: NSRange(location: 0, length: text.count))
-        attributedText = a
-    }
-}
-
 // MARK: - DateFormatter Convenience
 private extension DateFormatter {
     static let shortDate: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "MMM d, yyyy"; return f
     }()
-}
-
-// MARK: - NSLayoutConstraint Helpers
-private extension NSLayoutConstraint {
-    static func pin(_ view: UIView, to other: UIView) -> [NSLayoutConstraint] {
-        [view.topAnchor.constraint(equalTo: other.topAnchor),
-         view.leadingAnchor.constraint(equalTo: other.leadingAnchor),
-         view.trailingAnchor.constraint(equalTo: other.trailingAnchor),
-         view.bottomAnchor.constraint(equalTo: other.bottomAnchor)]
-    }
-}
-
-private extension UIView {
-    func pinEdges(to other: UIView) -> [NSLayoutConstraint] {
-        NSLayoutConstraint.pin(self, to: other)
-    }
-}
-
-// MARK: - Data Append Helper
-private extension Data {
-    mutating func append(_ string: String) {
-        if let d = string.data(using: .utf8) { append(d) }
-    }
 }
 
 extension HomeViewController: UIAdaptivePresentationControllerDelegate {

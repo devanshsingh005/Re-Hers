@@ -390,15 +390,3 @@ class AllUploadsViewController: UIViewController {
 
 }
 
-// MARK: - GradientView
-private class GradientView: UIView {
-    private let gl = CAGradientLayer()
-    init(colors: [UIColor]) {
-        super.init(frame: .zero)
-        gl.colors = colors.map { $0.cgColor }
-        gl.startPoint = CGPoint(x: 0, y: 0); gl.endPoint = CGPoint(x: 0.5, y: 1)
-        layer.addSublayer(gl)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-    override func layoutSubviews() { super.layoutSubviews(); gl.frame = bounds }
-}

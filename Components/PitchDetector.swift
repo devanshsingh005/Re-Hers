@@ -174,9 +174,4 @@ public final class PitchDetector {
                                          amplitude: amplitude)
     }
 
-    static func frequencyToNoteName(_ f: Float) -> String {
-        guard f > 0 else { return "—" }
-        let midi = max(0, min(127, Int((69 + 12 * log2(f / 440)).rounded())))
-        return PianoPitchAnalyzer.name(of: midi)
-    }
 }

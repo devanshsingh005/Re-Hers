@@ -44,7 +44,6 @@ nonisolated enum NoteValue: Int, Comparable, Sendable {
     var quarters: Double { pow(2, Double(NoteValue.quarter.rawValue - rawValue)) }
     /// Flags (or beams) the value carries: eighth 1, 16th 2, …
     var flagCount: Int { max(0, rawValue - NoteValue.quarter.rawValue) }
-    var isHollow: Bool { self <= .half }
     var hasStem: Bool { self >= .half }
 
     /// The written value closest to a duration, for notes and rests without a <type>.

@@ -494,17 +494,6 @@ final class UploadPageNextViewController: UIViewController {
         performAutoStartIfReady()
     }
 
-    private func showErrorState(error: String) {
-        unavailableReasonMessage = error
-        metronomeLabel.text    = "Metronome: N/A"
-        keyLabel.text = "Key: N/A"; timeLabel.text = "Time: N/A"; chordLabel.text = "Chords: N/A"
-        progressView.isHidden  = true
-        statusLabel.text       = error
-        statusLabel.isHidden   = false
-        refreshButton.isHidden = false
-        presentUnavailableReasonIfNeeded()
-    }
-
     private func showUnavailableState(message: String) {
         unavailableReasonMessage = message
         extractedChords = []

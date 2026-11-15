@@ -74,20 +74,10 @@ public enum BrandColors {
     /// Dark Mode: Same — orange pops equally on dark surfaces.
     public static let brand: UIColor = UIColor(hex: "#EF9408")
 
-    /// Darker brand orange — #FF6B00
-    /// Use for: gradient end-stops (scan card, upload row icon).
-    public static let brandDark: UIColor = UIColor(hex: "#FF6B00")
-
     /// Brand orange at 10% opacity — for graph fills, soft highlights.
     public static let brandSubtle: UIColor = UIColor.adaptive(
         light: UIColor(hex: "#EF9408").withAlphaComponent(0.50),
         dark:  UIColor(hex: "#EF9408").withAlphaComponent(0.15)
-    )
-
-    /// Brand orange at 20% opacity — pressed / ripple states.
-    public static let brandPressed: UIColor = UIColor.adaptive(
-        light: UIColor(hex: "#EF9408").withAlphaComponent(0.20),
-        dark:  UIColor(hex: "#EF9408").withAlphaComponent(0.25)
     )
 
 
@@ -197,18 +187,6 @@ public enum BrandColors {
     public static let errorSubtle: UIColor = UIColor.adaptive(
         light: UIColor(hex: "#FDECEA"),
         dark:  UIColor(hex: "#2E1A1A")
-    )
-
-    /// Warning amber — Light: #D4860A / Dark: #FFB74D
-    public static let warning: UIColor = UIColor.adaptive(
-        light: UIColor(hex: "#D4860A"),
-        dark:  UIColor(hex: "#FFB74D")
-    )
-
-    /// Warning background tint — Light: #FEF3E2 / Dark: #2E2010
-    public static let warningSubtle: UIColor = UIColor.adaptive(
-        light: UIColor(hex: "#FEF3E2"),
-        dark:  UIColor(hex: "#2E2010")
     )
 
 

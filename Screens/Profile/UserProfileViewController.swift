@@ -17,9 +17,7 @@ struct OnboardingData: Codable {
 
 // MARK: - Stats model fetched from lesson_events
 struct ProfileStats {
-    var totalPracticeSeconds: Int = 0
     var totalLessons: Int = 0
-    var currentStreak: Int = 0
     var weeklyData: [CGFloat] = [0, 0, 0, 0, 0, 0, 0] // Mon–Sun in hours
 }
 
@@ -53,8 +51,6 @@ final class UserProfileViewController: UIViewController {
     private let goalBadgeBg = UIView()
     private let goalBadgeLabel = UILabel()
     private let appearanceValueLabel = UILabel()
-    private var chartBars: [UIView] = []
-    private var chartDots: [UIView] = []
 
     // Sign out
     private let signOutButton = UIButton(type: .system)
@@ -1903,11 +1899,6 @@ final class PracticeChartView: UIView {
 
 
 
-extension UIView {
-    func addSubviews(_ views: UIView...) {
-        views.forEach { addSubview($0) }
-    }
-}
 
 
 extension UserProfileViewController: UIScrollViewDelegate {

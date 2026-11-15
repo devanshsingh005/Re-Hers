@@ -59,10 +59,6 @@ final class AppThemeManager {
         apply(theme: currentTheme, to: window)
     }
 
-    func setDarkModeEnabled(_ isEnabled: Bool, window: UIWindow? = nil) {
-        setTheme(isEnabled ? .dark : .light, window: window)
-    }
-
     func setTheme(_ theme: AppTheme, window: UIWindow? = nil) {
         currentTheme = theme
         UserDefaults.standard.set(theme.rawValue, forKey: storageKey)

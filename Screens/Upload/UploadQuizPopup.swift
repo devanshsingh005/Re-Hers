@@ -100,7 +100,6 @@ class UploadQuizPopup: UIViewController {
     private var isAnswered = false
 
     // MARK: - UI
-    private let dimView         = UIView()
     private let cardView        = UIView()
 
     // Header

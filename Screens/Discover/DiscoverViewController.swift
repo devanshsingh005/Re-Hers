@@ -654,11 +654,6 @@ final class BlockedUserStore {
         return Set(rawValues.compactMap(UUID.init(uuidString:)))
     }
 
-    func isBlocked(_ userID: UUID?) -> Bool {
-        guard let userID else { return false }
-        return blockedUserIDs().contains(userID)
-    }
-
     func block(_ userID: UUID) {
         var updated = blockedUserIDs()
         updated.insert(userID)

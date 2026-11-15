@@ -111,10 +111,6 @@ final class SupabaseManager {
         return try await client.auth.session.accessToken
     }
 
-    func currentUserId() async throws -> String {
-        try await client.auth.session.user.id.uuidString
-    }
-
     func startAutoRefresh() {
         client.auth.startAutoRefresh()
     }

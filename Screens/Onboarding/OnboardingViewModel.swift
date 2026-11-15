@@ -27,13 +27,6 @@ class OnboardingViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var errorMessage: String?
 
-    @Published var availableLevels: [String] = [
-        "Absolute beginner",
-        "Some basics",
-        "Intermediate",
-        "Advanced"
-    ]
-
     // MARK: - Level display → DB value map
     static let levelDBMap: [String: String] = [
         "Absolute beginner": "beginner",

@@ -48,7 +48,6 @@ final class SheetMusicView: UIView {
     private let pageLayer = CALayer()      // every system, stacked; scrolled vertically
     private let cursorBand = CALayer()
     private let cursor = CALayer()
-    private let feedbackOverlay = UIView()
 
     // MARK: Init
     override init(frame: CGRect) {
@@ -72,9 +71,6 @@ final class SheetMusicView: UIView {
         cursor.shadowRadius = 4
         cursor.shadowOffset = .zero
 
-        feedbackOverlay.isUserInteractionEnabled = false
-        feedbackOverlay.alpha = 0
-        addSubview(feedbackOverlay)
     }
 
     // MARK: - Loading
@@ -100,24 +96,15 @@ final class SheetMusicView: UIView {
         setNeedsLayout()
     }
 
-    func setChordCount(_ n: Int) {}
-
     /// Play Along hands over its chords after `loadData`; the sheet already has everything.
     func configure(with chords: [SongChord]) {
         setNeedsLayout()
     }
 
-    func setProgressBarHidden(_ hidden: Bool) {}
-
     // MARK: - Playback
 
     func updateProgress(to tick: Int) {
         updateToTick(Double(tick))
-    }
-
-    func updatePlaybackProgress(_ p: CGFloat) {
-        let total = Double(timeline?.totalTicks ?? 0)
-        updateToTick(total * Double(max(0, min(1, p))))
     }
 
     /// Moves the cursor to `tick` (scrolling to its line) and lights the notes sounding there.
@@ -160,21 +147,6 @@ final class SheetMusicView: UIView {
         }
         pageLayer.transform = CATransform3DMakeTranslation(0, -y, 0)
         CATransaction.commit()
-    }
-
-    // MARK: - Interactive Feedback
-
-    func showFeedback(isCorrect: Bool) {
-        let color = isCorrect ? UIColor.systemGreen : UIColor.systemRed
-        feedbackOverlay.backgroundColor = color.withAlphaComponent(0.15)
-
-        UIView.animate(withDuration: 0.1, animations: {
-            self.feedbackOverlay.alpha = 1
-        }) { _ in
-            UIView.animate(withDuration: 0.3, delay: 0.1, options: .curveEaseOut, animations: {
-                self.feedbackOverlay.alpha = 0
-            }, completion: nil)
-        }
     }
 
     func addWrongNoteMarker(at tick: Double) {
@@ -228,7 +200,6 @@ final class SheetMusicView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.height > 0 else { return }
-        feedbackOverlay.frame = bounds
         if bounds != lastBounds {
             lastBounds = bounds
             scheduleRender()

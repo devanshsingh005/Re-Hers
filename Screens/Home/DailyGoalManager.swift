@@ -93,11 +93,6 @@ class DailyGoalManager {
         }
     }
 
-    func getProgressRatio() -> Float {
-        guard dailyGoalMinutes > 0 else { return 0 }
-        return min(Float(practiceTimeMinutesToday) / Float(dailyGoalMinutes), 1.0)
-    }
-
     // MARK: - Supabase Sync
 
     func refreshFromSupabase() async {

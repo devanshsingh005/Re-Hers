@@ -304,24 +304,6 @@ public final class PlaylistsManager {
         debugLog("✅ Updated playlist \(id) name to: \(validatedName)")
     }
     
-    public func updateTrackName(playlistItemId: Int64, newTitle: String) async throws {
-        let validatedTitle = InputValidator.limit(
-            InputValidator.trimOnSubmit(newTitle),
-            maxLength: InputValidator.nameMaxLength
-        )
-        guard InputValidator.validateRequired(validatedTitle, message: "Track title is required.") == nil else {
-            throw PlaylistError.invalidName
-        }
-
-        try await SupabaseManager.shared.client
-            .from("playlist_items")
-            .update(["track_title": validatedTitle])
-            .eq("id", value: Int(playlistItemId))
-            .execute()
-        
-        debugLog("✅ Updated track \(playlistItemId) title to: \(validatedTitle)")
-    }
-    
     // MARK: - Delete Playlist
     
     public func deletePlaylist(id: UUID) async {

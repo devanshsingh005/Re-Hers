@@ -2,7 +2,6 @@ import Foundation
 
 enum InputValidator {
     static let nameMaxLength = 100
-    static let bioMaxLength = 500
     static let searchMaxLength = 200
     static let singleLineMaxLength = 150
     static let passwordMinLength = 8

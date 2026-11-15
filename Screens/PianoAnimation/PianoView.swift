@@ -316,26 +316,6 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
         return keysByMidi[midi]
     }
 
-    func showHints(leftHand: [String], rightHand: [String]) {
-        let normalizedLeft = Set(leftHand.map(normalise))
-        let normalizedRight = Set(rightHand.map(normalise))
-
-        (whiteKeys + blackKeys).forEach { key in
-            let normalizedKey = normalise(key.noteName)
-
-            if normalizedLeft.contains(normalizedKey) {
-                key.currentHand = .left
-                key.isHinted = true
-            } else if normalizedRight.contains(normalizedKey) {
-                key.currentHand = .right
-                key.isHinted = true
-            } else {
-                key.currentHand = nil
-                key.isHinted = false
-            }
-        }
-    }
-
     /// Play Along: the keys to play, in their hand's colour (others cleared).
     func hint(left: [Int], right: [Int]) {
         let l = Set(left), r = Set(right)
@@ -405,47 +385,5 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
             if whitePC.contains(m % 12) { idx += 1 }
         }
         return idx < whiteKeys.count ? idx : nil
-    }
-}
-
-// MARK: - Chord Display View (kept for play-along mode)
-final class RealTimeChordDisplayView: UIView {
-    private let label: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 24, weight: .bold)
-        l.textColor = .label; l.textAlignment = .center
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
-    }()
-
-    private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = .clear
-        layer.cornerRadius = 14; clipsToBounds = true
-        
-        blurView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(blurView)
-        addSubview(label)
-        
-        NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: topAnchor),
-            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-        label.text = "🎹 Ready"
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    func setSingleChord(_ text: String) {
-        UIView.transition(with: label, duration: 0.2, options: .transitionCrossDissolve) {
-            self.label.text = text
-        }
     }
 }

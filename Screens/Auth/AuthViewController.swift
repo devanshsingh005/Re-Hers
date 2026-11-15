@@ -707,16 +707,6 @@ extension AuthViewController {
         updatePrimaryButtonState()
     }
     
-    private func presentLegalScreen(initialTab: LegalTab) {
-        let legalVC = UIHostingController(rootView: LegalScreenView(initialTab: initialTab))
-        legalVC.modalPresentationStyle = .pageSheet
-        if #available(iOS 15.0, *), let sheet = legalVC.sheetPresentationController {
-            sheet.detents = [.large()]
-            sheet.prefersGrabberVisible = true
-        }
-        present(legalVC, animated: true)
-    }
-    
     @objc func togglePasswordVisibility() {
         passwordTextField.isSecureTextEntry.toggle()
         let imgName = passwordTextField.isSecureTextEntry ? "eye" : "eye.slash"
