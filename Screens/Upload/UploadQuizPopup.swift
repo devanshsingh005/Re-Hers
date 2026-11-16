@@ -139,6 +139,8 @@ class UploadQuizPopup: UIViewController {
 
     private var uploadFinished = false
     private var autoCloseTimer: Timer?
+    private var progressObserver: NSObjectProtocol?
+    private var shownProgress: Float = 0.05
 
     private var questions: [MusicQuizQuestion] = []
     private var currentIndex = 0
@@ -198,9 +200,29 @@ class UploadQuizPopup: UIViewController {
         startFloatingAnimation()
     }
 
-    deinit { autoCloseTimer?.invalidate() }
+    deinit {
+        autoCloseTimer?.invalidate()
+        if let progressObserver { NotificationCenter.default.removeObserver(progressObserver) }
+    }
 
     // MARK: - Public API
+    /// Follows the on-device conversion of this upload: the bar shows its real progress.
+    func track(uploadId: UUID) {
+        if let observer = progressObserver { NotificationCenter.default.removeObserver(observer) }
+        progressObserver = NotificationCenter.default.addObserver(
+            forName: LocalSheetLibrary.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard (note.userInfo?["id"] as? UUID) == uploadId else { return }
+            MainActor.assumeIsolated {
+                guard let self, !self.uploadFinished,
+                      let p = LocalSheetLibrary.shared.progress[uploadId] else { return }
+                // the conversion starts at 0; keep the bar from jumping backwards from its start
+                let value: Float = 0.05 + 0.9 * Float(p)
+                self.updateProgress(max(self.shownProgress, value))
+            }
+        }
+    }
+
     func notifyUploadComplete() {
         uploadFinished = true
         DispatchQueue.main.async { self.showUploadDone() }
@@ -209,6 +231,7 @@ class UploadQuizPopup: UIViewController {
     func updateProgress(_ value: Float) {
         DispatchQueue.main.async {
             let clamped = max(0, min(1, value))
+            self.shownProgress = clamped
             let pct = Int(clamped * 100)
             self.progressPctLabel.text = "\(pct)%"
             guard let parent = self.progressFill.superview else { return }
@@ -287,7 +310,7 @@ class UploadQuizPopup: UIViewController {
         progressTrack.addSubview(progressFill)
 
         // Percentage label
-        progressPctLabel.text = "18%"
+        progressPctLabel.text = "5%"
         progressPctLabel.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
         progressPctLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         progressPctLabel.textAlignment = .right
@@ -338,10 +361,10 @@ class UploadQuizPopup: UIViewController {
         progressFillWidth = progressFill.widthAnchor.constraint(equalToConstant: 0)
         progressFillWidth.isActive = true
 
-        // Set initial 18% fill after first layout
+        // Initial fill after first layout, until the conversion reports progress
         DispatchQueue.main.async {
             let trackWidth = self.progressTrack.bounds.width
-            self.progressFillWidth.constant = trackWidth * 0.18
+            self.progressFillWidth.constant = trackWidth * CGFloat(self.shownProgress)
             self.progressTrack.layoutIfNeeded()
         }
     }

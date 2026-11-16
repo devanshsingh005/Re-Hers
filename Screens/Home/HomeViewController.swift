@@ -40,8 +40,11 @@ class HomeViewController: UIViewController {
         return "SheetMusic_\(f.string(from: Date())).pdf"
     }
 
+    /// The picked file's name, used as the upload's title (scans and photos have none).
+    private var pickedTitleBase: String?
+
     private func generateUniqueUploadTitle() -> String {
-        LocalSheetLibrary.shared.uniqueTitle(base: defaultUploadTitleBase)
+        LocalSheetLibrary.shared.uniqueTitle(base: pickedTitleBase ?? defaultUploadTitleBase)
     }
     private var currentFileName  = ""
     private var currentFileType  = ""
@@ -783,6 +786,7 @@ class HomeViewController: UIViewController {
         vc.onDataReady = {
             popup.notifyUploadComplete()
         }
+        popup.track(uploadId: upload.id)
         debugLog("[Navigate] upload=\(upload.id.uuidString)")
         navigationController?.pushViewController(vc, animated: true)
     }
@@ -972,6 +976,7 @@ class HomeViewController: UIViewController {
     }
 
     private func clearUploadState() {
+        pickedTitleBase = nil
         currentFileName = ""
         currentFileType = ""
         currentUploadSource = "unknown"
@@ -1182,9 +1187,12 @@ extension HomeViewController: UIDocumentPickerDelegate, UploadQuizPopupDelegate,
                     return
                 }
 
-                self.currentFileName   = self.generateTimestampFilename()
+                self.currentFileName   = validatedFile.url.lastPathComponent
                 self.currentFileType   = "application/pdf"
                 self.currentUploadSource = "document_picker"
+                let name = validatedFile.url.deletingPathExtension().lastPathComponent
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                self.pickedTitleBase = name.isEmpty ? nil : String(name.prefix(60))
                 let popup = self.showQuizPopup()
                 AnalyticsManager.logUploadStarted(source: self.currentUploadSource, fileType: self.currentFileType)
                 self.uploadTask?.cancel()

@@ -880,20 +880,22 @@ final class UserProfileViewController: UIViewController {
 
             await MainActor.run {
                 nameLabel.text = profile.full_name?.isEmpty == false ? profile.full_name : "No Name"
-                usernameLabel.text = profile.username.map { "@\($0)" } ?? "@username"
+                let username = profile.username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                usernameLabel.text = username.isEmpty ? "" : "@\(username)"
                 updateAvatar(with: profile.avatar_url)
             }
             
-            // Fetch daily goal from user_onboarding
+            // Fetch daily goal from user_onboarding (an account that skipped onboarding has no row)
             do {
-                let onboarding: OnboardingData = try await SupabaseManager.shared.client
+                let rows: [OnboardingData] = try await SupabaseManager.shared.client
                     .from("user_onboarding")
                     .select("practice_mins")
                     .eq("id", value: user.id.uuidString)
-                    .single()
+                    .limit(1)
                     .execute()
                     .value
-                
+                guard let onboarding = rows.first else { return }
+
                 await MainActor.run {
                     let goalMins = onboarding.practice_mins
                     goalBadgeLabel.text = self.goalBadgeText(for: goalMins)

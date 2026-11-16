@@ -299,7 +299,7 @@ final class UploadPageNextViewController: UIViewController {
             let xml = extractChordsFromMusicXML(sp)
             return xml.isEmpty ? deriveChordsFallback(from: sp) : xml
         }
-        return ["C", "G", "Am", "F"]
+        return []
     }
 
     private func extractChordsFromMusicXML(_ sp: [String: Any]) -> [String] {
@@ -312,26 +312,55 @@ final class UploadPageNextViewController: UIViewController {
         return chords
     }
 
+    /// The score has no chord symbols: names, bar by bar, the major or minor triad that best
+    /// covers the bar's notes (weighted by length), in the order they first appear.
     private func deriveChordsFallback(from sp: [String: Any]) -> [String] {
-        // Build a unique set of pitch-step names per measure, deduplicated globally
-        var seen  = Set<String>()
-        var chords: [String] = []
+        let stepClass = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11]
+        let names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+        func number(_ value: Any?) -> Double? {
+            if let d = value as? Double { return d }
+            if let i = value as? Int { return Double(i) }
+            if let s = value as? String { return Double(s) }
+            return nil
+        }
+
+        // pitch-class weights per bar, all parts together
+        var bars: [[Double]] = []
         for part in flatList(sp["part"]) {
-            for measure in flatList(part["measure"]) {
-                var steps = Set<String>()
+            for (index, measure) in flatList(part["measure"]).enumerated() {
+                if bars.count <= index { bars.append(Array(repeating: 0, count: 12)) }
                 for note in flatList(measure["note"]) {
-                    if let pitch = note["pitch"] as? [String: Any],
-                       let step  = pitch["step"] as? String {
-                        steps.insert(step)
-                    }
+                    guard let pitch = note["pitch"] as? [String: Any],
+                          let step = pitch["step"] as? String, let base = stepClass[step] else { continue }
+                    let alter = Int(number(pitch["alter"]) ?? 0)
+                    let pc = ((base + alter) % 12 + 12) % 12
+                    bars[index][pc] += max(number(note["duration"]) ?? 1, 0.25)
                 }
-                guard !steps.isEmpty else { continue }
-                let _ = steps.sorted().joined()   // e.g. "ADE" → use root only
-                let root  = steps.sorted().first ?? "C"
-                if !seen.contains(root) { seen.insert(root); chords.append(root) }
             }
         }
-        return chords.isEmpty ? ["C","G","Am","F"] : chords
+
+        var chords: [String] = []
+        for weights in bars {
+            let total = weights.reduce(0, +)
+            guard total > 0 else { continue }
+            var best: (name: String, score: Double, tones: Int)?
+            for root in 0..<12 {
+                for (third, suffix) in [(4, ""), (3, "m")] {
+                    let tones = [root, (root + third) % 12, (root + 7) % 12]
+                    let covered = tones.map { weights[$0] }
+                    // the root and the notes that belong count; a small bonus for the root itself
+                    let score = covered.reduce(0, +) + 0.1 * weights[root]
+                    let present = covered.filter { $0 > 0 }.count
+                    if best == nil || score > best!.score + 1e-9 {
+                        best = (names[root] + suffix, score, present)
+                    }
+                }
+            }
+            // only name a chord the bar really outlines: two of its notes and most of the bar
+            guard let best, best.tones >= 2, best.score >= 0.6 * total else { continue }
+            if !chords.contains(best.name) { chords.append(best.name) }
+        }
+        return chords
     }
 
     // Accepts either a [[String:Any]] or [String:Any] and returns [[String:Any]].
@@ -482,7 +511,8 @@ final class UploadPageNextViewController: UIViewController {
     metronomeLabel.text = "Metronome on \(bpm) BPM"
         keyLabel.text       = "Key: \(keySignature)"
         timeLabel.text      = "Time: \(timeSignature)"
-        chordLabel.text     = "Chords: \(extractedChords.prefix(3).joined(separator: ", "))"
+        chordLabel.text     = extractedChords.isEmpty ? "Chords: –"
+            : "Chords: \(extractedChords.prefix(3).joined(separator: ", "))"
         updatePracticeTips()
         processingHeightConstraint?.constant = 0
         statusHeightConstraint?.constant     = 0
