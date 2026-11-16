@@ -373,6 +373,35 @@ final class SupabaseProgressManager: Sendable {
         )
     }
 
+    /// Parts of a chapter already practised, for guests and signed-in users.
+    static func completedPartIndexes(for chapterIndex: Int) async -> Set<Int> {
+        if GuestSessionManager.shared.isGuest() { return guestCompletedPartIndexes(for: chapterIndex) }
+        struct Row: Decodable { let part_index: Int }
+        guard let userID = await currentUserID() else { return [] }
+        let rows: [Row] = (try? await db.from("lesson_events")
+            .select("part_index")
+            .eq("user_id", value: userID.uuidString)
+            .eq("chapter_index", value: chapterIndex)
+            .eq("event_type", value: "part_completed")
+            .execute().value) ?? []
+        return Set(rows.map(\.part_index).filter { $0 >= 0 })
+    }
+
+    /// Best stars per completed chapter for a signed-in user.
+    static func chapterStars() async -> [Int: Int] {
+        if GuestSessionManager.shared.isGuest() { return guestChapterStars() }
+        struct Row: Decodable { let chapter_index: Int; let stars: Int? }
+        guard let userID = await currentUserID() else { return [:] }
+        let rows: [Row] = (try? await db.from("lesson_events")
+            .select("chapter_index, stars")
+            .eq("user_id", value: userID.uuidString)
+            .eq("event_type", value: "lesson_completed")
+            .execute().value) ?? []
+        var stars: [Int: Int] = [:]
+        for row in rows { stars[row.chapter_index] = max(stars[row.chapter_index] ?? 0, row.stars ?? 1) }
+        return stars
+    }
+
     static func guestChapterStars() -> [Int: Int] {
         var starsMap: [Int: Int] = [:]
         for event in guestLessonEvents() where event.eventType == "lesson_completed" {

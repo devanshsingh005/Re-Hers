@@ -4,246 +4,6 @@ internal import PostgREST
 import Auth
 import Supabase
 
-// MARK: - Music Staff View
-
-class MusicStaffView: UIView {
-
-    private let noteName: String
-    private let playbackNotes: [String]
-    private var noteLayers: [CALayer] = []
-    private weak var tapToPlayContainer: UIView?
-    private var pendingPlaybackWorkItems: [DispatchWorkItem] = []
-
-    init(noteName: String, playbackNotes: [String] = []) {
-        self.noteName = noteName
-        self.playbackNotes = playbackNotes
-        super.init(frame: .zero)
-        backgroundColor = ComponentColors.LessonScreen.cardFill
-        layer.cornerRadius = 24
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.08
-        layer.shadowRadius = 16
-        layer.shadowOffset = CGSize(width: 0, height: 6)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    deinit {
-        pendingPlaybackWorkItems.forEach { $0.cancel() }
-        pendingPlaybackWorkItems.removeAll()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        layer.sublayers?.forEach { $0.removeFromSuperlayer() }
-        drawStaff()
-        addTapToPlay()
-    }
-
-    private func drawStaff() {
-        let staffTop: CGFloat = 50
-        let staffLeft: CGFloat = 24
-        let staffRight: CGFloat = bounds.width - 24
-        let lineSpacing: CGFloat = 14
-        let numLines = 5
-        noteLayers.removeAll()
-
-        for i in 0..<numLines {
-            let y = staffTop + CGFloat(i) * lineSpacing
-            let line = CALayer()
-            line.frame = CGRect(x: staffLeft, y: y, width: staffRight - staffLeft, height: 1)
-            line.backgroundColor = ComponentColors.QuizScreen.staffLines.withAlphaComponent(0.22).cgColor
-            layer.addSublayer(line)
-        }
-
-        let clefLayer = CATextLayer()
-        clefLayer.string = "𝄞"
-        clefLayer.font = CTFontCreateWithName("TimesNewRomanPS-BoldMT" as CFString, 72, nil)
-        clefLayer.fontSize = 72
-        clefLayer.foregroundColor = ComponentColors.QuizScreen.clefSymbol.withAlphaComponent(0.32).cgColor
-        clefLayer.frame = CGRect(x: staffLeft + 2, y: staffTop - 32, width: 60, height: 85)
-        clefLayer.contentsScale = UITraitCollection.current.displayScale
-        layer.addSublayer(clefLayer)
-
-        let centerY = staffTop + CGFloat(numLines - 1) / 2 * lineSpacing
-        let chordSymbols = displayedChordSymbols()
-        let noteCount = chordSymbols.count
-        let startX = max(staffLeft + 88, bounds.width * 0.42)
-        let endX = min(staffRight - 28, bounds.width - 46)
-        let xPositions: [CGFloat]
-
-        if noteCount <= 1 {
-            xPositions = [bounds.width / 2 + 20]
-        } else {
-            let span = endX - startX
-            let step = span / CGFloat(max(1, noteCount - 1))
-            xPositions = (0..<noteCount).map { startX + CGFloat($0) * step }
-        }
-
-        for (index, symbol) in chordSymbols.enumerated() {
-            let root = rootNote(for: symbol)
-            let noteOffset = noteYOffset(for: root)
-            let noteY = centerY + noteOffset
-            let noteX = xPositions[index]
-
-            if root == "C" {
-                let ledger = CALayer()
-                ledger.frame = CGRect(x: noteX - 18, y: noteY + 6, width: 38, height: 1.5)
-                ledger.backgroundColor = ComponentColors.QuizScreen.staffLines.withAlphaComponent(0.32).cgColor
-                layer.addSublayer(ledger)
-            }
-
-            let stem = CALayer()
-            stem.frame = CGRect(x: noteX + 8, y: noteY - 28, width: 2, height: 32)
-            stem.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
-            layer.addSublayer(stem)
-
-            let noteHead = CALayer()
-            noteHead.bounds = CGRect(x: 0, y: 0, width: 22, height: 15)
-            noteHead.position = CGPoint(x: noteX, y: noteY + 6)
-            noteHead.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
-            noteHead.cornerRadius = 7
-            noteHead.transform = CATransform3DMakeRotation(-0.25, 0, 0, 1)
-            layer.addSublayer(noteHead)
-            noteLayers.append(noteHead)
-        }
-
-        startPulse()
-    }
-
-    private func displayedChordSymbols() -> [String] {
-        let symbols = playbackNotes.isEmpty ? [noteName] : playbackNotes
-        return symbols.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-
-    private func rootNote(for symbol: String) -> String {
-        let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = trimmed.first else { return noteName }
-        var root = String(first).uppercased()
-        let remainder = trimmed.dropFirst()
-        if let accidental = remainder.first, accidental == "#" || accidental == "b" {
-            root.append(accidental)
-        }
-        return root
-    }
-
-    private func noteYOffset(for note: String) -> CGFloat {
-        switch note {
-        case "C": return 22
-        case "D": return 14
-        case "E": return 7
-        case "F": return 0
-        case "G": return -7
-        case "A": return -14
-        case "B": return -21
-        default:  return 22
-        }
-    }
-
-    private func startPulse() {
-        guard !noteLayers.isEmpty else { return }
-        for noteLayer in noteLayers {
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.0
-            pulse.toValue = 1.12
-            pulse.duration = 0.65
-            pulse.autoreverses = true
-            pulse.repeatCount = .infinity
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            noteLayer.add(pulse, forKey: "pulse")
-        }
-    }
-
-    private func addTapToPlay() {
-        tapToPlayContainer?.removeFromSuperview()
-
-        let tapLabel = UILabel()
-        tapLabel.text = "TAP TO PLAY"
-        tapLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        tapLabel.textColor = ComponentColors.LessonScreen.labelPrimary
-        tapLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let border = UIView()
-        border.translatesAutoresizingMaskIntoConstraints = false
-        border.backgroundColor = ComponentColors.LessonScreen.cardFill
-        border.layer.borderColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
-        border.layer.borderWidth = 1.2
-        border.layer.cornerRadius = 11
-        border.isUserInteractionEnabled = true
-        border.addSubview(tapLabel)
-        addSubview(border)
-        tapToPlayContainer = border
-
-        NSLayoutConstraint.activate([
-            tapLabel.topAnchor.constraint(equalTo: border.topAnchor, constant: 5),
-            tapLabel.bottomAnchor.constraint(equalTo: border.bottomAnchor, constant: -5),
-            tapLabel.leadingAnchor.constraint(equalTo: border.leadingAnchor, constant: 12),
-            tapLabel.trailingAnchor.constraint(equalTo: border.trailingAnchor, constant: -12),
-            border.topAnchor.constraint(equalTo: topAnchor, constant: 14),
-            border.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-        ])
-        border.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
-    }
-
-    @objc private func handleTap() {
-        guard !noteLayers.isEmpty else { return }
-        animateTapToPlay()
-        for noteLayer in noteLayers {
-            noteLayer.removeAllAnimations()
-            let bounce = CAKeyframeAnimation(keyPath: "transform.scale")
-            bounce.values = [1.0, 1.3, 0.9, 1.1, 1.0]
-            bounce.duration = 0.5
-            bounce.calculationMode = .cubic
-            noteLayer.add(bounce, forKey: "bounce")
-        }
-        playSelectedNote()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.startPulse() }
-    }
-
-    private func animateTapToPlay() {
-        guard let tapToPlayContainer else { return }
-        UIView.animate(withDuration: 0.08, animations: {
-            tapToPlayContainer.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
-        }) { _ in
-            UIView.animate(withDuration: 0.22,
-                           delay: 0,
-                           usingSpringWithDamping: 0.55,
-                           initialSpringVelocity: 4) {
-                tapToPlayContainer.transform = .identity
-            }
-        }
-    }
-
-    private func playSelectedNote() {
-        pendingPlaybackWorkItems.forEach { $0.cancel() }
-        pendingPlaybackWorkItems.removeAll()
-        AudioEngineManager.shared.stopAllNotes()
-        let midiNotes = displayedChordSymbols()
-            .map(rootNote(for:))
-            .compactMap { AudioEngineManager.shared.midiNumber(from: playableNoteName(for: $0)) }
-        guard !midiNotes.isEmpty else { return }
-
-        let chordVelocity = UInt8(max(92, 118 - (max(1, midiNotes.count) - 1) * 5))
-        for midi in midiNotes {
-            AudioEngineManager.shared.startNote(midi: midi, velocity: chordVelocity)
-        }
-
-        let stopWorkItem = DispatchWorkItem {
-            AudioEngineManager.shared.stopAllNotes()
-        }
-        pendingPlaybackWorkItems.append(stopWorkItem)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: stopWorkItem)
-    }
-
-    private func playableNoteName(for note: String) -> String {
-        if note.rangeOfCharacter(from: .decimalDigits) != nil {
-            return note
-        }
-        return "\(note)4"
-    }
-
-}
-
 // MARK: - Variant Chip Button
 
 class VariantChipButton: UIButton {
@@ -373,28 +133,23 @@ class LessonDetailViewController: UIViewController {
     var onLessonCompleted: ((Int) -> Void)?
 
     // UI references
-    private var staffView: MusicStaffView!
+    private var staffView: LessonStaffView!
+    /// What each variant shows, plays and asks for (nil for ear-training rounds).
+    private lazy var items: [PracticeItem?] = lesson.variants.map { PracticeMusic.item(for: $0, in: lesson) }
+    private lazy var earRounds: [PracticeMusic.EarRound] = lesson.variants.enumerated()
+        .map { PracticeMusic.earRound(for: $0.element, index: $0.offset) }
     private var noteNameLabel: UILabel!
     private var englishLabel: UILabel!
     private var englishPrefixLabel: UILabel!
     private var variantsScrollView: UIScrollView!
     private var chipsStack: UIStackView!
     private var tryBtn: UIButton!
-    private var progressFillConstraint: NSLayoutConstraint!
-    private var progressPercentLabel: UILabel!
-    private var progressRowLabel: UILabel!
-    private var dotsStack: UIStackView!
+    private var progressCountLabel: UILabel!
+    /// One segment per part; filled when that part is done.
+    private var progressSegments: [UIView] = []
     private var earTrainingOptionButtons: [UIButton] = []
-    private var earTrainingTargets: [String] = []
     private var earTrainingAttempts: [Int: Int] = [:]
     private var hasAudioPlaybackSession = false
-    private let noteMapping: [String: String] = [
-        "Do": "C", "Re": "D", "Mi": "E", "Fa": "F", "Sol": "G", "La": "A", "Ti": "B",
-        "Treble": "G", "Bass": "F", "Alto": "C", "Tenor": "C", "Soprano": "G", "Mezzo": "G", "Violin": "G",
-        "Minor": "C", "Major": "C", "Sharp": "C#", "Dim": "C", "Aug": "C", "Flat": "Cb",
-        "Diminished": "C", "Augmented": "C", "7th": "C",
-        "C": "C", "D": "D", "E": "E", "F": "F", "G": "G", "A": "A", "B": "B"
-    ]
 
     // Scrolling + Nav Setup
     private let scrollView = UIScrollView()
@@ -405,8 +160,6 @@ class LessonDetailViewController: UIViewController {
     private var isEarTrainingLesson: Bool {
         chapterIndex == 10
     }
-
-    private let earTrainingNotePool = ["A", "B", "C", "D", "E", "F", "G"]
     init(lesson: MusicLesson, chapterIndex: Int) {
         self.lesson = lesson
         self.chapterIndex = chapterIndex
@@ -423,7 +176,6 @@ class LessonDetailViewController: UIViewController {
         syncNavBarAlpha()
         setupScrollView()
         setupNavBackground()
-        initializeEarTrainingTargetsIfNeeded()
         setupUI()
         loadCompletedVariantsFromSupabase()
         
@@ -514,105 +266,8 @@ class LessonDetailViewController: UIViewController {
         ])
     }
 
-    private func initializeEarTrainingTargetsIfNeeded() {
-        guard isEarTrainingLesson, earTrainingTargets.isEmpty else { return }
-        earTrainingTargets = (0..<lesson.variants.count).map { index in
-            earTrainingNotePool[index % earTrainingNotePool.count]
-        }
-    }
-
-    private func currentEarTrainingTarget() -> String {
-        guard selectedVariantIndex < earTrainingTargets.count else { return earTrainingNotePool.first ?? "C" }
-        return earTrainingTargets[selectedVariantIndex]
-    }
-
-    private func earTrainingChipLabel(for index: Int) -> String {
-        guard index < earTrainingTargets.count else { return "Round \(index + 1)" }
-        return variantsDone.contains(index) ? earTrainingTargets[index] : "Round \(index + 1)"
-    }
-
-    private func getNoteLetter(from variant: String) -> String {
-        if let n = noteMapping[variant] { return n }
-        if let progressionRoot = chordNames(for: variant)?
-            .split(separator: "–")
-            .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
-            .first {
-            let first = String(progressionRoot.prefix(1))
-            if ["C","D","E","F","G","A","B"].contains(first) { return first }
-        }
-        let first = String(variant.prefix(1))
-        return ["C","D","E","F","G","A","B"].contains(first) ? first : String(lesson.noteName.prefix(1))
-    }
-
-    private func chordNames(for variant: String) -> String? {
-        if let mapped = chordNamesFromRomanProgression(variant) {
-            return mapped
-        }
-        return lesson.progressions.first(where: { $0.numerals == variant })?.chords
-    }
-
-    private func playbackNotes(for variant: String) -> [String] {
-        guard let chordNames = chordNames(for: variant) else { return [] }
-        return chordNames
-            .split(separator: "–")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private func displayTitle(for variant: String) -> String {
-        chordNames(for: variant) ?? variant
-    }
-
-    private func chordNamesFromRomanProgression(_ progression: String) -> String? {
-        guard let scale = majorScaleChords(for: lesson.noteEnglish) else { return nil }
-        let numerals = progression
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "-", with: "–")
-            .split(separator: "–")
-            .map(String.init)
-            .filter { !$0.isEmpty }
-        guard !numerals.isEmpty else { return nil }
-
-        let chords = numerals.compactMap { numeral -> String? in
-            let cleaned = numeral.replacingOccurrences(of: "°", with: "")
-            switch cleaned {
-            case "I", "i": return scale[0]
-            case "II", "ii": return scale[1]
-            case "III", "iii": return scale[2]
-            case "IV", "iv": return scale[3]
-            case "V", "v": return scale[4]
-            case "VI", "vi": return scale[5]
-            case "VII", "vii": return scale[6]
-            default: return nil
-            }
-        }
-
-        guard chords.count == numerals.count else { return nil }
-        return chords.joined(separator: "–")
-    }
-
-    private func majorScaleChords(for keyName: String) -> [String]? {
-        let tonic = keyName
-            .split(separator: " ")
-            .first
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let majorFamilies: [String: [String]] = [
-            "C": ["C", "Dm", "Em", "F", "G", "Am", "Bdim"],
-            "G": ["G", "Am", "Bm", "C", "D", "Em", "F#dim"],
-            "D": ["D", "Em", "F#m", "G", "A", "Bm", "C#dim"],
-            "A": ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"],
-            "E": ["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"],
-            "F": ["F", "Gm", "Am", "Bb", "C", "Dm", "Edim"],
-            "Bb": ["Bb", "Cm", "Dm", "Eb", "F", "Gm", "Adim"],
-            "Eb": ["Eb", "Fm", "Gm", "Ab", "Bb", "Cm", "Ddim"],
-            "Ab": ["Ab", "Bbm", "Cm", "Db", "Eb", "Fm", "Gdim"],
-            "B": ["B", "C#m", "D#m", "E", "F#", "G#m", "A#dim"]
-        ]
-
-        guard let tonic else { return nil }
-        return majorFamilies[tonic]
+    private func item(at index: Int) -> PracticeItem? {
+        items.indices.contains(index) ? items[index] : nil
     }
 
     private func lessonCardBorderWidth() -> CGFloat {
@@ -622,58 +277,38 @@ class LessonDetailViewController: UIViewController {
     // MARK: - UI Setup
 
     private func setupUI() {
-        // ── Progress bar (L1 style) ──
-        progressRowLabel = UILabel()
-        progressRowLabel.translatesAutoresizingMaskIntoConstraints = false
-        refreshProgressRowLabel()
-
-        let progressBGView = UIView()
-        progressBGView.translatesAutoresizingMaskIntoConstraints = false
-        progressBGView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18)
-        progressBGView.layer.cornerRadius = 4
-
-        let progressFill = UIView()
-        progressFill.translatesAutoresizingMaskIntoConstraints = false
-        progressFill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        progressFill.layer.cornerRadius = 4
-        progressBGView.addSubview(progressFill)
-
+        // ── Header: lesson name, parts done, and one bar segment per part ──
         let lessonNameLabel = UILabel()
         lessonNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        lessonNameLabel.text = "Lesson \(chapterIndex): \(lesson.title)"
-        lessonNameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        lessonNameLabel.text = "Lesson \(chapterIndex) · \(lesson.title)"
+        lessonNameLabel.font = .preferredFont(forTextStyle: .headline)
+        lessonNameLabel.adjustsFontForContentSizeCategory = true
         lessonNameLabel.textColor = ComponentColors.LessonScreen.labelPrimary
+        lessonNameLabel.numberOfLines = 2
 
-        progressPercentLabel = UILabel()
-        progressPercentLabel.translatesAutoresizingMaskIntoConstraints = false
-        progressPercentLabel.text = "0% complete"
-        progressPercentLabel.font = .systemFont(ofSize: 13)
-        progressPercentLabel.textColor = ComponentColors.LessonScreen.labelSecondary
+        progressCountLabel = UILabel()
+        progressCountLabel.translatesAutoresizingMaskIntoConstraints = false
+        progressCountLabel.font = UIFont.preferredFont(forTextStyle: .footnote).withWeight(.semibold)
+        progressCountLabel.adjustsFontForContentSizeCategory = true
+        progressCountLabel.textColor = BrandColors.brand
+        progressCountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        progressCountLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        // ── Variant dots row (one dot per variant, turns green when done) ──
-        let dotsLabel = UILabel()
-        dotsLabel.translatesAutoresizingMaskIntoConstraints = false
-        dotsLabel.text = "Variants:"
-        dotsLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        dotsLabel.textColor = ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
-
-        dotsStack = UIStackView()
-        dotsStack.translatesAutoresizingMaskIntoConstraints = false
-        dotsStack.axis = .horizontal; dotsStack.spacing = 6; dotsStack.alignment = .center
-
-        for _ in 0..<lesson.variants.count {
-            let dot = UIView()
-            dot.translatesAutoresizingMaskIntoConstraints = false
-            dot.layer.cornerRadius = 5
-            dot.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.2)
-            dot.widthAnchor.constraint(equalToConstant: 10).isActive = true
-            dot.heightAnchor.constraint(equalToConstant: 10).isActive = true
-            dotsStack.addArrangedSubview(dot)
+        let progressBar = UIStackView()
+        progressBar.translatesAutoresizingMaskIntoConstraints = false
+        progressBar.axis = .horizontal
+        progressBar.spacing = 4
+        progressBar.distribution = .fillEqually
+        progressBar.isAccessibilityElement = true
+        progressBar.accessibilityLabel = "Lesson progress"
+        for _ in lesson.variants {
+            let segment = UIView()
+            segment.layer.cornerRadius = 3
+            segment.backgroundColor = BrandColors.brand.withAlphaComponent(0.18)
+            progressBar.addArrangedSubview(segment)
+            progressSegments.append(segment)
         }
-
-        let dotsRow = UIStackView(arrangedSubviews: [dotsLabel, dotsStack])
-        dotsRow.translatesAutoresizingMaskIntoConstraints = false
-        dotsRow.axis = .horizontal; dotsRow.spacing = 8; dotsRow.alignment = .center
+        refreshProgress(animated: false)
 
         // ── Staff card ──
         let staffCardView = UIView()
@@ -685,10 +320,7 @@ class LessonDetailViewController: UIViewController {
         staffCardView.layer.shadowRadius = 16
         staffCardView.layer.shadowOffset = CGSize(width: 0, height: 6)
 
-        staffView = MusicStaffView(
-            noteName: getNoteLetter(from: lesson.variants[0]),
-            playbackNotes: playbackNotes(for: lesson.variants[0])
-        )
+        staffView = LessonStaffView(steps: item(at: 0)?.steps ?? [])
         staffView.translatesAutoresizingMaskIntoConstraints = false
         staffView.backgroundColor = .clear; staffView.layer.shadowOpacity = 0
         staffCardView.addSubview(staffView)
@@ -708,7 +340,7 @@ class LessonDetailViewController: UIViewController {
         // ── Note name ──
         noteNameLabel = UILabel()
         noteNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        noteNameLabel.text = isEarTrainingLesson ? nil : displayTitle(for: lesson.variants[0])
+        noteNameLabel.text = isEarTrainingLesson ? nil : item(at: 0)?.title
         noteNameLabel.font = isEarTrainingLesson
             ? .systemFont(ofSize: 24, weight: .semibold)
             : .systemFont(ofSize: 42, weight: .heavy)
@@ -733,14 +365,16 @@ class LessonDetailViewController: UIViewController {
         engRow.addSubview(englishPrefixLabel)
         englishLabel = UILabel()
         englishLabel.translatesAutoresizingMaskIntoConstraints = false
-        updateEnglishLabel(with: lesson.variants[0])
+        updateEnglishLabel(with: 0)
         engRow.addSubview(englishLabel)
         engRow.isHidden = isEarTrainingLesson
 
         // ── Variants section ──
         let variantsHeaderLabel = UILabel()
         variantsHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
-        variantsHeaderLabel.text = isEarTrainingLesson ? "Identify the note you heard" : "Tap a variant chip, then practice with the mic ↓"
+        variantsHeaderLabel.text = isEarTrainingLesson
+            ? "Which chord came after the home chord?"
+            : "Pick a part, listen to it, then play it with Try Yourself"
         variantsHeaderLabel.font = .systemFont(ofSize: 12, weight: .medium)
         variantsHeaderLabel.textColor = ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
 
@@ -759,7 +393,7 @@ class LessonDetailViewController: UIViewController {
         variantsScrollView.addSubview(chipsStack)
 
         for (i, variant) in lesson.variants.enumerated() {
-            let chipLabel = isEarTrainingLesson ? earTrainingChipLabel(for: i) : (chordNames(for: variant) ?? variant)
+            let chipLabel = isEarTrainingLesson ? variant : (item(at: i)?.chipLabel ?? variant)
             let chip = VariantChipButton(label: chipLabel, isSelected: i == 0)
             chip.tag = i
             chip.addTarget(self, action: #selector(selectVariant(_:)), for: .touchUpInside)
@@ -922,40 +556,23 @@ class LessonDetailViewController: UIViewController {
             infoCards.append(tasksCard)
         }
 
-        [progressRowLabel, progressBGView,
-         lessonNameLabel, progressPercentLabel, dotsRow, staffCardView, noteNameLabel,
+        [lessonNameLabel, progressCountLabel, progressBar, staffCardView, noteNameLabel,
          engRow, variantsHeaderLabel, optionsGrid, variantsScrollView, tryBtn].forEach { contentView.addSubview($0) }
         infoCards.forEach { contentView.addSubview($0) }
 
-        // Progress fill width — starts at 0
-        progressFillConstraint = progressFill.widthAnchor.constraint(equalToConstant: 0)
-        progressFillConstraint.isActive = true
-
         NSLayoutConstraint.activate([
-            lessonNameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 34),
+            lessonNameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 30),
             lessonNameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            lessonNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: progressBGView.leadingAnchor, constant: -24),
+            lessonNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: progressCountLabel.leadingAnchor, constant: -12),
+            progressCountLabel.firstBaselineAnchor.constraint(equalTo: lessonNameLabel.firstBaselineAnchor),
+            progressCountLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            progressRowLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 38),
-            progressRowLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            progressBar.topAnchor.constraint(equalTo: lessonNameLabel.bottomAnchor, constant: 10),
+            progressBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            progressBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            progressBar.heightAnchor.constraint(equalToConstant: 6),
 
-            progressBGView.topAnchor.constraint(equalTo: progressRowLabel.bottomAnchor, constant: 8),
-            progressBGView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            progressBGView.widthAnchor.constraint(equalToConstant: 130),
-            progressBGView.heightAnchor.constraint(equalToConstant: 7),
-
-            progressFill.leadingAnchor.constraint(equalTo: progressBGView.leadingAnchor),
-            progressFill.topAnchor.constraint(equalTo: progressBGView.topAnchor),
-            progressFill.bottomAnchor.constraint(equalTo: progressBGView.bottomAnchor),
-
-            progressPercentLabel.topAnchor.constraint(equalTo: progressBGView.bottomAnchor, constant: 10),
-            progressPercentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            dotsRow.topAnchor.constraint(equalTo: progressPercentLabel.bottomAnchor, constant: 18),
-            dotsRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            lessonNameLabel.bottomAnchor.constraint(lessThanOrEqualTo: dotsRow.topAnchor, constant: -12),
-
-            staffCardView.topAnchor.constraint(equalTo: dotsRow.bottomAnchor, constant: 14),
+            staffCardView.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: 18),
             staffCardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             staffCardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             staffCardView.heightAnchor.constraint(equalToConstant: 195),
@@ -1019,7 +636,6 @@ class LessonDetailViewController: UIViewController {
             bottomAnchorView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
         }
         
-        chipsStack.widthAnchor.constraint(equalToConstant: CGFloat(lesson.variants.count) * 82).isActive = true
     }
 
     // MARK: - Card builder helpers
@@ -1072,7 +688,9 @@ class LessonDetailViewController: UIViewController {
         playButton.addTarget(self, action: #selector(didTapEarTrainingPlay), for: .touchUpInside)
         let helperLabel = UILabel()
         helperLabel.translatesAutoresizingMaskIntoConstraints = false
-        helperLabel.text = "Tap play to hear the note"
+        helperLabel.text = "Home chord, then a mystery chord"
+        helperLabel.adjustsFontSizeToFitWidth = true
+        helperLabel.minimumScaleFactor = 0.8
         helperLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         helperLabel.textColor = ComponentColors.LessonScreen.labelSecondary
         helperLabel.textAlignment = .center
@@ -1112,10 +730,11 @@ class LessonDetailViewController: UIViewController {
         bottomRow.spacing = 12
         bottomRow.distribution = .fillEqually
 
-        for index in 0..<4 {
+        for index in 0..<PracticeMusic.earOptions.count {
             let button = UIButton(type: .system)
             button.translatesAutoresizingMaskIntoConstraints = false
-            button.titleLabel?.font = .systemFont(ofSize: 24, weight: .bold)
+            button.tag = index
+            button.titleLabel?.font = .systemFont(ofSize: 20, weight: .bold)
             button.layer.cornerRadius = 18
             button.layer.borderWidth = 1
             button.addTarget(self, action: #selector(didTapEarTrainingOption(_:)), for: .touchUpInside)
@@ -1159,13 +778,9 @@ class LessonDetailViewController: UIViewController {
     }
 
     private func refreshEarTrainingOptions() {
-        guard isEarTrainingLesson, earTrainingOptionButtons.count == 4 else { return }
-        let target = currentEarTrainingTarget()
-        let distractors = earTrainingNotePool.filter { $0 != target }.shuffled().prefix(3)
-        let options = Array(([target] + distractors).shuffled())
-
-        for (button, title) in zip(earTrainingOptionButtons, options) {
-            button.setTitle(title, for: .normal)
+        guard isEarTrainingLesson else { return }
+        for (button, numeral) in zip(earTrainingOptionButtons, PracticeMusic.earOptions) {
+            button.setTitle("\(numeral) · \(PracticeMusic.earOptionHints[numeral] ?? "")", for: .normal)
             styleEarTrainingOption(button, state: .idle)
         }
     }
@@ -1362,23 +977,8 @@ class LessonDetailViewController: UIViewController {
             let pts = attempts == 1 ? 3 : attempts == 2 ? 2 : 1
             scorePoints += pts
             variantsDone.insert(variantIndex)
-            if isEarTrainingLesson {
-                chipButtons[variantIndex].updateLabel(earTrainingChipLabel(for: variantIndex))
-            }
-
-            // Mark chip done
             chipButtons[variantIndex].markDone()
-
-            // Turn the corresponding dot green
-            if variantIndex < dotsStack.arrangedSubviews.count {
-                let dot = dotsStack.arrangedSubviews[variantIndex]
-                UIView.animate(withDuration: 0.3) {
-                    dot.backgroundColor = ComponentColors.LessonScreen.correctAnswer
-                }
-            }
-
-            // Animate progress bar
-            animateProgressBar()
+            refreshProgress(animated: true)
 
             // ── Persist part completion to Supabase ───────────────────────
             Task {
@@ -1401,30 +1001,19 @@ class LessonDetailViewController: UIViewController {
         }
     }
 
-    private func animateProgressBar() {
-        let pct = Int(lessonProgress * 100)
-        progressPercentLabel.text = "\(pct)% complete"
-        refreshProgressRowLabel()
-
-        // Animate fill — bar background is 130 pt wide
-        progressFillConstraint.constant = 130 * CGFloat(lessonProgress)
-        UIView.animate(withDuration: 0.55, delay: 0,
-                       usingSpringWithDamping: 0.72, initialSpringVelocity: 0.3) {
-            self.view.layoutIfNeeded()
+    /// "3 of 7 parts" and the filled segments.
+    private func refreshProgress(animated: Bool) {
+        let done = variantsDone.count, total = lesson.variants.count
+        progressCountLabel?.text = done == total ? "Complete" : "\(done) of \(total) parts"
+        let update = {
+            for (i, segment) in self.progressSegments.enumerated() {
+                segment.backgroundColor = self.variantsDone.contains(i)
+                    ? BrandColors.brand
+                    : BrandColors.brand.withAlphaComponent(0.18)
+            }
         }
-    }
-
-    private func refreshProgressRowLabel() {
-        let pct = Int(lessonProgress * 100)
-        let text = NSMutableAttributedString(string: "PROGRESS    ", attributes: [
-            .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: UIColor.systemGray
-        ])
-        text.append(NSAttributedString(string: "\(pct)%", attributes: [
-            .font: UIFont.systemFont(ofSize: 11, weight: .bold),
-            .foregroundColor: ComponentColors.HomeScreen.actionButtonFill
-        ]))
-        progressRowLabel?.attributedText = text
+        animated ? UIView.animate(withDuration: 0.3, animations: update) : update()
+        progressSegments.first?.superview?.accessibilityValue = "\(done) of \(total) parts done"
     }
 
     // MARK: - Stars Calculation
@@ -1491,6 +1080,8 @@ class LessonDetailViewController: UIViewController {
                     }) { _ in
                         popup.removeFromSuperview(); dim.removeFromSuperview()
                         self?.onLessonCompleted?(stars)
+                        // back to the map, where the next chapter is now unlocked
+                        self?.dismiss(animated: true)
                     }
                 }
             }
@@ -1520,11 +1111,9 @@ class LessonDetailViewController: UIViewController {
 
         // Rebuild staff
         if !isEarTrainingLesson, let card = staffView.superview {
+            staffView.stop()
             staffView.removeFromSuperview()
-            staffView = MusicStaffView(
-                noteName: getNoteLetter(from: variant),
-                playbackNotes: playbackNotes(for: variant)
-            )
+            staffView = LessonStaffView(steps: item(at: idx)?.steps ?? [])
             staffView.translatesAutoresizingMaskIntoConstraints = false
             staffView.backgroundColor = .clear; staffView.layer.shadowOpacity = 0
             card.addSubview(staffView)
@@ -1538,10 +1127,10 @@ class LessonDetailViewController: UIViewController {
 
         if !isEarTrainingLesson {
             UIView.transition(with: noteNameLabel, duration: 0.25, options: .transitionCrossDissolve) {
-                self.noteNameLabel.text = self.displayTitle(for: variant)
+                self.noteNameLabel.text = self.item(at: idx)?.title ?? variant
             }
             UIView.transition(with: englishLabel, duration: 0.25, options: .transitionCrossDissolve) {
-                self.updateEnglishLabel(with: variant)
+                self.updateEnglishLabel(with: idx)
             }
         }
         if isEarTrainingLesson {
@@ -1572,22 +1161,10 @@ class LessonDetailViewController: UIViewController {
         }
     }
 
-    private func updateEnglishLabel(with variant: String) {
-        let name: String
-        if chordNames(for: variant) != nil {
-            englishPrefixLabel?.text = "Key: "
-            name = lesson.noteEnglish
-        } else if let mappedName = noteMapping[variant] {
-            englishPrefixLabel?.text = "English Note: "
-            name = mappedName
-        } else if ["C","D","E","F","G","A","B"].contains(variant) {
-            englishPrefixLabel?.text = "English Note: "
-            name = variant
-        } else {
-            englishPrefixLabel?.text = "English Note: "
-            name = lesson.noteEnglish
-        }
-        englishLabel.text = name
+    /// "Notes: D · F · A", "Solfège: Do", "In C major: I–IV–V".
+    private func updateEnglishLabel(with index: Int) {
+        englishPrefixLabel?.text = item(at: index)?.detailPrefix
+        englishLabel.text = item(at: index)?.detail
         englishLabel.font = .systemFont(ofSize: 14, weight: .bold)
         englishLabel.textColor = ComponentColors.LessonScreen.labelPrimary
     }
@@ -1595,12 +1172,14 @@ class LessonDetailViewController: UIViewController {
     @objc private func didTapTryYourself() {
         guard !isEarTrainingLesson else { return }
         let variantIdx = selectedVariantIndex
-        let variant = lesson.variants[variantIdx]
+        guard let practiceItem = item(at: variantIdx) else { return }
+        staffView.stop()
 
-        let sheet = TryYourselfViewController(noteName: variant)
+        let sheet = TryYourselfViewController(item: practiceItem)
         sheet.modalPresentationStyle = .pageSheet
         if #available(iOS 15.0, *), let sp = sheet.sheetPresentationController {
-            sp.detents = [.medium()]
+            // the sheet's content (instructions, mic, status) needs more than half the screen
+            sp.detents = [.large()]
             sp.prefersGrabberVisible = true
             sp.preferredCornerRadius = 30
         }
@@ -1613,33 +1192,44 @@ class LessonDetailViewController: UIViewController {
         present(sheet, animated: true)
     }
 
-    @objc private func didTapEarTrainingPlay() {
-        guard isEarTrainingLesson else { return }
-        let target = currentEarTrainingTarget()
-        guard let midi = AudioEngineManager.shared.midiNumber(from: "\(target)4") else { return }
+    private var earPlaybackItems: [DispatchWorkItem] = []
 
+    /// The key's home chord, a pause, then the mystery chord.
+    @objc private func didTapEarTrainingPlay() {
+        guard isEarTrainingLesson, earRounds.indices.contains(selectedVariantIndex) else { return }
+        let round = earRounds[selectedVariantIndex]
+        earPlaybackItems.forEach { $0.cancel() }
+        earPlaybackItems = []
         AudioEngineManager.shared.startEngine()
         AudioEngineManager.shared.stopAllNotes()
-        AudioEngineManager.shared.startNote(midi: midi, velocity: 112)
 
-        let stopWorkItem = DispatchWorkItem {
-            AudioEngineManager.shared.stopAllNotes()
+        func chord(_ c: PracticeChord, at time: Double) {
+            let on = DispatchWorkItem {
+                AudioEngineManager.shared.stopAllNotes()
+                c.notes.forEach { AudioEngineManager.shared.startNote(midi: UInt8($0.midi), velocity: 100) }
+            }
+            earPlaybackItems.append(on)
+            DispatchQueue.main.asyncAfter(deadline: .now() + time, execute: on)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: stopWorkItem)
+        chord(round.reference, at: 0)
+        chord(round.mystery, at: 1.3)
+        let off = DispatchWorkItem { AudioEngineManager.shared.stopAllNotes() }
+        earPlaybackItems.append(off)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6, execute: off)
     }
 
     @objc private func didTapEarTrainingOption(_ sender: UIButton) {
-        guard isEarTrainingLesson, let chosen = sender.title(for: .normal) else { return }
+        guard isEarTrainingLesson, earRounds.indices.contains(selectedVariantIndex),
+              PracticeMusic.earOptions.indices.contains(sender.tag) else { return }
 
         let variantIdx = selectedVariantIndex
-        let target = currentEarTrainingTarget()
+        let answer = earRounds[variantIdx].answer
         let attempts = (earTrainingAttempts[variantIdx] ?? 0) + 1
         earTrainingAttempts[variantIdx] = attempts
 
-        let isCorrect = chosen == target
+        let isCorrect = PracticeMusic.earOptions[sender.tag] == answer
         for button in earTrainingOptionButtons {
-            guard let title = button.title(for: .normal) else { continue }
-            if title == target {
+            if PracticeMusic.earOptions[button.tag] == answer, isCorrect {
                 styleEarTrainingOption(button, state: .correct)
             } else if button == sender && !isCorrect {
                 styleEarTrainingOption(button, state: .incorrect)
@@ -1647,13 +1237,11 @@ class LessonDetailViewController: UIViewController {
                 styleEarTrainingOption(button, state: .idle)
             }
         }
-
         if isCorrect {
             recordVariantPracticed(variantIndex: variantIdx, attempts: attempts)
-        } else {
         }
     }
-    
+
     // MARK: - Supabase Parts Synchronization
     
     private struct PartCompletedEvent: Decodable {
@@ -1662,70 +1250,12 @@ class LessonDetailViewController: UIViewController {
     
     private func loadCompletedVariantsFromSupabase() {
         Task {
-            if GuestSessionManager.shared.isGuest() {
-                let completedPartIndexes = SupabaseProgressManager.guestCompletedPartIndexes(for: chapterIndex)
-
-                await MainActor.run {
-                    for idx in completedPartIndexes where idx < self.lesson.variants.count {
-                        self.variantsDone.insert(idx)
-                        if self.isEarTrainingLesson {
-                            self.chipButtons[idx].updateLabel(self.earTrainingChipLabel(for: idx))
-                        }
-                        self.chipButtons[idx].markDone()
-                        self.dotsStack.arrangedSubviews[idx].backgroundColor = .systemGreen
-                    }
-
-                    self.refreshProgressRowLabel()
-                    self.progressPercentLabel.text = "\(Int(self.lessonProgress * 100))% complete"
-
-                    if self.progressFillConstraint != nil {
-                        self.progressFillConstraint.constant = 130 * CGFloat(self.lessonProgress)
-                        UIView.animate(withDuration: 0.3) {
-                            self.view.layoutIfNeeded()
-                        }
-                    }
-                }
-                return
+            let done = await SupabaseProgressManager.completedPartIndexes(for: chapterIndex)
+            for idx in done where idx < lesson.variants.count {
+                variantsDone.insert(idx)
+                chipButtons[idx].markDone()
             }
-
-            do {
-                let db = SupabaseManager.shared.client
-                let userID = try await db.auth.session.user.id
-                
-                let events: [PartCompletedEvent] = try await db
-                    .from("lesson_events")
-                    .select("part_index")
-                    .eq("user_id", value: userID.uuidString)
-                    .eq("chapter_index", value: chapterIndex)
-                    .eq("event_type", value: "part_completed")
-                    .execute()
-                    .value
-                
-                await MainActor.run {
-                    for event in events {
-                        let idx = event.part_index
-                        guard idx >= 0 && idx < self.lesson.variants.count else { continue }
-                        self.variantsDone.insert(idx)
-                        if self.isEarTrainingLesson {
-                            self.chipButtons[idx].updateLabel(self.earTrainingChipLabel(for: idx))
-                        }
-                        self.chipButtons[idx].markDone()
-                        self.dotsStack.arrangedSubviews[idx].backgroundColor = .systemGreen
-                    }
-                    
-                    self.refreshProgressRowLabel()
-                    self.progressPercentLabel.text = "\(Int(self.lessonProgress * 100))% complete"
-                    
-                    if self.progressFillConstraint != nil {
-                        self.progressFillConstraint.constant = 130 * CGFloat(self.lessonProgress)
-                        UIView.animate(withDuration: 0.3) {
-                            self.view.layoutIfNeeded()
-                        }
-                    }
-                }
-            } catch {
-                debugLog("[LessonDetailViewController] loadCompletedVariants error: \(error)")
-            }
+            refreshProgress(animated: true)
         }
     }
 
@@ -1892,9 +1422,11 @@ class TryYourselfViewController: UIViewController {
 
     // MARK: - Properties
 
-    private let noteName: String
-    /// The root note letter we expect (e.g. "C", "G", "D")
-    private let targetNote: String
+    private let item: PracticeItem
+    /// Which step (chord of a progression) is being listened for.
+    private var stepIndex = 0
+    private var targetStep: PracticeStep { item.steps[min(stepIndex, item.steps.count - 1)] }
+    private var targetHintLabel: UILabel!
 
     private var isListening = false
     private var pulseViews: [UIView] = []
@@ -1920,53 +1452,8 @@ class TryYourselfViewController: UIViewController {
     /// Delivers the number of mic taps (attempts) the user made — used to compute stars
     var onSessionCompleted: ((Int) -> Void)?
 
-    // Note name mapping — maps display names to target root notes.
-    private static let noteMapping: [String: String] = [
-        "Do": "C", "Re": "D", "Mi": "E", "Fa": "F", "Sol": "G", "La": "A", "Ti": "B",
-        "Treble": "G", "Bass": "F", "Alto": "C", "Tenor": "C", "Soprano": "G", "Mezzo": "G", "Violin": "G",
-        // Chord quality / progression lessons still require a stable captured pitch.
-        "Minor": "C", "Major": "C", "Sharp": "C#", "Dim": "C", "Aug": "C", "Flat": "Cb",
-        "Diminished": "C", "Augmented": "C", "7th": "C",
-        "I–IV–V": "C", "I–V–vi–IV": "C", "ii–V–I": "D", "vi–IV–I–V": "A", "I–vi–IV–V": "C",
-        // Specific root notes
-        "C": "C", "D": "D", "E": "E", "F": "F", "G": "G", "A": "A", "B": "B",
-        "Cm": "C", "Dm": "D", "Em": "E", "Fm": "F", "Gm": "G", "Am": "A", "Bm": "B",
-        "C Family": "C", "G Family": "G", "F Family": "F", "D Family": "D", "A Family": "A",
-    ]
-
-    /// Tracks whether we need an exact octave match
-    private let exactOctave: Int?   // nil = any octave
-    init(noteName: String) {
-        self.noteName = noteName
-
-        // ── Parse the passed-in name ────────────────────────────────
-        // Could be: "F", "C5", "Major", "Do", "C Family", "Dm", etc.
-        //
-        // 1. Try the explicit mapping table first
-        //    - String value → specific root note target
-        // 2. If it ends with a digit, honour that as the required octave
-        // 3. Otherwise accept any octave
-        // ────────────────────────────────────────────────────────────
-
-        if let lookup = TryYourselfViewController.noteMapping[noteName] {
-            self.targetNote = lookup
-            self.exactOctave = nil
-        } else {
-            // Raw string — check if it ends with a digit (e.g. "C5")
-            let stripped = noteName.prefix(while: { !$0.isNumber })
-            let root = String(stripped).uppercased()
-
-            if let digitStr = noteName.last, digitStr.isNumber,
-                let octave = Int(String(digitStr)) {
-                self.targetNote = root
-                self.exactOctave = octave
-            } else {
-                let letter = root.isEmpty ? String(noteName.prefix(1)).uppercased() : String(root.prefix(1))
-                self.targetNote = letter
-                self.exactOctave = nil
-            }
-        }
-
+    init(item: PracticeItem) {
+        self.item = item
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -2005,7 +1492,7 @@ class TryYourselfViewController: UIViewController {
         notePill.layer.cornerRadius = 25
         let noteLabel = UILabel()
         noteLabel.translatesAutoresizingMaskIntoConstraints = false
-        noteLabel.text = noteName
+        noteLabel.text = item.title
         noteLabel.font = .systemFont(ofSize: 28, weight: .bold)
         noteLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         noteLabel.textAlignment = .center
@@ -2020,23 +1507,24 @@ class TryYourselfViewController: UIViewController {
         ])
 
         // Target hint
-        let targetHintLabel = UILabel()
+        targetHintLabel = UILabel()
         targetHintLabel.translatesAutoresizingMaskIntoConstraints = false
-        targetHintLabel.text = "Target: \(targetNote)  (clear captured pitch)"
+        targetHintLabel.numberOfLines = 0
+        updateTargetHint()
         targetHintLabel.font = .systemFont(ofSize: 12, weight: .medium)
         targetHintLabel.textColor = .systemGray2
         targetHintLabel.textAlignment = .center
 
         let subLabel = UILabel()
         subLabel.translatesAutoresizingMaskIntoConstraints = false
-        subLabel.text = "Sing or play the note on your instrument"
+        subLabel.text = item.instruction
         subLabel.font = .systemFont(ofSize: 15)
         subLabel.textColor = .systemGray; subLabel.textAlignment = .center
         subLabel.numberOfLines = 0
 
         instructionLabel = UILabel()
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
-        instructionLabel.text = "Tap capture audio, then play a clean single note."
+        instructionLabel.text = "Tap the microphone, then play on your piano."
         instructionLabel.font = .systemFont(ofSize: 13, weight: .medium)
         instructionLabel.textColor = ComponentColors.LessonScreen.labelSecondary
         instructionLabel.textAlignment = .center
@@ -2105,7 +1593,7 @@ class TryYourselfViewController: UIViewController {
 
         statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = "Tap capture audio to start"
+        statusLabel.text = "Tap the microphone to start listening"
         statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
         statusLabel.textColor = .systemGray; statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 2
@@ -2176,7 +1664,7 @@ class TryYourselfViewController: UIViewController {
             doneButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
             doneButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
             doneButton.heightAnchor.constraint(equalToConstant: 48),
-            doneButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -28),
+            doneButton.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
         ])
     }
 
@@ -2224,15 +1712,17 @@ class TryYourselfViewController: UIViewController {
         correctStreak = 0
         stableRootFrameCount = 0
         lastDetectedRoot = nil
+        stepIndex = 0
+        updateTargetHint()
         let starsHint = attemptCount == 1 ? "⭐⭐⭐" : attemptCount == 2 ? "⭐⭐" : "⭐"
         attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
         UIView.transition(with: attemptCounterLabel, duration: 0.2, options: .transitionCrossDissolve, animations: nil)
 
         let activeMicConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: activeMicConfig), for: .normal)
-        statusLabel.text = "Capturing audio... play the target note clearly."
+        statusLabel.text = "Listening… play \(targetStep.label)"
         statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
-        instructionLabel.text = "Avoid background noise. Hold the correct note steady for a moment."
+        instructionLabel.text = "Hold it steady for a moment. Quiet rooms work best."
         UIView.animate(withDuration: 0.25) {
             self.detectedNoteLabel.alpha = 1
             self.micButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
@@ -2338,18 +1828,11 @@ class TryYourselfViewController: UIViewController {
         lastDetectedRoot = nil
         let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
-        statusLabel.text = "Good. Tap capture audio again to retry, or tap Done ✓"
+        statusLabel.text = "Stopped. Tap the microphone to try again."
         statusLabel.textColor = .systemGray
-        instructionLabel.text = "Tap capture audio, then play a clean single note."
+        instructionLabel.text = "Tap the microphone, then play on your piano."
         stopPulseAnimation()
         UIView.animate(withDuration: 0.3) { self.micButton.transform = .identity }
-
-        if doneButton.alpha == 0 {
-            UIView.animate(withDuration: 0.35, delay: 0.1,
-                           usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-                self.doneButton.alpha = 1
-            }
-        }
     }
 
     @objc private func didTapDone() {
@@ -2362,6 +1845,15 @@ class TryYourselfViewController: UIViewController {
         dismiss(animated: true) { [weak self] in
             self?.onSessionCompleted?(finalCount)
         }
+    }
+
+    /// "Listening for: D · F · A", or "Chord 2 of 4: G · B · D" in a progression.
+    private func updateTargetHint() {
+        let notes = targetStep.pitches.map(\.display).joined(separator: " · ")
+        let prefix = item.steps.count > 1
+            ? "Chord \(stepIndex + 1) of \(item.steps.count) — \(targetStep.label): "
+            : (targetStep.pitches.count > 1 ? "Listening for: " : "Listening for ")
+        targetHintLabel?.text = prefix + notes
     }
 
     // MARK: - Correct Match Animation
@@ -2382,7 +1874,7 @@ class TryYourselfViewController: UIViewController {
 
         statusLabel.text = "🎉 Nailed it! Tap Done ✓"
         statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
-        instructionLabel.text = "Nice work. You matched the target note."
+        instructionLabel.text = item.steps.count > 1 ? "You played every chord in order." : "You played \(item.title)."
 
         // Animate rings green
         for (i, ring) in pulseViews.enumerated() {
@@ -2434,109 +1926,63 @@ class TryYourselfViewController: UIViewController {
 extension TryYourselfViewController: PitchDetectorDelegate {
     public func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
         guard isListening, !alreadyMarkedCorrect else { return }
-        guard amplitude >= minimumDetectionAmplitude else {
+        guard amplitude >= minimumDetectionAmplitude, frequency >= minimumMatchFrequency else {
             correctStreak = 0
             stableRootFrameCount = 0
             lastDetectedRoot = nil
             return
         }
-        guard frequency >= minimumMatchFrequency else {
-            correctStreak = 0
-            stableRootFrameCount = 0
-            lastDetectedRoot = nil
-            return
-        }
+        let heardMidi = notes.compactMap { AudioEngineManager.shared.midiNumber(from: $0) }.map(Int.init)
+        guard !heardMidi.isEmpty else { return }
+        let heard = Set(heardMidi.map { $0 % 12 })
+        let target = targetStep.pitchClasses
 
-        // ── Parse detected note (e.g. "C4", "F#3") ──────────────────
-        guard let rawNote = notes.first, rawNote != "—" else { return }
+        detectedNoteLabel.text = notes.prefix(3).joined(separator: " ")
+        // every note of the target sounding (any octave)
+        let allHeard = target.isSubset(of: heard)
+        let someHeard = !target.isDisjoint(with: heard)
+        let key = heard.sorted().map(String.init).joined(separator: ",")
+        if key == lastDetectedRoot { stableRootFrameCount += 1 } else { lastDetectedRoot = key; stableRootFrameCount = 1 }
+        let isMatch = allHeard && stableRootFrameCount >= 2
 
-        // Root = letters up to (but not including) the octave digit
-        let detectedRoot = String(rawNote.prefix(while: { !$0.isNumber && $0 != "-" }))
-        // Octave = trailing digit(s)
-        let detectedOctave = rawNote.last.flatMap { $0.isNumber ? Int(String($0)) : nil }
-
-        // Display the full detected note (e.g. "F4") so the user sees exactly what is heard
-        detectedNoteLabel.text = rawNote
-        UIView.transition(with: detectedNoteLabel, duration: 0.12, options: .transitionCrossDissolve, animations: nil)
-
-        // ── Smart match ──────────────────────────────────────────────
-        // If qualityOnly is true, any detected note is a match (for generic chord quality lessons)
-        // If exactOctave is set, require BOTH root and octave to match
-        // If exactOctave is nil, only the root letter needs to match
-        let rootMatch: Bool
-        let octaveMatch: Bool
-        
-        if detectedRoot == lastDetectedRoot {
-            stableRootFrameCount += 1
-        } else {
-            lastDetectedRoot = detectedRoot
-            stableRootFrameCount = 1
-        }
-
-        rootMatch = detectedRoot.uppercased() == targetNote.uppercased()
-        if let required = exactOctave {
-            octaveMatch = detectedOctave == required
-        } else {
-            octaveMatch = true
-        }
-        
-        let isMatch = rootMatch && octaveMatch && stableRootFrameCount >= 3
-
-        // ── Colour the detected-note badge ───────────────────────────
-        if isMatch {
-            detectedNoteLabel.textColor = ComponentColors.LessonScreen.correctAnswer
-        } else if rootMatch && !octaveMatch {
-            // Right note, wrong octave — amber hint
-            detectedNoteLabel.textColor = .systemOrange
-        } else {
-            // Wrong note entirely — red
-            detectedNoteLabel.textColor = .systemRed
-        }
-
-        // ── Ring animation driven by real amplitude ───────────────────
-        let ringColor: UIColor = isMatch
-            ? ComponentColors.LessonScreen.correctAnswer
-            : (rootMatch ? .systemOrange : .systemRed)
+        let color: UIColor = isMatch ? ComponentColors.LessonScreen.correctAnswer : (someHeard ? .systemOrange : .systemRed)
+        detectedNoteLabel.textColor = color
         let scale = 1.0 + amplitude * 0.18
         UIView.animate(withDuration: 0.1) {
             for (i, ring) in self.pulseViews.enumerated() {
                 let s = scale + CGFloat(i) * 0.03
                 ring.transform = CGAffineTransform(scaleX: s, y: s)
-                ring.layer.borderColor = ringColor.withAlphaComponent(amplitude * 0.5).cgColor
+                ring.layer.borderColor = color.withAlphaComponent(amplitude * 0.5).cgColor
             }
         }
 
-        // ── Streak logic & status text ───────────────────────────────
-        if isMatch {
-            correctStreak += 1
-            let progress = min(correctStreak, streakRequired)
-            let filled = String(repeating: "●", count: progress)
-            let empty  = String(repeating: "○", count: streakRequired - progress)
-            statusLabel.text = "✅ \(detectedRoot) — Hold it!  \(filled)\(empty)"
-            statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
-            if correctStreak >= streakRequired {
-                flashCorrect()
-            }
-        } else {
-            // Wrong — vibrate mic button briefly
-            if correctStreak > 0 {
-                let shake = CAKeyframeAnimation(keyPath: "transform.translation.x")
-                shake.values = [-4, 4, -3, 3, -2, 2, 0]
-                shake.duration = 0.3
-                shake.timingFunction = CAMediaTimingFunction(name: .linear)
-                micButton.layer.add(shake, forKey: "shake")
-            }
+        guard isMatch else {
             correctStreak = 0
+            let missing = targetStep.pitches.filter { !heard.contains($0.pitchClass) }.map(\.display)
+            statusLabel.text = someHeard && !missing.isEmpty
+                ? "Almost — also play \(missing.joined(separator: ", "))"
+                : "Heard \(notes.first ?? "") — play \(targetStep.label)"
+            statusLabel.textColor = someHeard ? .systemOrange : .systemRed
+            return
+        }
 
-            // Smart hint message
-            if rootMatch, let oct = exactOctave, let det = detectedOctave {
-                let dir = det < oct ? "higher 🔼" : "lower 🔽"
-                statusLabel.text = "Right note, go \(dir) (need \(targetNote)\(oct))"
-                statusLabel.textColor = .systemOrange
-            } else {
-                statusLabel.text = "Heard \(detectedRoot) — need \(targetNote)  🎵"
-                statusLabel.textColor = .systemRed
-            }
+        correctStreak += 1
+        let filled = String(repeating: "●", count: min(correctStreak, streakRequired))
+        let empty = String(repeating: "○", count: max(0, streakRequired - correctStreak))
+        statusLabel.text = "✅ \(targetStep.label) — hold it!  \(filled)\(empty)"
+        statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
+        guard correctStreak >= streakRequired else { return }
+
+        if stepIndex < item.steps.count - 1 {
+            // next chord of the progression
+            stepIndex += 1
+            correctStreak = 0
+            stableRootFrameCount = 0
+            lastDetectedRoot = nil
+            updateTargetHint()
+            statusLabel.text = "Great — now play \(targetStep.label)"
+        } else {
+            flashCorrect()
         }
     }
 }

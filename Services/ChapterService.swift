@@ -21,8 +21,6 @@ class ChapterService {
             .execute()
             .value
             
-        // Also fetch stars from lesson_events if tracked there
-        // For now returning defaults
-        return (profile.current_chapter ?? 1, [:])
+        return (profile.current_chapter ?? 1, await SupabaseProgressManager.chapterStars())
     }
 }

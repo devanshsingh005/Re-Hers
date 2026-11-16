@@ -151,7 +151,7 @@ var allChapters: [MusicChapter] = [
             noteEnglish: "C major",
             description: "Chords carry emotion. Major chords sound bright and happy. Minor chords sound sad or serious. Diminished chords sound tense and unstable. Learning to hear the difference is the most important skill in music.",
             variants: ["Major", "Minor", "Diminished", "Augmented"],
-            familyOverview: "Every chord has a quality — major, minor, or diminished. That quality determines the emotional colour of the sound. Most songs mix these qualities to tell a musical story.",
+            familyOverview: "Every chord has a quality — major, minor, diminished or augmented. The quality comes from the gaps between its notes, and it sets the emotional colour of the sound. Most songs mix these qualities to tell a musical story.",
             chordDetails: [
                 ChordDetail(name: "Major chord", notes: ["Root", "Major 3rd", "Perfect 5th"],
                             type: "major", emotion: "Bright, happy, stable",
@@ -251,9 +251,9 @@ var allChapters: [MusicChapter] = [
             title: "Key of G Major",
             noteName: "G",
             noteEnglish: "G major",
-            description: "The G major family has one sharp — F#. It has a bright, energetic sound and is one of the most common keys in rock, folk and country music. The open G chord on guitar makes this key feel natural on stringed instruments.",
+            description: "The G major family has one sharp — F#. It has a bright, energetic sound and is one of the most common keys in rock, folk and country music. On the piano, every F becomes the black key F# just to its right.",
             variants: ["G", "Am", "Bm", "C", "D", "Em", "F#dim"],
-            familyOverview: "G major shares four chords with C major (Am, C, Em and the notes of D). Adding Bm and D gives it a brighter, more energetic character than C major.",
+            familyOverview: "G major shares four chords with C major — G, C, Em and Am. Swapping Dm and F for D and Bm (and Bdim for F#dim) gives it a brighter, more energetic character than C major.",
             chordDetails: [
                 ChordDetail(name: "G major (I)", notes: ["G", "B", "D"], type: "major",
                             emotion: "Bright, energetic, confident", staffPosition: "G B D",
@@ -331,12 +331,12 @@ var allChapters: [MusicChapter] = [
                             emotion: "Tense, dramatic", staffPosition: "E G Bb",
                             commonUse: "Passing chord. Creates tension before F."),
             ],
-            listeningGuide: "Play F – Bb – C – F. Notice how the Bb gives it a richer, warmer sound than the G chord does in C major. This warmth is the defining quality of F major.",
+            listeningGuide: "Play F – Bb – C – F. Bb is the IV chord here, just as F is the IV chord in C major — but the lift to Bb feels richer and warmer. This warmth is the defining quality of F major.",
             practiceTasks: [
                 "Play all 7 chords: F Gm Am Bb C Dm Edim",
                 "Play I–IV–V–I in F: F Bb C F",
                 "Play I–V–vi–IV in F: F C Dm Bb",
-                "Notice how Bb feels different from G (IV in C). Both are IV chords but Bb is warmer.",
+                "Compare Bb (IV in F) with F (IV in C). Both are IV chords, but Bb sounds warmer.",
                 "Play Dm–Bb–F–C. This is the emotional version of F major."
             ],
             progressions: [
@@ -359,7 +359,7 @@ var allChapters: [MusicChapter] = [
             title: "Key of D Major",
             noteName: "D",
             noteEnglish: "D major",
-            description: "The D major family has two sharps — F# and C#. It has a bold, triumphant sound and is extremely common in rock and pop. The open D chord on guitar is one of the first chords beginners learn.",
+            description: "The D major family has two sharps — F# and C#. It has a bold, triumphant sound and is extremely common in rock and pop. On the piano, every F and C becomes the black key just to its right.",
             variants: ["D", "Em", "F#m", "G", "A", "Bm", "C#dim"],
             familyOverview: "D major shares several chords with G major (Em, G, A, Bm). Its bold, open sound makes it a favourite in rock anthems and folk ballads alike.",
             chordDetails: [
@@ -391,7 +391,7 @@ var allChapters: [MusicChapter] = [
                 "Play I–V–vi–IV in D: D A Bm G",
                 "Compare G–D–Em–C (G major) with D–A–Bm–G (D major). Same pattern, bolder sound.",
                 "Play D – G – A – D. Classic D family resolution.",
-                "Try playing 'Sweet Home Alabama' riff: D – C – G (a common D-family variation)."
+                "Play D – C – G. C is not in the D family (D's seventh note is C#) — borrowing it gives a classic rock sound."
             ],
             progressions: [
                 ProgressionExample(numerals: "I – V – vi – IV", chords: "D – A – Bm – G", feel: "Bold and triumphant. Stadium rock sound."),
@@ -413,7 +413,7 @@ var allChapters: [MusicChapter] = [
             title: "Key of A Major",
             noteName: "A",
             noteEnglish: "A major",
-            description: "The A major family has three sharps. It has a confident, slightly bluesy sound and is one of the most common keys in rock and blues. The open A chord on guitar gives it an immediate, powerful quality.",
+            description: "The A major family has three sharps — F#, C# and G#. It has a confident, slightly bluesy sound and is one of the most common keys in rock and blues.",
             variants: ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"],
             familyOverview: "A major is one of the great rock keys. Its vi chord (F#m) is particularly emotive, and the E major dominant is one of the strongest pulls in music.",
             chordDetails: [
@@ -467,9 +467,9 @@ var allChapters: [MusicChapter] = [
             title: "Key of E Major",
             noteName: "E",
             noteEnglish: "E major",
-            description: "The E major family has four sharps. It has a raw, powerful sound and is the signature key of rock guitar. The open E chord is the deepest, most resonant chord on guitar.",
+            description: "The E major family has four sharps — F#, C#, G# and D#. It has a raw, powerful sound and is a favourite key of rock music.",
             variants: ["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"],
-            familyOverview: "E major is the king of rock keys. Its power comes from the open E string resonance on guitar, and its vi chord (C#m) is one of the most emotive chords in rock music.",
+            familyOverview: "E major is one of the great rock keys. Its V chord (B) pulls strongly back home, and its vi chord (C#m) is one of the most emotive chords in rock music.",
             chordDetails: [
                 ChordDetail(name: "E major (I)", notes: ["E", "G#", "B"], type: "major",
                             emotion: "Raw, powerful, electric", staffPosition: "E G# B",
@@ -570,13 +570,13 @@ var allChapters: [MusicChapter] = [
     MusicChapter(
         chapterIndex: 10,
         title: "Ear Training",
-        subtitle: "Hear which family a chord belongs to",
+        subtitle: "Hear each chord's job in its family",
         status: .locked, stars: 0,
         lesson: MusicLesson(
-            title: "Recognizing Chord Families",
+            title: "Hearing Chord Roles",
             noteName: "C",
             noteEnglish: "C major",
-            description: "Learning to hear chord families by ear is what separates a beginner from a confident musician. When you can identify the key of a song by ear, you can play along with anything — on the spot, without sheet music.",
+            description: "Every chord in a key has a job: I feels like home, IV lifts, V builds tension and vi sounds emotional. Each round plays a family's home chord, then a mystery chord — name its job. Hearing these roles is how musicians play along by ear.",
             variants: ["C Family", "G Family", "F Family", "D Family", "A Family"],
             familyOverview: "Every key has a unique sound colour. C major sounds clean and neutral. G major sounds bright and energetic. F major sounds warm and full. D major sounds bold and triumphant. A major sounds confident and slightly bluesy.",
             chordDetails: [
@@ -590,20 +590,20 @@ var allChapters: [MusicChapter] = [
                             commonUse: "Identify the I chord first. Then you know the key."),
                 ChordDetail(name: "Hearing the IV chord", notes: ["IV chord", "Lift"], type: "major",
                             emotion: "The IV chord feels like lifting or expanding.",
-                            staffPosition: "Count up 5 white keys from the I chord root.",
+                            staffPosition: "Its root is the 4th note of the scale — 5 semitones above the I root (in C: F).",
                             commonUse: "The IV chord provides harmonic lift in verses and bridges."),
                 ChordDetail(name: "Hearing the V chord", notes: ["V chord", "Tension"], type: "major",
                             emotion: "The V chord creates tension and momentum. Always wants to go back to I.",
-                            staffPosition: "Count up 7 white keys from the I chord root.",
+                            staffPosition: "Its root is the 5th note of the scale — 7 semitones above the I root (in C: G).",
                             commonUse: "The V chord is the engine of music."),
                 ChordDetail(name: "Hearing the vi chord", notes: ["vi chord", "Emotion"], type: "minor",
                             emotion: "The vi chord is always minor and always emotional.",
-                            staffPosition: "Count up 9 white keys from the I chord root.",
+                            staffPosition: "Its root is the 6th note of the scale — 9 semitones above the I root (in C: A).",
                             commonUse: "The emotional heart of any progression."),
             ],
             listeningGuide: "Choose any pop song you know. Try to find: (1) Is the key major or minor overall? (2) Can you sing the I chord? (3) When does the music feel tense? That is probably the V chord. (4) When does it feel emotional? That is probably the vi chord.",
             practiceTasks: [
-                "Play C and Am back to back. Same notes, completely different mood.",
+                "Play C (C E G) and Am (A C E) back to back. They share two notes, yet the mood changes completely.",
                 "Listen to a song and identify: major key or minor key?",
                 "Play I–V–vi–IV in C and name each chord's emotional role.",
                 "Try to play along with a song by finding the I chord first.",

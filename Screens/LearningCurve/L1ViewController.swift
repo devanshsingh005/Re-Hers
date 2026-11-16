@@ -152,12 +152,15 @@ class ChapterNodeView: UIView {
 
 class ChapterPopupCard: UIView {
 
-    var onPrimary: (() -> Void)?
     var onDismiss: (() -> Void)?
 
     private let containerView = UIView()
 
-    init(chapter: MusicChapter) {
+    private let unlockHint: String
+
+    /// Shown for locked chapters only; open chapters go straight into their lesson.
+    init(chapter: MusicChapter, unlockHint: String) {
+        self.unlockHint = unlockHint
         super.init(frame: .zero)
         setupView(chapter: chapter)
     }
@@ -218,50 +221,24 @@ class ChapterPopupCard: UIView {
         dismissBtn.layer.cornerRadius = 15
         dismissBtn.addTarget(self, action: #selector(didTapDismiss), for: .touchUpInside)
 
-        let primaryBtn = UIButton(type: .system)
-        primaryBtn.translatesAutoresizingMaskIntoConstraints = false
-        primaryBtn.layer.cornerRadius   = 24
-        primaryBtn.layer.masksToBounds  = true
-
-        let status = chapter.status
-        if status == .completed {
-            let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-            primaryBtn.setImage(UIImage(systemName: "arrow.counterclockwise", withConfiguration: cfg), for: .normal)
-            primaryBtn.setTitle("  Practice Again", for: .normal)
-            primaryBtn.titleLabel?.font      = .systemFont(ofSize: 16, weight: .bold)
-            primaryBtn.tintColor             = ComponentColors.PrimaryButton.text
-            primaryBtn.backgroundColor       = ComponentColors.LearningCurve.pathCompleted
-            primaryBtn.layer.shadowColor     = ComponentColors.HomeScreen.actionButtonFill.cgColor
-            primaryBtn.layer.shadowOpacity   = 0.35
-            primaryBtn.layer.shadowRadius    = 8
-            primaryBtn.layer.shadowOffset    = CGSize(width: 0, height: 4)
-            primaryBtn.layer.masksToBounds   = false
-        } else if status == .current {
-            let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-            primaryBtn.setImage(UIImage(systemName: "play.fill", withConfiguration: cfg), for: .normal)
-            primaryBtn.setTitle("  Start Lesson", for: .normal)
-            primaryBtn.titleLabel?.font      = .systemFont(ofSize: 16, weight: .bold)
-            primaryBtn.tintColor             = ComponentColors.PrimaryButton.text
-            primaryBtn.backgroundColor       = ComponentColors.LearningCurve.pathCompleted
-            primaryBtn.layer.shadowColor     = ComponentColors.HomeScreen.actionButtonFill.cgColor
-            primaryBtn.layer.shadowOpacity   = 0.35
-            primaryBtn.layer.shadowRadius    = 8
-            primaryBtn.layer.shadowOffset    = CGSize(width: 0, height: 4)
-            primaryBtn.layer.masksToBounds   = false
-        } else { // .locked
-            let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-            primaryBtn.setImage(UIImage(systemName: "lock.fill", withConfiguration: cfg), for: .normal)
-            primaryBtn.setTitle("  Locked", for: .normal)
-            primaryBtn.titleLabel?.font  = .systemFont(ofSize: 16, weight: .bold)
-            primaryBtn.tintColor         = ComponentColors.LearningCurve.nodeIconLocked
-            primaryBtn.backgroundColor   = ComponentColors.LearningCurve.nodeLockedFill
-            primaryBtn.isEnabled         = false
-        }
-        primaryBtn.addTarget(self, action: #selector(didTapPrimary), for: .touchUpInside)
+        let hintLabel = UILabel()
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        hintLabel.text = unlockHint
+        hintLabel.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.semibold)
+        hintLabel.adjustsFontForContentSizeCategory = true
+        hintLabel.textColor = ComponentColors.LessonScreen.labelSecondary
+        hintLabel.numberOfLines = 0
+        let lockIcon = UIImageView(image: UIImage(systemName: "lock.fill"))
+        lockIcon.tintColor = ComponentColors.LessonScreen.labelSecondary
+        lockIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .subheadline)
+        let hintRow = UIStackView(arrangedSubviews: [lockIcon, hintLabel])
+        hintRow.translatesAutoresizingMaskIntoConstraints = false
+        hintRow.spacing = 8
+        hintRow.alignment = .firstBaseline
 
         containerView.addSubview(statusView); containerView.addSubview(statusIcon)
         containerView.addSubview(titleLabel); containerView.addSubview(subtitleLabel)
-        containerView.addSubview(dismissBtn); containerView.addSubview(primaryBtn)
+        containerView.addSubview(dismissBtn); containerView.addSubview(hintRow)
 
         NSLayoutConstraint.activate([
             containerView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -290,22 +267,13 @@ class ChapterPopupCard: UIView {
             subtitleLabel.leadingAnchor.constraint(equalTo: statusView.trailingAnchor, constant: 14),
             subtitleLabel.trailingAnchor.constraint(equalTo: dismissBtn.leadingAnchor, constant: -8),
 
-            primaryBtn.topAnchor.constraint(equalTo: statusView.bottomAnchor, constant: 16),
-            primaryBtn.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
-            primaryBtn.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
-            primaryBtn.heightAnchor.constraint(equalToConstant: 48),
-            primaryBtn.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -18),
+            hintRow.topAnchor.constraint(equalTo: statusView.bottomAnchor, constant: 16),
+            hintRow.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            hintRow.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+            hintRow.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20),
         ])
     }
 
-    @objc private func didTapPrimary() {
-        UIView.animate(withDuration: 0.08, animations: {
-            self.transform = CGAffineTransform(scaleX: 0.97, y: 0.97)
-        }) { _ in
-            UIView.animate(withDuration: 0.12) { self.transform = .identity }
-        }
-        onPrimary?()
-    }
     @objc private func didTapDismiss() { onDismiss?() }
 }
 
@@ -329,7 +297,6 @@ class LessonMapViewController: UIViewController {
     // ─────────────────────────────────────────────────────────────────────
     // Header progress refs
     private var headerProgressLabel:     UILabel?
-    private var headerProgressFillWidth: NSLayoutConstraint?
 
     // Nav Background / Large Header state
     private let navBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
@@ -337,11 +304,25 @@ class LessonMapViewController: UIViewController {
     private let largeProfileButton = UIButton(type: .custom)
     private let largeSubtitleLabel = UILabel()
 
+    /// Parts practised in the chapter in progress.
+    private var currentChapterPartsDone = 0
+
+    /// Share of all lesson parts practised: finished chapters count in full.
     private var progress: Float {
-        let completed = chapters.filter { $0.status == .completed }.count
-        return Float(completed) / Float(chapters.count)
+        let total = chapters.reduce(0) { $0 + $1.lesson.variants.count }
+        guard total > 0 else { return 0 }
+        let done = chapters.reduce(0) { sum, chapter in
+            switch chapter.status {
+            case .completed: return sum + chapter.lesson.variants.count
+            case .current: return sum + min(currentChapterPartsDone, chapter.lesson.variants.count)
+            case .locked: return sum
+            }
+        }
+        return Float(done) / Float(total)
     }
     private let nodeSize:  CGFloat = ChapterNodeView.diameter
+    /// Where the chapter path starts, below the progress bar.
+    private static let pathTop: CGFloat = 136
     private let vSpacing:  CGFloat = 130
 
     // MARK: - Lifecycle
@@ -433,6 +414,7 @@ class LessonMapViewController: UIViewController {
                     self.lessonSkeleton.hide()
                     self.rebuildPath()
                 }
+                await self.refreshCurrentChapterParts()
                 return
             }
 
@@ -447,6 +429,7 @@ class LessonMapViewController: UIViewController {
                     self.lessonSkeleton.hide()
                     self.rebuildPath()
                 }
+                await self.refreshCurrentChapterParts()
             } catch {
                 debugLog("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
                 await MainActor.run {
@@ -456,6 +439,16 @@ class LessonMapViewController: UIViewController {
                 }
             }
         }
+    }
+
+    private func refreshCurrentChapterParts() async {
+        guard let current = chapters.first(where: { $0.status == .current }) else {
+            currentChapterPartsDone = 0
+            animateHeaderProgress()
+            return
+        }
+        currentChapterPartsDone = await SupabaseProgressManager.completedPartIndexes(for: current.chapterIndex).count
+        animateHeaderProgress()
     }
 
     // MARK: - Scroll View
@@ -538,67 +531,55 @@ class LessonMapViewController: UIViewController {
         ])
     }
 
+    private var headerProgressBar: UIProgressView?
+
+    /// "Your progress  12%" over a full-width bar.
     private func setupHeader() {
+        let titleLabel = UILabel()
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.text = "Your progress"
+        titleLabel.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.semibold)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.textColor = ComponentColors.LessonScreen.labelSecondary
 
-        let progressLabel = UILabel()
-        progressLabel.translatesAutoresizingMaskIntoConstraints = false
-        headerProgressLabel = progressLabel
-        refreshHeaderProgressLabel()
+        let percentLabel = UILabel()
+        percentLabel.translatesAutoresizingMaskIntoConstraints = false
+        percentLabel.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.bold)
+        percentLabel.adjustsFontForContentSizeCategory = true
+        percentLabel.textColor = BrandColors.brand
+        headerProgressLabel = percentLabel
 
-        let progressBG = UIView()
-        progressBG.translatesAutoresizingMaskIntoConstraints = false
-        progressBG.backgroundColor  = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18)
-        progressBG.layer.cornerRadius = 4
+        let bar = UIProgressView(progressViewStyle: .default)
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.progressTintColor = BrandColors.brand
+        bar.trackTintColor = BrandColors.brand.withAlphaComponent(0.18)
+        bar.layer.cornerRadius = 3
+        bar.clipsToBounds = true
+        headerProgressBar = bar
 
-        let progressFill = UIView()
-        progressFill.translatesAutoresizingMaskIntoConstraints = false
-        progressFill.backgroundColor  = ComponentColors.HomeScreen.actionButtonFill
-        progressFill.layer.cornerRadius = 4
-        progressBG.addSubview(progressFill)
-        contentView.addSubview(progressLabel)
-        contentView.addSubview(progressBG)
-
-        let fillWidth = progressFill.widthAnchor.constraint(equalToConstant: 130 * CGFloat(progress))
-        fillWidth.isActive     = true
-        headerProgressFillWidth = fillWidth
-
+        [titleLabel, percentLabel, bar].forEach { contentView.addSubview($0) }
         NSLayoutConstraint.activate([
-            progressLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 96),
-            progressLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            progressBG.topAnchor.constraint(equalTo: progressLabel.bottomAnchor, constant: 5),
-            progressBG.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            progressBG.widthAnchor.constraint(equalToConstant: 130),
-            progressBG.heightAnchor.constraint(equalToConstant: 7),
-
-            progressFill.leadingAnchor.constraint(equalTo: progressBG.leadingAnchor),
-            progressFill.topAnchor.constraint(equalTo: progressBG.topAnchor),
-            progressFill.bottomAnchor.constraint(equalTo: progressBG.bottomAnchor),
+            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 88),
+            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            percentLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
+            percentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            bar.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            bar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            bar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            bar.heightAnchor.constraint(equalToConstant: 6),
         ])
+        refreshHeaderProgressLabel()
     }
 
     private func refreshHeaderProgressLabel() {
-        let pText = NSMutableAttributedString(string: "PROGRESS    ", attributes: [
-            .font: UIFont.systemFont(ofSize: 11, weight: .black),
-            .foregroundColor: ComponentColors.LearningCurve.headerSubtitle
-        ])
-        pText.append(NSAttributedString(string: "\(Int(progress * 100))%", attributes: [
-            .font: UIFont.systemFont(ofSize: 11, weight: .bold),
-            .foregroundColor: ComponentColors.HomeScreen.actionButtonFill
-        ]))
-        headerProgressLabel?.attributedText = pText
+        let percent = Int((progress * 100).rounded())
+        headerProgressLabel?.text = "\(percent)%"
+        headerProgressBar?.accessibilityLabel = "Practice progress"
+        headerProgressBar?.accessibilityValue = "\(percent) percent"
     }
 
     private func animateHeaderProgress(animated: Bool = true) {
-        headerProgressFillWidth?.constant = 130 * CGFloat(progress)
-        if animated {
-            UIView.animate(withDuration: 0.55, delay: 0,
-                           usingSpringWithDamping: 0.75, initialSpringVelocity: 0.3) {
-                self.view.layoutIfNeeded()
-            }
-        } else {
-            view.layoutIfNeeded()
-        }
+        headerProgressBar?.setProgress(progress, animated: animated)
         refreshHeaderProgressLabel()
     }
 
@@ -617,7 +598,7 @@ class LessonMapViewController: UIViewController {
         canvas.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(canvas)
         NSLayoutConstraint.activate([
-            canvas.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 120),
+            canvas.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Self.pathTop),
             canvas.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             canvas.heightAnchor.constraint(equalToConstant: totalHeight),
@@ -633,7 +614,7 @@ class LessonMapViewController: UIViewController {
             let nodeContainerW: CGFloat = nodeSize + 40
             NSLayoutConstraint.activate([
                 node.topAnchor.constraint(equalTo: contentView.topAnchor,
-                                          constant: 120 + pos.y),
+                                          constant: Self.pathTop + pos.y),
                 node.centerXAnchor.constraint(equalTo: contentView.leadingAnchor,
                                               constant: pos.x + nodeSize / 2),
                 node.widthAnchor.constraint(equalToConstant: nodeContainerW),
@@ -642,7 +623,11 @@ class LessonMapViewController: UIViewController {
             let capturedChapter = chapter
             let capturedIndex   = i
             node.onTap = { [weak self] in
-                self?.showPopup(for: capturedChapter, nodeIndex: capturedIndex)
+                if capturedChapter.status == .locked {
+                    self?.showPopup(for: capturedChapter, nodeIndex: capturedIndex)
+                } else {
+                    self?.openLesson(capturedChapter)
+                }
             }
             nodeViews.append(node)
         }
@@ -686,7 +671,8 @@ class LessonMapViewController: UIViewController {
         view.addSubview(overlay)
         popupOverlay = overlay
 
-        let card = ChapterPopupCard(chapter: chapter)
+        let previous = allChapters.first { $0.chapterIndex == chapter.chapterIndex - 1 }?.title ?? "the previous chapter"
+        let card = ChapterPopupCard(chapter: chapter, unlockHint: "Finish \(previous) to unlock this chapter.")
         card.translatesAutoresizingMaskIntoConstraints = false
         card.alpha     = 0
         card.transform = CGAffineTransform(translationX: 0, y: 24)
@@ -700,20 +686,6 @@ class LessonMapViewController: UIViewController {
         ])
 
         card.onDismiss = { [weak self] in self?.dismissPopupAnimated() }
-        card.onPrimary = { [weak self] in
-            guard let self = self else { return }
-            guard chapter.status != .locked else { return }
-            self.dismissPopup(animated: true)
-            let vc = LessonDetailViewController(
-                lesson: chapter.lesson, chapterIndex: chapter.chapterIndex)
-            vc.onLessonCompleted = { [weak self] (stars: Int) in
-                // After lesson completes, re-fetch from Supabase — single source of truth
-                self?.loadProgressFromSupabase()
-            }
-            let nav = UINavigationController(rootViewController: vc)
-            nav.modalPresentationStyle = .fullScreen
-            self.present(nav, animated: true)
-        }
         popupCard = card
 
         UIView.animate(withDuration: 0.38, delay: 0,
@@ -723,6 +695,18 @@ class LessonMapViewController: UIViewController {
     }
 
     @objc private func dismissPopupAnimated() { dismissPopup(animated: true) }
+
+    private func openLesson(_ chapter: MusicChapter) {
+        dismissPopup(animated: false)
+        let vc = LessonDetailViewController(lesson: chapter.lesson, chapterIndex: chapter.chapterIndex)
+        vc.onLessonCompleted = { [weak self] _ in
+            // re-read saved progress: the next chapter is now unlocked
+            self?.loadProgressFromSupabase()
+        }
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
 
     private func dismissPopup(animated: Bool) {
         guard let card = popupCard else { return }

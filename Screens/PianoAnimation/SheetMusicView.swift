@@ -1623,7 +1623,8 @@ private struct PageBuilder {
 // Notation symbols as paths, sized in staff spaces (`s`). All are filled shapes so a measure's
 // ink can share one path.
 
-private enum SheetGlyphs {
+/// Notation glyphs, shared with the Practice lessons' staff.
+enum SheetGlyphs {
     static func line(x: CGFloat, y: CGFloat, width: CGFloat, s: CGFloat) -> CALayer {
         let line = CALayer()
         line.backgroundColor = UIColor(white: 0.12, alpha: 0.55).cgColor
