@@ -31,3 +31,6 @@ temp/
 .env
 !.env.example
 Re-Hearse_v1/Secrets.xcconfig
+
+# Local database/storage backups (contain user data)
+backups/

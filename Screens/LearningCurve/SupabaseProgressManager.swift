@@ -6,38 +6,7 @@
 //  Uses SupabaseManager.shared.client — no raw URLSession or manual headers.
 //  All calls are async Tasks (fire-and-forget) so the UI never blocks.
 //
-//  ── Run this SQL once in your Supabase SQL editor ────────────────────────
-//
-//  -- 1. Add new columns to profiles
-//  ALTER TABLE public.profiles
-//    ADD COLUMN IF NOT EXISTS current_chapter     smallint NOT NULL DEFAULT 1,
-//    ADD COLUMN IF NOT EXISTS current_part        smallint NOT NULL DEFAULT 0,
-//    ADD COLUMN IF NOT EXISTS last_active_at      timestamptz,
-//    ADD COLUMN IF NOT EXISTS total_study_seconds bigint   NOT NULL DEFAULT 0;
-//
-//  -- 2. lesson_events table (one row per action)
-//  CREATE TABLE IF NOT EXISTS public.lesson_events (
-//    id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-//    user_id          uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-//    chapter_index    smallint    NOT NULL,
-//    part_index       smallint    NOT NULL,        -- 0-based variant index; -1 = full lesson
-//    event_type       text        NOT NULL,        -- 'part_completed' | 'lesson_completed'
-//    stars            smallint,
-//    attempts         smallint,
-//    duration_seconds integer,
-//    score_points     smallint,
-//    occurred_at      timestamptz NOT NULL DEFAULT now()
-//  );
-//
-//  -- 3. RPC for safe study-time increment
-//  CREATE OR REPLACE FUNCTION increment_study_time(p_user_id uuid, p_delta integer)
-//  RETURNS void LANGUAGE sql SECURITY DEFINER AS $$
-//    UPDATE public.profiles
-//    SET total_study_seconds = total_study_seconds + p_delta
-//    WHERE id = p_user_id;
-//  $$;
-//
-//  ─────────────────────────────────────────────────────────────────────────
+//  Schema: supabase/migrations. Study time is added atomically by add_my_study_time().
 
 // @preconcurrency suppresses the main-actor isolation leak that UIKit projects
 // inject onto file-scope types when the app entry point is @MainActor.
@@ -60,12 +29,10 @@ private struct LessonEventInsert: Encodable, Sendable {
     let score_points:     Int
 }
 
-public struct ProfileProgressModel: Codable, Sendable {
-    public let id: String
-    public let current_chapter: Int
-    public let current_part: Int
-    public let last_active_at: String
-    public let total_study_seconds: Int
+private struct ProfileProgressUpdate: Encodable, Sendable {
+    let current_chapter: Int
+    let current_part: Int
+    let last_active_at: String
 }
 
 private struct ExistingProfileProgress: Codable, Sendable {
@@ -150,7 +117,6 @@ final class SupabaseProgressManager: Sendable {
             let existingProgress = try await fetchExistingProgress(for: userID)
             let currentChapter = existingProgress?.current_chapter ?? 1
             let currentPart = existingProgress?.current_part ?? 0
-            let currentTotal = existingProgress?.total_study_seconds ?? 0
             let mergedChapter = max(currentChapter, chapterIndex)
             let mergedPart: Int
             if mergedChapter > chapterIndex {
@@ -161,18 +127,7 @@ final class SupabaseProgressManager: Sendable {
                 mergedPart = max(currentPart, partIndex)
             }
             
-            let profileUpdate = ProfileProgressModel(
-                id: userID.uuidString,
-                current_chapter: mergedChapter,
-                current_part: mergedPart,
-                last_active_at: iso8601Now(),
-                total_study_seconds: currentTotal
-            )
-            
-            try await db
-                .from("profiles")
-                .upsert(profileUpdate, onConflict: "id")
-                .execute()
+            try await updateProgress(userID: userID, chapter: mergedChapter, part: mergedPart)
             
             debugLog("[SupabaseProgressManager] Part saved — ch:\(chapterIndex) part:\(partIndex)")
         } catch {
@@ -222,23 +177,12 @@ final class SupabaseProgressManager: Sendable {
             let existingProgress = try await fetchExistingProgress(for: userID)
             let currentChapter = existingProgress?.current_chapter ?? 1
             let currentPart = existingProgress?.current_part ?? 0
-            let currentTotal = existingProgress?.total_study_seconds ?? 0
             let completedChapter = chapterIndex + 1
             let mergedChapter = max(currentChapter, completedChapter)
             let mergedPart = mergedChapter == completedChapter ? 0 : currentPart
             
-            let profileUpdate = ProfileProgressModel(
-                id: userID.uuidString,
-                current_chapter: mergedChapter,
-                current_part: mergedPart,
-                last_active_at: iso8601Now(),
-                total_study_seconds: currentTotal + durationSeconds
-            )
-            
-            try await db
-                .from("profiles")
-                .upsert(profileUpdate, onConflict: "id")
-                .execute()
+            try await updateProgress(userID: userID, chapter: mergedChapter, part: mergedPart)
+            try await addStudyTime(seconds: durationSeconds)
             
             debugLog("[SupabaseProgressManager] Lesson saved — ch:\(chapterIndex) ⭐\(stars) \(durationSeconds)s")
             
@@ -304,23 +248,7 @@ final class SupabaseProgressManager: Sendable {
                 .insert(event)
                 .execute()
 
-            let existingProgress = try await fetchExistingProgress(for: userID)
-            let currentChapter = existingProgress?.current_chapter ?? 1
-            let currentPart = existingProgress?.current_part ?? 0
-            let currentTotal = existingProgress?.total_study_seconds ?? 0
-
-            let profileUpdate = ProfileProgressModel(
-                id: userID.uuidString,
-                current_chapter: currentChapter,
-                current_part: currentPart,
-                last_active_at: iso8601Now(),
-                total_study_seconds: currentTotal + durationSeconds
-            )
-
-            try await db
-                .from("profiles")
-                .upsert(profileUpdate, onConflict: "id")
-                .execute()
+            try await addStudyTime(seconds: durationSeconds)
 
             debugLog("[SupabaseProgressManager] Practice session saved — \(kind.rawValue) \(durationSeconds)s")
         } catch {
@@ -334,6 +262,24 @@ final class SupabaseProgressManager: Sendable {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: Date())
+    }
+
+    /// Writes only chapter/part, so it never overwrites study time written from another device.
+    private static func updateProgress(userID: UUID, chapter: Int, part: Int) async throws {
+        try await db
+            .from("profiles")
+            .update(ProfileProgressUpdate(current_chapter: chapter, current_part: part, last_active_at: iso8601Now()))
+            .eq("id", value: userID.uuidString)
+            .execute()
+    }
+
+    /// Atomic increment on the server (also stamps last_active_at). Capped at 6 hours per call, like the function.
+    private static func addStudyTime(seconds: Int) async throws {
+        let clamped = min(max(seconds, 0), 21_600)
+        guard clamped > 0 else { return }
+        try await db
+            .rpc("add_my_study_time", params: ["p_seconds": clamped])
+            .execute()
     }
 
     private static func fetchExistingProgress(for userID: UUID) async throws -> ExistingProfileProgress? {

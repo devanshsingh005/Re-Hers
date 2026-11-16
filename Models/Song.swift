@@ -45,6 +45,9 @@ struct Song: Codable, Identifiable {
         case outputJsonPath   = "output_json_path"
         case coverImageUrl    = "cover_image_url"
     }
+
+    /// Columns that exist on `songs`; userId, sheetFileId, sheetUrl and jsonUrl are no longer in the table and decode as nil.
+    static let listColumns = "id, title, composer, level, tempo, hands, initials, skill_tags, skill_description, is_free, is_active, sort_order, original_pdf_path, labeled_pdf_path, output_json_path, cover_image_url"
 }
 
 extension Song {
@@ -134,7 +137,8 @@ final class SongService {
 
         let task = Task {
             try await SupabaseManager.shared.client
-                .from("songs").select()
+                .from("songs")
+                .select(Song.listColumns)
                 .order("level", ascending: true)
                 .order("sort_order", ascending: true)
                 .execute().value as [Song]

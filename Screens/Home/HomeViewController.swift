@@ -231,7 +231,7 @@ class HomeViewController: UIViewController {
         }
         profileFetchTask = Task { [weak self] in
             let profile: UserProfile? = try? await SupabaseManager.shared.client
-                .from("profiles").select().eq("id", value: user.id).single().execute().value
+                .from("profiles").select("id, full_name, username").eq("id", value: user.id).single().execute().value
             guard let self, !Task.isCancelled else { return }
             let fullName = profile?.full_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let firstName = fullName.split(separator: " ").first.map(String.init)

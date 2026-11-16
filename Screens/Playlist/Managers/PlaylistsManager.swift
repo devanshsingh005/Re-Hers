@@ -36,17 +36,20 @@ public final class PlaylistsManager {
             .value
         
         var remotePlaylists: [PlaylistData] = []
-        
+
+        // One request for every playlist's tracks instead of one request per playlist.
+        let allItems: [DBPlaylistItem] = dbPlaylists.isEmpty ? [] : try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .order("position", ascending: false)
+            .execute()
+            .value
+        let itemsByPlaylist = Dictionary(grouping: allItems, by: \.playlistId)
+
         for dbPlaylist in dbPlaylists {
-            // Fetch tracks for this playlist
-            let dbItems: [DBPlaylistItem] = try await SupabaseManager.shared.client
-                .from("playlist_items")
-                .select()
-                .eq("playlist_id", value: dbPlaylist.id.uuidString)
-                .order("position", ascending: false)
-                .execute()
-                .value
-            
+            let dbItems = itemsByPlaylist[dbPlaylist.id] ?? []
+
             let tracks = dbItems.map { item in
                 PlaylistTrack(
                     id: UUID(),
