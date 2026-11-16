@@ -149,8 +149,10 @@ final class InAppNotificationStore {
         }
         knownUploadStatus[id] = upload.status
         // Only a conversion seen running reports its end, so a retry reports again
-        // and nothing is posted for uploads that were already finished.
-        guard previous == .processing || (previous == nil && upload.status != .processing) else { return }
+        // and nothing is posted for uploads that were already finished, or that arrive
+        // already converted from the account's other devices.
+        guard previous == .processing
+            || (previous == nil && upload.status != .processing && upload.filesOnDevice != false) else { return }
         switch upload.status {
         case .processing:
             return

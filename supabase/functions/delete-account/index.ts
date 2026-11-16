@@ -115,6 +115,15 @@ serve(async (req) => {
       .list(userId, { limit: 1000 });
     for (const file of coverFiles ?? []) addPath(playlistCoverPaths, `${userId}/${file.name}`);
 
+    // Synced sheet uploads: user_sheets/<userId>/<uploadId>/<file>.
+    const sheetPaths: string[] = [];
+    const { data: uploadFolders } = await adminClient.storage.from("user_sheets").list(userId, { limit: 1000 });
+    for (const folder of uploadFolders ?? []) {
+      const { data: files } = await adminClient.storage.from("user_sheets")
+        .list(`${userId}/${folder.name}`, { limit: 100 });
+      for (const file of files ?? []) sheetPaths.push(`${userId}/${folder.name}/${file.name}`);
+    }
+
     // Only storage paths: bundled icons ("icon_3") and on-device covers ("doc_…") are not files in storage.
     const isStoragePath = (p: string) => p.includes("/") || p.includes(".");
     const removals: Array<Promise<unknown>> = [];
@@ -122,6 +131,7 @@ serve(async (req) => {
     const coverList = Array.from(playlistCoverPaths).filter(isStoragePath);
     if (avatarList.length > 0) removals.push(adminClient.storage.from("useprofile").remove(avatarList));
     if (coverList.length > 0) removals.push(adminClient.storage.from("PlayListCover").remove(coverList));
+    if (sheetPaths.length > 0) removals.push(adminClient.storage.from("user_sheets").remove(sheetPaths));
     await Promise.all(removals);
 
     const { error: cleanupError } = await adminClient.rpc("delete_user_account_data", {

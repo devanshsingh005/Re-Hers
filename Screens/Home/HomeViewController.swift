@@ -96,6 +96,7 @@ class HomeViewController: UIViewController {
         // Sheets are converted on this device: finish any conversion the app was closed during,
         // and load the recognition models now so the first upload doesn't wait for them.
         LocalSheetLibrary.shared.resumeInterruptedConversions()
+        UploadCloudSync.shared.start()
         Task.detached(priority: .utility) { await OnDeviceSheetConverter.shared.prepare() }
     }
 
@@ -153,11 +154,19 @@ class HomeViewController: UIViewController {
         presentVisionKitScanner()
     }
 
+    /// Stops a new upload before anything is picked when the account already has 10.
+    private func presentUploadLimitIfNeeded() -> Bool {
+        guard LocalSheetLibrary.shared.isAtUploadLimit else { return false }
+        presentAlert(title: "Upload Limit Reached",
+                     message: LocalSheetLibrary.LibraryError.limitReached.errorDescription ?? "")
+        return true
+    }
+
     @discardableResult
     private func presentSheetUploadGuestGateIfNeeded() -> Bool {
         guard GuestFeatureAccessPolicy.shouldGateSheetUploadActions(
             forGuest: GuestSessionManager.shared.isGuest()
-        ) else { return false }
+        ) else { return presentUploadLimitIfNeeded() }
         guard let presenter = guestGatePresenter(), presenter.presentedViewController == nil else { return true }
 
         let gateModal = GuestFeatureGateModal(
@@ -548,7 +557,9 @@ class HomeViewController: UIViewController {
         case .processing: return "Converting on device…"
         case .failed:     return "Conversion failed"
         case .completed:
-            return [relativeDate(upload.uploadedAt), formatBytes(upload.fileSizeBytes)].joined(separator: " · ")
+            var parts = [relativeDate(upload.uploadedAt), formatBytes(upload.fileSizeBytes)]
+            if upload.cloud == .notBackedUp { parts.append("Not backed up") }
+            return parts.joined(separator: " · ")
         }
     }
 
@@ -938,8 +949,11 @@ class HomeViewController: UIViewController {
         )
         clearUploadState()
         activeQuizPopup = nil
-        let title = AppUserFacingError.title(for: error)
-        let message = AppUserFacingError.message(
+        let libraryError = error as? LocalSheetLibrary.LibraryError
+        let title = libraryError == .limitReached ? "Upload Limit Reached"
+            : libraryError == .fileTooLarge ? "Upload Too Large"
+            : AppUserFacingError.title(for: error)
+        let message = libraryError?.errorDescription ?? AppUserFacingError.message(
             for: "finish this upload",
             error: error,
             fallback: "We couldn't save this sheet on your device. Please check your free storage and try again."
