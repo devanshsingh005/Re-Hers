@@ -14,6 +14,7 @@
 		0E0E0E0E0000000000000201 /* Services/SheetMusic/MusicXMLDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000101 /* Services/SheetMusic/MusicXMLDocument.swift */; };
 		0E0E0E0E0000000000000202 /* Services/SheetMusic/NoteLabelRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000102 /* Services/SheetMusic/NoteLabelRenderer.swift */; };
 		0E0E0E0E0000000000000203 /* Services/SheetMusic/OnDeviceSheetConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */; };
+		0E0E0E0E0000000000000210 /* Services/SheetMusic/UploadCloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000110 /* Services/SheetMusic/UploadCloudSync.swift */; };
 		0E0E0E0E0000000000000400 /* Services/LastPlayedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */; };
 		0E0E0E0E0000000000000401 /* Services/InAppNotificationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */; };
 		0E0E0E0E0000000000000402 /* Components/MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000302 /* Components/MiniPlayerView.swift */; };
@@ -134,6 +135,7 @@
 		0E0E0E0E0000000000000101 /* Services/SheetMusic/MusicXMLDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/MusicXMLDocument.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000102 /* Services/SheetMusic/NoteLabelRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/NoteLabelRenderer.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/OnDeviceSheetConverter.swift; sourceTree = SOURCE_ROOT; };
+		0E0E0E0E0000000000000110 /* Services/SheetMusic/UploadCloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/UploadCloudSync.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LastPlayedStore.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/InAppNotificationStore.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000302 /* Components/MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/MiniPlayerView.swift; sourceTree = SOURCE_ROOT; };
@@ -534,6 +536,7 @@
 				0E0E0E0E0000000000000101 /* Services/SheetMusic/MusicXMLDocument.swift */,
 				0E0E0E0E0000000000000102 /* Services/SheetMusic/NoteLabelRenderer.swift */,
 				0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */,
+				0E0E0E0E0000000000000110 /* Services/SheetMusic/UploadCloudSync.swift */,
 				BB5D556F9727BE03E27BD881 /* Services/AnalyticsManager.swift */,
 				DFE55467143C308902EDA1BC /* Services/GuestFeatureAccessPolicy.swift */,
 				A2F0A1B42EFA000100000001 /* Services/AppThemeManager.swift */,
@@ -742,6 +745,7 @@
 				0E0E0E0E0000000000000201 /* Services/SheetMusic/MusicXMLDocument.swift in Sources */,
 				0E0E0E0E0000000000000202 /* Services/SheetMusic/NoteLabelRenderer.swift in Sources */,
 				0E0E0E0E0000000000000203 /* Services/SheetMusic/OnDeviceSheetConverter.swift in Sources */,
+				0E0E0E0E0000000000000210 /* Services/SheetMusic/UploadCloudSync.swift in Sources */,
 				23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */,
 				2BC06DAB2EEE903200CBDC03 /* OnboardingFlowRoot.swift in Sources */,
 				2B9B8F592F485DE70049535B /* UploadQuizPopup.swift in Sources */,

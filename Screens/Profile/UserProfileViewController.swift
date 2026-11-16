@@ -1680,8 +1680,13 @@ extension UserProfileViewController: UIImagePickerControllerDelegate, UINavigati
                 _ = try await client.from("profiles")
                     .update(["avatar_url": fileName])
                     .eq("id", value: user.id.uuidString)
-                    .select()
                     .execute()
+                // Earlier avatars are never shown again; remove them so storage doesn't grow with every change.
+                if let previous = try? await client.storage.from("useprofile")
+                    .list(options: SearchOptions(search: "avatar_\(user.id.uuidString)")) {
+                    let stale = previous.map(\.name).filter { $0 != fileName && $0.hasPrefix("avatar_") }
+                    if !stale.isEmpty { _ = try? await client.storage.from("useprofile").remove(paths: stale) }
+                }
                 self.currentProfile = UserProfile(
                     id: self.currentProfile?.id ?? user.id,
                     avatar_url: signedURL.absoluteString,

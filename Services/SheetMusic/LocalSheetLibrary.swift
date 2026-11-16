@@ -2,12 +2,14 @@
 //  LocalSheetLibrary.swift
 //  Re-Hearse_v1
 //
-//  The user's uploaded sheets and their conversions, kept only on this device in
-//  Application Support/SheetLibrary/<account>/. Nothing is uploaded: uploads made before
-//  on-device conversion (Supabase `jobs`/`scans` rows and storage files) are not shown.
+//  The user's uploaded sheets and their conversions, in Application Support/SheetLibrary/<account>/.
+//  Sheets are converted on this device; converted uploads of a signed-in account are also backed
+//  up to Supabase by UploadCloudSync, so they appear on the account's other devices and after a
+//  reinstall. Limits: 10 uploads per account (failed conversions don't count), 10 MB per file.
 //
 //  Each upload has a folder with input.pdf, and once converted output.json (the score JSON
-//  Play Along and Animation read), labeled.pdf (note names under the notes) and score.musicxml.
+//  Play Along and Animation read), labeled.pdf (note names under the notes), labels.json (what
+//  labeled.pdf was drawn from) and score.musicxml.
 //
 
 import Foundation
@@ -26,6 +28,16 @@ final class LocalSheetLibrary {
         case processing, completed, failed
     }
 
+    /// Whether a converted upload is backed up to the account in Supabase.
+    enum CloudState: String, Codable {
+        case synced
+        /// Over the 10-upload limit: kept on this device only.
+        case notBackedUp
+    }
+
+    nonisolated static let maxUploads = 10
+    nonisolated static let maxFileBytes = 10 * 1024 * 1024
+
     struct Upload: Codable, Identifiable {
         /// Identifies the upload everywhere (screens pass it on as `jobId`, like the old job id).
         let id: UUID
@@ -42,6 +54,13 @@ final class LocalSheetLibrary {
         var pageCount: Int?
         var skippedPages: [Int]?
         var conversionSeconds: Double?
+        /// nil: not backed up yet (or a guest's upload).
+        var cloud: CloudState?
+        /// false: listed from the account but its files aren't downloaded to this device yet.
+        var filesOnDevice: Bool?
+
+        /// Failed conversions don't use one of the 10 slots.
+        var countsTowardLimit: Bool { status != .failed }
     }
 
     /// Playlists (stored in Supabase) point at an upload on this device through their
@@ -57,8 +76,22 @@ final class LocalSheetLibrary {
 
     enum LibraryError: LocalizedError {
         case notFound
+        case limitReached
+        case fileTooLarge
 
-        var errorDescription: String? { "This upload is no longer on this device." }
+        var errorDescription: String? {
+            switch self {
+            case .notFound: return "This upload is no longer on this device."
+            case .limitReached:
+                return "You can keep up to \(LocalSheetLibrary.maxUploads) uploads. Delete one to upload another."
+            case .fileTooLarge: return "Files must be under 10 MB."
+            }
+        }
+    }
+
+    /// True when the account already has 10 uploads (converting or converted).
+    var isAtUploadLimit: Bool {
+        list(for: owner).filter(\.countsTowardLimit).count >= Self.maxUploads
     }
 
     /// Conversion progress 0...1 of uploads being converted right now.
@@ -130,6 +163,8 @@ final class LocalSheetLibrary {
     /// Stores a new upload and starts converting it on the device.
     @discardableResult
     func add(pdfData: Data, title: String, originalFilename: String) throws -> Upload {
+        guard pdfData.count <= Self.maxFileBytes else { throw LibraryError.fileTooLarge }
+        guard !isAtUploadLimit else { throw LibraryError.limitReached }
         let owner = self.owner
         let id = UUID()
         try FileManager.default.createDirectory(at: folder(of: id, owner: owner), withIntermediateDirectories: true)
@@ -154,18 +189,21 @@ final class LocalSheetLibrary {
         all[i].updatedAt = Date()
         try save(all, owner: owner)
         notify(all[i].id)
+        UploadCloudSync.shared.uploadRenamed(all[i], owner: owner)
     }
 
     func delete(scanId: Int64) throws {
         let owner = self.owner
         var all = list(for: owner)
         guard let i = all.firstIndex(where: { $0.scanId == scanId }) else { throw LibraryError.notFound }
-        let id = all.remove(at: i).id
+        let removed = all.remove(at: i)
+        let id = removed.id
         tasks.removeValue(forKey: id)?.cancel()
         progress[id] = nil
         try save(all, owner: owner)
         try? FileManager.default.removeItem(at: folder(of: id, owner: owner))
         notify(id)
+        UploadCloudSync.shared.uploadDeleted(removed, owner: owner)
     }
 
     /// Removes every upload of the signed-in account from this device; call it when the account
@@ -193,9 +231,13 @@ final class LocalSheetLibrary {
         notify(id)
     }
 
-    /// Waits for the upload's conversion if one is running and returns the upload.
+    /// Waits for the upload's conversion if one is running, or downloads its files if it was
+    /// backed up from another device, and returns the upload.
     func waitForConversion(id: UUID) async -> Upload? {
         if let task = tasks[id] { await task.value }
+        if upload(id: id)?.filesOnDevice == false {
+            await UploadCloudSync.shared.downloadFiles(of: id)
+        }
         return upload(id: id)
     }
 
@@ -225,6 +267,8 @@ final class LocalSheetLibrary {
                     try result.labeledPDF.write(to: folder.appendingPathComponent("labeled.pdf"), options: .atomic)
                     try result.musicXML.write(to: folder.appendingPathComponent("score.musicxml"),
                                               atomically: true, encoding: .utf8)
+                    try JSONEncoder().encode(result.labels)
+                        .write(to: folder.appendingPathComponent("labels.json"), options: .atomic)
                     return .success(result)
                 } catch {
                     return .failure(error)
@@ -265,21 +309,22 @@ final class LocalSheetLibrary {
         all[i].updatedAt = Date()
         try? save(all, owner: owner)
         notify(id)
+        if all[i].status == .completed { UploadCloudSync.shared.syncSoon() }
     }
 
-    // MARK: - Storage
+    // MARK: - Storage (also used by UploadCloudSync)
 
     /// Uploads belong to the signed-in account, read from the stored session (no network).
-    private var owner: String {
+    var owner: String {
         SupabaseManager.shared.client.auth.currentUser?.id.uuidString.lowercased() ?? "guest"
     }
 
-    private func folder(of id: UUID, owner: String) -> URL {
+    func folder(of id: UUID, owner: String) -> URL {
         root.appendingPathComponent(owner, isDirectory: true)
             .appendingPathComponent(id.uuidString.lowercased(), isDirectory: true)
     }
 
-    private func file(_ name: String, of id: UUID, owner: String) -> URL {
+    func file(_ name: String, of id: UUID, owner: String) -> URL {
         folder(of: id, owner: owner).appendingPathComponent(name)
     }
 
@@ -287,7 +332,7 @@ final class LocalSheetLibrary {
         root.appendingPathComponent(owner, isDirectory: true).appendingPathComponent("index.json")
     }
 
-    private func list(for owner: String) -> [Upload] {
+    func list(for owner: String) -> [Upload] {
         if let cached = lists[owner] { return cached }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -297,7 +342,7 @@ final class LocalSheetLibrary {
         return loaded
     }
 
-    private func save(_ uploads: [Upload], owner: String) throws {
+    func save(_ uploads: [Upload], owner: String) throws {
         lists[owner] = uploads
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -309,14 +354,14 @@ final class LocalSheetLibrary {
 
     /// Milliseconds since 1970: unique on this device and far above the small ids of old
     /// server-side scans, so the two can never be confused.
-    private func nextScanId(owner: String) -> Int64 {
+    func nextScanId(owner: String) -> Int64 {
         let taken = Set(list(for: owner).map { $0.scanId })
         var id = Int64(Date().timeIntervalSince1970 * 1000)
         while taken.contains(id) { id += 1 }
         return id
     }
 
-    private func notify(_ id: UUID) {
+    func notify(_ id: UUID) {
         NotificationCenter.default.post(name: Self.didChangeNotification, object: self, userInfo: ["id": id])
     }
 }

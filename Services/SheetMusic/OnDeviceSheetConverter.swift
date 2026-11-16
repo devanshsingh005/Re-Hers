@@ -18,11 +18,23 @@ nonisolated struct SheetConversionResult {
     let musicXML: String
     /// The input PDF with English note names under the notes.
     let labeledPDF: Data
+    /// What `labeledPDF` was drawn from, so it can be redrawn from the input PDF on another
+    /// device instead of storing a second PDF (see `LabelSheet`).
+    let labels: LabelSheet
     let noteCount: Int
     let pageCount: Int
     /// 1-based pages where no music was found; they stay unlabeled and add no measures.
     let skippedPages: [Int]
     let seconds: Double
+}
+
+/// The note names drawn on each page, in page-image pixels, with each page's render scale.
+nonisolated struct LabelSheet: Codable {
+    struct Page: Codable {
+        let labels: [NoteLabelRenderer.Label]
+        let scale: CGFloat
+    }
+    let pages: [Page]
 }
 
 nonisolated enum SheetConversionError: LocalizedError {
@@ -135,7 +147,9 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
         let labeledPDF = Self.labeledPDF(document, labels: labels, scales: scales)
         progress(1)
         return SheetConversionResult(scoreJSON: jsonData, musicXML: MusicXMLDocument.serialize(score),
-                                     labeledPDF: labeledPDF, noteCount: noteCount, pageCount: pageCount,
+                                     labeledPDF: labeledPDF,
+                                     labels: LabelSheet(pages: zip(labels, scales).map { LabelSheet.Page(labels: $0, scale: $1) }),
+                                     noteCount: noteCount, pageCount: pageCount,
                                      skippedPages: skipped, seconds: Date().timeIntervalSince(start))
     }
 
@@ -192,6 +206,12 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
             drawPage(page, size: size, in: ctx.cgContext)
         }
         return image.cgImage
+    }
+
+    /// Redraws the labeled PDF from the original PDF and its saved labels.
+    static func labeledPDF(pdfData: Data, sheet: LabelSheet) -> Data? {
+        guard let document = PDFDocument(data: pdfData), document.pageCount == sheet.pages.count else { return nil }
+        return labeledPDF(document, labels: sheet.pages.map(\.labels), scales: sheet.pages.map(\.scale))
     }
 
     /// The original pages, unchanged (vector stays vector), with the note names on top.

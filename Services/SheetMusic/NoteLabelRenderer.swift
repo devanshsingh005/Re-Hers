@@ -12,7 +12,7 @@ import UIKit
 
 nonisolated enum NoteLabelRenderer {
     /// One note name, in the pixel coordinates of the recognized page image.
-    struct Label {
+    struct Label: Codable {
         let text: String
         /// Horizontal center and text baseline.
         let x: CGFloat

@@ -110,7 +110,10 @@ class AllUploadsViewController: UIViewController {
             switch upload.status {
             case .processing: return "Converting on device…"
             case .failed:     return "Conversion failed"
-            case .completed:  return [relativeDate(upload.uploadedAt), formatSize(upload.fileSizeBytes)].joined(separator: " • ")
+            case .completed:
+                var parts = [relativeDate(upload.uploadedAt), formatSize(upload.fileSizeBytes)]
+                if upload.cloud == .notBackedUp { parts.append("Not backed up") }
+                return parts.joined(separator: " • ")
             }
         }()
 

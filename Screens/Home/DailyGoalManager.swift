@@ -30,7 +30,7 @@ class DailyGoalManager {
             _dailyGoal = newValue
             UserDefaults.standard.set(newValue, forKey: dailyGoalKey)
             NotificationCenter.default.post(name: Self.dailyGoalUpdatedNotification, object: nil)
-            syncToSupabase()
+            // The goal is saved by whoever changes it, to user_onboarding.practice_mins (the source of truth).
         }
     }
 
@@ -95,30 +95,58 @@ class DailyGoalManager {
 
     // MARK: - Supabase Sync
 
+    private struct RemoteDailyProgress: Decodable {
+        let practice_mins_today: Int?
+        let last_practice_date: String?
+    }
+
+    private struct RemoteGoal: Decodable {
+        let practice_mins: Int
+    }
+
+    /// Goal from user_onboarding (chosen during onboarding), today's progress from profiles.
     func refreshFromSupabase() async {
         guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
+        let client = SupabaseManager.shared.client
+        let userId = user.id.uuidString
+
+        async let goalRows: [RemoteGoal] = client
+            .from("user_onboarding")
+            .select("practice_mins")
+            .eq("id", value: userId)
+            .limit(1)
+            .execute()
+            .value
+        async let progressRows: [RemoteDailyProgress] = client
+            .from("profiles")
+            .select("practice_mins_today, last_practice_date")
+            .eq("id", value: userId)
+            .limit(1)
+            .execute()
+            .value
+
         do {
-            let profile: UserProfile = try await SupabaseManager.shared.client
-                .from("profiles")
-                .select("daily_goal_minutes, practice_mins_today, last_practice_date")
-                .eq("id", value: user.id.uuidString)
-                .single()
-                .execute()
-                .value
+            let goal = try await goalRows.first?.practice_mins
+            let progress = try await progressRows.first
 
             await MainActor.run {
-                self._dailyGoal = profile.daily_goal_minutes ?? self._dailyGoal
+                if let goal, goal > 0 {
+                    self._dailyGoal = goal
+                    UserDefaults.standard.set(goal, forKey: self.dailyGoalKey)
+                }
 
                 let today = DailyGoalManager.dayString(for: Date())
-                if profile.last_practice_date == today {
-                    let remotePracticeMins = profile.practice_mins_today ?? 0
+                if progress?.last_practice_date == today {
+                    let remotePracticeMins = progress?.practice_mins_today ?? 0
                     self._practiceMins = max(remotePracticeMins, self._practiceMins)
-                } else {
+                } else if self.lastPracticeDateString != today {
                     self._practiceMins = 0
                     self.practiceRemainderSeconds = 0
                 }
 
-                self.lastPracticeDateString = profile.last_practice_date
+                if let remoteDate = progress?.last_practice_date {
+                    self.lastPracticeDateString = max(remoteDate, self.lastPracticeDateString ?? "")
+                }
                 NotificationCenter.default.post(name: Self.dailyGoalUpdatedNotification, object: nil)
             }
         } catch {
@@ -126,20 +154,19 @@ class DailyGoalManager {
         }
     }
 
+    /// Pushes today's progress only; the goal lives in user_onboarding.
     private func syncToSupabase() {
         Task {
             guard let user = SupabaseManager.shared.client.auth.currentUser else { return }
             let today = DailyGoalManager.dayString(for: Date())
 
-            struct DailyGoalProfileUpdate: Encodable {
-                let daily_goal_minutes: Int
+            struct DailyProgressUpdate: Encodable {
                 let practice_mins_today: Int
                 let last_practice_date: String
             }
 
-            let update = DailyGoalProfileUpdate(
-                daily_goal_minutes: dailyGoalMinutes,
-                practice_mins_today: practiceTimeMinutesToday,
+            let update = DailyProgressUpdate(
+                practice_mins_today: min(practiceTimeMinutesToday, 1440),
                 last_practice_date: today
             )
 

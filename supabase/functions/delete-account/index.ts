@@ -4,11 +4,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 type JsonBody = Record<string, unknown>;
 type ProfileRow = { avatar_url: string | null };
 type PlaylistRow = { cover_image_url: string | null };
-type JobRow = { pdf_path: string | null; result_url: string | null };
-type ScanRow = {
-  processing_id: string | null;
-  json_data: Record<string, unknown> | null;
-};
 
 const json = (body: JsonBody, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), {
@@ -91,11 +86,9 @@ serve(async (req) => {
   const userId = user.id;
 
   try {
-    const [profileResult, playlistsResult, jobsResult, scansResult] = await Promise.all([
+    const [profileResult, playlistsResult] = await Promise.all([
       adminClient.from("profiles").select("avatar_url").eq("id", userId).maybeSingle(),
       adminClient.from("playlists").select("cover_image_url").eq("user_id", userId),
-      adminClient.from("jobs").select("pdf_path, result_url").eq("user_id", userId),
-      adminClient.from("scans").select("processing_id, json_data").eq("user_id", userId),
     ]);
 
     if (profileResult.error) {
@@ -104,60 +97,42 @@ serve(async (req) => {
     if (playlistsResult.error) {
       return json({ error: playlistsResult.error.message || "Failed to load playlist assets." }, { status: 500 });
     }
-    if (jobsResult.error) {
-      return json({ error: jobsResult.error.message || "Failed to load job assets." }, { status: 500 });
-    }
-    if (scansResult.error) {
-      return json({ error: scansResult.error.message || "Failed to load scan assets." }, { status: 500 });
-    }
 
     const useprofilePaths = new Set<string>();
     const playlistCoverPaths = new Set<string>();
-    const pdfUploadPaths = new Set<string>();
-    const sheetDataPaths = new Set<string>();
 
-    addPath(useprofilePaths, (profileResult.data as ProfileRow | null)?.avatar_url ?? null);
+    // Current avatar, plus every earlier avatar this user uploaded (avatar_<userId>_<timestamp>.<ext>).
+    addPath(useprofilePaths, extractStoragePath((profileResult.data as ProfileRow | null)?.avatar_url ?? null, "useprofile"));
+    const { data: oldAvatars } = await adminClient.storage.from("useprofile")
+      .list("", { search: `avatar_${userId}`, limit: 1000 });
+    for (const file of oldAvatars ?? []) addPath(useprofilePaths, file.name);
 
+    // Covers live under <userId>/ in PlayListCover.
     for (const row of (playlistsResult.data ?? []) as PlaylistRow[]) {
-      addPath(playlistCoverPaths, row.cover_image_url);
+      addPath(playlistCoverPaths, extractStoragePath(row.cover_image_url, "PlayListCover"));
+    }
+    const { data: coverFiles } = await adminClient.storage.from("PlayListCover")
+      .list(userId, { limit: 1000 });
+    for (const file of coverFiles ?? []) addPath(playlistCoverPaths, `${userId}/${file.name}`);
+
+    // Synced sheet uploads: user_sheets/<userId>/<uploadId>/<file>.
+    const sheetPaths: string[] = [];
+    const { data: uploadFolders } = await adminClient.storage.from("user_sheets").list(userId, { limit: 1000 });
+    for (const folder of uploadFolders ?? []) {
+      const { data: files } = await adminClient.storage.from("user_sheets")
+        .list(`${userId}/${folder.name}`, { limit: 100 });
+      for (const file of files ?? []) sheetPaths.push(`${userId}/${folder.name}/${file.name}`);
     }
 
-    for (const row of (jobsResult.data ?? []) as JobRow[]) {
-      addPath(pdfUploadPaths, row.pdf_path);
-      addPath(pdfUploadPaths, extractStoragePath(row.result_url, "pdf_uploads"));
-      addPath(sheetDataPaths, extractStoragePath(row.result_url, "sheet_data"));
-    }
-
-    for (const row of (scansResult.data ?? []) as ScanRow[]) {
-      const processingId = row.processing_id?.trim();
-      if (processingId) {
-        addPath(pdfUploadPaths, `${userId}/${processingId}/input.pdf`);
-        addPath(pdfUploadPaths, `${userId}/${processingId}/labeled.pdf`);
-        addPath(sheetDataPaths, `${userId}/${processingId}/output.json`);
-      }
-
-      const outputURL = typeof row.json_data?.output_url === "string"
-        ? row.json_data.output_url
-        : null;
-      addPath(pdfUploadPaths, extractStoragePath(outputURL, "pdf_uploads"));
-      addPath(sheetDataPaths, extractStoragePath(outputURL, "sheet_data"));
-    }
-
-    const storageDeletes: Array<Promise<unknown>> = [];
-    if (useprofilePaths.size > 0) {
-      storageDeletes.push(adminClient.storage.from("useprofile").remove(Array.from(useprofilePaths)));
-    }
-    if (playlistCoverPaths.size > 0) {
-      storageDeletes.push(adminClient.storage.from("PlayListCover").remove(Array.from(playlistCoverPaths)));
-    }
-    if (pdfUploadPaths.size > 0) {
-      storageDeletes.push(adminClient.storage.from("pdf_uploads").remove(Array.from(pdfUploadPaths)));
-    }
-    if (sheetDataPaths.size > 0) {
-      storageDeletes.push(adminClient.storage.from("sheet_data").remove(Array.from(sheetDataPaths)));
-    }
-
-    await Promise.all(storageDeletes);
+    // Only storage paths: bundled icons ("icon_3") and on-device covers ("doc_…") are not files in storage.
+    const isStoragePath = (p: string) => p.includes("/") || p.includes(".");
+    const removals: Array<Promise<unknown>> = [];
+    const avatarList = Array.from(useprofilePaths).filter(isStoragePath);
+    const coverList = Array.from(playlistCoverPaths).filter(isStoragePath);
+    if (avatarList.length > 0) removals.push(adminClient.storage.from("useprofile").remove(avatarList));
+    if (coverList.length > 0) removals.push(adminClient.storage.from("PlayListCover").remove(coverList));
+    if (sheetPaths.length > 0) removals.push(adminClient.storage.from("user_sheets").remove(sheetPaths));
+    await Promise.all(removals);
 
     const { error: cleanupError } = await adminClient.rpc("delete_user_account_data", {
       p_user_id: userId,
