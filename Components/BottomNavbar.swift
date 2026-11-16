@@ -157,8 +157,9 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func setupAppearance() {
         tabBar.tintColor = ComponentColors.TabBar.activeIcon
         if #available(iOS 26.0, *) {
-            // Liquid Glass tab bar: let the system draw it and fold it away while scrolling down.
-            tabBarMinimizeBehavior = .onScrollDown
+            // Liquid Glass tab bar drawn by the system. It folds away on scroll only while the
+            // mini player is showing (see refreshMiniPlayer), so it stays full-size otherwise.
+            tabBarMinimizeBehavior = .never
             return
         }
         tabBar.unselectedItemTintColor = ComponentColors.TabBar.inactiveIcon
@@ -209,6 +210,9 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
             } else if !wantsAccessory, bottomAccessory != nil {
                 setBottomAccessory(nil, animated: viewIfLoaded?.window != nil)
             }
+            // The minimized form (two round buttons) tucks the mini player in between them.
+            // Without a recent song there is nothing to tuck in, so keep the full tab bar.
+            tabBarMinimizeBehavior = wantsAccessory ? .onScrollDown : .never
         } else {
             legacyMiniPlayerContainer?.isHidden = item == nil || !isShowingTabRoot
             for nav in [homeNav, libraryNav, settingsNav, searchNav] {

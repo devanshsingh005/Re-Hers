@@ -5,6 +5,7 @@
 //
 
 import UIKit
+import CoreText
 
 // MARK: - Quiz Question Model
 struct MusicQuizQuestion {
@@ -15,60 +16,89 @@ struct MusicQuizQuestion {
 }
 
 // MARK: - Staff Drawing Types
+/// What the quiz staff shows. Positions count half staff-spaces up from the bottom line
+/// (0 = bottom line, 1 = first space, -2 = first ledger line below).
 enum StaffDrawingType {
-    case noteOnLine(line: Int, noteName: String)
-    case noteInSpace(space: Int, noteName: String)
-    case noteWithDuration(duration: NoteDuration, beats: String)
-    case restSymbol(duration: NoteDuration)
+    /// One quarter note on a clef'd staff, with an optional accidental.
+    case note(clef: ScoreClef, position: Int, accidental: ScoreNote.Accidental? = nil)
+    /// One note of the given value in 4/4, for "how many beats" questions.
+    case noteValue(NoteValue)
+    /// One rest of the given value in 4/4.
+    case rest(NoteValue)
     case timeSignature(top: Int, bottom: Int)
-    case dynamicSymbol(symbol: String)
-    case clef(type: ClefType)
+    /// A treble key signature: sharps when positive, flats when negative.
+    case keySignature(fifths: Int)
+    /// A note with a dynamic marking (f, p, mf…) under the staff.
+    case dynamic(String)
+    case clef(ScoreClef)
 }
-
-enum NoteDuration { case whole, half, quarter, eighth }
-enum ClefType { case treble, bass }
 
 // MARK: - Static Question Bank
 private let questionBank: [MusicQuizQuestion] = [
     MusicQuizQuestion(
         question: "What note is this?",
-        drawingType: .noteOnLine(line: 1, noteName: "E"),
+        drawingType: .note(clef: .treble, position: 0),              // bottom line: E4
         answers: ["E", "F", "G"], correctIndex: 0
     ),
     MusicQuizQuestion(
         question: "What note is this?",
-        drawingType: .noteInSpace(space: 1, noteName: "F"),
+        drawingType: .note(clef: .treble, position: 1),              // first space: F4
         answers: ["D", "E", "F"], correctIndex: 2
     ),
     MusicQuizQuestion(
         question: "What note is this?",
-        drawingType: .noteOnLine(line: 3, noteName: "B"),
+        drawingType: .note(clef: .treble, position: 4),              // middle line: B4
         answers: ["A", "B", "C"], correctIndex: 1
     ),
     MusicQuizQuestion(
         question: "What note is this?",
-        drawingType: .noteInSpace(space: 3, noteName: "C"),
+        drawingType: .note(clef: .treble, position: 5),              // third space: C5
         answers: ["C", "D", "E"], correctIndex: 0
     ),
     MusicQuizQuestion(
+        question: "What note is this?",
+        drawingType: .note(clef: .treble, position: -2),             // ledger line below: middle C
+        answers: ["A", "C", "E"], correctIndex: 1
+    ),
+    MusicQuizQuestion(
+        question: "What note is this?",
+        drawingType: .note(clef: .bass, position: 4),                // bass middle line: D3
+        answers: ["B", "D", "F"], correctIndex: 1
+    ),
+    MusicQuizQuestion(
+        question: "What note is this?",
+        drawingType: .note(clef: .treble, position: 1, accidental: .sharp),   // F♯4
+        answers: ["F", "F♯", "F♭"], correctIndex: 1
+    ),
+    MusicQuizQuestion(
         question: "How many beats does this note get?",
-        drawingType: .noteWithDuration(duration: .whole, beats: "4"),
+        drawingType: .noteValue(.whole),
         answers: ["2", "3", "4"], correctIndex: 2
     ),
     MusicQuizQuestion(
         question: "How many beats does this note get?",
-        drawingType: .noteWithDuration(duration: .half, beats: "2"),
+        drawingType: .noteValue(.half),
         answers: ["1", "2", "4"], correctIndex: 1
     ),
     MusicQuizQuestion(
         question: "How many beats does this note get?",
-        drawingType: .noteWithDuration(duration: .quarter, beats: "1"),
+        drawingType: .noteValue(.quarter),
         answers: ["1", "2", "3"], correctIndex: 0
     ),
     MusicQuizQuestion(
+        question: "How many beats does this note get?",
+        drawingType: .noteValue(.eighth),
+        answers: ["½", "1", "2"], correctIndex: 0
+    ),
+    MusicQuizQuestion(
         question: "What does this symbol mean?",
-        drawingType: .restSymbol(duration: .quarter),
+        drawingType: .rest(.quarter),
         answers: ["Play loud", "Silence", "Repeat"], correctIndex: 1
+    ),
+    MusicQuizQuestion(
+        question: "What rest is this?",
+        drawingType: .rest(.whole),
+        answers: ["Whole rest", "Half rest", "Quarter rest"], correctIndex: 0
     ),
     MusicQuizQuestion(
         question: "What time signature is this?",
@@ -76,9 +106,24 @@ private let questionBank: [MusicQuizQuestion] = [
         answers: ["3/4", "2/4", "4/4"], correctIndex: 2
     ),
     MusicQuizQuestion(
+        question: "Which major key is this?",
+        drawingType: .keySignature(fifths: 1),                       // one sharp (F♯)
+        answers: ["C major", "G major", "F major"], correctIndex: 1
+    ),
+    MusicQuizQuestion(
+        question: "What does this marking mean?",
+        drawingType: .dynamic("f"),                                  // forte
+        answers: ["Loud", "Soft", "Slowly"], correctIndex: 0
+    ),
+    MusicQuizQuestion(
         question: "What clef is this?",
-        drawingType: .clef(type: .treble),
+        drawingType: .clef(.treble),
         answers: ["Bass clef", "Alto clef", "Treble clef"], correctIndex: 2
+    ),
+    MusicQuizQuestion(
+        question: "What clef is this?",
+        drawingType: .clef(.bass),
+        answers: ["Bass clef", "Alto clef", "Treble clef"], correctIndex: 0
     ),
 ]
 
@@ -314,7 +359,10 @@ class UploadQuizPopup: UIViewController {
         questionLabel.font = UIFont.systemFont(ofSize: 19, weight: .bold)
         questionLabel.textColor = .label
         questionLabel.textAlignment = .center
-        questionLabel.numberOfLines = 0
+        // One line, shrinking to fit: the sheet's height leaves no room for a second line.
+        questionLabel.numberOfLines = 1
+        questionLabel.adjustsFontSizeToFitWidth = true
+        questionLabel.minimumScaleFactor = 0.7
         questionLabel.translatesAutoresizingMaskIntoConstraints = false
         quizCard.addSubview(questionLabel)
 
@@ -482,7 +530,6 @@ class UploadQuizPopup: UIViewController {
 
         questionLabel.text = q.question
         staffView.drawingType = q.drawingType
-        staffView.setNeedsDisplay()
 
         feedbackLabel.text = "Tap an answer to continue"
         feedbackLabel.textColor = .tertiaryLabel
@@ -646,269 +693,199 @@ class UploadQuizPopup: UIViewController {
 }
 
 // MARK: - Staff Drawing View
+/// The quiz's staff, drawn with the same glyphs as the Animation sheet and the Practice lessons
+/// (`SheetGlyphs`): real clefs, note heads, stems, flags, ledger lines, rests, accidentals,
+/// key and time signatures at their true staff positions.
 class StaffDrawingView: UIView {
 
-    var drawingType: StaffDrawingType = .noteOnLine(line: 1, noteName: "E")
+    var drawingType: StaffDrawingType = .clef(.treble) {
+        didSet { drawnSize = .zero; setNeedsLayout() }
+    }
 
-    private let notationColor = SemanticColors.Text.musicNotation
-    private let staffColor    = SemanticColors.Border.default
+    private let content = CALayer()
+    private var drawnSize: CGSize = .zero
 
-    override func draw(_ rect: CGRect) {
-        super.draw(rect)
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.clear(rect)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
 
-        let w = rect.width, h = rect.height
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
 
-        // Staff lines — vertically centred with comfortable padding
-        let staffTop:    CGFloat = h * 0.18
-        let staffBottom: CGFloat = h * 0.78
-        let lineSpacing: CGFloat = (staffBottom - staffTop) / 4.0
-
-        ctx.setStrokeColor(staffColor.cgColor)
-        ctx.setLineWidth(1.2)
-        for i in 0..<5 {
-            let y = staffBottom - CGFloat(i) * lineSpacing
-            ctx.move(to: CGPoint(x: w * 0.06, y: y))
-            ctx.addLine(to: CGPoint(x: w * 0.94, y: y))
-            ctx.strokePath()
+    private func setup() {
+        isUserInteractionEnabled = false
+        layer.addSublayer(content)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
+            self.drawnSize = .zero
+            self.setNeedsLayout()
         }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.size != drawnSize, bounds.width > 0, bounds.height > 0 else { return }
+        drawnSize = bounds.size
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        redraw()
+        CATransaction.commit()
+    }
+
+    private func redraw() {
+        content.sublayers?.forEach { $0.removeFromSuperlayer() }
+        content.frame = bounds
+
+        let ink = SemanticColors.Text.musicNotation.resolvedColor(with: traitCollection)
+        let scale = traitCollection.displayScale
+        // Staff space: fits the staff plus a ledger note and stem in the box.
+        let s = min(12, bounds.height / 11)
+        var staffTop = (bounds.height - 4 * s) / 2
+        if case .dynamic = drawingType { staffTop -= 1.2 * s }   // room for the marking underneath
+        let bottomLine = staffTop + 4 * s
+        let left: CGFloat = 18, right = bounds.width - 18
+        func y(_ position: Int) -> CGFloat { bottomLine - CGFloat(position) * s / 2 }
+
+        // Staff lines
+        let staffLines = CGMutablePath()
+        for i in 0..<5 {
+            staffLines.addRect(CGRect(x: left, y: staffTop + CGFloat(i) * s - 0.5, width: right - left, height: 1))
+        }
+        addShape(staffLines, color: ink.withAlphaComponent(0.45))
+
+        let path = CGMutablePath()
+        var textLayers: [CALayer] = []
+
+        let clefX = left + 0.4 * s
+        let afterClef = clefX + 3.6 * s
+        /// Draws the clef with its left edge at `x` (or centred on `centerX`) at its true size:
+        /// the treble clef curls round the G line and reaches past both ends of the staff; the bass
+        /// clef's dots sit either side of the F line.
+        func addClef(_ clef: ScoreClef, x: CGFloat = clefX, centerX: CGFloat? = nil) {
+            // Extents in staff spaces from SMuFL's gClef / fClef bounding boxes.
+            let top: CGFloat, bottom: CGFloat
+            if clef.isBass {
+                let fLine = staffTop + s
+                top = fLine - 1.03 * s
+                bottom = fLine + 2.54 * s
+            } else {
+                let gLine = bottomLine - s
+                top = gLine - 4.39 * s
+                bottom = gLine + 2.63 * s
+            }
+            guard let glyph = Self.clefGlyph(bass: clef.isBass) else {
+                textLayers.append(SheetGlyphs.clefLayer(clef, x: x, staffTop: staffTop, s: s, color: ink, scale: scale))
+                return
+            }
+            let box = glyph.boundingBoxOfPath
+            let k = (bottom - top) / box.height
+            let left = centerX.map { $0 - box.width * k / 2 } ?? x
+            // Font outlines are y-up: flip, scale to the extents, and move into place.
+            let place = CGAffineTransform(a: k, b: 0, c: 0, d: -k, tx: left - box.minX * k, ty: bottom + box.minY * k)
+            path.addPath(glyph, transform: place)
+        }
+        func addTime(_ top: Int, _ bottom: Int, centerX: CGFloat) {
+            textLayers += SheetGlyphs.timeLayers(ScoreTimeSignature(beats: top, beatType: bottom), centerX: centerX,
+                                                 staffTop: staffTop, s: s, color: ink, scale: scale)
+        }
+        func addNote(_ value: NoteValue, position p: Int, x: CGFloat, accidental: ScoreNote.Accidental? = nil) {
+            let headWidth = SheetGlyphs.headWidth(value, s: s)
+            let noteY = y(p)
+            SheetGlyphs.addHead(path, center: CGPoint(x: x, y: noteY), value: value, s: s)
+
+            // Ledger lines through and between the note and the staff
+            let ledgerThickness = max(1.2, 0.1 * s)
+            func ledger(_ q: Int) {
+                path.addRect(CGRect(x: x - headWidth * 0.85, y: y(q) - ledgerThickness / 2,
+                                    width: headWidth * 1.7, height: ledgerThickness))
+            }
+            if p <= -2 { stride(from: -2, through: p, by: -2).forEach(ledger) }
+            if p >= 10 { stride(from: 10, through: p, by: 2).forEach(ledger) }
+
+            if let accidental {
+                SheetGlyphs.addAccidental(path, accidental, centerX: x - headWidth / 2 - 0.95 * s, centerY: noteY, s: s)
+            }
+
+            guard value.hasStem else { return }
+            // Stem up (on the right) below the middle line, down (on the left) from it upwards.
+            let up = p < 4
+            let t = max(1.1, 0.11 * s)
+            let length = 3.5 * s
+            let stemX = up ? x + headWidth / 2 - t / 2 : x - headWidth / 2 + t / 2
+            let tipY = up ? noteY - length : noteY + length
+            path.addRect(CGRect(x: stemX - t / 2, y: min(noteY, tipY), width: t, height: length))
+            if value.flagCount > 0 {
+                SheetGlyphs.addFlags(path, stemX: stemX - t / 2, tipY: tipY,
+                                     count: value.flagCount, up: up, s: s)
+            }
+        }
+
+        let middleX = (afterClef + right) / 2
 
         switch drawingType {
-        case .noteOnLine(let line, _):
-            let y = staffBottom - CGFloat(line - 1) * lineSpacing
-            drawFilledNote(ctx: ctx, noteY: y, lineSpacing: lineSpacing,
-                           staffBottom: staffBottom, centerX: w * 0.55)
+        case .clef(let clef):
+            addClef(clef, centerX: (left + right) / 2)
 
-        case .noteInSpace(let space, _):
-            let y = staffBottom - (CGFloat(space) - 0.5) * lineSpacing
-            drawFilledNote(ctx: ctx, noteY: y, lineSpacing: lineSpacing,
-                           staffBottom: staffBottom, centerX: w * 0.55)
+        case .note(let clef, let position, let accidental):
+            addClef(clef)
+            addNote(.quarter, position: position, x: middleX, accidental: accidental)
 
-        case .noteWithDuration(let dur, _):
-            drawDurationNote(ctx: ctx, duration: dur,
-                             centerX: w * 0.55,
-                             centerY: staffBottom - 2 * lineSpacing,
-                             lineSpacing: lineSpacing)
+        case .noteValue(let value):
+            addClef(.treble)
+            addTime(4, 4, centerX: afterClef + 0.9 * s)
+            addNote(value, position: 3, x: (afterClef + 2 * s + right) / 2)   // A4, stem up
 
-        case .restSymbol(let dur):
-            drawRest(ctx: ctx, duration: dur, rect: rect,
-                     staffBottom: staffBottom, lineSpacing: lineSpacing)
+        case .rest(let value):
+            addClef(.treble)
+            addTime(4, 4, centerX: afterClef + 0.9 * s)
+            SheetGlyphs.addRest(path, value: value, x: (afterClef + 2 * s + right) / 2, centerY: y(4), s: s)
 
         case .timeSignature(let top, let bottom):
-            drawTimeSignature(ctx: ctx, top: top, bottom: bottom,
-                              staffBottom: staffBottom, lineSpacing: lineSpacing, rect: rect)
+            addClef(.treble)
+            addTime(top, bottom, centerX: middleX)
 
-        case .dynamicSymbol(let symbol):
-            drawDynamic(ctx: ctx, symbol: symbol, rect: rect)
+        case .keySignature(let fifths):
+            addClef(.treble)
+            let count = CGFloat(min(7, abs(fifths)))
+            let width = 0.5 * s + count * 0.95 * s
+            SheetGlyphs.addKeySignature(path, fifths: fifths, previous: 0, clef: .treble,
+                                        x: middleX - width / 2, staffTop: staffTop, s: s)
 
-        case .clef(let type):
-            drawClef(ctx: ctx, type: type, staffBottom: staffBottom,
-                     lineSpacing: lineSpacing, rect: rect)
+        case .dynamic(let marking):
+            addClef(.treble)
+            addNote(.quarter, position: 3, x: middleX)
+            let font = UIFont(name: "TimesNewRomanPS-BoldItalicMT", size: 2.6 * s)
+                ?? UIFont.italicSystemFont(ofSize: 2.6 * s)
+            textLayers.append(SheetGlyphs.textLayer(marking, font: font, color: ink, centerX: middleX,
+                                                    centerY: bottomLine + 2.4 * s, scale: scale))
         }
+
+        addShape(path, color: ink)
+        textLayers.forEach(content.addSublayer)
     }
 
-    // MARK: Note helpers
-    private func drawFilledNote(ctx: CGContext, noteY: CGFloat, lineSpacing: CGFloat,
-                                staffBottom: CGFloat, centerX: CGFloat) {
-        let rx = lineSpacing * 0.58, ry = lineSpacing * 0.42
-
-        ctx.saveGState()
-        ctx.translateBy(x: centerX, y: noteY)
-        ctx.rotate(by: -0.28)
-        ctx.setFillColor(notationColor.cgColor)
-        ctx.fillEllipse(in: CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2))
-        ctx.restoreGState()
-
-        ctx.setStrokeColor(notationColor.cgColor)
-        ctx.setLineWidth(1.8)
-        ctx.move(to: CGPoint(x: centerX + rx * 0.85, y: noteY))
-        ctx.addLine(to: CGPoint(x: centerX + rx * 0.85, y: noteY - lineSpacing * 2.8))
-        ctx.strokePath()
-
-        if noteY > staffBottom + 2 {
-            ctx.setStrokeColor(staffColor.cgColor)
-            ctx.setLineWidth(1.2)
-            ctx.move(to: CGPoint(x: centerX - rx * 1.6, y: staffBottom))
-            ctx.addLine(to: CGPoint(x: centerX + rx * 1.6, y: staffBottom))
-            ctx.strokePath()
-        }
+    /// The outline of the Unicode clef (𝄞 / 𝄢) from a font that has it (Apple Symbols, or
+    /// whichever font the system falls back to).
+    private static func clefGlyph(bass: Bool) -> CGPath? {
+        let string = bass ? "𝄢" : "𝄞"
+        let base = CTFontCreateWithName("AppleSymbols" as CFString, 100, nil)
+        let font = CTFontCreateForString(base, string as CFString, CFRange(location: 0, length: string.utf16.count))
+        var chars = Array(string.utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: chars.count)
+        guard CTFontGetGlyphsForCharacters(font, &chars, &glyphs, chars.count), glyphs[0] != 0,
+              let path = CTFontCreatePathForGlyph(font, glyphs[0], nil),
+              !path.boundingBoxOfPath.isEmpty else { return nil }
+        return path
     }
 
-    private func drawDurationNote(ctx: CGContext, duration: NoteDuration,
-                                  centerX: CGFloat, centerY: CGFloat, lineSpacing: CGFloat) {
-        let rx = lineSpacing * 0.58, ry = lineSpacing * 0.42
-
-        ctx.saveGState()
-        ctx.translateBy(x: centerX, y: centerY)
-        ctx.rotate(by: -0.28)
-        let r = CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2)
-
-        switch duration {
-        case .whole:
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setFillColor(UIColor.clear.cgColor)
-            ctx.setLineWidth(2.0)
-            ctx.strokeEllipse(in: r)
-            ctx.restoreGState()
-
-        case .half:
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setFillColor(UIColor.clear.cgColor)
-            ctx.setLineWidth(2.0)
-            ctx.strokeEllipse(in: r)
-            ctx.restoreGState()
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setLineWidth(1.8)
-            ctx.move(to: CGPoint(x: centerX + rx * 0.85, y: centerY))
-            ctx.addLine(to: CGPoint(x: centerX + rx * 0.85, y: centerY - lineSpacing * 2.8))
-            ctx.strokePath()
-
-        case .quarter:
-            ctx.setFillColor(notationColor.cgColor)
-            ctx.fillEllipse(in: r)
-            ctx.restoreGState()
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setLineWidth(1.8)
-            ctx.move(to: CGPoint(x: centerX + rx * 0.85, y: centerY))
-            ctx.addLine(to: CGPoint(x: centerX + rx * 0.85, y: centerY - lineSpacing * 2.8))
-            ctx.strokePath()
-
-        case .eighth:
-            ctx.setFillColor(notationColor.cgColor)
-            ctx.fillEllipse(in: r)
-            ctx.restoreGState()
-            let stemTopY = centerY - lineSpacing * 2.8
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setLineWidth(1.8)
-            ctx.move(to: CGPoint(x: centerX + rx * 0.85, y: centerY))
-            ctx.addLine(to: CGPoint(x: centerX + rx * 0.85, y: stemTopY))
-            ctx.strokePath()
-            let flag = UIBezierPath()
-            flag.move(to: CGPoint(x: centerX + rx * 0.85, y: stemTopY))
-            flag.addCurve(
-                to: CGPoint(x: centerX + rx * 0.85 + lineSpacing * 0.8, y: stemTopY + lineSpacing),
-                controlPoint1: CGPoint(x: centerX + rx * 0.85 + lineSpacing, y: stemTopY),
-                controlPoint2: CGPoint(x: centerX + rx * 0.85 + lineSpacing * 1.2, y: stemTopY + lineSpacing * 0.5))
-            flag.stroke()
-        }
-    }
-
-    private func drawRest(ctx: CGContext, duration: NoteDuration, rect: CGRect,
-                          staffBottom: CGFloat, lineSpacing: CGFloat) {
-        let cx = rect.width * 0.55
-        let midY = staffBottom - 2 * lineSpacing
-
-        ctx.setFillColor(notationColor.cgColor)
-        ctx.setStrokeColor(notationColor.cgColor)
-
-        switch duration {
-        case .whole:
-            ctx.fill(CGRect(x: cx - lineSpacing * 0.8, y: staffBottom - 3 * lineSpacing,
-                            width: lineSpacing * 1.6, height: lineSpacing * 0.55))
-        case .half:
-            ctx.fill(CGRect(x: cx - lineSpacing * 0.8, y: midY - lineSpacing * 0.55,
-                            width: lineSpacing * 1.6, height: lineSpacing * 0.55))
-        case .quarter:
-            ctx.setLineWidth(2.0)
-            ctx.setLineCap(.round)
-            let pts: [CGPoint] = [
-                CGPoint(x: cx - lineSpacing * 0.2, y: midY - lineSpacing * 1.2),
-                CGPoint(x: cx + lineSpacing * 0.4, y: midY - lineSpacing * 0.5),
-                CGPoint(x: cx - lineSpacing * 0.3, y: midY),
-                CGPoint(x: cx + lineSpacing * 0.5, y: midY + lineSpacing * 0.5),
-                CGPoint(x: cx - lineSpacing * 0.1, y: midY + lineSpacing * 1.2),
-            ]
-            ctx.move(to: pts[0])
-            pts.dropFirst().forEach { ctx.addLine(to: $0) }
-            ctx.strokePath()
-        case .eighth:
-            ctx.setLineWidth(1.8)
-            ctx.strokeEllipse(in: CGRect(x: cx - lineSpacing * 0.3, y: midY - lineSpacing * 0.3,
-                                         width: lineSpacing * 0.6, height: lineSpacing * 0.6))
-            ctx.move(to: CGPoint(x: cx + lineSpacing * 0.3, y: midY))
-            ctx.addLine(to: CGPoint(x: cx + lineSpacing * 0.6, y: midY - lineSpacing * 1.2))
-            ctx.strokePath()
-        }
-    }
-
-    private func drawTimeSignature(ctx: CGContext, top: Int, bottom: Int,
-                                   staffBottom: CGFloat, lineSpacing: CGFloat, rect: CGRect) {
-        let cx = rect.width * 0.50
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.boldSystemFont(ofSize: lineSpacing * 1.5),
-            .foregroundColor: notationColor,
-        ]
-        let topStr = "\(top)" as NSString
-        let botStr = "\(bottom)" as NSString
-        let sz = topStr.size(withAttributes: attrs)
-        topStr.draw(at: CGPoint(x: cx - sz.width / 2, y: staffBottom - 4 * lineSpacing), withAttributes: attrs)
-        botStr.draw(at: CGPoint(x: cx - sz.width / 2, y: staffBottom - 2 * lineSpacing), withAttributes: attrs)
-    }
-
-    private func drawDynamic(ctx: CGContext, symbol: String, rect: CGRect) {
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.italicSystemFont(ofSize: 36),
-            .foregroundColor: notationColor,
-        ]
-        let str = symbol as NSString
-        let sz = str.size(withAttributes: attrs)
-        str.draw(at: CGPoint(x: rect.width / 2 - sz.width / 2,
-                             y: rect.height / 2 - sz.height / 2), withAttributes: attrs)
-    }
-
-    private func drawClef(ctx: CGContext, type: ClefType, staffBottom: CGFloat,
-                          lineSpacing: CGFloat, rect: CGRect) {
-        let cx = rect.width * 0.50
-
-        switch type {
-        case .treble:
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setLineWidth(2.2)
-            ctx.setLineCap(.round)
-
-            let baseY  = staffBottom
-            let topY   = baseY - 4 * lineSpacing - lineSpacing * 0.8
-            let circleY = baseY - lineSpacing
-            let circleR: CGFloat = lineSpacing * 0.85
-
-            ctx.move(to: CGPoint(x: cx, y: baseY + lineSpacing * 0.6))
-            ctx.addLine(to: CGPoint(x: cx, y: topY))
-            ctx.strokePath()
-
-            ctx.setLineWidth(2.0)
-            ctx.strokeEllipse(in: CGRect(x: cx - circleR, y: circleY - circleR,
-                                         width: circleR * 2, height: circleR * 2))
-
-            let curl = UIBezierPath()
-            curl.move(to: CGPoint(x: cx, y: baseY + lineSpacing * 0.6))
-            curl.addCurve(
-                to: CGPoint(x: cx - lineSpacing * 0.7, y: baseY + lineSpacing * 0.2),
-                controlPoint1: CGPoint(x: cx + lineSpacing * 0.5, y: baseY + lineSpacing),
-                controlPoint2: CGPoint(x: cx - lineSpacing * 0.5, y: baseY + lineSpacing * 0.8))
-            ctx.setLineWidth(2.2)
-            curl.stroke()
-
-        case .bass:
-            ctx.setFillColor(notationColor.cgColor)
-            ctx.setStrokeColor(notationColor.cgColor)
-            ctx.setLineWidth(2.0)
-
-            let startY = staffBottom - 3 * lineSpacing
-            let bassCurve = UIBezierPath()
-            bassCurve.move(to: CGPoint(x: cx, y: startY))
-            bassCurve.addCurve(
-                to: CGPoint(x: cx - lineSpacing * 0.4, y: startY + lineSpacing * 2),
-                controlPoint1: CGPoint(x: cx + lineSpacing * 1.2, y: startY + lineSpacing * 0.4),
-                controlPoint2: CGPoint(x: cx + lineSpacing * 0.8, y: startY + lineSpacing * 1.8))
-            bassCurve.stroke()
-
-            let dotR: CGFloat = 4
-            ctx.fillEllipse(in: CGRect(x: cx + lineSpacing * 0.9, y: startY - dotR,
-                                       width: dotR * 2, height: dotR * 2))
-            ctx.fillEllipse(in: CGRect(x: cx + lineSpacing * 0.9, y: startY + lineSpacing * 0.7 - dotR,
-                                       width: dotR * 2, height: dotR * 2))
-        }
+    private func addShape(_ path: CGPath, color: UIColor) {
+        let shape = CAShapeLayer()
+        shape.path = path
+        shape.fillColor = color.cgColor
+        shape.frame = content.bounds
+        content.addSublayer(shape)
     }
 }
 
