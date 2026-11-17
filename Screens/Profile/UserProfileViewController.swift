@@ -122,7 +122,7 @@ final class UserProfileViewController: UIViewController {
             let navBar = navigationController?.navigationBar
             navBar?.titleTextAttributes = [
                 .foregroundColor: UIColor.white,
-                .font: UIFont.systemFont(ofSize: 17, weight: .bold)
+                .font: UIFont.systemFont(ofSize: DeviceLayout.s(17), weight: .bold)
             ]
             navBar?.tintColor = .white
         }
@@ -247,7 +247,7 @@ final class UserProfileViewController: UIViewController {
     // MARK: - HEADER (avatar + name + username)
     private func buildHeaderSection() {
         // Avatar ring
-        let ringSize: CGFloat = 110
+        let ringSize: CGFloat = DeviceLayout.s(110)
         let ringView = UIView()
         ringView.translatesAutoresizingMaskIntoConstraints = false
         let ringGradient = CAGradientLayer()
@@ -277,14 +277,14 @@ final class UserProfileViewController: UIViewController {
         contentView.addSubview(profileImageView)
 
         nameLabel.text = "Loading..."
-        nameLabel.font = .systemFont(ofSize: 24, weight: .bold)
+        nameLabel.font = .systemFont(ofSize: DeviceLayout.s(24), weight: .bold)
         nameLabel.textColor = ComponentColors.ProfileScreen.userName
         nameLabel.textAlignment = .center
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(nameLabel)
 
         usernameLabel.text = "@username"
-        usernameLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        usernameLabel.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .regular)
         usernameLabel.textColor = ComponentColors.ProfileScreen.userHandle
         usernameLabel.textAlignment = .center
         usernameLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -292,8 +292,8 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             isTabRoot
-                ? ringView.topAnchor.constraint(equalTo: tabHeader.bottomAnchor, constant: 12)
-                : ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
+                ? ringView.topAnchor.constraint(equalTo: tabHeader.bottomAnchor, constant: DeviceLayout.s(12))
+                : ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: DeviceLayout.s(28)),
             ringView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             ringView.widthAnchor.constraint(equalToConstant: ringSize),
             ringView.heightAnchor.constraint(equalToConstant: ringSize),
@@ -303,10 +303,10 @@ final class UserProfileViewController: UIViewController {
             profileImageView.widthAnchor.constraint(equalToConstant: ringSize - 8),
             profileImageView.heightAnchor.constraint(equalToConstant: ringSize - 8),
 
-            nameLabel.topAnchor.constraint(equalTo: ringView.bottomAnchor, constant: 16),
+            nameLabel.topAnchor.constraint(equalTo: ringView.bottomAnchor, constant: DeviceLayout.s(16)),
             nameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            usernameLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
+            usernameLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: DeviceLayout.s(4)),
             usernameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
         ])
 
@@ -334,7 +334,7 @@ final class UserProfileViewController: UIViewController {
         let stack = UIStackView(arrangedSubviews: cards)
         stack.axis = .horizontal
         stack.distribution = .fillEqually
-        stack.spacing = 12
+        stack.spacing = DeviceLayout.s(12)
         stack.translatesAutoresizingMaskIntoConstraints = false
         statsContainer.addSubview(stack)
 
@@ -346,10 +346,10 @@ final class UserProfileViewController: UIViewController {
         ])
 
         NSLayoutConstraint.activate([
-            statsContainer.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 28),
-            statsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            statsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            statsContainer.heightAnchor.constraint(equalToConstant: 100),
+            statsContainer.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: DeviceLayout.s(28)),
+            statsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            statsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            statsContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(100)),
         ])
     }
 
@@ -358,7 +358,7 @@ final class UserProfileViewController: UIViewController {
                                subtitleText: String) -> UIView {
         let card = UIView()
         card.backgroundColor = ComponentColors.ProfileScreen.statCardFill // #FBF1DA 80%
-        card.layer.cornerRadius = 16
+        card.layer.cornerRadius = DeviceLayout.s(16)
         card.layer.borderWidth = 0.5
         card.layer.borderColor = ComponentColors.ProfileScreen.statCardBorder.cgColor // #EF9408 at 40%
 
@@ -368,14 +368,14 @@ final class UserProfileViewController: UIViewController {
         icon.translatesAutoresizingMaskIntoConstraints = false
 
         valueLabel.text = valueText
-        valueLabel.font = .systemFont(ofSize: 22, weight: .bold)
+        valueLabel.font = .systemFont(ofSize: DeviceLayout.s(22), weight: .bold)
         valueLabel.textColor = ComponentColors.ProfileScreen.userName
         valueLabel.textAlignment = .center
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitle = UILabel()
         subtitle.text = subtitleText
-        subtitle.font = .systemFont(ofSize: 10, weight: .semibold)
+        subtitle.font = .systemFont(ofSize: DeviceLayout.s(10), weight: .semibold)
         subtitle.textColor = ComponentColors.ProfileScreen.statLabel
         subtitle.textAlignment = .center
         let subtitleAttrs = NSMutableAttributedString(string: subtitleText)
@@ -388,15 +388,15 @@ final class UserProfileViewController: UIViewController {
         card.addSubview(subtitle)
 
         NSLayoutConstraint.activate([
-            icon.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            icon.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(14)),
             icon.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 22),
-            icon.heightAnchor.constraint(equalToConstant: 22),
+            icon.widthAnchor.constraint(equalToConstant: DeviceLayout.s(22)),
+            icon.heightAnchor.constraint(equalToConstant: DeviceLayout.s(22)),
 
-            valueLabel.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 6),
+            valueLabel.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: DeviceLayout.s(6)),
             valueLabel.centerXAnchor.constraint(equalTo: card.centerXAnchor),
 
-            subtitle.topAnchor.constraint(equalTo: valueLabel.bottomAnchor, constant: 2),
+            subtitle.topAnchor.constraint(equalTo: valueLabel.bottomAnchor, constant: DeviceLayout.s(2)),
             subtitle.centerXAnchor.constraint(equalTo: card.centerXAnchor),
         ])
 
@@ -407,7 +407,7 @@ final class UserProfileViewController: UIViewController {
     private func buildPracticeProgressSection() {
         let card = UIView()
         card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
-        card.layer.cornerRadius = 20
+        card.layer.cornerRadius = DeviceLayout.s(20)
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
         card.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -418,35 +418,35 @@ final class UserProfileViewController: UIViewController {
         // Title row
         let titleLabel = UILabel()
         titleLabel.text = "Practice Progress"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
         titleLabel.textColor = ComponentColors.ProfileScreen.userName
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(titleLabel)
 
         // Goal badge
         goalBadgeBg.backgroundColor = ComponentColors.ProfileScreen.statCardFill
-        goalBadgeBg.layer.cornerRadius = 12
+        goalBadgeBg.layer.cornerRadius = DeviceLayout.s(12)
         goalBadgeBg.isUserInteractionEnabled = true
         goalBadgeBg.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(dailyGoalBadgeTapped)))
         goalBadgeBg.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(goalBadgeBg)
 
         goalBadgeLabel.text = "Goal: –"
-        goalBadgeLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        goalBadgeLabel.font = .systemFont(ofSize: DeviceLayout.s(12), weight: .semibold)
         goalBadgeLabel.textColor = ComponentColors.ProfileScreen.editProfileText
         goalBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
         goalBadgeBg.addSubview(goalBadgeLabel)
 
         // Weekly hours
         weeklyHoursLabel.text = "– h"
-        weeklyHoursLabel.font = .systemFont(ofSize: 36, weight: .bold)
+        weeklyHoursLabel.font = .systemFont(ofSize: DeviceLayout.s(36), weight: .bold)
         weeklyHoursLabel.textColor = ComponentColors.ProfileScreen.userName
         weeklyHoursLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(weeklyHoursLabel)
 
         let thisWeekLabel = UILabel()
         thisWeekLabel.text = "This Week"
-        thisWeekLabel.font = .systemFont(ofSize: 14, weight: .regular)
+        thisWeekLabel.font = .systemFont(ofSize: DeviceLayout.s(14), weight: .regular)
         thisWeekLabel.textColor = ComponentColors.ProfileScreen.statLabel
         thisWeekLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(thisWeekLabel)
@@ -462,33 +462,33 @@ final class UserProfileViewController: UIViewController {
         let statsContainer = contentView.subviews.last(where: { $0 != card })!
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: statsContainer.bottomAnchor, constant: 20),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            card.topAnchor.constraint(equalTo: statsContainer.bottomAnchor, constant: DeviceLayout.s(20)),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
 
-            titleLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            titleLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
+            titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
 
             goalBadgeBg.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            goalBadgeBg.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            goalBadgeBg.heightAnchor.constraint(equalToConstant: 28),
+            goalBadgeBg.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: DeviceLayout.s(-16)),
+            goalBadgeBg.heightAnchor.constraint(equalToConstant: DeviceLayout.s(28)),
 
-            goalBadgeLabel.topAnchor.constraint(equalTo: goalBadgeBg.topAnchor, constant: 6),
-            goalBadgeLabel.bottomAnchor.constraint(equalTo: goalBadgeBg.bottomAnchor, constant: -6),
-            goalBadgeLabel.leadingAnchor.constraint(equalTo: goalBadgeBg.leadingAnchor, constant: 10),
-            goalBadgeLabel.trailingAnchor.constraint(equalTo: goalBadgeBg.trailingAnchor, constant: -10),
+            goalBadgeLabel.topAnchor.constraint(equalTo: goalBadgeBg.topAnchor, constant: DeviceLayout.s(6)),
+            goalBadgeLabel.bottomAnchor.constraint(equalTo: goalBadgeBg.bottomAnchor, constant: DeviceLayout.s(-6)),
+            goalBadgeLabel.leadingAnchor.constraint(equalTo: goalBadgeBg.leadingAnchor, constant: DeviceLayout.s(10)),
+            goalBadgeLabel.trailingAnchor.constraint(equalTo: goalBadgeBg.trailingAnchor, constant: DeviceLayout.s(-10)),
 
-            weeklyHoursLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
-            weeklyHoursLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            weeklyHoursLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: DeviceLayout.s(16)),
+            weeklyHoursLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
 
-            thisWeekLabel.leadingAnchor.constraint(equalTo: weeklyHoursLabel.trailingAnchor, constant: 8),
+            thisWeekLabel.leadingAnchor.constraint(equalTo: weeklyHoursLabel.trailingAnchor, constant: DeviceLayout.s(8)),
             thisWeekLabel.lastBaselineAnchor.constraint(equalTo: weeklyHoursLabel.lastBaselineAnchor),
 
-            chartContainer.topAnchor.constraint(equalTo: weeklyHoursLabel.bottomAnchor, constant: 8),
-            chartContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 8),
-            chartContainer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -8),
-            chartContainer.heightAnchor.constraint(equalToConstant: 130),
-            chartContainer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+            chartContainer.topAnchor.constraint(equalTo: weeklyHoursLabel.bottomAnchor, constant: DeviceLayout.s(8)),
+            chartContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(8)),
+            chartContainer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: DeviceLayout.s(-8)),
+            chartContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(130)),
+            chartContainer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: DeviceLayout.s(-16)),
         ])
     }
 
@@ -504,7 +504,7 @@ final class UserProfileViewController: UIViewController {
     private func buildPracticeLinksSection() {
         let card = UIView()
         card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
-        card.layer.cornerRadius = 20
+        card.layer.cornerRadius = DeviceLayout.s(20)
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
         card.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -514,7 +514,7 @@ final class UserProfileViewController: UIViewController {
 
         let sectionTitle = UILabel()
         sectionTitle.text = "Practice"
-        sectionTitle.font = .systemFont(ofSize: 20, weight: .bold)
+        sectionTitle.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
         sectionTitle.textColor = ComponentColors.ProfileScreen.userName
         sectionTitle.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(sectionTitle)
@@ -539,7 +539,7 @@ final class UserProfileViewController: UIViewController {
             let divider = UIView()
             divider.backgroundColor = ComponentColors.ProfileScreen.statCardBorder
             divider.translatesAutoresizingMaskIntoConstraints = false
-            divider.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+            divider.heightAnchor.constraint(equalToConstant: DeviceLayout.s(0.5)).isActive = true
             return divider
         }
 
@@ -551,17 +551,17 @@ final class UserProfileViewController: UIViewController {
         let previousView = contentView.subviews.last(where: { $0 != card })!
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: 20),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
 
-            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
+            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
 
-            stack.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: 10),
+            stack.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: DeviceLayout.s(10)),
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: DeviceLayout.s(-8)),
 
             lessons.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
             notifications.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
@@ -594,7 +594,7 @@ final class UserProfileViewController: UIViewController {
         button.addSubview(chevron)
         NSLayoutConstraint.activate([
             chevron.centerYAnchor.constraint(equalTo: button.centerYAnchor),
-            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -20)
+            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: DeviceLayout.s(-20))
         ])
         return button
     }
@@ -632,7 +632,7 @@ final class UserProfileViewController: UIViewController {
     private func buildAppearanceSection() {
         let card = UIView()
         card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
-        card.layer.cornerRadius = 20
+        card.layer.cornerRadius = DeviceLayout.s(20)
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
         card.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -642,7 +642,7 @@ final class UserProfileViewController: UIViewController {
 
         let sectionTitle = UILabel()
         sectionTitle.text = "Appearance"
-        sectionTitle.font = .systemFont(ofSize: 20, weight: .bold)
+        sectionTitle.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
         sectionTitle.textColor = ComponentColors.ProfileScreen.userName
         sectionTitle.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(sectionTitle)
@@ -654,12 +654,12 @@ final class UserProfileViewController: UIViewController {
 
         let rowTitleLabel = UILabel()
         rowTitleLabel.text = "Theme"
-        rowTitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        rowTitleLabel.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .regular)
         rowTitleLabel.textColor = ComponentColors.ProfileScreen.userName
         rowTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         rowButton.addSubview(rowTitleLabel)
 
-        appearanceValueLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        appearanceValueLabel.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .regular)
         appearanceValueLabel.textColor = ComponentColors.ProfileScreen.statLabel
         appearanceValueLabel.textAlignment = .right
         appearanceValueLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -674,35 +674,35 @@ final class UserProfileViewController: UIViewController {
         let previousView = contentView.subviews.last(where: { $0 != card })!
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: 20),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
 
-            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
+            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
 
-            rowButton.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: 10),
+            rowButton.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: DeviceLayout.s(10)),
             rowButton.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             rowButton.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            rowButton.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
-            rowButton.heightAnchor.constraint(equalToConstant: 50),
+            rowButton.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: DeviceLayout.s(-8)),
+            rowButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)),
 
-            rowTitleLabel.leadingAnchor.constraint(equalTo: rowButton.leadingAnchor, constant: 20),
+            rowTitleLabel.leadingAnchor.constraint(equalTo: rowButton.leadingAnchor, constant: DeviceLayout.s(20)),
             rowTitleLabel.centerYAnchor.constraint(equalTo: rowButton.centerYAnchor),
 
-            chevron.trailingAnchor.constraint(equalTo: rowButton.trailingAnchor, constant: -20),
+            chevron.trailingAnchor.constraint(equalTo: rowButton.trailingAnchor, constant: DeviceLayout.s(-20)),
             chevron.centerYAnchor.constraint(equalTo: rowButton.centerYAnchor),
 
-            appearanceValueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -8),
+            appearanceValueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: DeviceLayout.s(-8)),
             appearanceValueLabel.centerYAnchor.constraint(equalTo: rowButton.centerYAnchor),
-            appearanceValueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: rowTitleLabel.trailingAnchor, constant: 12)
+            appearanceValueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: rowTitleLabel.trailingAnchor, constant: DeviceLayout.s(12))
         ])
     }
 
     // MARK: - SIGN OUT SECTION
     private func buildSignOutSection() {
-        signOutButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
-        signOutButton.layer.cornerRadius = 28
+        signOutButton.titleLabel?.font = .systemFont(ofSize: DeviceLayout.s(17), weight: .bold)
+        signOutButton.layer.cornerRadius = DeviceLayout.s(28)
         signOutButton.translatesAutoresizingMaskIntoConstraints = false
         updateSignInOutButton()
 
@@ -714,20 +714,20 @@ final class UserProfileViewController: UIViewController {
         let practiceCard = contentView.subviews.last(where: { $0 != signOutButton })!
 
         NSLayoutConstraint.activate([
-            signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
+            signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: DeviceLayout.s(28)),
             // iPad: a button of its own size, centred, rather than one across the page
             signOutButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            signOutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -48).withPriority(.defaultHigh),
+            signOutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: DeviceLayout.s(-48)).withPriority(.defaultHigh),
             signOutButton.widthAnchor.constraint(lessThanOrEqualToConstant: DeviceLayout.isPad ? 340 : .greatestFiniteMagnitude),
-            signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
-            signOutButton.heightAnchor.constraint(equalToConstant: 56),
+            signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-48)),
+            signOutButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
         ])
     }
 
     private func buildLegalSection() {
         let card = UIView()
         card.backgroundColor = ComponentColors.ProfileScreen.headerCardFill
-        card.layer.cornerRadius = 20
+        card.layer.cornerRadius = DeviceLayout.s(20)
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
         card.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -737,7 +737,7 @@ final class UserProfileViewController: UIViewController {
 
         let sectionTitle = UILabel()
         sectionTitle.text = "Legal"
-        sectionTitle.font = .systemFont(ofSize: 20, weight: .bold)
+        sectionTitle.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
         sectionTitle.textColor = ComponentColors.ProfileScreen.userName
         sectionTitle.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(sectionTitle)
@@ -751,32 +751,32 @@ final class UserProfileViewController: UIViewController {
 
         let stack = UIStackView(arrangedSubviews: [termsButton, divider, privacyButton])
         stack.axis = .vertical
-        stack.spacing = 0
+        stack.spacing = DeviceLayout.s(0)
         stack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(stack)
 
         let previousView = contentView.subviews.last(where: { $0 != card })!
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: 20),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
 
-            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
+            sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
 
-            stack.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: 10),
+            stack.topAnchor.constraint(equalTo: sectionTitle.bottomAnchor, constant: DeviceLayout.s(10)),
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: DeviceLayout.s(-8)),
 
-            termsButton.heightAnchor.constraint(equalToConstant: 50),
-            privacyButton.heightAnchor.constraint(equalToConstant: 50),
-            divider.heightAnchor.constraint(equalToConstant: 0.5)
+            termsButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)),
+            privacyButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)),
+            divider.heightAnchor.constraint(equalToConstant: DeviceLayout.s(0.5))
         ])
 
         if !GuestSessionManager.shared.isGuest() {
-            card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -72).isActive = true
+            card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72)).isActive = true
         }
     }
 
@@ -787,7 +787,7 @@ final class UserProfileViewController: UIViewController {
         config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var attrs = attrs
-            attrs.font = .systemFont(ofSize: 16, weight: .medium)
+            attrs.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .medium)
             return attrs
         }
         let button = UIButton(configuration: config)
@@ -802,7 +802,7 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             chevron.centerYAnchor.constraint(equalTo: button.centerYAnchor),
-            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -20)
+            chevron.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: DeviceLayout.s(-20))
         ])
 
         return button
@@ -1970,7 +1970,7 @@ final class PracticeChartView: UIView {
 
         // Day labels
         let labelAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 11, weight: .medium),
+            .font: UIFont.systemFont(ofSize: DeviceLayout.s(11), weight: .medium),
             .foregroundColor: ComponentColors.ProfileScreen.graphAxisLabel
         ]
         for (i, day) in days.enumerated() {

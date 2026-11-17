@@ -11,6 +11,9 @@ final class UploadPageNextViewController: UIViewController {
     // Set jobId from the previous screen: the id of an upload in LocalSheetLibrary.
     var jobId:     UUID?
     var onDataReady: (() -> Void)?
+    /// The conversion failed: true if the processing popup showed the reason (this page then
+    /// doesn't show its own alert).
+    var onConversionFailed: ((String) -> Bool)?
 
     private var sheetMusicText:   String       = ""
     private var extractedChords:  [String]     = []
@@ -205,8 +208,10 @@ final class UploadPageNextViewController: UIViewController {
             return
         case .failed:
             isProcessing = false
-            showUnavailableState(message: upload.errorMessage
-                ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete.")
+            let message = upload.errorMessage
+                ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete."
+            if onConversionFailed?(message) == true { hasPresentedUnavailableReason = true }
+            showUnavailableState(message: message)
         case .completed:
             isProcessing = false
             progressView.isHidden  = true

@@ -181,6 +181,10 @@ class PlaylistSongDetailViewController: UIViewController {
                                pageLabel, pdfView, pdfSkeleton, errorLabel, buttonStack]
         views.forEach { $0.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview($0) }
 
+        if DeviceLayout.isPad {
+            layoutTwoPanes(buttonStack: buttonStack)
+            return
+        }
         let cx = contentView.centerXAnchor
         NSLayoutConstraint.activate([
             albumArt.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
@@ -226,6 +230,83 @@ class PlaylistSongDetailViewController: UIViewController {
         let h = pdfView.heightAnchor.constraint(equalToConstant: 480)
         h.isActive = true
         pdfHeightConstraint = h
+    }
+
+    /// iPad: as on the Library's song page, the song and its actions in a pane on the left and
+    /// the sheet music filling the right at the screen's height.
+    private func layoutTwoPanes(buttonStack: UIStackView) {
+        let pane = UILayoutGuide()
+        contentView.addLayoutGuide(pane)
+        buttonStack.axis = .vertical
+        titleLabel.numberOfLines = 2
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.7
+        pageLabel.textAlignment = .left
+        // the sheet card behind the PDF, like the Library's
+        let sheetCard = UIView()
+        sheetCard.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicCardFill
+        sheetCard.layer.cornerRadius = 20
+        sheetCard.layer.borderWidth = 0.5
+        sheetCard.layer.borderColor = UIColor.separator.cgColor
+        sheetCard.translatesAutoresizingMaskIntoConstraints = false
+        contentView.insertSubview(sheetCard, belowSubview: pdfView)
+        playAlongButton.layer.cornerRadius = 25
+        animationButton.layer.cornerRadius = 25
+
+        NSLayoutConstraint.activate([
+            pane.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            pane.widthAnchor.constraint(equalToConstant: 340),
+            pane.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+
+            albumArt.topAnchor.constraint(equalTo: pane.topAnchor),
+            albumArt.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
+            albumArt.widthAnchor.constraint(equalToConstant: 220),
+            albumArt.heightAnchor.constraint(equalToConstant: 220),
+
+            titleLabel.topAnchor.constraint(equalTo: albumArt.bottomAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            artistLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            artistLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            artistLabel.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            segmentControl.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 24),
+            segmentControl.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            segmentControl.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            buttonStack.topAnchor.constraint(equalTo: segmentControl.bottomAnchor, constant: 24),
+            buttonStack.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            buttonStack.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            buttonStack.heightAnchor.constraint(equalToConstant: 2 * 50 + 12),
+            buttonStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -24),
+
+            pageLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+            pageLabel.leadingAnchor.constraint(equalTo: sheetCard.leadingAnchor, constant: 4),
+
+            sheetCard.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
+            sheetCard.leadingAnchor.constraint(equalTo: pane.trailingAnchor, constant: 28),
+            sheetCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            // the sheet fills the visible height under the header
+            sheetCard.heightAnchor.constraint(equalTo: view.safeAreaLayoutGuide.heightAnchor, constant: -70),
+            sheetCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+
+            pdfView.topAnchor.constraint(equalTo: sheetCard.topAnchor),
+            pdfView.leadingAnchor.constraint(equalTo: sheetCard.leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: sheetCard.trailingAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: sheetCard.bottomAnchor),
+
+            pdfSkeleton.topAnchor.constraint(equalTo: pdfView.topAnchor),
+            pdfSkeleton.leadingAnchor.constraint(equalTo: pdfView.leadingAnchor),
+            pdfSkeleton.trailingAnchor.constraint(equalTo: pdfView.trailingAnchor),
+            pdfSkeleton.bottomAnchor.constraint(equalTo: pdfView.bottomAnchor),
+
+            errorLabel.centerXAnchor.constraint(equalTo: pdfView.centerXAnchor),
+            errorLabel.centerYAnchor.constraint(equalTo: pdfView.centerYAnchor),
+            errorLabel.leadingAnchor.constraint(equalTo: pdfView.leadingAnchor, constant: 16),
+            errorLabel.trailingAnchor.constraint(equalTo: pdfView.trailingAnchor, constant: -16),
+        ])
+        // pdfHeightConstraint stays nil: the sheet's height comes from the screen, not the page
     }
 
     private func configure(_ btn: UIButton, title: String, isPrimary: Bool) {
@@ -718,4 +799,9 @@ class PlaylistSongDetailViewController: UIViewController {
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
     }
+}
+
+/// iPad: two panes across the width, as the Library's song page.
+extension PlaylistSongDetailViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1240 }
 }

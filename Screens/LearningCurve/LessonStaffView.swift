@@ -43,8 +43,8 @@ final class LessonStaffView: UIView {
         playButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(playButton)
         NSLayoutConstraint.activate([
-            playButton.topAnchor.constraint(equalTo: topAnchor, constant: 14),
-            playButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            playButton.topAnchor.constraint(equalTo: topAnchor, constant: DeviceLayout.s(14)),
+            playButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-14)),
         ])
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(play)))
 
@@ -153,7 +153,7 @@ final class LessonStaffView: UIView {
             stepLayers.append(headLayers)
 
             if steps.count > 1 {
-                let label = SheetGlyphs.textLayer(step.label, font: .systemFont(ofSize: 13, weight: .semibold),
+                let label = SheetGlyphs.textLayer(step.label, font: .systemFont(ofSize: DeviceLayout.s(13), weight: .semibold),
                                                   color: ink.withAlphaComponent(0.75), centerX: x,
                                                   centerY: bounds.height - 18, scale: scale)
                 layer.addSublayer(label)

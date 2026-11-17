@@ -42,6 +42,10 @@ final class AppSearchViewController: UIViewController {
     }
 
     private let searchController = UISearchController(searchResultsController: nil)
+    /// iPad: a search field that stays under the title (a search controller's bar moves to the
+    /// top of the screen while it's active).
+    private let padSearchBar = UISearchBar()
+    private var activeSearchBar: UISearchBar { DeviceLayout.isPad ? padSearchBar : searchController.searchBar }
     private var sections: [Section] = []
     private var songs: [Song] = []
     private var playlists: [Playlist] = []
@@ -92,6 +96,8 @@ final class AppSearchViewController: UIViewController {
         navigationItem.titleView?.alpha = 0
 
         tableView.backgroundColor = .clear
+        // iPad: rows and their text a size up, in proportion with the larger header
+        if DeviceLayout.isPad { tableView.traitOverrides.preferredContentSizeCategory = .extraExtraLarge }
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
@@ -109,7 +115,25 @@ final class AppSearchViewController: UIViewController {
         header.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: TabRootHeaderView.height)
         header.translatesAutoresizingMaskIntoConstraints = true
         header.autoresizingMask = [.flexibleWidth]
-        tableView.tableHeaderView = header
+        if DeviceLayout.isPad {
+            // iPad (no tab bar to hold it): the search field sits under the title, at the
+            // page's width, instead of in the corner of the navigation bar
+            let barHeight: CGFloat = 64
+            let top = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width,
+                                           height: TabRootHeaderView.height + barHeight))
+            let bar = padSearchBar
+            bar.placeholder = "Uploads, songs, playlists, lessons, settings"
+            bar.delegate = self
+            bar.searchBarStyle = .minimal
+            bar.searchTextField.font = .systemFont(ofSize: 19)
+            bar.frame = CGRect(x: 8, y: TabRootHeaderView.height + 6, width: view.bounds.width - 44, height: 52)
+            bar.autoresizingMask = [.flexibleWidth]
+            top.addSubview(header)
+            top.addSubview(bar)
+            tableView.tableHeaderView = top
+        } else {
+            tableView.tableHeaderView = header
+        }
         setContentScrollView(tableView)
 
         NavigationBarHelper.updateNavigationBackgroundAppearance(
@@ -120,8 +144,12 @@ final class AppSearchViewController: UIViewController {
         searchController.searchResultsUpdater = self
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "Uploads, songs, playlists, lessons, settings"
-        navigationItem.searchController = searchController
-        navigationItem.hidesSearchBarWhenScrolling = false
+        if DeviceLayout.isPad {
+            searchController.hidesNavigationBarDuringPresentation = false
+        } else {
+            navigationItem.searchController = searchController
+            navigationItem.hidesSearchBarWhenScrolling = false
+        }
         definesPresentationContext = true
 
         NotificationCenter.default.addObserver(self, selector: #selector(refresh),
@@ -172,7 +200,7 @@ final class AppSearchViewController: UIViewController {
     // MARK: - Searching
 
     private var query: String {
-        searchController.searchBar.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        activeSearchBar.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     @objc private func refresh() {
@@ -262,7 +290,7 @@ final class AppSearchViewController: UIViewController {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        searchController.searchBar.resignFirstResponder()
+        activeSearchBar.resignFirstResponder()
         switch sections[indexPath.section].results[indexPath.row] {
         case .upload(let upload):
             if upload.status == .failed { LocalSheetLibrary.shared.retry(id: upload.id) }
@@ -319,6 +347,24 @@ extension AppSearchViewController: UITableViewDataSource, UITableViewDelegate {
 
 extension AppSearchViewController: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {
+        refresh()
+    }
+}
+
+extension AppSearchViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        searchBar.setShowsCancelButton(!searchText.isEmpty, animated: true)
+        refresh()
+    }
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.resignFirstResponder()
+    }
+
+    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.text = ""
+        searchBar.setShowsCancelButton(false, animated: true)
+        searchBar.resignFirstResponder()
         refresh()
     }
 }

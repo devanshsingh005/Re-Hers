@@ -62,6 +62,8 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
 
     /// Pages are rendered at about this many pixels; OemerKit works at 3.0–4.35 MP.
     private static let renderPixels: CGFloat = 4_000_000
+    /// Fewer notes than this in the whole file and it isn't a piece of music.
+    static let minimumNotes = 4
 
     /// Loads the models ahead of the first upload (the first load after install is slow).
     func prepare() async {
@@ -128,7 +130,11 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
             }
         }
 
-        guard let score = MusicXMLDocument.merge(pages: scores) else { throw SheetConversionError.noMusicFound }
+        // Lines in a photo (grass, a table's edge) can pass for staves; with hardly a note on
+        // them it isn't music, and the upload fails instead of "completing" empty.
+        guard noteCount >= Self.minimumNotes, let score = MusicXMLDocument.merge(pages: scores) else {
+            throw SheetConversionError.noMusicFound
+        }
         score.firstChild(named: "work")?.firstChild(named: "work-title")?.text = title
         let cleanup = ScoreCleanup.clean(score)
         if cleanup != ScoreCleanup.Report() {

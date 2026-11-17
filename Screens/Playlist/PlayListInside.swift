@@ -62,7 +62,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         let label = UILabel()
         label.text = "No tracks yet.\nTap + to add a track."
         label.textColor = .secondaryLabel
-        label.font = .systemFont(ofSize: 16)
+        label.font = .systemFont(ofSize: DeviceLayout.s(16))
         label.textAlignment = .center
         label.numberOfLines = 0
         label.isHidden = true
@@ -76,7 +76,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         btn.backgroundColor = UIColor.orange
         btn.setImage(UIImage(systemName: "plus"), for: .normal)
         btn.tintColor = .white
-        btn.layer.cornerRadius = 30
+        btn.layer.cornerRadius = DeviceLayout.s(30)
         btn.layer.shadowColor = UIColor.black.cgColor
         btn.layer.shadowOpacity = 0.25
         btn.layer.shadowRadius = 6
@@ -179,9 +179,9 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
 
     // MARK: - Header Setup
     private func setupHeader() {
-        headerContainerView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 350)
+        headerContainerView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: DeviceLayout.s(350))
         
-        albumArtBackgroundContainer.layer.cornerRadius = 24
+        albumArtBackgroundContainer.layer.cornerRadius = DeviceLayout.s(24)
         albumArtBackgroundContainer.clipsToBounds = true
         albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
         headerContainerView.addSubview(albumArtBackgroundContainer)
@@ -192,22 +192,22 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         
         albumArtCardView.contentMode = .scaleAspectFill
         albumArtCardView.clipsToBounds = true
-        albumArtCardView.layer.cornerRadius = 24
+        albumArtCardView.layer.cornerRadius = DeviceLayout.s(24)
         albumArtCardView.translatesAutoresizingMaskIntoConstraints = false
         headerContainerView.addSubview(albumArtCardView)
         
-        playlistTitleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        playlistTitleLabel.font = .systemFont(ofSize: DeviceLayout.s(28), weight: .bold)
         playlistTitleLabel.textAlignment = .center
         playlistTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         headerContainerView.addSubview(playlistTitleLabel)
         
-        playlistArtistLabel.font = .systemFont(ofSize: 16)
+        playlistArtistLabel.font = .systemFont(ofSize: DeviceLayout.s(16))
         playlistArtistLabel.textColor = .secondaryLabel
         playlistArtistLabel.textAlignment = .center
         playlistArtistLabel.translatesAutoresizingMaskIntoConstraints = false
         headerContainerView.addSubview(playlistArtistLabel)
         
-        tracksHeaderLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        tracksHeaderLabel.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
         tracksHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         headerContainerView.addSubview(tracksHeaderLabel)
         
@@ -216,10 +216,10 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         tracksTableView.tableHeaderView = headerContainerView
         
         NSLayoutConstraint.activate([
-            albumArtBackgroundContainer.topAnchor.constraint(equalTo: headerContainerView.topAnchor, constant: 8),
-            albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: 16),
-            albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: -16),
-            albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: 160),
+            albumArtBackgroundContainer.topAnchor.constraint(equalTo: headerContainerView.topAnchor, constant: DeviceLayout.s(8)),
+            albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: DeviceLayout.s(16)),
+            albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: DeviceLayout.s(-16)),
+            albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(160)),
             
             albumArtBackgroundView.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
             albumArtBackgroundView.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
@@ -227,23 +227,23 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
             albumArtBackgroundView.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
             
             albumArtCardView.centerXAnchor.constraint(equalTo: albumArtBackgroundContainer.centerXAnchor),
-            albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: -10),
-            albumArtCardView.heightAnchor.constraint(equalToConstant: 140),
-            albumArtCardView.widthAnchor.constraint(equalToConstant: 140),
+            albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: DeviceLayout.s(-10)),
+            albumArtCardView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(140)),
+            albumArtCardView.widthAnchor.constraint(equalToConstant: DeviceLayout.s(140)),
             
-            playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: 10),
+            playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: DeviceLayout.s(10)),
             playlistTitleLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
             
-            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: 4),
+            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: DeviceLayout.s(4)),
             playlistArtistLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
             
-            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: 16),
-            tracksHeaderLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: 20),
+            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: DeviceLayout.s(16)),
+            tracksHeaderLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: DeviceLayout.s(20)),
             
-            emptyStateLabel.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: 30),
+            emptyStateLabel.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: DeviceLayout.s(30)),
             emptyStateLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
-            emptyStateLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: 40),
-            emptyStateLabel.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: -40),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: DeviceLayout.s(40)),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: DeviceLayout.s(-40)),
         ])
         
     }
@@ -298,10 +298,10 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         floatingAddButton.addTarget(self, action: #selector(showAddTrackDialog), for: .touchUpInside)
         
         NSLayoutConstraint.activate([
-            floatingAddButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
-            floatingAddButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            floatingAddButton.widthAnchor.constraint(equalToConstant: 60),
-            floatingAddButton.heightAnchor.constraint(equalToConstant: 60),
+            floatingAddButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-22)),
+            floatingAddButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: DeviceLayout.s(-20)),
+            floatingAddButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(60)),
+            floatingAddButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(60)),
         ])
     }
     
@@ -453,7 +453,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     // MARK: - UITableViewDelegate
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 92
+        return DeviceLayout.s(92)
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -504,23 +504,23 @@ class TrackTableViewCell: UITableViewCell {
         contentView.backgroundColor = .clear
         
         container.backgroundColor = ComponentColors.SongCard.background
-        container.layer.cornerRadius = 22
+        container.layer.cornerRadius = DeviceLayout.s(22)
         container.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(container)
         
         artwork.contentMode = .scaleAspectFill
-        artwork.layer.cornerRadius = 18
+        artwork.layer.cornerRadius = DeviceLayout.s(18)
         artwork.clipsToBounds = true
         artwork.backgroundColor = UIColor.systemGray4
         artwork.tintColor = .darkGray
         artwork.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(artwork)
         
-        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .semibold)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(titleLabel)
         
-        artistLabel.font = .systemFont(ofSize: 12)
+        artistLabel.font = .systemFont(ofSize: DeviceLayout.s(12))
         artistLabel.textColor = .secondaryLabel
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(artistLabel)
@@ -532,27 +532,27 @@ class TrackTableViewCell: UITableViewCell {
         container.addSubview(chevronImageView)
         
         NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
-            container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
+            container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: DeviceLayout.s(6)),
+            container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(16)),
+            container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-16)),
+            container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-6)),
             
-            artwork.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            artwork.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: DeviceLayout.s(12)),
             artwork.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            artwork.widthAnchor.constraint(equalToConstant: 56),
-            artwork.heightAnchor.constraint(equalToConstant: 56),
+            artwork.widthAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
+            artwork.heightAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
 
-            chevronImageView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            chevronImageView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: DeviceLayout.s(-16)),
             chevronImageView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            chevronImageView.widthAnchor.constraint(equalToConstant: 14),
+            chevronImageView.widthAnchor.constraint(equalToConstant: DeviceLayout.s(14)),
             
-            titleLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
-            titleLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -12),
-            titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -10),
+            titleLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: DeviceLayout.s(12)),
+            titleLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: DeviceLayout.s(-12)),
+            titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: DeviceLayout.s(-10)),
             
-            artistLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
-            artistLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -12),
-            artistLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: 10),
+            artistLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: DeviceLayout.s(12)),
+            artistLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: DeviceLayout.s(-12)),
+            artistLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: DeviceLayout.s(10)),
         ])
     }
     

@@ -30,6 +30,8 @@ final class NotificationsViewController: UITableViewController {
         view.backgroundColor = ComponentColors.HomeScreen.background
         tableView.backgroundColor = ComponentColors.HomeScreen.background
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        // iPad: rows and their text a size up, in proportion with the other pages
+        if DeviceLayout.isPad { tableView.traitOverrides.preferredContentSizeCategory = .extraExtraLarge }
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: makeMenu())
         navigationItem.rightBarButtonItem?.accessibilityLabel = "More"
         NotificationCenter.default.addObserver(self, selector: #selector(reload),
@@ -112,7 +114,7 @@ final class NotificationsViewController: UITableViewController {
         } else {
             let dot = UIView(frame: CGRect(x: 0, y: 0, width: 10, height: 10))
             dot.backgroundColor = BrandColors.brand
-            dot.layer.cornerRadius = 5
+            dot.layer.cornerRadius = DeviceLayout.s(5)
             cell.accessoryView = dot
         }
         cell.accessibilityValue = item.isRead ? nil : "Unread"

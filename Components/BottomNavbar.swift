@@ -60,6 +60,11 @@ extension NSLayoutConstraint {
 enum DeviceLayout {
     static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     static func value(phone: CGFloat, pad: CGFloat) -> CGFloat { isPad ? pad : phone }
+    /// iPad pages laid out for the phone grow by this much (text, spacing and components
+    /// alike), so they keep their proportions on the larger screen.
+    static let padScale: CGFloat = 1.25
+    /// `value` at the iPad's scale (unchanged on iPhone).
+    static func s(_ value: CGFloat) -> CGFloat { isPad ? (value * padScale).rounded() : value }
 }
 
 /// iPad: holds one screen in a centred column of the width it asks for (`IPadContentWidth`,
@@ -69,7 +74,7 @@ enum DeviceLayout {
 /// the screen inside.
 final class IPadScreenContainer: UIViewController {
     /// Lists, settings, forms: wide enough for rows, narrow enough to read.
-    static let readingWidth: CGFloat = 700
+    static let readingWidth: CGFloat = 900
     /// Screens at least this wide (Home) fill the window and need no container.
     static let fullWidth: CGFloat = 1400
 
@@ -117,7 +122,8 @@ final class IPadScreenContainer: UIViewController {
         NSLayoutConstraint.activate([
             column.topAnchor.constraint(equalTo: view.topAnchor),
             column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            column.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            // within the safe area: on iPad the tab rail on the right adds to it
+            column.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             width,
         ])
         content.didMove(toParent: self)
@@ -125,7 +131,7 @@ final class IPadScreenContainer: UIViewController {
 
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
-        let width = min(view.bounds.width, maxWidth)
+        let width = min(view.bounds.inset(by: view.safeAreaInsets).width, maxWidth)
         if widthConstraint?.constant != width { widthConstraint?.constant = width }
     }
 
@@ -178,8 +184,16 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     var selectedNav: UINavigationController? { selectedViewController as? UINavigationController }
 
     private let miniPlayer = MiniPlayerView()
-    /// Pre-iOS 26 the mini player floats above the tab bar in this container.
+    /// Pre-iOS 26 (and on iPad) the mini player floats in this container: above the tab bar,
+    /// or along the bottom beside the iPad's tab rail.
     private var legacyMiniPlayerContainer: UIVisualEffectView?
+
+    /// iPad: the tabs in a column on the right instead of a tab bar along the bottom.
+    private lazy var padRail = PadTabRail()
+    private static let padMiniPlayerHeight: CGFloat = 72
+
+    /// What lets people move between tabs: the iPad's tab rail, else the tab bar.
+    var tabNavigationView: UIView { isPad ? padRail : tabBar }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -191,6 +205,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         if isPad { traitOverrides.horizontalSizeClass = .compact }
         setupTabs()
         setupAppearance()
+        if isPad { setupPadRail() }
         setupMiniPlayer()
         setupOfflineNote()
 
@@ -231,6 +246,47 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     @available(iOS 18.0, *)
     func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
         refreshMiniPlayer()
+    }
+
+    /// The tab showing now.
+    private var currentTab: TabID {
+        switch selectedNav {
+        case libraryNav: return .library
+        case settingsNav: return .settings
+        case searchNav: return .search
+        default: return .home
+        }
+    }
+
+    // MARK: - iPad tab rail
+
+    private func setupPadRail() {
+        if #available(iOS 18.0, *) { setTabBarHidden(true, animated: false) } else { tabBar.isHidden = true }
+        padRail.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(padRail)
+        NSLayoutConstraint.activate([
+            padRail.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            padRail.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+        ])
+        padRail.onSelect = { [weak self] tab in
+            guard let self else { return }
+            // the tab showing: back to its first screen, as tapping a tab bar item does
+            self.select(tab, popToRoot: tab == self.currentTab)
+            self.refreshMiniPlayer()
+        }
+        padRail.setSelected(currentTab)
+    }
+
+    /// Room for the rail (and the mini player under it) in each tab's first screen.
+    private func updatePadInsets(miniPlayerShown: Bool) {
+        guard isPad else { return }
+        let right = PadTabRail.width + 16 + 12
+        let bottom = miniPlayerShown ? Self.padMiniPlayerHeight + 14 + 8 : 0
+        for nav in [homeNav, libraryNav, settingsNav, searchNav] {
+            guard let root = nav.viewControllers.first else { continue }
+            let insets = UIEdgeInsets(top: 0, left: 0, bottom: bottom, right: right)
+            if root.additionalSafeAreaInsets != insets { root.additionalSafeAreaInsets = insets }
+        }
     }
 
     /// Pushed screens hide the tab bar; the mini player goes with it so it never covers their buttons.
@@ -359,7 +415,9 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         miniPlayer.onOpen = { [weak self] in self?.openLastPlayed(resume: false) }
         miniPlayer.onResume = { [weak self] in self?.openLastPlayed(resume: true) }
 
-        if #unavailable(iOS 26.0) {
+        if isPad {
+            setupPadMiniPlayer()
+        } else if #unavailable(iOS 26.0) {
             let container = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
             container.layer.cornerRadius = 16
             container.layer.cornerCurve = .continuous
@@ -383,9 +441,53 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         refreshMiniPlayer()
     }
 
+    /// iPad: a larger mini player along the bottom, from the left edge to the tab rail.
+    private func setupPadMiniPlayer() {
+        let effect: UIVisualEffect
+        if #available(iOS 26.0, *) { effect = UIGlassEffect() } else { effect = UIBlurEffect(style: .systemChromeMaterial) }
+        let container = UIVisualEffectView(effect: effect)
+        container.layer.cornerRadius = Self.padMiniPlayerHeight / 2
+        container.layer.cornerCurve = .continuous
+        container.clipsToBounds = true
+        container.translatesAutoresizingMaskIntoConstraints = false
+        miniPlayer.isLarge = true
+        miniPlayer.translatesAutoresizingMaskIntoConstraints = false
+        container.contentView.addSubview(miniPlayer)
+        view.addSubview(container)
+        NSLayoutConstraint.activate([
+            container.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            container.trailingAnchor.constraint(equalTo: padRail.leadingAnchor, constant: -16),
+            container.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -14),
+            container.heightAnchor.constraint(equalToConstant: Self.padMiniPlayerHeight),
+            miniPlayer.leadingAnchor.constraint(equalTo: container.contentView.leadingAnchor, constant: 6),
+            miniPlayer.trailingAnchor.constraint(equalTo: container.contentView.trailingAnchor, constant: -10),
+            miniPlayer.topAnchor.constraint(equalTo: container.contentView.topAnchor),
+            miniPlayer.bottomAnchor.constraint(equalTo: container.contentView.bottomAnchor),
+        ])
+        legacyMiniPlayerContainer = container
+    }
+
     @objc private func refreshMiniPlayer() {
         let item = LastPlayedStore.shared.current
         if let item { miniPlayer.configure(with: item) }
+
+        if isPad {
+            // the rail and mini player belong to the tabs' first screens; pushed screens get the
+            // whole window, as they did without the tab bar
+            let showRail = isShowingTabRoot
+            let showMini = item != nil && showRail
+            padRail.setSelected(currentTab)
+            UIView.animate(withDuration: viewIfLoaded?.window != nil ? 0.25 : 0) {
+                self.padRail.alpha = showRail ? 1 : 0
+                self.legacyMiniPlayerContainer?.alpha = showMini ? 1 : 0
+            }
+            padRail.isUserInteractionEnabled = showRail
+            legacyMiniPlayerContainer?.isUserInteractionEnabled = showMini
+            view.bringSubviewToFront(padRail)
+            if let container = legacyMiniPlayerContainer { view.bringSubviewToFront(container) }
+            updatePadInsets(miniPlayerShown: showMini)
+            return
+        }
 
         if #available(iOS 26.0, *) {
             let wantsAccessory = item != nil && isShowingTabRoot
@@ -464,5 +566,122 @@ extension UINavigationController {
 
     override open var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         return topViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
+    }
+}
+
+// MARK: - iPad tab rail
+
+/// iPad: Home, Library and Settings in a glass column on the right, with Search in its own
+/// round button below, in place of the tab bar along the bottom.
+final class PadTabRail: UIView {
+    static let width: CGFloat = 88
+    var onSelect: ((MainTabBarController.TabID) -> Void)?
+
+    private var buttons: [MainTabBarController.TabID: UIButton] = [:]
+    private var selected: MainTabBarController.TabID?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        build()
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private static func glass(cornerRadius: CGFloat) -> UIVisualEffectView {
+        let effect: UIVisualEffect
+        if #available(iOS 26.0, *) { effect = UIGlassEffect() } else { effect = UIBlurEffect(style: .systemChromeMaterial) }
+        let view = UIVisualEffectView(effect: effect)
+        view.layer.cornerRadius = cornerRadius
+        view.layer.cornerCurve = .continuous
+        view.clipsToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }
+
+    private func build() {
+        let items: [(MainTabBarController.TabID, String, String)] = [
+            (.home, "Home", "house.fill"),
+            (.library, "Library", "music.note.list"),
+            (.settings, "Settings", "gearshape.fill"),
+        ]
+        let pill = Self.glass(cornerRadius: Self.width / 2)
+        let column = UIStackView()
+        column.axis = .vertical
+        column.spacing = 10
+        column.translatesAutoresizingMaskIntoConstraints = false
+        pill.contentView.addSubview(column)
+        for (tab, title, symbol) in items {
+            let button = makeButton(tab: tab, title: title, symbol: symbol)
+            column.addArrangedSubview(button)
+        }
+
+        let searchCircle = Self.glass(cornerRadius: Self.width / 2)
+        let search = makeButton(tab: .search, title: nil, symbol: "magnifyingglass")
+        search.accessibilityLabel = "Search"
+        searchCircle.contentView.addSubview(search)
+
+        let stack = UIStackView(arrangedSubviews: [pill, searchCircle])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            pill.widthAnchor.constraint(equalToConstant: Self.width),
+            column.topAnchor.constraint(equalTo: pill.contentView.topAnchor, constant: 8),
+            column.bottomAnchor.constraint(equalTo: pill.contentView.bottomAnchor, constant: -8),
+            column.leadingAnchor.constraint(equalTo: pill.contentView.leadingAnchor, constant: 6),
+            column.trailingAnchor.constraint(equalTo: pill.contentView.trailingAnchor, constant: -6),
+
+            searchCircle.widthAnchor.constraint(equalToConstant: Self.width),
+            searchCircle.heightAnchor.constraint(equalToConstant: Self.width),
+            search.centerXAnchor.constraint(equalTo: searchCircle.contentView.centerXAnchor),
+            search.centerYAnchor.constraint(equalTo: searchCircle.contentView.centerYAnchor),
+            search.widthAnchor.constraint(equalToConstant: Self.width - 12),
+            search.heightAnchor.constraint(equalToConstant: Self.width - 12),
+        ])
+    }
+
+    private func makeButton(tab: MainTabBarController.TabID, title: String?, symbol: String) -> UIButton {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: symbol)
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: title == nil ? 24 : 21,
+                                                                                  weight: .semibold)
+        config.imagePlacement = .top
+        config.imagePadding = 5
+        config.cornerStyle = .capsule
+        // narrow sides, so "Settings" fits on one line
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 2, bottom: 8, trailing: 2)
+        config.titleLineBreakMode = .byClipping
+        if let title {
+            config.attributedTitle = AttributedString(title, attributes: AttributeContainer(
+                [.font: UIFont.systemFont(ofSize: 12, weight: .semibold)]))
+        }
+        let button = UIButton(configuration: config)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        if title != nil {
+            button.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        }
+        button.accessibilityLabel = title
+        button.addAction(UIAction { [weak self] _ in self?.onSelect?(tab) }, for: .touchUpInside)
+        buttons[tab] = button
+        style(button, selected: false)
+        return button
+    }
+
+    func setSelected(_ tab: MainTabBarController.TabID) {
+        guard tab != selected else { return }
+        selected = tab
+        for (id, button) in buttons { style(button, selected: id == tab) }
+    }
+
+    private func style(_ button: UIButton, selected: Bool) {
+        button.configuration?.baseForegroundColor = selected ? ComponentColors.TabBar.activeIcon : .label
+        button.configuration?.background.backgroundColor = selected
+            ? ComponentColors.TabBar.activeIcon.withAlphaComponent(0.16) : .clear
+        button.accessibilityTraits = selected ? [.button, .selected] : .button
     }
 }

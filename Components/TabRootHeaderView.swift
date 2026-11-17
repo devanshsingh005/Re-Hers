@@ -10,7 +10,7 @@
 import UIKit
 
 final class TabRootHeaderView: UIView {
-    static let height: CGFloat = 80
+    static let height: CGFloat = DeviceLayout.s(80)
     /// Where the header sits below the top of the screen (status bar plus bar height).
     static let topOffset: CGFloat = 96
 
@@ -24,17 +24,17 @@ final class TabRootHeaderView: UIView {
         translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.text = title
-        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(34), weight: .heavy)
         titleLabel.textColor = ComponentColors.NavBar.title
         titleLabel.accessibilityTraits = .header
 
         subtitleLabel.text = subtitle
-        subtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        subtitleLabel.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .regular)
         subtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
 
         let labelStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
         labelStack.axis = .vertical
-        labelStack.spacing = -2
+        labelStack.spacing = DeviceLayout.s(-2)
         labelStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(labelStack)
 
@@ -51,9 +51,9 @@ final class TabRootHeaderView: UIView {
             NSLayoutConstraint.activate([
                 accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
                 accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
-                accessory.widthAnchor.constraint(equalToConstant: 44),
-                accessory.heightAnchor.constraint(equalToConstant: 44),
-                labelStack.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: -12),
+                accessory.widthAnchor.constraint(equalToConstant: DeviceLayout.s(44)),
+                accessory.heightAnchor.constraint(equalToConstant: DeviceLayout.s(44)),
+                labelStack.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: DeviceLayout.s(-12)),
             ])
         } else {
             labelStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -inset).isActive = true

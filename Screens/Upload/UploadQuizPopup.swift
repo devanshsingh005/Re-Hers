@@ -176,6 +176,7 @@ class UploadQuizPopup: UIViewController {
     private let checkLayer      = CAShapeLayer()
     private let doneLabel       = UILabel()
     private let doneSubLabel    = UILabel()
+    private let doneButton      = UIButton(type: .system)
 
     // Progress fill width constraint (for animation)
     private var progressFillWidth: NSLayoutConstraint!
@@ -221,6 +222,13 @@ class UploadQuizPopup: UIViewController {
                 self.updateProgress(max(self.shownProgress, value))
             }
         }
+    }
+
+    /// The conversion failed: the popup says so (no "Upload Complete", no auto-close) and
+    /// gives the reason.
+    func notifyUploadFailed(message: String) {
+        uploadFinished = true
+        DispatchQueue.main.async { self.showUploadFailed(message: message) }
     }
 
     func notifyUploadComplete() {
@@ -532,7 +540,8 @@ class UploadQuizPopup: UIViewController {
         doneConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
         doneConfig.background.cornerRadius = 24
         doneConfig.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 40, bottom: 12, trailing: 40)
-        let closeDoneBtn = UIButton(configuration: doneConfig)
+        let closeDoneBtn = doneButton
+        closeDoneBtn.configuration = doneConfig
         closeDoneBtn.translatesAutoresizingMaskIntoConstraints = false
         closeDoneBtn.addTarget(self, action: #selector(dismissButtonTapped), for: .touchUpInside)
         doneOverlay.addSubview(closeDoneBtn)
@@ -548,6 +557,8 @@ class UploadQuizPopup: UIViewController {
 
             doneSubLabel.topAnchor.constraint(equalTo: doneLabel.bottomAnchor, constant: 8),
             doneSubLabel.centerXAnchor.constraint(equalTo: doneOverlay.centerXAnchor),
+            doneSubLabel.leadingAnchor.constraint(greaterThanOrEqualTo: doneOverlay.leadingAnchor, constant: 28),
+            doneLabel.leadingAnchor.constraint(greaterThanOrEqualTo: doneOverlay.leadingAnchor, constant: 28),
 
             closeDoneBtn.topAnchor.constraint(equalTo: doneSubLabel.bottomAnchor, constant: 24),
             closeDoneBtn.centerXAnchor.constraint(equalTo: doneOverlay.centerXAnchor),
@@ -643,6 +654,38 @@ class UploadQuizPopup: UIViewController {
     }
 
     // MARK: - Upload Done
+    private func showUploadFailed(message: String) {
+        autoCloseTimer?.invalidate()
+        let red = SemanticColors.State.incorrect
+        checkCircle.backgroundColor = red.withAlphaComponent(0.12)
+        checkLayer.strokeColor = red.cgColor
+        doneLabel.text = "Couldn't read this sheet"
+        doneSubLabel.text = message
+        doneSubLabel.numberOfLines = 0
+        doneButton.configuration?.title = "OK"
+        doneButton.configuration?.baseBackgroundColor = red
+        UIView.animate(withDuration: 0.35, delay: 0.1, options: .curveEaseInOut) {
+            self.doneOverlay.alpha = 1
+        } completion: { _ in
+            self.animateCross()
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+
+    private func animateCross() {
+        let size: CGFloat = 80
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 28, y: 28)); path.addLine(to: CGPoint(x: 52, y: 52))
+        path.move(to: CGPoint(x: 52, y: 28)); path.addLine(to: CGPoint(x: 28, y: 52))
+        checkLayer.path = path.cgPath
+        checkLayer.frame = CGRect(x: 0, y: 0, width: size, height: size)
+        let anim = CABasicAnimation(keyPath: "strokeEnd")
+        anim.fromValue = 0; anim.toValue = 1
+        anim.duration = 0.4
+        checkLayer.add(anim, forKey: "cross")
+        checkLayer.strokeEnd = 1
+    }
+
     private func showUploadDone() {
         updateProgress(1.0)
         UIView.animate(withDuration: 0.35, delay: 0.3, options: .curveEaseInOut) {

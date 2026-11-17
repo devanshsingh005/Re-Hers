@@ -47,7 +47,7 @@ final class DiscoverViewController: UIViewController {
         sb.translatesAutoresizingMaskIntoConstraints = false
         (sb.value(forKey: "searchField") as? UITextField).map {
             $0.backgroundColor    = ComponentColors.DiscoverScreen.chipBackgroundDefault
-            $0.layer.cornerRadius = 12
+            $0.layer.cornerRadius = DeviceLayout.s(12)
             $0.clipsToBounds      = true
         }
         return sb
@@ -60,7 +60,7 @@ final class DiscoverViewController: UIViewController {
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let sv = UIStackView(arrangedSubviews: [levelButton, skillButton, spacer])
-        sv.spacing = 12
+        sv.spacing = DeviceLayout.s(12)
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
@@ -76,17 +76,17 @@ final class DiscoverViewController: UIViewController {
 
     private lazy var chipsStack: UIStackView = {
         let sv = UIStackView()
-        sv.spacing = 8
+        sv.spacing = DeviceLayout.s(8)
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
 
     private lazy var songsTitleLabel = styledLabel(
-        "Songs", font: .systemFont(ofSize: 22, weight: .bold),
+        "Songs", font: .systemFont(ofSize: DeviceLayout.s(22), weight: .bold),
         color: ComponentColors.DiscoverScreen.sectionHeader)
 
     private lazy var emptyLabel: UILabel = {
-        let l = styledLabel("No songs found.", font: .systemFont(ofSize: 16),
+        let l = styledLabel("No songs found.", font: .systemFont(ofSize: DeviceLayout.s(16)),
                             color: ComponentColors.DiscoverScreen.emptyStateText)
         l.textAlignment = .center
         l.isHidden = true
@@ -98,12 +98,19 @@ final class DiscoverViewController: UIViewController {
     private lazy var tableView: UITableView = {
         let tv = UITableView()
         tv.register(SongCell.self, forCellReuseIdentifier: SongCell.reuseID)
+        tv.register(PadSongPairCell.self, forCellReuseIdentifier: PadSongPairCell.reuseID)
+        if DeviceLayout.isPad {
+            tv.allowsSelection = false   // the cards take the taps
+            // a fixed height (card 116 + 16 between rows), so the table's full height is known
+            // up front and the last row is never cut off
+            tv.rowHeight = PadSongPairCell.rowHeight
+        }
         tv.dataSource         = self
         tv.delegate           = self
         tv.separatorStyle     = .none
         tv.backgroundColor    = .clear
-        tv.rowHeight          = UITableView.automaticDimension
-        tv.estimatedRowHeight = 86
+        if !DeviceLayout.isPad { tv.rowHeight = UITableView.automaticDimension }
+        tv.estimatedRowHeight = DeviceLayout.isPad ? PadSongPairCell.rowHeight : 86
         tv.isScrollEnabled    = false
         tv.translatesAutoresizingMaskIntoConstraints = false
         return tv
@@ -221,16 +228,16 @@ final class DiscoverViewController: UIViewController {
         
         let labelStack = UIStackView()
         labelStack.axis = .vertical
-        labelStack.spacing = -2
+        labelStack.spacing = DeviceLayout.s(-2)
         labelStack.translatesAutoresizingMaskIntoConstraints = false
         
         let titleLabel = UILabel()
         titleLabel.text = "Library"
-        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(34), weight: .heavy)
         titleLabel.textColor = ComponentColors.NavBar.title
         
         largeSubtitleLabel.text = "Songs to learn and play"
-        largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        largeSubtitleLabel.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .regular)
         largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
         
         labelStack.addArrangedSubview(titleLabel)
@@ -242,15 +249,15 @@ final class DiscoverViewController: UIViewController {
         headerContainer.addSubview(notificationsButton)
         
         NSLayoutConstraint.activate([
-            headerContainer.heightAnchor.constraint(equalToConstant: 80),
+            headerContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(80)),
             
-            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 20),
+            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: DeviceLayout.s(20)),
             labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
             
-            notificationsButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
+            notificationsButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: DeviceLayout.s(-20)),
             notificationsButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
-            notificationsButton.widthAnchor.constraint(equalToConstant: 44),
-            notificationsButton.heightAnchor.constraint(equalToConstant: 44)
+            notificationsButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(44)),
+            notificationsButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(44))
         ])
         return headerContainer
     }
@@ -272,7 +279,7 @@ final class DiscoverViewController: UIViewController {
             .forEach { contentView.addSubview($0) }
 
         // Install a starting table height constraint (updated after each reload)
-        let initialHeight = tableView.heightAnchor.constraint(equalToConstant: 0)
+        let initialHeight = tableView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(0))
         initialHeight.isActive = true
         tableHeightConstraint = initialHeight
 
@@ -285,30 +292,30 @@ final class DiscoverViewController: UIViewController {
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // Content view
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 96),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: DeviceLayout.s(96)),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
             // header container
-            headerContainer.topAnchor.constraint(equalTo: c.topAnchor, constant: 0),
+            headerContainer.topAnchor.constraint(equalTo: c.topAnchor, constant: DeviceLayout.s(0)),
             headerContainer.leadingAnchor.constraint(equalTo: c.leadingAnchor),
             headerContainer.trailingAnchor.constraint(equalTo: c.trailingAnchor),
             
             // Search bar
-            searchBar.topAnchor.constraint(equalTo: headerContainer.bottomAnchor, constant: 16),
-            searchBar.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 12),
-            searchBar.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -12),
-            searchBar.heightAnchor.constraint(equalToConstant: 48),
+            searchBar.topAnchor.constraint(equalTo: headerContainer.bottomAnchor, constant: DeviceLayout.s(16)),
+            searchBar.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: DeviceLayout.s(12)),
+            searchBar.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: DeviceLayout.s(-12)),
+            searchBar.heightAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
 
             // Filter row
-            filterRow.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 12),
-            filterRow.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 20),
-            filterRow.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -20),
-            filterRow.heightAnchor.constraint(equalToConstant: 44),
+            filterRow.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: DeviceLayout.s(12)),
+            filterRow.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: DeviceLayout.s(20)),
+            filterRow.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: DeviceLayout.s(-20)),
+            filterRow.heightAnchor.constraint(equalToConstant: DeviceLayout.s(44)),
 
             // Chips
-            chipsScrollView.topAnchor.constraint(equalTo: filterRow.bottomAnchor, constant: 10),
+            chipsScrollView.topAnchor.constraint(equalTo: filterRow.bottomAnchor, constant: DeviceLayout.s(10)),
             chipsScrollView.leadingAnchor.constraint(equalTo: c.leadingAnchor),
             chipsScrollView.trailingAnchor.constraint(equalTo: c.trailingAnchor),
 
@@ -319,21 +326,21 @@ final class DiscoverViewController: UIViewController {
             chipsStack.heightAnchor.constraint(equalTo: chipsScrollView.heightAnchor),
 
             // Songs header
-            songsTitleLabel.topAnchor.constraint(equalTo: chipsScrollView.bottomAnchor, constant: 10),
-            songsTitleLabel.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 20),
+            songsTitleLabel.topAnchor.constraint(equalTo: chipsScrollView.bottomAnchor, constant: DeviceLayout.s(10)),
+            songsTitleLabel.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: DeviceLayout.s(20)),
 
             // Table — height driven by tableHeightConstraint, bottom closes contentView
-            tableView.topAnchor.constraint(equalTo: songsTitleLabel.bottomAnchor, constant: 12),
+            tableView.topAnchor.constraint(equalTo: songsTitleLabel.bottomAnchor, constant: DeviceLayout.s(12)),
             tableView.leadingAnchor.constraint(equalTo: c.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: c.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: c.bottomAnchor, constant: -20),
+            tableView.bottomAnchor.constraint(equalTo: c.bottomAnchor, constant: DeviceLayout.s(-20)),
 
             // Overlays
             emptyLabel.centerXAnchor.constraint(equalTo: c.centerXAnchor),
-            emptyLabel.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 60),
+            emptyLabel.topAnchor.constraint(equalTo: tableView.topAnchor, constant: DeviceLayout.s(60)),
         ])
 
-        chipsHeightConstraint = chipsScrollView.heightAnchor.constraint(equalToConstant: 0)
+        chipsHeightConstraint = chipsScrollView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(0))
         chipsHeightConstraint?.isActive = true
 
         updateScrollInsets()
@@ -352,7 +359,10 @@ final class DiscoverViewController: UIViewController {
     /// Call after every reload so the outer scroll view knows the correct content size.
     private func updateTableHeight() {
         tableView.layoutIfNeeded()
-        let h = tableView.contentSize.height
+        // iPad rows are a fixed height, so the full height is known without laying them all out
+        let h = DeviceLayout.isPad
+            ? CGFloat(tableView.numberOfRows(inSection: 0)) * PadSongPairCell.rowHeight
+            : tableView.contentSize.height
         tableHeightConstraint?.constant = max(h, 1)   // never zero — layout engine needs > 0
         scrollView.layoutIfNeeded()
     }
@@ -507,11 +517,11 @@ final class DiscoverViewController: UIViewController {
         config.imagePadding = 8
         config.baseForegroundColor = ComponentColors.DiscoverScreen.chipTextDefault
         config.background.backgroundColor = ComponentColors.DiscoverScreen.chipBackgroundDefault
-        config.background.cornerRadius = 14
+        config.background.cornerRadius = DeviceLayout.s(14)
         config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 18)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var attrs = attrs
-            attrs.font = .systemFont(ofSize: 15, weight: .semibold)
+            attrs.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .semibold)
             return attrs
         }
         let btn = UIButton(configuration: config)
@@ -523,13 +533,13 @@ final class DiscoverViewController: UIViewController {
         let orange = ComponentColors.HomeScreen.actionButtonFill
         let chip   = UIView()
         chip.backgroundColor    = orange.withAlphaComponent(0.18)
-        chip.layer.cornerRadius = 14
+        chip.layer.cornerRadius = DeviceLayout.s(14)
         chip.translatesAutoresizingMaskIntoConstraints = false
 
-        let lbl  = styledLabel(label, font: .systemFont(ofSize: 13, weight: .bold), color: orange)
+        let lbl  = styledLabel(label, font: .systemFont(ofSize: DeviceLayout.s(13), weight: .bold), color: orange)
         let xBtn = UIButton(type: .system)
         xBtn.setImage(UIImage(systemName: "xmark",
-                              withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)),
+                              withConfiguration: UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(11), weight: .bold)),
                       for: .normal)
         xBtn.tintColor = orange
         xBtn.translatesAutoresizingMaskIntoConstraints = false
@@ -537,13 +547,13 @@ final class DiscoverViewController: UIViewController {
 
         [lbl, xBtn].forEach { chip.addSubview($0) }
         NSLayoutConstraint.activate([
-            lbl.leadingAnchor.constraint(equalTo: chip.leadingAnchor, constant: 12),
+            lbl.leadingAnchor.constraint(equalTo: chip.leadingAnchor, constant: DeviceLayout.s(12)),
             lbl.centerYAnchor.constraint(equalTo: chip.centerYAnchor),
-            xBtn.leadingAnchor.constraint(equalTo: lbl.trailingAnchor, constant: 6),
-            xBtn.trailingAnchor.constraint(equalTo: chip.trailingAnchor, constant: -10),
+            xBtn.leadingAnchor.constraint(equalTo: lbl.trailingAnchor, constant: DeviceLayout.s(6)),
+            xBtn.trailingAnchor.constraint(equalTo: chip.trailingAnchor, constant: DeviceLayout.s(-10)),
             xBtn.centerYAnchor.constraint(equalTo: chip.centerYAnchor),
-            xBtn.widthAnchor.constraint(equalToConstant: 16),
-            chip.heightAnchor.constraint(equalToConstant: 30),
+            xBtn.widthAnchor.constraint(equalToConstant: DeviceLayout.s(16)),
+            chip.heightAnchor.constraint(equalToConstant: DeviceLayout.s(30)),
         ])
         return chip
     }
@@ -598,11 +608,24 @@ extension DiscoverViewController: UISearchBarDelegate {
 
 extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
 
+    // iPad: two songs to a row, as cards
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        filteredSongs.count
+        DeviceLayout.isPad ? (filteredSongs.count + 1) / 2 : filteredSongs.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if DeviceLayout.isPad {
+            let cell = tableView.dequeueReusableCell(withIdentifier: PadSongPairCell.reuseID,
+                                                     for: indexPath) as! PadSongPairCell
+            let first = indexPath.row * 2
+            cell.configure(left: filteredSongs[first],
+                           right: first + 1 < filteredSongs.count ? filteredSongs[first + 1] : nil)
+            cell.onTap = { [weak self, weak cell] side in
+                guard let self, first + side < self.filteredSongs.count else { return }
+                self.openSong(at: first + side, art: cell?.rows[side].currentArtImage)
+            }
+            return cell
+        }
         let cell = tableView.dequeueReusableCell(withIdentifier: SongCell.reuseID, for: indexPath) as! SongCell
         cell.configure(with: filteredSongs[indexPath.row])
         return cell
@@ -610,17 +633,18 @@ extension DiscoverViewController: UITableViewDataSource, UITableViewDelegate {
     
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        dismissKeyboard()
         tableView.deselectRow(at: indexPath, animated: true)
-     
-        let song = filteredSongs[indexPath.row]
-     
         // Grab the art image from the visible cell (optional, for a smooth transition)
         let cell = tableView.cellForRow(at: indexPath) as? SongCell
-     
+        openSong(at: indexPath.row, art: cell?.currentArtImage)
+    }
+
+    private func openSong(at index: Int, art: UIImage?) {
+        dismissKeyboard()
+        let song = filteredSongs[index]
         let detailVC        = DiscoverSongDetailViewController()
         detailVC.song       = song
-        detailVC.passedImage = cell?.currentArtImage
+        detailVC.passedImage = art
         detailVC.onUserBlocked = { [weak self] blockedUserID in
             self?.blockedUserStore.block(blockedUserID)
             self?.applyFilters()
@@ -706,107 +730,86 @@ enum DiscoverSongFilter {
     }
 }
 
-// MARK: - SongCell
+// MARK: - Song rows and cards
 
-final class SongCell: UITableViewCell {
-    static let reuseID = "SongCell"
-
+/// One song: cover, title, composer and tags (level, tempo, hands). A row in the phone's list
+/// (`SongCell`) and, larger, a card in the iPad's two-column grid (`PadSongPairCell`).
+final class SongRowView: UIView {
     private let orange = ComponentColors.HomeScreen.actionButtonFill
     private var coverImageTask: Task<Void, Never>?
+    private let large: Bool
 
     // Pool of track images from Assets/track_images/
-    private static let trackImages: [UIImage] = (1...16).compactMap {
-        UIImage(named: "trackimage_\($0)")
-    }
+    static let trackImages: [UIImage] = (1...16).compactMap { UIImage(named: "trackimage_\($0)") }
 
-    private lazy var artImageView: UIImageView = {
-        let iv = UIImageView()
-        iv.contentMode        = .scaleAspectFill
-        iv.clipsToBounds      = true
-        iv.layer.cornerRadius = 8
-        iv.backgroundColor    = ComponentColors.DiscoverySongCard.artPlaceholder
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        return iv
-    }()
-    
+    private let artImageView = UIImageView()
+    private let titleLabel = UILabel()
+    private let composerLabel = UILabel()
+    private let tagsStack = UIStackView()
 
-    // Expose the current art image for transition/preview purposes
     var currentArtImage: UIImage? { artImageView.image }
 
-    private lazy var titleLabel    = cellLabel(17, .semibold, ComponentColors.DiscoverySongCard.titleText)
-    private lazy var composerLabel = cellLabel(14, .regular,  SemanticColors.Text.secondary)
+    init(large: Bool) {
+        self.large = large
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        isUserInteractionEnabled = false
 
-    private lazy var tagsStack: UIStackView = {
-        let sv = UIStackView()
-        sv.spacing = 6
-        sv.translatesAutoresizingMaskIntoConstraints = false
-        return sv
-    }()
+        artImageView.contentMode = .scaleAspectFill
+        artImageView.clipsToBounds = true
+        artImageView.layer.cornerRadius = large ? 12 : 8
+        artImageView.layer.cornerCurve = .continuous
+        artImageView.backgroundColor = ComponentColors.DiscoverySongCard.artPlaceholder
+        artImageView.translatesAutoresizingMaskIntoConstraints = false
 
-    private lazy var separator: UIView = {
-        let v = UIView()
-        v.backgroundColor = ComponentColors.DiscoverySongCard.separator
-        v.translatesAutoresizingMaskIntoConstraints = false
-        return v
-    }()
+        style(titleLabel, size: large ? 19 : 17, weight: .semibold, color: ComponentColors.DiscoverySongCard.titleText)
+        style(composerLabel, size: large ? 15 : 14, weight: .regular, color: SemanticColors.Text.secondary)
+        tagsStack.spacing = 6
 
-    private lazy var infoStack: UIStackView = {
-        let sv = UIStackView(arrangedSubviews: [titleLabel, composerLabel, tagsStack])
-        sv.axis    = .vertical
-        sv.spacing = 4
-        sv.translatesAutoresizingMaskIntoConstraints = false
-        return sv
-    }()
+        let info = UIStackView(arrangedSubviews: [titleLabel, composerLabel, tagsStack])
+        info.axis = .vertical
+        info.spacing = large ? 5 : 4
+        info.setCustomSpacing(large ? 10 : 4, after: composerLabel)
+        info.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(artImageView)
+        addSubview(info)
 
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        backgroundColor = .clear
-        selectionStyle  = .default
-        accessoryType   = .disclosureIndicator
-        [artImageView, infoStack, separator].forEach { contentView.addSubview($0) }
-
+        let art: CGFloat = large ? 84 : 58
         NSLayoutConstraint.activate([
-            artImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            artImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
-            artImageView.widthAnchor.constraint(equalToConstant: 58),
-            artImageView.heightAnchor.constraint(equalToConstant: 58),
-            artImageView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -14),
-
-            infoStack.leadingAnchor.constraint(equalTo: artImageView.trailingAnchor, constant: 14),
-            infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
-            infoStack.centerYAnchor.constraint(equalTo: artImageView.centerYAnchor),
-
-            separator.leadingAnchor.constraint(equalTo: infoStack.leadingAnchor),
-            separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            separator.heightAnchor.constraint(equalToConstant: 0.5),
+            artImageView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            artImageView.topAnchor.constraint(equalTo: topAnchor),
+            artImageView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
+            artImageView.widthAnchor.constraint(equalToConstant: art),
+            artImageView.heightAnchor.constraint(equalToConstant: art),
+            info.leadingAnchor.constraint(equalTo: artImageView.trailingAnchor, constant: large ? 18 : 14),
+            info.trailingAnchor.constraint(equalTo: trailingAnchor),
+            info.centerYAnchor.constraint(equalTo: artImageView.centerYAnchor),
+            info.topAnchor.constraint(greaterThanOrEqualTo: topAnchor),
+            info.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override func prepareForReuse() {
-        super.prepareForReuse()
+    func prepareForReuse() {
         coverImageTask?.cancel()
         coverImageTask = nil
-        artImageView.image = SongCell.trackImages.randomElement()
+        artImageView.image = Self.trackImages.randomElement()
     }
 
     func configure(with song: Song) {
-        let placeholder = SongCell.trackImages.randomElement()
+        let placeholder = Self.trackImages.randomElement()
         artImageView.image = placeholder
 
         coverImageTask?.cancel()
         coverImageTask = Task { [weak self] in
             guard let self else { return }
-
             if let url = try? await song.resolvedCoverImageURL() {
                 ImageLoader.shared.loadImage(from: url.absoluteString) { [weak self] img in
                     if let img = img { self?.artImageView.image = img }
                 }
                 return
             }
-
             if let coverUrl = song.coverImageUrl, !coverUrl.isEmpty {
                 await MainActor.run {
                     self.artImageView.image = UIImage(named: coverUrl) ?? placeholder
@@ -827,32 +830,164 @@ final class SongCell: UITableViewCell {
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         tagsStack.addArrangedSubview(spacer)
+        accessibilityLabel = "\(song.title), \(song.composer)"
     }
 
     private func makeTag(_ text: String, color: UIColor) -> UIView {
-        let lbl = cellLabel(11, .bold, color)
+        let lbl = UILabel()
+        style(lbl, size: large ? 12 : 11, weight: .bold, color: color)
         lbl.text = text
         let v = UIView()
         v.backgroundColor    = color.withAlphaComponent(0.1)
-        v.layer.cornerRadius = 6
+        v.layer.cornerRadius = large ? 7 : 6
         v.translatesAutoresizingMaskIntoConstraints = false
         v.addSubview(lbl)
+        let vertical: CGFloat = large ? 4 : 3
         NSLayoutConstraint.activate([
-            lbl.topAnchor.constraint(equalTo: v.topAnchor, constant: 3),
-            lbl.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -3),
+            lbl.topAnchor.constraint(equalTo: v.topAnchor, constant: vertical),
+            lbl.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -vertical),
             lbl.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 8),
             lbl.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -8),
         ])
         return v
     }
 
-    private func cellLabel(_ size: CGFloat, _ weight: UIFont.Weight,
-                           _ color: UIColor, _ align: NSTextAlignment = .left) -> UILabel {
-        let l = UILabel()
-        l.font          = .systemFont(ofSize: size, weight: weight)
-        l.textColor     = color
-        l.textAlignment = align
+    private func style(_ l: UILabel, size: CGFloat, weight: UIFont.Weight, color: UIColor) {
+        l.font = .systemFont(ofSize: size, weight: weight)
+        l.textColor = color
         l.translatesAutoresizingMaskIntoConstraints = false
-        return l
     }
+}
+
+// MARK: - SongCell (phone)
+
+final class SongCell: UITableViewCell {
+    static let reuseID = "SongCell"
+
+    private let row = SongRowView(large: false)
+    var currentArtImage: UIImage? { row.currentArtImage }
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle  = .default
+        accessoryType   = .disclosureIndicator
+        let separator = UIView()
+        separator.backgroundColor = ComponentColors.DiscoverySongCard.separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(row)
+        contentView.addSubview(separator)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            row.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            row.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+            row.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -14),
+            separator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 92),
+            separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            separator.heightAnchor.constraint(equalToConstant: 0.5),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        row.prepareForReuse()
+    }
+
+    func configure(with song: Song) { row.configure(with: song) }
+}
+
+// MARK: - PadSongPairCell (iPad)
+
+/// iPad: two songs side by side, each a card.
+final class PadSongPairCell: UITableViewCell {
+    static let reuseID = "PadSongPairCell"
+    static let rowHeight: CGFloat = 132
+    /// Called with 0 (left card) or 1 (right card).
+    var onTap: ((Int) -> Void)?
+
+    private let cards = [SongCard(), SongCard()]
+    var rows: [SongRowView] { cards.map(\.row) }
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle = .none
+        let pair = UIStackView(arrangedSubviews: cards)
+        pair.axis = .horizontal
+        pair.spacing = 16
+        pair.distribution = .fillEqually
+        pair.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(pair)
+        NSLayoutConstraint.activate([
+            pair.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            pair.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            pair.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            pair.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+        ])
+        for (i, card) in cards.enumerated() {
+            card.addAction(UIAction { [weak self] _ in self?.onTap?(i) }, for: .touchUpInside)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        cards.forEach { $0.row.prepareForReuse() }
+    }
+
+    /// `right` is nil for the last row of an odd number of songs.
+    func configure(left: Song, right: Song?) {
+        cards[0].row.configure(with: left)
+        cards[0].accessibilityLabel = cards[0].row.accessibilityLabel
+        cards[1].alpha = right == nil ? 0 : 1
+        cards[1].isUserInteractionEnabled = right != nil
+        if let right {
+            cards[1].row.configure(with: right)
+            cards[1].accessibilityLabel = cards[1].row.accessibilityLabel
+        }
+    }
+
+    /// A song card: rounded, slightly raised, with a chevron; dims while pressed.
+    final class SongCard: UIControl {
+        let row = SongRowView(large: true)
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            backgroundColor = ComponentColors.HomeScreen.cardBackground
+            layer.cornerRadius = 20
+            layer.cornerCurve = .continuous
+            isAccessibilityElement = true
+            accessibilityTraits = .button
+            let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+            chevron.tintColor = .tertiaryLabel
+            chevron.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+            chevron.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(row)
+            addSubview(chevron)
+            NSLayoutConstraint.activate([
+                row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+                row.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+                row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
+                row.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -12),
+                chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+                chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+                chevron.widthAnchor.constraint(equalToConstant: 10),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override var isHighlighted: Bool {
+            didSet { UIView.animate(withDuration: 0.15) { self.alpha = self.isHighlighted ? 0.6 : 1 } }
+        }
+    }
+}
+
+/// iPad: wide enough for two columns of song cards, centred beside the tab rail.
+extension DiscoverViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
 }

@@ -61,18 +61,18 @@ class AllUploadsViewController: UIViewController {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.addSubview(contentStack)
         contentStack.axis    = .vertical
-        contentStack.spacing = 10
+        contentStack.spacing = DeviceLayout.s(10)
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: DeviceLayout.s(18)),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -30),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 20),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -20),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40)
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: DeviceLayout.s(-30)),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: DeviceLayout.s(20)),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: DeviceLayout.s(-20)),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: DeviceLayout.s(-40))
         ])
     }
 
@@ -131,7 +131,7 @@ class AllUploadsViewController: UIViewController {
         // Icon
         let iconWrap = UIView()
         iconWrap.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
-        iconWrap.layer.cornerRadius = 12; iconWrap.clipsToBounds = true
+        iconWrap.layer.cornerRadius = DeviceLayout.s(12); iconWrap.clipsToBounds = true
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.isUserInteractionEnabled = false
         let iconImg = UIImageView(image: UIImage(systemName: "doc.fill"))
@@ -141,26 +141,26 @@ class AllUploadsViewController: UIViewController {
 
         // Labels
         let titleLbl = UILabel()
-        titleLbl.text = title; titleLbl.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLbl.text = title; titleLbl.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .semibold)
         titleLbl.textColor = .label; titleLbl.lineBreakMode = .byTruncatingTail
 
         let badge = UILabel()
-        badge.text = fileType; badge.font = .systemFont(ofSize: 11, weight: .bold)
+        badge.text = fileType; badge.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .bold)
         badge.textColor = ComponentColors.SongCard.fileIcon
         badge.backgroundColor = ComponentColors.SongCard.fileIcon.withAlphaComponent(0.12)
-        badge.layer.cornerRadius = 5; badge.clipsToBounds = true; badge.textAlignment = .center
+        badge.layer.cornerRadius = DeviceLayout.s(5); badge.clipsToBounds = true; badge.textAlignment = .center
         badge.translatesAutoresizingMaskIntoConstraints = false
-        badge.widthAnchor.constraint(equalToConstant: 38).isActive = true
-        badge.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        badge.widthAnchor.constraint(equalToConstant: DeviceLayout.s(38)).isActive = true
+        badge.heightAnchor.constraint(equalToConstant: DeviceLayout.s(20)).isActive = true
 
         let metaLbl = UILabel()
-        metaLbl.text = meta; metaLbl.font = .systemFont(ofSize: 12); metaLbl.textColor = .tertiaryLabel
+        metaLbl.text = meta; metaLbl.font = .systemFont(ofSize: DeviceLayout.s(12)); metaLbl.textColor = .tertiaryLabel
 
         let metaRow = UIStackView(arrangedSubviews: [badge, metaLbl])
-        metaRow.axis = .horizontal; metaRow.spacing = 6; metaRow.alignment = .center
+        metaRow.axis = .horizontal; metaRow.spacing = DeviceLayout.s(6); metaRow.alignment = .center
 
         let textStack = UIStackView(arrangedSubviews: [titleLbl, metaRow])
-        textStack.axis = .vertical; textStack.spacing = 5
+        textStack.axis = .vertical; textStack.spacing = DeviceLayout.s(5)
         textStack.isUserInteractionEnabled = false
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -185,22 +185,22 @@ class AllUploadsViewController: UIViewController {
 
         card.addSubview(iconWrap); card.addSubview(textStack); card.addSubview(moreBtn)
         NSLayoutConstraint.activate([
-            card.heightAnchor.constraint(equalToConstant: 76),
-            iconWrap.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            card.heightAnchor.constraint(equalToConstant: DeviceLayout.s(76)),
+            iconWrap.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(14)),
             iconWrap.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            iconWrap.widthAnchor.constraint(equalToConstant: 48),
-            iconWrap.heightAnchor.constraint(equalToConstant: 48),
+            iconWrap.widthAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
+            iconWrap.heightAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
             iconImg.centerXAnchor.constraint(equalTo: iconWrap.centerXAnchor),
             iconImg.centerYAnchor.constraint(equalTo: iconWrap.centerYAnchor),
-            iconImg.widthAnchor.constraint(equalToConstant: 26),
-            iconImg.heightAnchor.constraint(equalToConstant: 26),
-            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: 13),
+            iconImg.widthAnchor.constraint(equalToConstant: DeviceLayout.s(26)),
+            iconImg.heightAnchor.constraint(equalToConstant: DeviceLayout.s(26)),
+            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: DeviceLayout.s(13)),
             textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            textStack.trailingAnchor.constraint(equalTo: moreBtn.leadingAnchor, constant: -8),
-            moreBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            textStack.trailingAnchor.constraint(equalTo: moreBtn.leadingAnchor, constant: DeviceLayout.s(-8)),
+            moreBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: DeviceLayout.s(-16)),
             moreBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            moreBtn.widthAnchor.constraint(equalToConstant: 30),
-            moreBtn.heightAnchor.constraint(equalToConstant: 30)
+            moreBtn.widthAnchor.constraint(equalToConstant: DeviceLayout.s(30)),
+            moreBtn.heightAnchor.constraint(equalToConstant: DeviceLayout.s(30))
         ])
 
         // ── Tap: open the result screen (it shows progress while still converting) ──
@@ -255,18 +255,18 @@ class AllUploadsViewController: UIViewController {
     private func makeEmptyState(message: String?) -> UIView {
         let v = UIView()
         v.backgroundColor    = .secondarySystemBackground
-        v.layer.cornerRadius = 14
+        v.layer.cornerRadius = DeviceLayout.s(14)
         let lbl = UILabel()
         lbl.text = message ?? "No uploads yet"
         lbl.textColor = .tertiaryLabel
-        lbl.font = .systemFont(ofSize: 15); lbl.textAlignment = .center
+        lbl.font = .systemFont(ofSize: DeviceLayout.s(15)); lbl.textAlignment = .center
         lbl.numberOfLines = 0
         lbl.translatesAutoresizingMaskIntoConstraints = false
         v.addSubview(lbl)
         NSLayoutConstraint.activate([
             lbl.centerXAnchor.constraint(equalTo: v.centerXAnchor),
             lbl.centerYAnchor.constraint(equalTo: v.centerYAnchor),
-            v.heightAnchor.constraint(equalToConstant: 80)
+            v.heightAnchor.constraint(equalToConstant: DeviceLayout.s(80))
         ])
         return v
     }

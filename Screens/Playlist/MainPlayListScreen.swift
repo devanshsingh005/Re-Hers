@@ -61,7 +61,7 @@ class PlaylistViewController: UIViewController {
         btn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         btn.setImage(UIImage(systemName: "trash"), for: .normal)
         btn.tintColor = SemanticColors.Text.onBrand
-        btn.layer.cornerRadius = 28
+        btn.layer.cornerRadius = DeviceLayout.s(28)
         btn.clipsToBounds = false
         btn.layer.shadowColor = SemanticColors.Shadow.level2.cgColor
         btn.layer.shadowOpacity = 0.3
@@ -77,10 +77,10 @@ class PlaylistViewController: UIViewController {
         let label = UILabel()
         label.text = "Select Playlists to Delete"
         label.textColor = SemanticColors.Text.primary
-        label.font = .systemFont(ofSize: 20, weight: .bold)
+        label.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
         label.textAlignment = .center
         label.backgroundColor = SemanticColors.Background.card
-        label.layer.cornerRadius = 4
+        label.layer.cornerRadius = DeviceLayout.s(4)
         label.clipsToBounds = true
         label.layer.borderColor = ComponentColors.DestructiveButton.border.cgColor
         label.layer.borderWidth = 1
@@ -178,7 +178,7 @@ class PlaylistViewController: UIViewController {
     private func setupSelectionModeLabel() {
         view.addSubview(selectionModeLabel)
         NSLayoutConstraint.activate([
-            selectionModeLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            selectionModeLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: DeviceLayout.s(8)),
             selectionModeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor,
                                                         constant: isPad ? 40 : 20),
             selectionModeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor,
@@ -196,12 +196,12 @@ class PlaylistViewController: UIViewController {
             let spacing: CGFloat = 16
             let availableWidth = view.bounds.width - (3 * spacing)
             let itemWidth = availableWidth / 2
-            layout.itemSize = CGSize(width: itemWidth, height: 110)
+            layout.itemSize = CGSize(width: itemWidth, height: DeviceLayout.s(110))
             layout.minimumInteritemSpacing = spacing
             layout.minimumLineSpacing = spacing
             layout.sectionInset = UIEdgeInsets(top: 16, left: spacing, bottom: 0, right: spacing)
         } else {
-            layout.itemSize = CGSize(width: view.bounds.width - 32, height: 98)
+            layout.itemSize = CGSize(width: view.bounds.width - 32, height: DeviceLayout.s(98))
             layout.minimumLineSpacing = 12
             layout.sectionInset = UIEdgeInsets(top: 12, left: 16, bottom: 0, right: 16)
         }
@@ -445,7 +445,7 @@ class PlaylistViewController: UIViewController {
             let label = UILabel()
             label.text = message
             label.textColor = .secondaryLabel
-            label.font = .systemFont(ofSize: 16, weight: .medium)
+            label.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .medium)
             label.textAlignment = .center
             label.numberOfLines = 0
             collectionView.backgroundView = label
@@ -576,13 +576,13 @@ extension PlaylistViewController: UICollectionViewDelegate,
                         layout collectionViewLayout: UICollectionViewLayout,
                         sizeForItemAt indexPath: IndexPath) -> CGSize {
         guard isPad else {
-            return CGSize(width: collectionView.bounds.width - 32, height: 98)
+            return CGSize(width: collectionView.bounds.width - 32, height: DeviceLayout.s(98))
         }
         let spacing: CGFloat = 16
         let available = collectionView.bounds.width - (3 * spacing)
         let columns   = max(2, Int(available / 300))
         let width     = (available - CGFloat(columns - 1) * spacing) / CGFloat(columns)
-        return CGSize(width: width, height: 110)
+        return CGSize(width: width, height: DeviceLayout.s(110))
     }
 
     // MARK: Footer size
@@ -591,7 +591,7 @@ extension PlaylistViewController: UICollectionViewDelegate,
                         referenceSizeForFooterInSection section: Int) -> CGSize {
         // Guests see the sign-up prompt instead of "Create New Playlist".
         guard !GuestSessionManager.shared.isGuest() else { return .zero }
-        return CGSize(width: collectionView.bounds.width, height: 84)
+        return CGSize(width: collectionView.bounds.width, height: DeviceLayout.s(84))
     }
 
     // MARK: Footer view
@@ -645,7 +645,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     let deleteBackgroundView: UIView = {
         let v = UIView()
         v.backgroundColor = SemanticColors.State.incorrect
-        v.layer.cornerRadius = 4
+        v.layer.cornerRadius = DeviceLayout.s(4)
         v.clipsToBounds = true
         v.isHidden = true
         return v
@@ -661,7 +661,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     let containerView: UIView = {
         let v = UIView()
         v.backgroundColor = ComponentColors.SongCard.background
-        v.layer.cornerRadius = 18
+        v.layer.cornerRadius = DeviceLayout.s(18)
         v.clipsToBounds = true
         return v
     }()
@@ -670,13 +670,13 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
         let iv = UIImageView()
         iv.contentMode = .scaleAspectFill
         iv.clipsToBounds = true
-        iv.layer.cornerRadius = 12
+        iv.layer.cornerRadius = DeviceLayout.s(12)
         return iv
     }()
 
     private let titleLabel: UILabel = {
         let l = UILabel()
-        l.font = .boldSystemFont(ofSize: 16)
+        l.font = .boldSystemFont(ofSize: DeviceLayout.s(16))
         l.textColor = ComponentColors.SongCard.titleText
         l.numberOfLines = 1
         return l
@@ -684,14 +684,14 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
 
     private let subtitleLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 13)
+        l.font = .systemFont(ofSize: DeviceLayout.s(13))
         l.textColor = ComponentColors.SongCard.metadataText
         l.numberOfLines = 1
         return l
     }()
 
     private let chevron: UIImageView = {
-        let cfg = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        let cfg = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(12), weight: .medium)
         let iv = UIImageView(image: UIImage(systemName: "chevron.right",
                                             withConfiguration: cfg))
         iv.tintColor = ComponentColors.SongCard.metadataText.withAlphaComponent(0.45)
@@ -702,7 +702,7 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
     let selectionOverlay: UIView = {
         let v = UIView()
         v.backgroundColor = SemanticColors.State.incorrectSubtle
-        v.layer.cornerRadius = 18
+        v.layer.cornerRadius = DeviceLayout.s(18)
         v.layer.borderColor  = SemanticColors.State.incorrect.cgColor
         v.layer.borderWidth  = 1.5
         v.isHidden = true
@@ -744,10 +744,10 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
             deleteBackgroundView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
             trashImageView.trailingAnchor.constraint(equalTo: deleteBackgroundView.trailingAnchor,
-                                                     constant: -24),
+                                                     constant: DeviceLayout.s(-24)),
             trashImageView.centerYAnchor.constraint(equalTo: deleteBackgroundView.centerYAnchor),
-            trashImageView.widthAnchor.constraint(equalToConstant: 22),
-            trashImageView.heightAnchor.constraint(equalToConstant: 22),
+            trashImageView.widthAnchor.constraint(equalToConstant: DeviceLayout.s(22)),
+            trashImageView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(22)),
 
             // Container
             containerView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -763,20 +763,20 @@ class PlaylistCollectionViewCell: UICollectionViewCell, UIGestureRecognizerDeleg
             playlistImageView.heightAnchor.constraint(equalToConstant: imageSize),
 
             // Chevron
-            chevron.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
+            chevron.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: DeviceLayout.s(-16)),
             chevron.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            chevron.widthAnchor.constraint(equalToConstant: 14),
+            chevron.widthAnchor.constraint(equalToConstant: DeviceLayout.s(14)),
 
             // Title — above center
             titleLabel.leadingAnchor.constraint(equalTo: playlistImageView.trailingAnchor,
                                                 constant: padding),
-            titleLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -12),
-            titleLabel.bottomAnchor.constraint(equalTo: containerView.centerYAnchor, constant: -2),
+            titleLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: DeviceLayout.s(-12)),
+            titleLabel.bottomAnchor.constraint(equalTo: containerView.centerYAnchor, constant: DeviceLayout.s(-2)),
 
             // Subtitle — below center
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
-            subtitleLabel.topAnchor.constraint(equalTo: containerView.centerYAnchor, constant: 3),
+            subtitleLabel.topAnchor.constraint(equalTo: containerView.centerYAnchor, constant: DeviceLayout.s(3)),
 
             // Selection overlay
             selectionOverlay.topAnchor.constraint(equalTo: containerView.topAnchor),
@@ -889,13 +889,13 @@ class CreatePlaylistFooterView: UICollectionReusableView {
     private let button: UIButton = {
         var config = UIButton.Configuration.plain()
         config.image = UIImage(systemName: "plus.circle.fill")
-        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(20), weight: .medium)
         config.title = "Create New Playlist"
         config.imagePadding = 8
         config.baseForegroundColor = BrandColors.brand
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var attrs = attrs
-            attrs.font = .boldSystemFont(ofSize: 16)
+            attrs.font = .boldSystemFont(ofSize: DeviceLayout.s(16))
             return attrs
         }
         let btn = UIButton(configuration: config)
@@ -908,10 +908,10 @@ class CreatePlaylistFooterView: UICollectionReusableView {
         backgroundColor = .clear
         addSubview(button)
         NSLayoutConstraint.activate([
-            button.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            button.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            button.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            button.leadingAnchor.constraint(equalTo: leadingAnchor, constant: DeviceLayout.s(16)),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-16)),
+            button.topAnchor.constraint(equalTo: topAnchor, constant: DeviceLayout.s(8)),
+            button.bottomAnchor.constraint(equalTo: bottomAnchor, constant: DeviceLayout.s(-12)),
         ])
         button.addTarget(self, action: #selector(tapped), for: .touchUpInside)
     }
@@ -955,7 +955,7 @@ class AddPlaylistViewController: UIViewController,
     private let cardView: UIView = {
         let v = UIView()
         v.backgroundColor = SemanticColors.Background.card
-        v.layer.cornerRadius = 20
+        v.layer.cornerRadius = DeviceLayout.s(20)
         v.clipsToBounds = true
         return v
     }()
@@ -964,8 +964,8 @@ class AddPlaylistViewController: UIViewController,
         let l = UILabel()
         l.text = "Create Playlist"
         l.font = UIDevice.current.userInterfaceIdiom == .pad
-            ? .boldSystemFont(ofSize: 22)
-            : .boldSystemFont(ofSize: 18)
+            ? .boldSystemFont(ofSize: DeviceLayout.s(22))
+            : .boldSystemFont(ofSize: DeviceLayout.s(18))
         l.textAlignment = .center
         return l
     }()
@@ -975,14 +975,14 @@ class AddPlaylistViewController: UIViewController,
         tf.placeholder = "Playlist name"
         tf.borderStyle = .roundedRect
         tf.font = UIDevice.current.userInterfaceIdiom == .pad
-            ? .systemFont(ofSize: 18)
-            : .systemFont(ofSize: 16)
+            ? .systemFont(ofSize: DeviceLayout.s(18))
+            : .systemFont(ofSize: DeviceLayout.s(16))
         return tf
     }()
 
     private let nameErrorLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.font = .systemFont(ofSize: DeviceLayout.s(12), weight: .medium)
         label.textColor = ComponentColors.AuthScreen.inputErrorText
         label.numberOfLines = 0
         label.isHidden = true
@@ -992,7 +992,7 @@ class AddPlaylistViewController: UIViewController,
     private let imageViewPreview: UIImageView = {
         let iv = UIImageView()
         iv.contentMode = .scaleAspectFill
-        iv.layer.cornerRadius = 12
+        iv.layer.cornerRadius = DeviceLayout.s(12)
         iv.clipsToBounds = true
         iv.backgroundColor = SemanticColors.Background.skeletonBase
         return iv
@@ -1011,7 +1011,7 @@ class AddPlaylistViewController: UIViewController,
     private let swatchStack: UIStackView = {
         let stack = UIStackView()
         stack.axis = .horizontal
-        stack.spacing = 10
+        stack.spacing = DeviceLayout.s(10)
         return stack
     }()
     private let swatchScroll: UIScrollView = {
@@ -1026,8 +1026,8 @@ class AddPlaylistViewController: UIViewController,
         let b = UIButton(type: .system)
         b.setTitle("Save", for: .normal)
         b.titleLabel?.font = UIDevice.current.userInterfaceIdiom == .pad
-            ? .boldSystemFont(ofSize: 20)
-            : .boldSystemFont(ofSize: 16)
+            ? .boldSystemFont(ofSize: DeviceLayout.s(20))
+            : .boldSystemFont(ofSize: DeviceLayout.s(16))
         return b
     }()
 
@@ -1035,8 +1035,8 @@ class AddPlaylistViewController: UIViewController,
         let b = UIButton(type: .system)
         b.setTitle("Cancel", for: .normal)
         b.titleLabel?.font = UIDevice.current.userInterfaceIdiom == .pad
-            ? .systemFont(ofSize: 18)
-            : .systemFont(ofSize: 16)
+            ? .systemFont(ofSize: DeviceLayout.s(18))
+            : .systemFont(ofSize: DeviceLayout.s(16))
         return b
     }()
 
@@ -1060,17 +1060,17 @@ class AddPlaylistViewController: UIViewController,
             var config = UIButton.Configuration.plain()
             config.background.image = PlaylistCover.image(style: index, side: 88)
             config.background.imageContentMode = .scaleAspectFill
-            config.background.cornerRadius = 10
+            config.background.cornerRadius = DeviceLayout.s(10)
             let swatch = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
                 self?.selectGradient(index)
             })
             swatch.tag = index
-            swatch.layer.cornerRadius = 12
+            swatch.layer.cornerRadius = DeviceLayout.s(12)
             swatch.layer.borderColor = BrandColors.brand.cgColor
             swatch.accessibilityLabel = "Gradient \(index + 1)"
             swatch.translatesAutoresizingMaskIntoConstraints = false
-            swatch.widthAnchor.constraint(equalToConstant: 44).isActive = true
-            swatch.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            swatch.widthAnchor.constraint(equalToConstant: DeviceLayout.s(44)).isActive = true
+            swatch.heightAnchor.constraint(equalToConstant: DeviceLayout.s(44)).isActive = true
             swatchStack.addArrangedSubview(swatch)
         }
     }
@@ -1131,9 +1131,9 @@ class AddPlaylistViewController: UIViewController,
             nameField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
             nameField.heightAnchor.constraint(equalToConstant: fieldH),
 
-            nameErrorLabel.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 6),
-            nameErrorLabel.leadingAnchor.constraint(equalTo: nameField.leadingAnchor, constant: 4),
-            nameErrorLabel.trailingAnchor.constraint(equalTo: nameField.trailingAnchor, constant: -4),
+            nameErrorLabel.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: DeviceLayout.s(6)),
+            nameErrorLabel.leadingAnchor.constraint(equalTo: nameField.leadingAnchor, constant: DeviceLayout.s(4)),
+            nameErrorLabel.trailingAnchor.constraint(equalTo: nameField.trailingAnchor, constant: DeviceLayout.s(-4)),
 
             imageViewPreview.topAnchor.constraint(equalTo: nameErrorLabel.bottomAnchor, constant: spacing),
             imageViewPreview.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: hPad),
@@ -1143,7 +1143,7 @@ class AddPlaylistViewController: UIViewController,
             swatchScroll.topAnchor.constraint(equalTo: imageViewPreview.bottomAnchor, constant: spacing),
             swatchScroll.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: hPad),
             swatchScroll.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -hPad),
-            swatchScroll.heightAnchor.constraint(equalToConstant: 48),
+            swatchScroll.heightAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
 
             pickImageButton.topAnchor.constraint(equalTo: swatchScroll.bottomAnchor,
                                                   constant: spacing / 2),
@@ -1163,8 +1163,8 @@ class AddPlaylistViewController: UIViewController,
         swatchStack.translatesAutoresizingMaskIntoConstraints = false
         swatchScroll.addSubview(swatchStack)
         NSLayoutConstraint.activate([
-            swatchStack.leadingAnchor.constraint(equalTo: swatchScroll.contentLayoutGuide.leadingAnchor, constant: 2),
-            swatchStack.trailingAnchor.constraint(equalTo: swatchScroll.contentLayoutGuide.trailingAnchor, constant: -2),
+            swatchStack.leadingAnchor.constraint(equalTo: swatchScroll.contentLayoutGuide.leadingAnchor, constant: DeviceLayout.s(2)),
+            swatchStack.trailingAnchor.constraint(equalTo: swatchScroll.contentLayoutGuide.trailingAnchor, constant: DeviceLayout.s(-2)),
             swatchStack.centerYAnchor.constraint(equalTo: swatchScroll.frameLayoutGuide.centerYAnchor),
         ])
 

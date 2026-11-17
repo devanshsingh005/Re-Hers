@@ -24,7 +24,7 @@ class ChapterNodeView: UIView {
     private let starsStack  = UIStackView()
     private let badgeLabel  = UILabel()
 
-    static let diameter: CGFloat = 72
+    static let diameter: CGFloat = DeviceLayout.s(72)
 
     init(chapter: MusicChapter) {
         self.chapter = chapter
@@ -49,7 +49,7 @@ class ChapterNodeView: UIView {
             circleView.layer.shadowRadius  = 10
             circleView.layer.shadowOffset  = CGSize(width: 0, height: 5)
             iconLabel.text      = "✓"
-            iconLabel.font      = .systemFont(ofSize: 28, weight: .heavy)
+            iconLabel.font      = .systemFont(ofSize: DeviceLayout.s(28), weight: .heavy)
             iconLabel.textColor = ComponentColors.LearningCurve.nodeIconCompleted
         case .current:
             circleView.backgroundColor   = ComponentColors.LearningCurve.nodeActiveFill
@@ -61,14 +61,14 @@ class ChapterNodeView: UIView {
             circleView.layer.shadowOffset  = CGSize(width: 0, height: 5)
             iconLabel.text      = "♩"
             iconLabel.textColor = ComponentColors.LearningCurve.nodeIconActive
-            iconLabel.font      = .systemFont(ofSize: 24)
+            iconLabel.font      = .systemFont(ofSize: DeviceLayout.s(24))
         case .locked:
             circleView.backgroundColor   = ComponentColors.LearningCurve.nodeLockedFill
             circleView.layer.borderColor = ComponentColors.LearningCurve.nodeLockedBorder.cgColor
             circleView.layer.borderWidth = 2
             iconLabel.text      = "🔒"
             iconLabel.textColor = ComponentColors.LearningCurve.nodeIconLocked
-            iconLabel.font      = .systemFont(ofSize: 24)
+            iconLabel.font      = .systemFont(ofSize: DeviceLayout.s(24))
         }
 
         iconLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -76,23 +76,23 @@ class ChapterNodeView: UIView {
         circleView.addSubview(iconLabel)
 
         starsStack.translatesAutoresizingMaskIntoConstraints = false
-        starsStack.axis = .horizontal; starsStack.spacing = 1; starsStack.alignment = .center
+        starsStack.axis = .horizontal; starsStack.spacing = DeviceLayout.s(1); starsStack.alignment = .center
         if chapter.stars > 0 {
             for _ in 0..<chapter.stars {
-                let star = UILabel(); star.text = "⭐"; star.font = .systemFont(ofSize: 10)
+                let star = UILabel(); star.text = "⭐"; star.font = .systemFont(ofSize: DeviceLayout.s(10))
                 starsStack.addArrangedSubview(star)
             }
         }
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text          = chapter.title
-        titleLabel.font          = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font          = .systemFont(ofSize: DeviceLayout.s(13), weight: .semibold)
         titleLabel.textAlignment = .center
         titleLabel.textColor = chapter.status == .locked ? ComponentColors.LearningCurve.nodeIconLocked : ComponentColors.LearningCurve.headerTitle
         
         badgeLabel.translatesAutoresizingMaskIntoConstraints = false
         badgeLabel.text            = chapter.title.uppercased()
-        badgeLabel.font            = .systemFont(ofSize: 11, weight: .heavy)
+        badgeLabel.font            = .systemFont(ofSize: DeviceLayout.s(11), weight: .heavy)
         badgeLabel.textColor       = ComponentColors.LearningCurve.chapterBadgeText
         badgeLabel.textAlignment   = .center
         badgeLabel.backgroundColor = ComponentColors.LearningCurve.chapterBadgeFill
@@ -104,10 +104,10 @@ class ChapterNodeView: UIView {
         addSubview(titleLabel); addSubview(badgeLabel)
 
         NSLayoutConstraint.activate([
-            starsStack.bottomAnchor.constraint(equalTo: circleView.topAnchor, constant: -4),
+            starsStack.bottomAnchor.constraint(equalTo: circleView.topAnchor, constant: DeviceLayout.s(-4)),
             starsStack.centerXAnchor.constraint(equalTo: centerXAnchor),
 
-            circleView.topAnchor.constraint(equalTo: topAnchor, constant: 18),
+            circleView.topAnchor.constraint(equalTo: topAnchor, constant: DeviceLayout.s(18)),
             circleView.centerXAnchor.constraint(equalTo: centerXAnchor),
             circleView.widthAnchor.constraint(equalToConstant: d),
             circleView.heightAnchor.constraint(equalToConstant: d),
@@ -115,12 +115,12 @@ class ChapterNodeView: UIView {
             iconLabel.centerXAnchor.constraint(equalTo: circleView.centerXAnchor),
             iconLabel.centerYAnchor.constraint(equalTo: circleView.centerYAnchor),
 
-            badgeLabel.topAnchor.constraint(equalTo: circleView.bottomAnchor, constant: 6),
+            badgeLabel.topAnchor.constraint(equalTo: circleView.bottomAnchor, constant: DeviceLayout.s(6)),
             badgeLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            badgeLabel.heightAnchor.constraint(equalToConstant: 22),
+            badgeLabel.heightAnchor.constraint(equalToConstant: DeviceLayout.s(22)),
             badgeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 60),
 
-            titleLabel.topAnchor.constraint(equalTo: circleView.bottomAnchor, constant: 6),
+            titleLabel.topAnchor.constraint(equalTo: circleView.bottomAnchor, constant: DeviceLayout.s(6)),
             titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -169,7 +169,7 @@ class ChapterPopupCard: UIView {
     private func setupView(chapter: MusicChapter) {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         containerView.backgroundColor = ComponentColors.LearningCurve.popupBackground
-        containerView.layer.cornerRadius = 24
+        containerView.layer.cornerRadius = DeviceLayout.s(24)
         containerView.layer.shadowColor = ComponentColors.LearningCurve.popupShadow.cgColor
         containerView.layer.shadowOpacity  = 0.14
         containerView.layer.shadowRadius   = 20
@@ -188,28 +188,28 @@ class ChapterPopupCard: UIView {
         switch chapter.status {
         case .completed:
             statusView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-            statusIcon.text = "✓"; statusIcon.font = .systemFont(ofSize: 22, weight: .heavy)
+            statusIcon.text = "✓"; statusIcon.font = .systemFont(ofSize: DeviceLayout.s(22), weight: .heavy)
             statusIcon.textColor = .white
         case .current:
             statusView.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
-            statusIcon.text = "♩"; statusIcon.font = .systemFont(ofSize: 24, weight: .bold)
+            statusIcon.text = "♩"; statusIcon.font = .systemFont(ofSize: DeviceLayout.s(24), weight: .bold)
             statusIcon.textColor = ComponentColors.HomeScreen.actionButtonFill
         case .locked:
             statusView.backgroundColor = UIColor.systemGray5
-            statusIcon.text = "🔒"; statusIcon.font = .systemFont(ofSize: 20)
+            statusIcon.text = "🔒"; statusIcon.font = .systemFont(ofSize: DeviceLayout.s(20))
         }
         statusView.addSubview(statusIcon)
 
         let titleLabel = UILabel()
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text      = chapter.title
-        titleLabel.font      = .systemFont(ofSize: 18, weight: .bold)
+        titleLabel.font      = .systemFont(ofSize: DeviceLayout.s(18), weight: .bold)
         titleLabel.textColor = .label
 
         let subtitleLabel = UILabel()
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.text          = chapter.subtitle
-        subtitleLabel.font          = .systemFont(ofSize: 13)
+        subtitleLabel.font          = .systemFont(ofSize: DeviceLayout.s(13))
         subtitleLabel.textColor     = .systemGray
         subtitleLabel.numberOfLines = 2
 
@@ -218,7 +218,7 @@ class ChapterPopupCard: UIView {
         dismissBtn.setImage(UIImage(systemName: "xmark"), for: .normal)
         dismissBtn.tintColor       = .systemGray2
         dismissBtn.backgroundColor = UIColor.systemGray6
-        dismissBtn.layer.cornerRadius = 15
+        dismissBtn.layer.cornerRadius = DeviceLayout.s(15)
         dismissBtn.addTarget(self, action: #selector(didTapDismiss), for: .touchUpInside)
 
         let hintLabel = UILabel()
@@ -233,7 +233,7 @@ class ChapterPopupCard: UIView {
         lockIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .subheadline)
         let hintRow = UIStackView(arrangedSubviews: [lockIcon, hintLabel])
         hintRow.translatesAutoresizingMaskIntoConstraints = false
-        hintRow.spacing = 8
+        hintRow.spacing = DeviceLayout.s(8)
         hintRow.alignment = .firstBaseline
 
         containerView.addSubview(statusView); containerView.addSubview(statusIcon)
@@ -246,31 +246,31 @@ class ChapterPopupCard: UIView {
             containerView.topAnchor.constraint(equalTo: topAnchor),
             containerView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            dismissBtn.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
-            dismissBtn.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
-            dismissBtn.widthAnchor.constraint(equalToConstant: 30),
-            dismissBtn.heightAnchor.constraint(equalToConstant: 30),
+            dismissBtn.topAnchor.constraint(equalTo: containerView.topAnchor, constant: DeviceLayout.s(16)),
+            dismissBtn.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: DeviceLayout.s(-16)),
+            dismissBtn.widthAnchor.constraint(equalToConstant: DeviceLayout.s(30)),
+            dismissBtn.heightAnchor.constraint(equalToConstant: DeviceLayout.s(30)),
 
-            statusView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
-            statusView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 18),
-            statusView.widthAnchor.constraint(equalToConstant: 56),
-            statusView.heightAnchor.constraint(equalToConstant: 56),
+            statusView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: DeviceLayout.s(20)),
+            statusView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: DeviceLayout.s(18)),
+            statusView.widthAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
+            statusView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
 
             statusIcon.centerXAnchor.constraint(equalTo: statusView.centerXAnchor),
             statusIcon.centerYAnchor.constraint(equalTo: statusView.centerYAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 22),
-            titleLabel.leadingAnchor.constraint(equalTo: statusView.trailingAnchor, constant: 14),
-            titleLabel.trailingAnchor.constraint(equalTo: dismissBtn.leadingAnchor, constant: -8),
+            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: DeviceLayout.s(22)),
+            titleLabel.leadingAnchor.constraint(equalTo: statusView.trailingAnchor, constant: DeviceLayout.s(14)),
+            titleLabel.trailingAnchor.constraint(equalTo: dismissBtn.leadingAnchor, constant: DeviceLayout.s(-8)),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
-            subtitleLabel.leadingAnchor.constraint(equalTo: statusView.trailingAnchor, constant: 14),
-            subtitleLabel.trailingAnchor.constraint(equalTo: dismissBtn.leadingAnchor, constant: -8),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: DeviceLayout.s(3)),
+            subtitleLabel.leadingAnchor.constraint(equalTo: statusView.trailingAnchor, constant: DeviceLayout.s(14)),
+            subtitleLabel.trailingAnchor.constraint(equalTo: dismissBtn.leadingAnchor, constant: DeviceLayout.s(-8)),
 
-            hintRow.topAnchor.constraint(equalTo: statusView.bottomAnchor, constant: 16),
-            hintRow.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            hintRow.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            hintRow.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20),
+            hintRow.topAnchor.constraint(equalTo: statusView.bottomAnchor, constant: DeviceLayout.s(16)),
+            hintRow.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: DeviceLayout.s(20)),
+            hintRow.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            hintRow.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: DeviceLayout.s(-20)),
         ])
     }
 
@@ -322,8 +322,8 @@ class LessonMapViewController: UIViewController {
     }
     private let nodeSize:  CGFloat = ChapterNodeView.diameter
     /// Where the chapter path starts, below the progress bar.
-    private static let pathTop: CGFloat = 136
-    private let vSpacing:  CGFloat = 130
+    private static let pathTop: CGFloat = DeviceLayout.s(136)
+    private let vSpacing:  CGFloat = DeviceLayout.s(130)
 
     // MARK: - Lifecycle
 
@@ -485,7 +485,7 @@ class LessonMapViewController: UIViewController {
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             // Match the shared Home/Discover/Upload navbar overlap geometry
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 96),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: DeviceLayout.s(96)),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
@@ -502,16 +502,16 @@ class LessonMapViewController: UIViewController {
         
         let labelStack = UIStackView()
         labelStack.axis = .vertical
-        labelStack.spacing = -2
+        labelStack.spacing = DeviceLayout.s(-2)
         labelStack.translatesAutoresizingMaskIntoConstraints = false
         
         let titleLabel = UILabel()
         titleLabel.text = "Practice"
-        titleLabel.font = .systemFont(ofSize: 34, weight: .heavy)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(34), weight: .heavy)
         titleLabel.textColor = ComponentColors.NavBar.title
         
         largeSubtitleLabel.text = "Interactive lessons"
-        largeSubtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        largeSubtitleLabel.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .regular)
         largeSubtitleLabel.textColor = ComponentColors.NavBar.title.withAlphaComponent(0.6)
         
         labelStack.addArrangedSubview(titleLabel)
@@ -519,7 +519,7 @@ class LessonMapViewController: UIViewController {
         headerContainer.addSubview(labelStack)
         
         largeProfileButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.12)
-        largeProfileButton.layer.cornerRadius = 20
+        largeProfileButton.layer.cornerRadius = DeviceLayout.s(20)
         largeProfileButton.layer.masksToBounds = true
         largeProfileButton.clipsToBounds = true
         largeProfileButton.layer.borderWidth = 1.0
@@ -537,15 +537,15 @@ class LessonMapViewController: UIViewController {
             headerContainer.topAnchor.constraint(equalTo: contentView.topAnchor),
             headerContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             headerContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            headerContainer.heightAnchor.constraint(equalToConstant: 80),
+            headerContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(80)),
             
-            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 20),
+            labelStack.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: DeviceLayout.s(20)),
             labelStack.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
             
-            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -20),
+            largeProfileButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: DeviceLayout.s(-20)),
             largeProfileButton.centerYAnchor.constraint(equalTo: headerContainer.centerYAnchor),
-            largeProfileButton.widthAnchor.constraint(equalToConstant: 40),
-            largeProfileButton.heightAnchor.constraint(equalToConstant: 40)
+            largeProfileButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(40)),
+            largeProfileButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(40))
         ])
     }
 
@@ -571,20 +571,20 @@ class LessonMapViewController: UIViewController {
         bar.translatesAutoresizingMaskIntoConstraints = false
         bar.progressTintColor = BrandColors.brand
         bar.trackTintColor = BrandColors.brand.withAlphaComponent(0.18)
-        bar.layer.cornerRadius = 3
+        bar.layer.cornerRadius = DeviceLayout.s(3)
         bar.clipsToBounds = true
         headerProgressBar = bar
 
         [titleLabel, percentLabel, bar].forEach { contentView.addSubview($0) }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 88),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: DeviceLayout.s(88)),
+            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
             percentLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
-            percentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            bar.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            bar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            bar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            bar.heightAnchor.constraint(equalToConstant: 6),
+            percentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            bar.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: DeviceLayout.s(8)),
+            bar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            bar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            bar.heightAnchor.constraint(equalToConstant: DeviceLayout.s(6)),
         ])
         refreshHeaderProgressLabel()
     }
@@ -620,7 +620,7 @@ class LessonMapViewController: UIViewController {
             canvas.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             canvas.heightAnchor.constraint(equalToConstant: totalHeight),
-            canvas.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
+            canvas.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-20)),
         ])
 
         for (i, chapter) in chapters.enumerated() {
@@ -697,10 +697,10 @@ class LessonMapViewController: UIViewController {
         view.addSubview(card)
 
         NSLayoutConstraint.activate([
-            card.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            card.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            card.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-20)),
             card.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor,
-                                         constant: -20),
+                                         constant: DeviceLayout.s(-20)),
         ])
 
         card.onDismiss = { [weak self] in self?.dismissPopupAnimated() }
@@ -721,7 +721,8 @@ class LessonMapViewController: UIViewController {
             // re-read saved progress: the next chapter is now unlocked
             self?.loadProgressFromSupabase()
         }
-        let nav = UINavigationController(rootViewController: vc)
+        // iPad: the lesson in the page column, at the same scale as the other pages
+        let nav = UINavigationController(rootViewController: IPadScreenContainer.wrapIfNeeded(vc))
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }
@@ -808,7 +809,7 @@ class PathCanvasView: UIView {
     private func drawWatermarks(ctx: CGContext, rect: CGRect) {
         let iconChars = ["♩", "♫", "♬"]
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 32),
+            .font: UIFont.systemFont(ofSize: DeviceLayout.s(32)),
             .foregroundColor: ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.18)
         ]
         func drawStaffLines(at center: CGPoint, rotation: CGFloat) {

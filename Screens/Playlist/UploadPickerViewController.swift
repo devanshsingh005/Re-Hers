@@ -18,7 +18,7 @@ class UploadPickerViewController: UIViewController {
     private let handleBar: UIView = {
         let v = UIView()
         v.backgroundColor = UIColor.systemGray4
-        v.layer.cornerRadius = 3
+        v.layer.cornerRadius = DeviceLayout.s(3)
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
@@ -26,7 +26,7 @@ class UploadPickerViewController: UIViewController {
     private let titleLabel: UILabel = {
         let l = UILabel()
         l.text = "Add from Uploads"
-        l.font = .systemFont(ofSize: 18, weight: .bold)
+        l.font = .systemFont(ofSize: DeviceLayout.s(18), weight: .bold)
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
@@ -34,7 +34,7 @@ class UploadPickerViewController: UIViewController {
     private let subtitleLabel: UILabel = {
         let l = UILabel()
         l.text = "Choose one of your uploaded files"
-        l.font = .systemFont(ofSize: 13)
+        l.font = .systemFont(ofSize: DeviceLayout.s(13))
         l.textColor = .secondaryLabel
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
@@ -51,7 +51,7 @@ class UploadPickerViewController: UIViewController {
     private let contentStack: UIStackView = {
         let sv = UIStackView()
         sv.axis = .vertical
-        sv.spacing = 10
+        sv.spacing = DeviceLayout.s(10)
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
@@ -85,16 +85,16 @@ class UploadPickerViewController: UIViewController {
         view.addSubview(subtitleLabel)
 
         NSLayoutConstraint.activate([
-            handleBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 10),
+            handleBar.topAnchor.constraint(equalTo: view.topAnchor, constant: DeviceLayout.s(10)),
             handleBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            handleBar.widthAnchor.constraint(equalToConstant: 40),
-            handleBar.heightAnchor.constraint(equalToConstant: 5),
+            handleBar.widthAnchor.constraint(equalToConstant: DeviceLayout.s(40)),
+            handleBar.heightAnchor.constraint(equalToConstant: DeviceLayout.s(5)),
 
-            titleLabel.topAnchor.constraint(equalTo: handleBar.bottomAnchor, constant: 18),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            titleLabel.topAnchor.constraint(equalTo: handleBar.bottomAnchor, constant: DeviceLayout.s(18)),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(20)),
+            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-20)),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: DeviceLayout.s(4)),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
         ])
@@ -105,16 +105,16 @@ class UploadPickerViewController: UIViewController {
         scrollView.addSubview(contentStack)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 18),
+            scrollView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: DeviceLayout.s(18)),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -30),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 20),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -20),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: DeviceLayout.s(-30)),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: DeviceLayout.s(20)),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: DeviceLayout.s(-20)),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: DeviceLayout.s(-40)),
         ])
     }
 
@@ -174,7 +174,7 @@ class UploadPickerViewController: UIViewController {
         // Card container
         let card = UIView()
         card.backgroundColor = ComponentColors.SongCard.background
-        card.layer.cornerRadius = 16
+        card.layer.cornerRadius = DeviceLayout.s(16)
         card.layer.shadowColor = UIColor.black.cgColor
         card.layer.shadowOpacity = 0.06
         card.layer.shadowRadius = 8
@@ -193,16 +193,16 @@ class UploadPickerViewController: UIViewController {
         // Title
         let titleLbl = UILabel()
         titleLbl.text = upload.title
-        titleLbl.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLbl.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .semibold)
         titleLbl.lineBreakMode = .byTruncatingTail
 
         // Badge
         let badge = UILabel()
         badge.text = upload.fileType
-        badge.font = .systemFont(ofSize: 11, weight: .bold)
+        badge.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .bold)
         badge.textColor = ComponentColors.SongCard.fileIcon
         badge.backgroundColor = ComponentColors.SongCard.fileIcon.withAlphaComponent(0.12)
-        badge.layer.cornerRadius = 5
+        badge.layer.cornerRadius = DeviceLayout.s(5)
         badge.clipsToBounds = true
         badge.textAlignment = .center
         badge.translatesAutoresizingMaskIntoConstraints = false
@@ -210,17 +210,17 @@ class UploadPickerViewController: UIViewController {
         // Meta
         let metaLbl = UILabel()
         metaLbl.text = meta
-        metaLbl.font = .systemFont(ofSize: 12)
+        metaLbl.font = .systemFont(ofSize: DeviceLayout.s(12))
         metaLbl.textColor = .tertiaryLabel
 
         let metaRow = UIStackView(arrangedSubviews: [badge, metaLbl])
         metaRow.axis = .horizontal
-        metaRow.spacing = 6
+        metaRow.spacing = DeviceLayout.s(6)
         metaRow.alignment = .center
 
         let textStack = UIStackView(arrangedSubviews: [titleLbl, metaRow])
         textStack.axis = .vertical
-        textStack.spacing = 4
+        textStack.spacing = DeviceLayout.s(4)
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
         // Add button
@@ -228,8 +228,8 @@ class UploadPickerViewController: UIViewController {
         addBtn.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
         addBtn.tintColor = ComponentColors.SongCard.fileIcon
         addBtn.translatesAutoresizingMaskIntoConstraints = false
-        addBtn.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        addBtn.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        addBtn.widthAnchor.constraint(equalToConstant: DeviceLayout.s(36)).isActive = true
+        addBtn.heightAnchor.constraint(equalToConstant: DeviceLayout.s(36)).isActive = true
 
         let capturedUpload = upload
         addBtn.addAction(UIAction { [weak self] _ in
@@ -241,27 +241,27 @@ class UploadPickerViewController: UIViewController {
         card.addSubview(addBtn)
 
         NSLayoutConstraint.activate([
-            card.heightAnchor.constraint(equalToConstant: 76),
+            card.heightAnchor.constraint(equalToConstant: DeviceLayout.s(76)),
 
-            iconWrap.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            iconWrap.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(14)),
             iconWrap.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            iconWrap.widthAnchor.constraint(equalToConstant: 48),
-            iconWrap.heightAnchor.constraint(equalToConstant: 48),
+            iconWrap.widthAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
+            iconWrap.heightAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
 
             iconImg.centerXAnchor.constraint(equalTo: iconWrap.centerXAnchor),
             iconImg.centerYAnchor.constraint(equalTo: iconWrap.centerYAnchor),
-            iconImg.widthAnchor.constraint(equalToConstant: 26),
-            iconImg.heightAnchor.constraint(equalToConstant: 26),
+            iconImg.widthAnchor.constraint(equalToConstant: DeviceLayout.s(26)),
+            iconImg.heightAnchor.constraint(equalToConstant: DeviceLayout.s(26)),
 
-            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: 13),
+            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: DeviceLayout.s(13)),
             textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            textStack.trailingAnchor.constraint(equalTo: addBtn.leadingAnchor, constant: -8),
+            textStack.trailingAnchor.constraint(equalTo: addBtn.leadingAnchor, constant: DeviceLayout.s(-8)),
 
-            addBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            addBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: DeviceLayout.s(-16)),
             addBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor),
 
-            badge.widthAnchor.constraint(equalToConstant: 38),
-            badge.heightAnchor.constraint(equalToConstant: 20),
+            badge.widthAnchor.constraint(equalToConstant: DeviceLayout.s(38)),
+            badge.heightAnchor.constraint(equalToConstant: DeviceLayout.s(20)),
         ])
 
         return card
@@ -270,7 +270,7 @@ class UploadPickerViewController: UIViewController {
     private func makeEmptyState(message: String?) -> UIView {
         let v = UIView()
         v.backgroundColor = .secondarySystemBackground
-        v.layer.cornerRadius = 14
+        v.layer.cornerRadius = DeviceLayout.s(14)
 
         let isError = message != nil
         let img = UIImageView(image: UIImage(systemName: isError ? "wifi.exclamationmark" : "square.and.arrow.up"))
@@ -281,7 +281,7 @@ class UploadPickerViewController: UIViewController {
         let lbl = UILabel()
         lbl.text = message ?? "No uploads yet.\nUpload something first!"
         lbl.textColor = .secondaryLabel
-        lbl.font = .systemFont(ofSize: 14)
+        lbl.font = .systemFont(ofSize: DeviceLayout.s(14))
         lbl.textAlignment = .center
         lbl.numberOfLines = 0
         lbl.translatesAutoresizingMaskIntoConstraints = false
@@ -289,14 +289,14 @@ class UploadPickerViewController: UIViewController {
         v.addSubview(img)
         v.addSubview(lbl)
         NSLayoutConstraint.activate([
-            v.heightAnchor.constraint(equalToConstant: 120),
+            v.heightAnchor.constraint(equalToConstant: DeviceLayout.s(120)),
             img.centerXAnchor.constraint(equalTo: v.centerXAnchor),
-            img.topAnchor.constraint(equalTo: v.topAnchor, constant: 20),
-            img.widthAnchor.constraint(equalToConstant: 34),
-            img.heightAnchor.constraint(equalToConstant: 34),
-            lbl.topAnchor.constraint(equalTo: img.bottomAnchor, constant: 10),
-            lbl.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 20),
-            lbl.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -20),
+            img.topAnchor.constraint(equalTo: v.topAnchor, constant: DeviceLayout.s(20)),
+            img.widthAnchor.constraint(equalToConstant: DeviceLayout.s(34)),
+            img.heightAnchor.constraint(equalToConstant: DeviceLayout.s(34)),
+            lbl.topAnchor.constraint(equalTo: img.bottomAnchor, constant: DeviceLayout.s(10)),
+            lbl.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: DeviceLayout.s(20)),
+            lbl.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: DeviceLayout.s(-20)),
         ])
         return v
     }
@@ -314,7 +314,7 @@ class UploadPickerViewController: UIViewController {
     private func makeGradientIconView() -> GradientIconView {
         let v = GradientIconView()
         v.colors = [ComponentColors.HomeScreen.actionButtonFill, ComponentColors.SongCard.fileIcon]
-        v.layer.cornerRadius = 12
+        v.layer.cornerRadius = DeviceLayout.s(12)
         v.clipsToBounds = true
         v.translatesAutoresizingMaskIntoConstraints = false
         return v

@@ -203,7 +203,7 @@ class HomeViewController: UIViewController {
                 TourStep(target: { [weak self] in self?.header.accessoryView },
                          title: "Notifications",
                          message: "Practice reminders and news show up here."),
-                TourStep(target: { [weak self] in self?.tabBarController?.tabBar },
+                TourStep(target: { [weak self] in self?.mainTabBarController?.tabNavigationView },
                          title: "Find your way around",
                          message: "Library has songs to learn, Settings has your profile and step-by-step lessons, and Search finds anything."),
             ]
@@ -920,6 +920,11 @@ class HomeViewController: UIViewController {
         vc.onDataReady = {
             popup.notifyUploadComplete()
         }
+        vc.onConversionFailed = { [weak popup] message in
+            guard let popup, popup.viewIfLoaded?.window != nil else { return false }   // closed already
+            popup.notifyUploadFailed(message: message)
+            return true
+        }
         popup.track(uploadId: upload.id)
         debugLog("[Navigate] upload=\(upload.id.uuidString)")
         navigationController?.pushViewController(vc, animated: true)
@@ -1157,7 +1162,23 @@ class HomeViewController: UIViewController {
         picker.dismiss(animated: true, completion: completion)
     }
 
-    private func beginUpload(with image: UIImage) {
+    /// A photo smaller than this on its short side is too coarse to read notes from reliably.
+    private static let minimumImageShortSide: CGFloat = 1000
+
+    private func beginUpload(with image: UIImage, lowResolutionConfirmed: Bool = false) {
+        let pixels = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        if !lowResolutionConfirmed, min(pixels.width, pixels.height) < Self.minimumImageShortSide {
+            let alert = UIAlertController(
+                title: "Low-resolution image",
+                message: "This image is only \(Int(pixels.width)) × \(Int(pixels.height)) pixels, too small for the notes to be read reliably. For good results, use a sharp photo or scan at least 1,500 pixels wide.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Choose Another", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Upload Anyway", style: .default) { [weak self] _ in
+                self?.beginUpload(with: image, lowResolutionConfirmed: true)
+            })
+            present(alert, animated: true)
+            return
+        }
         switch validateAndPrepareImage(image) {
         case .failure(let error):
             presentAlert(title: "Scan Failed", message: error.userMessage)

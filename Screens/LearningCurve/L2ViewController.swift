@@ -19,7 +19,7 @@ class VariantChipButton: UIButton {
 
     private func setupChip(label: String, isSelected: Bool) {
         backgroundColor = isSelected ? ComponentColors.HomeScreen.actionButtonFill : UIColor.systemGray6
-        layer.cornerRadius = 20
+        layer.cornerRadius = DeviceLayout.s(20)
         layer.shadowColor = isSelected ? ComponentColors.HomeScreen.actionButtonFill.cgColor : UIColor.clear.cgColor
         layer.shadowOpacity = 0.3; layer.shadowRadius = 8
         layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -27,11 +27,11 @@ class VariantChipButton: UIButton {
         let stack = UIStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical; stack.alignment = .center
-        stack.spacing = 2; stack.isUserInteractionEnabled = false
+        stack.spacing = DeviceLayout.s(2); stack.isUserInteractionEnabled = false
 
         let noteLabel = UILabel()
         noteLabel.text = label
-        noteLabel.font = .systemFont(ofSize: 18, weight: .bold)
+        noteLabel.font = .systemFont(ofSize: DeviceLayout.s(18), weight: .bold)
         noteLabel.textColor = isSelected ? ComponentColors.PrimaryButton.text : ComponentColors.LessonScreen.labelSecondary
         self.noteLabel = noteLabel
 
@@ -41,10 +41,10 @@ class VariantChipButton: UIButton {
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: DeviceLayout.s(12)),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-12)),
             widthAnchor.constraint(greaterThanOrEqualToConstant: 70),
-            heightAnchor.constraint(equalToConstant: 70),
+            heightAnchor.constraint(equalToConstant: DeviceLayout.s(70)),
         ])
     }
 
@@ -58,19 +58,19 @@ class VariantChipButton: UIButton {
         isDone = true
 
         let tick = UILabel()
-        tick.text = "✓"; tick.font = .systemFont(ofSize: 11, weight: .heavy)
+        tick.text = "✓"; tick.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .heavy)
         tick.textColor = .white; tick.translatesAutoresizingMaskIntoConstraints = false
 
         let badge = UIView()
         badge.backgroundColor = ComponentColors.LessonScreen.correctAnswer
-        badge.layer.cornerRadius = 9; badge.translatesAutoresizingMaskIntoConstraints = false
+        badge.layer.cornerRadius = DeviceLayout.s(9); badge.translatesAutoresizingMaskIntoConstraints = false
         badge.addSubview(tick); addSubview(badge)
 
         NSLayoutConstraint.activate([
-            badge.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            badge.widthAnchor.constraint(equalToConstant: 18),
-            badge.heightAnchor.constraint(equalToConstant: 18),
+            badge.topAnchor.constraint(equalTo: topAnchor, constant: DeviceLayout.s(2)),
+            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-2)),
+            badge.widthAnchor.constraint(equalToConstant: DeviceLayout.s(18)),
+            badge.heightAnchor.constraint(equalToConstant: DeviceLayout.s(18)),
             tick.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             tick.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
         ])
@@ -258,7 +258,7 @@ class LessonDetailViewController: UIViewController {
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 96),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: DeviceLayout.s(96)),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
@@ -297,13 +297,13 @@ class LessonDetailViewController: UIViewController {
         let progressBar = UIStackView()
         progressBar.translatesAutoresizingMaskIntoConstraints = false
         progressBar.axis = .horizontal
-        progressBar.spacing = 4
+        progressBar.spacing = DeviceLayout.s(4)
         progressBar.distribution = .fillEqually
         progressBar.isAccessibilityElement = true
         progressBar.accessibilityLabel = "Lesson progress"
         for _ in lesson.variants {
             let segment = UIView()
-            segment.layer.cornerRadius = 3
+            segment.layer.cornerRadius = DeviceLayout.s(3)
             segment.backgroundColor = BrandColors.brand.withAlphaComponent(0.18)
             progressBar.addArrangedSubview(segment)
             progressSegments.append(segment)
@@ -314,7 +314,7 @@ class LessonDetailViewController: UIViewController {
         let staffCardView = UIView()
         staffCardView.translatesAutoresizingMaskIntoConstraints = false
         staffCardView.backgroundColor = ComponentColors.LessonScreen.cardFill
-        staffCardView.layer.cornerRadius = 24
+        staffCardView.layer.cornerRadius = DeviceLayout.s(24)
         staffCardView.layer.shadowColor = UIColor.black.cgColor
         staffCardView.layer.shadowOpacity = 0.08
         staffCardView.layer.shadowRadius = 16
@@ -342,8 +342,8 @@ class LessonDetailViewController: UIViewController {
         noteNameLabel.translatesAutoresizingMaskIntoConstraints = false
         noteNameLabel.text = isEarTrainingLesson ? nil : item(at: 0)?.title
         noteNameLabel.font = isEarTrainingLesson
-            ? .systemFont(ofSize: 24, weight: .semibold)
-            : .systemFont(ofSize: 42, weight: .heavy)
+            ? .systemFont(ofSize: DeviceLayout.s(24), weight: .semibold)
+            : .systemFont(ofSize: DeviceLayout.s(42), weight: .heavy)
         noteNameLabel.textColor = ComponentColors.LessonScreen.labelPrimary; noteNameLabel.textAlignment = .center
         noteNameLabel.adjustsFontSizeToFitWidth = true
         noteNameLabel.minimumScaleFactor = 0.5
@@ -360,7 +360,7 @@ class LessonDetailViewController: UIViewController {
         engRow.translatesAutoresizingMaskIntoConstraints = false
         englishPrefixLabel = UILabel()
         englishPrefixLabel.translatesAutoresizingMaskIntoConstraints = false
-        englishPrefixLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        englishPrefixLabel.font = .systemFont(ofSize: DeviceLayout.s(14), weight: .medium)
         englishPrefixLabel.textColor = ComponentColors.LessonScreen.labelSecondary
         engRow.addSubview(englishPrefixLabel)
         englishLabel = UILabel()
@@ -375,7 +375,7 @@ class LessonDetailViewController: UIViewController {
         variantsHeaderLabel.text = isEarTrainingLesson
             ? "Which chord came after the home chord?"
             : "Pick a part, listen to it, then play it with Try Yourself"
-        variantsHeaderLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        variantsHeaderLabel.font = .systemFont(ofSize: DeviceLayout.s(12), weight: .medium)
         variantsHeaderLabel.textColor = ComponentColors.LessonScreen.labelSecondary.withAlphaComponent(0.7)
 
         let optionsGrid = makeEarTrainingOptionsGrid()
@@ -389,7 +389,7 @@ class LessonDetailViewController: UIViewController {
 
         chipsStack = UIStackView()
         chipsStack.translatesAutoresizingMaskIntoConstraints = false
-        chipsStack.axis = .horizontal; chipsStack.spacing = 10; chipsStack.alignment = .center
+        chipsStack.axis = .horizontal; chipsStack.spacing = DeviceLayout.s(10); chipsStack.alignment = .center
         variantsScrollView.addSubview(chipsStack)
 
         for (i, variant) in lesson.variants.enumerated() {
@@ -405,11 +405,11 @@ class LessonDetailViewController: UIViewController {
         tryBtn = UIButton(type: .system)
         tryBtn.translatesAutoresizingMaskIntoConstraints = false
         tryBtn.setTitle("  Try Yourself", for: .normal)
-        tryBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
-        let waveCfg = UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        tryBtn.titleLabel?.font = .systemFont(ofSize: DeviceLayout.s(17), weight: .bold)
+        let waveCfg = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(17), weight: .semibold)
         tryBtn.setImage(UIImage(systemName: "waveform", withConfiguration: waveCfg), for: .normal)
         tryBtn.tintColor = .white; tryBtn.setTitleColor(.white, for: .normal)
-        tryBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; tryBtn.layer.cornerRadius = 26
+        tryBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; tryBtn.layer.cornerRadius = DeviceLayout.s(26)
         tryBtn.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         tryBtn.layer.shadowOpacity = 0.35; tryBtn.layer.shadowRadius = 12
         tryBtn.layer.shadowOffset = CGSize(width: 0, height: 6)
@@ -422,36 +422,36 @@ class LessonDetailViewController: UIViewController {
         let descLabel = UILabel()
         descLabel.translatesAutoresizingMaskIntoConstraints = false
         descLabel.text = summarizedLessonDescription(from: lesson.description)
-        descLabel.font = .systemFont(ofSize: 14)
+        descLabel.font = .systemFont(ofSize: DeviceLayout.s(14))
         descLabel.textColor = .label
         descLabel.numberOfLines = 0
         descLabel.lineBreakMode = .byWordWrapping
         conceptCard.addSubview(conceptHeader)
         conceptCard.addSubview(descLabel)
         var conceptConstraints: [NSLayoutConstraint] = [
-            conceptHeader.topAnchor.constraint(equalTo: conceptCard.topAnchor, constant: 14),
-            conceptHeader.leadingAnchor.constraint(equalTo: conceptCard.leadingAnchor, constant: 14),
-            conceptHeader.trailingAnchor.constraint(equalTo: conceptCard.trailingAnchor, constant: -14),
-            descLabel.topAnchor.constraint(equalTo: conceptHeader.bottomAnchor, constant: 8),
-            descLabel.leadingAnchor.constraint(equalTo: conceptCard.leadingAnchor, constant: 14),
-            descLabel.trailingAnchor.constraint(equalTo: conceptCard.trailingAnchor, constant: -14),
+            conceptHeader.topAnchor.constraint(equalTo: conceptCard.topAnchor, constant: DeviceLayout.s(14)),
+            conceptHeader.leadingAnchor.constraint(equalTo: conceptCard.leadingAnchor, constant: DeviceLayout.s(14)),
+            conceptHeader.trailingAnchor.constraint(equalTo: conceptCard.trailingAnchor, constant: DeviceLayout.s(-14)),
+            descLabel.topAnchor.constraint(equalTo: conceptHeader.bottomAnchor, constant: DeviceLayout.s(8)),
+            descLabel.leadingAnchor.constraint(equalTo: conceptCard.leadingAnchor, constant: DeviceLayout.s(14)),
+            descLabel.trailingAnchor.constraint(equalTo: conceptCard.trailingAnchor, constant: DeviceLayout.s(-14)),
         ]
         if !lesson.familyOverview.isEmpty {
             let overviewLabel = UILabel()
             overviewLabel.translatesAutoresizingMaskIntoConstraints = false
             overviewLabel.text = lesson.familyOverview
-            overviewLabel.font = .systemFont(ofSize: 13)
+            overviewLabel.font = .systemFont(ofSize: DeviceLayout.s(13))
             overviewLabel.textColor = .secondaryLabel
             overviewLabel.numberOfLines = 0
             conceptCard.addSubview(overviewLabel)
             conceptConstraints += [
-                overviewLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 8),
-                overviewLabel.leadingAnchor.constraint(equalTo: conceptCard.leadingAnchor, constant: 14),
-                overviewLabel.trailingAnchor.constraint(equalTo: conceptCard.trailingAnchor, constant: -14),
-                overviewLabel.bottomAnchor.constraint(equalTo: conceptCard.bottomAnchor, constant: -14),
+                overviewLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: DeviceLayout.s(8)),
+                overviewLabel.leadingAnchor.constraint(equalTo: conceptCard.leadingAnchor, constant: DeviceLayout.s(14)),
+                overviewLabel.trailingAnchor.constraint(equalTo: conceptCard.trailingAnchor, constant: DeviceLayout.s(-14)),
+                overviewLabel.bottomAnchor.constraint(equalTo: conceptCard.bottomAnchor, constant: DeviceLayout.s(-14)),
             ]
         } else {
-            conceptConstraints.append(descLabel.bottomAnchor.constraint(equalTo: conceptCard.bottomAnchor, constant: -14))
+            conceptConstraints.append(descLabel.bottomAnchor.constraint(equalTo: conceptCard.bottomAnchor, constant: DeviceLayout.s(-14)))
         }
         NSLayoutConstraint.activate(conceptConstraints)
 
@@ -464,21 +464,21 @@ class LessonDetailViewController: UIViewController {
             chordsCard.addSubview(chordsHeader)
             var lastAnchor = chordsHeader.bottomAnchor
             var chordConstraints: [NSLayoutConstraint] = [
-                chordsHeader.topAnchor.constraint(equalTo: chordsCard.topAnchor, constant: 14),
-                chordsHeader.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: 14),
-                chordsHeader.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: -14),
+                chordsHeader.topAnchor.constraint(equalTo: chordsCard.topAnchor, constant: DeviceLayout.s(14)),
+                chordsHeader.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: DeviceLayout.s(14)),
+                chordsHeader.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: DeviceLayout.s(-14)),
             ]
             for (i, detail) in lesson.chordDetails.enumerated() {
                 let row = makeChordRow(detail: detail, index: i)
                 chordsCard.addSubview(row)
                 chordConstraints += [
                     row.topAnchor.constraint(equalTo: lastAnchor, constant: i == 0 ? 10 : 2),
-                    row.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: 10),
-                    row.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: -10),
+                    row.leadingAnchor.constraint(equalTo: chordsCard.leadingAnchor, constant: DeviceLayout.s(10)),
+                    row.trailingAnchor.constraint(equalTo: chordsCard.trailingAnchor, constant: DeviceLayout.s(-10)),
                 ]
                 lastAnchor = row.bottomAnchor
             }
-            chordConstraints.append(lastAnchor.constraint(equalTo: chordsCard.bottomAnchor, constant: -14))
+            chordConstraints.append(lastAnchor.constraint(equalTo: chordsCard.bottomAnchor, constant: DeviceLayout.s(-14)))
             NSLayoutConstraint.activate(chordConstraints)
             infoCards.append(chordsCard)
         }
@@ -489,21 +489,21 @@ class LessonDetailViewController: UIViewController {
             progsCard.addSubview(progsHeader)
             var lastProgAnchor = progsHeader.bottomAnchor
             var progConstraints: [NSLayoutConstraint] = [
-                progsHeader.topAnchor.constraint(equalTo: progsCard.topAnchor, constant: 14),
-                progsHeader.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: 14),
-                progsHeader.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: -14),
+                progsHeader.topAnchor.constraint(equalTo: progsCard.topAnchor, constant: DeviceLayout.s(14)),
+                progsHeader.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: DeviceLayout.s(14)),
+                progsHeader.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: DeviceLayout.s(-14)),
             ]
             for (i, prog) in lesson.progressions.enumerated() {
                 let row = makeProgressionRow(prog: prog, index: i)
                 progsCard.addSubview(row)
                 progConstraints += [
                     row.topAnchor.constraint(equalTo: lastProgAnchor, constant: i == 0 ? 10 : 6),
-                    row.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: 10),
-                    row.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: -10),
+                    row.leadingAnchor.constraint(equalTo: progsCard.leadingAnchor, constant: DeviceLayout.s(10)),
+                    row.trailingAnchor.constraint(equalTo: progsCard.trailingAnchor, constant: DeviceLayout.s(-10)),
                 ]
                 lastProgAnchor = row.bottomAnchor
             }
-            progConstraints.append(lastProgAnchor.constraint(equalTo: progsCard.bottomAnchor, constant: -14))
+            progConstraints.append(lastProgAnchor.constraint(equalTo: progsCard.bottomAnchor, constant: DeviceLayout.s(-14)))
             NSLayoutConstraint.activate(progConstraints)
             infoCards.append(progsCard)
         }
@@ -514,19 +514,19 @@ class LessonDetailViewController: UIViewController {
             let listenLabel = UILabel()
             listenLabel.translatesAutoresizingMaskIntoConstraints = false
             listenLabel.text = lesson.listeningGuide
-            listenLabel.font = .systemFont(ofSize: 14)
+            listenLabel.font = .systemFont(ofSize: DeviceLayout.s(14))
             listenLabel.textColor = .label
             listenLabel.numberOfLines = 0
             listenCard.addSubview(listenHeader)
             listenCard.addSubview(listenLabel)
             NSLayoutConstraint.activate([
-                listenHeader.topAnchor.constraint(equalTo: listenCard.topAnchor, constant: 14),
-                listenHeader.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: 14),
-                listenHeader.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: -14),
-                listenLabel.topAnchor.constraint(equalTo: listenHeader.bottomAnchor, constant: 8),
-                listenLabel.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: 14),
-                listenLabel.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: -14),
-                listenLabel.bottomAnchor.constraint(equalTo: listenCard.bottomAnchor, constant: -14),
+                listenHeader.topAnchor.constraint(equalTo: listenCard.topAnchor, constant: DeviceLayout.s(14)),
+                listenHeader.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: DeviceLayout.s(14)),
+                listenHeader.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: DeviceLayout.s(-14)),
+                listenLabel.topAnchor.constraint(equalTo: listenHeader.bottomAnchor, constant: DeviceLayout.s(8)),
+                listenLabel.leadingAnchor.constraint(equalTo: listenCard.leadingAnchor, constant: DeviceLayout.s(14)),
+                listenLabel.trailingAnchor.constraint(equalTo: listenCard.trailingAnchor, constant: DeviceLayout.s(-14)),
+                listenLabel.bottomAnchor.constraint(equalTo: listenCard.bottomAnchor, constant: DeviceLayout.s(-14)),
             ])
             infoCards.append(listenCard)
         }
@@ -537,21 +537,21 @@ class LessonDetailViewController: UIViewController {
             tasksCard.addSubview(tasksHeader)
             var lastTaskAnchor = tasksHeader.bottomAnchor
             var taskConstraints: [NSLayoutConstraint] = [
-                tasksHeader.topAnchor.constraint(equalTo: tasksCard.topAnchor, constant: 14),
-                tasksHeader.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: 14),
-                tasksHeader.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: -14),
+                tasksHeader.topAnchor.constraint(equalTo: tasksCard.topAnchor, constant: DeviceLayout.s(14)),
+                tasksHeader.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: DeviceLayout.s(14)),
+                tasksHeader.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: DeviceLayout.s(-14)),
             ]
             for (i, task) in lesson.practiceTasks.enumerated() {
                 let taskRow = makeTaskRow(number: i + 1, text: task)
                 tasksCard.addSubview(taskRow)
                 taskConstraints += [
                     taskRow.topAnchor.constraint(equalTo: lastTaskAnchor, constant: i == 0 ? 10 : 6),
-                    taskRow.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: 10),
-                    taskRow.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: -10),
+                    taskRow.leadingAnchor.constraint(equalTo: tasksCard.leadingAnchor, constant: DeviceLayout.s(10)),
+                    taskRow.trailingAnchor.constraint(equalTo: tasksCard.trailingAnchor, constant: DeviceLayout.s(-10)),
                 ]
                 lastTaskAnchor = taskRow.bottomAnchor
             }
-            taskConstraints.append(lastTaskAnchor.constraint(equalTo: tasksCard.bottomAnchor, constant: -14))
+            taskConstraints.append(lastTaskAnchor.constraint(equalTo: tasksCard.bottomAnchor, constant: DeviceLayout.s(-14)))
             NSLayoutConstraint.activate(taskConstraints)
             infoCards.append(tasksCard)
         }
@@ -561,21 +561,21 @@ class LessonDetailViewController: UIViewController {
         infoCards.forEach { contentView.addSubview($0) }
 
         NSLayoutConstraint.activate([
-            lessonNameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 30),
-            lessonNameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            lessonNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: progressCountLabel.leadingAnchor, constant: -12),
+            lessonNameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: DeviceLayout.s(30)),
+            lessonNameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(24)),
+            lessonNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: progressCountLabel.leadingAnchor, constant: DeviceLayout.s(-12)),
             progressCountLabel.firstBaselineAnchor.constraint(equalTo: lessonNameLabel.firstBaselineAnchor),
-            progressCountLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            progressCountLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-24)),
 
-            progressBar.topAnchor.constraint(equalTo: lessonNameLabel.bottomAnchor, constant: 10),
-            progressBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            progressBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            progressBar.heightAnchor.constraint(equalToConstant: 6),
+            progressBar.topAnchor.constraint(equalTo: lessonNameLabel.bottomAnchor, constant: DeviceLayout.s(10)),
+            progressBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(24)),
+            progressBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-24)),
+            progressBar.heightAnchor.constraint(equalToConstant: DeviceLayout.s(6)),
 
-            staffCardView.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: 18),
-            staffCardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            staffCardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            staffCardView.heightAnchor.constraint(equalToConstant: 195),
+            staffCardView.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: DeviceLayout.s(18)),
+            staffCardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            staffCardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            staffCardView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(195)),
             staffView.topAnchor.constraint(equalTo: staffCardView.topAnchor),
             staffView.leadingAnchor.constraint(equalTo: staffCardView.leadingAnchor),
             staffView.trailingAnchor.constraint(equalTo: staffCardView.trailingAnchor),
@@ -595,26 +595,26 @@ class LessonDetailViewController: UIViewController {
             englishLabel.trailingAnchor.constraint(equalTo: engRow.trailingAnchor),
 
             variantsHeaderLabel.topAnchor.constraint(equalTo: isEarTrainingLesson ? staffCardView.bottomAnchor : engRow.bottomAnchor, constant: isEarTrainingLesson ? 18 : 18),
-            variantsHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            variantsHeaderLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(24)),
 
-            optionsGrid.topAnchor.constraint(equalTo: variantsHeaderLabel.bottomAnchor, constant: 12),
-            optionsGrid.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            optionsGrid.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            optionsGrid.topAnchor.constraint(equalTo: variantsHeaderLabel.bottomAnchor, constant: DeviceLayout.s(12)),
+            optionsGrid.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            optionsGrid.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
 
             variantsScrollView.topAnchor.constraint(equalTo: isEarTrainingLesson ? optionsGrid.bottomAnchor : variantsHeaderLabel.bottomAnchor, constant: isEarTrainingLesson ? 18 : 10),
             variantsScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             variantsScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            variantsScrollView.heightAnchor.constraint(equalToConstant: 90),
+            variantsScrollView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(90)),
             chipsStack.topAnchor.constraint(equalTo: variantsScrollView.topAnchor),
             chipsStack.leadingAnchor.constraint(equalTo: variantsScrollView.leadingAnchor),
             chipsStack.trailingAnchor.constraint(equalTo: variantsScrollView.trailingAnchor),
             chipsStack.bottomAnchor.constraint(equalTo: variantsScrollView.bottomAnchor),
             chipsStack.heightAnchor.constraint(equalTo: variantsScrollView.heightAnchor),
 
-            tryBtn.topAnchor.constraint(equalTo: variantsScrollView.bottomAnchor, constant: 24),
-            tryBtn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            tryBtn.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            tryBtn.heightAnchor.constraint(equalToConstant: 52),
+            tryBtn.topAnchor.constraint(equalTo: variantsScrollView.bottomAnchor, constant: DeviceLayout.s(24)),
+            tryBtn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
+            tryBtn.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            tryBtn.heightAnchor.constraint(equalToConstant: DeviceLayout.s(52)),
 
             // ── Rich content cards below Try Yourself ──
         ])
@@ -623,17 +623,17 @@ class LessonDetailViewController: UIViewController {
         let bottomAnchorView: UIView = isEarTrainingLesson ? variantsScrollView : tryBtn
         for card in infoCards {
             NSLayoutConstraint.activate([
-                card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-                card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+                card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(16)),
+                card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-16)),
                 card.topAnchor.constraint(equalTo: (previousCard ?? bottomAnchorView).bottomAnchor, constant: previousCard == nil ? 28 : 14),
             ])
             previousCard = card
         }
 
         if let lastCard = previousCard {
-            lastCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
+            lastCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-36)).isActive = true
         } else {
-            bottomAnchorView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -36).isActive = true
+            bottomAnchorView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-36)).isActive = true
         }
         
     }
@@ -644,7 +644,7 @@ class LessonDetailViewController: UIViewController {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
         v.backgroundColor = ComponentColors.SongCard.background
-        v.layer.cornerRadius = 18
+        v.layer.cornerRadius = DeviceLayout.s(18)
         v.layer.borderWidth = lessonCardBorderWidth()
         v.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
         v.layer.masksToBounds = true
@@ -654,16 +654,16 @@ class LessonDetailViewController: UIViewController {
     private func makeCardHeader(_ title: String, icon: String) -> UIView {
         let row = UIStackView()
         row.translatesAutoresizingMaskIntoConstraints = false
-        row.axis = .horizontal; row.spacing = 7; row.alignment = .center
+        row.axis = .horizontal; row.spacing = DeviceLayout.s(7); row.alignment = .center
 
         let img = UIImageView(image: UIImage(systemName: icon))
         img.tintColor = ComponentColors.HomeScreen.actionButtonFill; img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
-        img.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        img.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        img.widthAnchor.constraint(equalToConstant: DeviceLayout.s(16)).isActive = true
+        img.heightAnchor.constraint(equalToConstant: DeviceLayout.s(16)).isActive = true
 
         let lbl = UILabel()
-        lbl.text = title; lbl.font = .systemFont(ofSize: 13, weight: .bold)
+        lbl.text = title; lbl.font = .systemFont(ofSize: DeviceLayout.s(13), weight: .bold)
         lbl.textColor = ComponentColors.LessonScreen.labelPrimary
 
         row.addArrangedSubview(img)
@@ -674,7 +674,7 @@ class LessonDetailViewController: UIViewController {
     private func makeEarTrainingCard() -> UIView {
         let card = UIView()
         card.backgroundColor = ComponentColors.LessonScreen.cardFill
-        card.layer.cornerRadius = 24
+        card.layer.cornerRadius = DeviceLayout.s(24)
         card.layer.borderWidth = lessonCardBorderWidth()
         card.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
@@ -682,8 +682,8 @@ class LessonDetailViewController: UIViewController {
         playButton.translatesAutoresizingMaskIntoConstraints = false
         playButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
         playButton.tintColor = .white
-        playButton.layer.cornerRadius = 48
-        let config = UIImage.SymbolConfiguration(pointSize: 30, weight: .bold)
+        playButton.layer.cornerRadius = DeviceLayout.s(48)
+        let config = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(30), weight: .bold)
         playButton.setImage(UIImage(systemName: "play.fill", withConfiguration: config), for: .normal)
         playButton.addTarget(self, action: #selector(didTapEarTrainingPlay), for: .touchUpInside)
         let helperLabel = UILabel()
@@ -691,7 +691,7 @@ class LessonDetailViewController: UIViewController {
         helperLabel.text = "Home chord, then a mystery chord"
         helperLabel.adjustsFontSizeToFitWidth = true
         helperLabel.minimumScaleFactor = 0.8
-        helperLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        helperLabel.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .semibold)
         helperLabel.textColor = ComponentColors.LessonScreen.labelSecondary
         helperLabel.textAlignment = .center
 
@@ -700,14 +700,14 @@ class LessonDetailViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             playButton.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-            playButton.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: -14),
-            playButton.widthAnchor.constraint(equalToConstant: 96),
-            playButton.heightAnchor.constraint(equalToConstant: 96),
+            playButton.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: DeviceLayout.s(-14)),
+            playButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(96)),
+            playButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(96)),
 
-            helperLabel.topAnchor.constraint(equalTo: playButton.bottomAnchor, constant: 18),
+            helperLabel.topAnchor.constraint(equalTo: playButton.bottomAnchor, constant: DeviceLayout.s(18)),
             helperLabel.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-            helperLabel.leadingAnchor.constraint(greaterThanOrEqualTo: card.leadingAnchor, constant: 20),
-            helperLabel.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -20),
+            helperLabel.leadingAnchor.constraint(greaterThanOrEqualTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
+            helperLabel.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: DeviceLayout.s(-20)),
         ])
 
         return card
@@ -716,29 +716,29 @@ class LessonDetailViewController: UIViewController {
     private func makeEarTrainingOptionsGrid() -> UIStackView {
         let rows = UIStackView()
         rows.axis = .vertical
-        rows.spacing = 12
+        rows.spacing = DeviceLayout.s(12)
         rows.alignment = .fill
         rows.distribution = .fillEqually
 
         let topRow = UIStackView()
         topRow.axis = .horizontal
-        topRow.spacing = 12
+        topRow.spacing = DeviceLayout.s(12)
         topRow.distribution = .fillEqually
 
         let bottomRow = UIStackView()
         bottomRow.axis = .horizontal
-        bottomRow.spacing = 12
+        bottomRow.spacing = DeviceLayout.s(12)
         bottomRow.distribution = .fillEqually
 
         for index in 0..<PracticeMusic.earOptions.count {
             let button = UIButton(type: .system)
             button.translatesAutoresizingMaskIntoConstraints = false
             button.tag = index
-            button.titleLabel?.font = .systemFont(ofSize: 20, weight: .bold)
-            button.layer.cornerRadius = 18
+            button.titleLabel?.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
+            button.layer.cornerRadius = DeviceLayout.s(18)
             button.layer.borderWidth = 1
             button.addTarget(self, action: #selector(didTapEarTrainingOption(_:)), for: .touchUpInside)
-            button.heightAnchor.constraint(equalToConstant: 72).isActive = true
+            button.heightAnchor.constraint(equalToConstant: DeviceLayout.s(72)).isActive = true
             styleEarTrainingOption(button, state: .idle)
             earTrainingOptionButtons.append(button)
             if index < 2 {
@@ -815,7 +815,7 @@ class LessonDetailViewController: UIViewController {
         bg.backgroundColor = index % 2 == 0
             ? ComponentColors.LessonScreen.background
             : ComponentColors.LessonScreen.cardFill
-        bg.layer.cornerRadius = 12
+        bg.layer.cornerRadius = DeviceLayout.s(12)
         bg.layer.borderWidth = lessonCardBorderWidth()
         bg.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
@@ -825,12 +825,12 @@ class LessonDetailViewController: UIViewController {
         namePill.backgroundColor = detail.type == "major" ? ComponentColors.HomeScreen.actionButtonFill
             : detail.type == "minor" ? ComponentColors.HomeScreen.actionButtonFill
             : ComponentColors.SongCard.metadataText
-        namePill.layer.cornerRadius = 10
+        namePill.layer.cornerRadius = DeviceLayout.s(10)
 
         let nameL = UILabel()
         nameL.translatesAutoresizingMaskIntoConstraints = false
         nameL.text = detail.name
-        nameL.font = .systemFont(ofSize: 11, weight: .bold)
+        nameL.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .bold)
         nameL.textColor = ComponentColors.PrimaryButton.text
         nameL.numberOfLines = 1
         namePill.addSubview(nameL)
@@ -839,35 +839,35 @@ class LessonDetailViewController: UIViewController {
         let notesL = UILabel()
         notesL.translatesAutoresizingMaskIntoConstraints = false
         notesL.text = detail.notes.joined(separator: " – ")
-        notesL.font = .systemFont(ofSize: 12, weight: .semibold)
+        notesL.font = .systemFont(ofSize: DeviceLayout.s(12), weight: .semibold)
         notesL.textColor = ComponentColors.LessonScreen.labelPrimary
 
         // Emotion label
         let emotionL = UILabel()
         emotionL.translatesAutoresizingMaskIntoConstraints = false
         emotionL.text = detail.emotion
-        emotionL.font = .systemFont(ofSize: 11)
+        emotionL.font = .systemFont(ofSize: DeviceLayout.s(11))
         emotionL.textColor = ComponentColors.LessonScreen.labelSecondary
         emotionL.numberOfLines = 2
 
         bg.addSubview(namePill); bg.addSubview(nameL); bg.addSubview(notesL); bg.addSubview(emotionL)
         NSLayoutConstraint.activate([
-            namePill.topAnchor.constraint(equalTo: bg.topAnchor, constant: 10),
-            namePill.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
+            namePill.topAnchor.constraint(equalTo: bg.topAnchor, constant: DeviceLayout.s(10)),
+            namePill.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
 
-            nameL.topAnchor.constraint(equalTo: namePill.topAnchor, constant: 4),
-            nameL.bottomAnchor.constraint(equalTo: namePill.bottomAnchor, constant: -4),
-            nameL.leadingAnchor.constraint(equalTo: namePill.leadingAnchor, constant: 8),
-            nameL.trailingAnchor.constraint(equalTo: namePill.trailingAnchor, constant: -8),
+            nameL.topAnchor.constraint(equalTo: namePill.topAnchor, constant: DeviceLayout.s(4)),
+            nameL.bottomAnchor.constraint(equalTo: namePill.bottomAnchor, constant: DeviceLayout.s(-4)),
+            nameL.leadingAnchor.constraint(equalTo: namePill.leadingAnchor, constant: DeviceLayout.s(8)),
+            nameL.trailingAnchor.constraint(equalTo: namePill.trailingAnchor, constant: DeviceLayout.s(-8)),
 
-            notesL.topAnchor.constraint(equalTo: namePill.bottomAnchor, constant: 5),
-            notesL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
-            notesL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -10),
+            notesL.topAnchor.constraint(equalTo: namePill.bottomAnchor, constant: DeviceLayout.s(5)),
+            notesL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
+            notesL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: DeviceLayout.s(-10)),
 
-            emotionL.topAnchor.constraint(equalTo: notesL.bottomAnchor, constant: 3),
-            emotionL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
-            emotionL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -10),
-            emotionL.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: -10),
+            emotionL.topAnchor.constraint(equalTo: notesL.bottomAnchor, constant: DeviceLayout.s(3)),
+            emotionL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
+            emotionL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: DeviceLayout.s(-10)),
+            emotionL.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: DeviceLayout.s(-10)),
         ])
         return bg
     }
@@ -878,43 +878,43 @@ class LessonDetailViewController: UIViewController {
         bg.backgroundColor = index % 2 == 0
             ? ComponentColors.LessonScreen.background
             : ComponentColors.LessonScreen.cardFill
-        bg.layer.cornerRadius = 12
+        bg.layer.cornerRadius = DeviceLayout.s(12)
         bg.layer.borderWidth = lessonCardBorderWidth()
         bg.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
         let numeralL = UILabel()
         numeralL.translatesAutoresizingMaskIntoConstraints = false
         numeralL.text = prog.numerals
-        numeralL.font = .systemFont(ofSize: 11, weight: .bold)
+        numeralL.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .bold)
         numeralL.textColor = ComponentColors.LessonScreen.brandAccent
 
         let chordsL = UILabel()
         chordsL.translatesAutoresizingMaskIntoConstraints = false
         chordsL.text = prog.chords
-        chordsL.font = .systemFont(ofSize: 13, weight: .semibold)
+        chordsL.font = .systemFont(ofSize: DeviceLayout.s(13), weight: .semibold)
         chordsL.textColor = ComponentColors.LessonScreen.labelPrimary
 
         let feelL = UILabel()
         feelL.translatesAutoresizingMaskIntoConstraints = false
         feelL.text = prog.feel
-        feelL.font = .systemFont(ofSize: 11)
+        feelL.font = .systemFont(ofSize: DeviceLayout.s(11))
         feelL.textColor = ComponentColors.LessonScreen.labelSecondary
         feelL.numberOfLines = 2
 
         bg.addSubview(numeralL); bg.addSubview(chordsL); bg.addSubview(feelL)
         NSLayoutConstraint.activate([
-            numeralL.topAnchor.constraint(equalTo: bg.topAnchor, constant: 10),
-            numeralL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
-            numeralL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -10),
+            numeralL.topAnchor.constraint(equalTo: bg.topAnchor, constant: DeviceLayout.s(10)),
+            numeralL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
+            numeralL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: DeviceLayout.s(-10)),
 
-            chordsL.topAnchor.constraint(equalTo: numeralL.bottomAnchor, constant: 3),
-            chordsL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
-            chordsL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -10),
+            chordsL.topAnchor.constraint(equalTo: numeralL.bottomAnchor, constant: DeviceLayout.s(3)),
+            chordsL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
+            chordsL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: DeviceLayout.s(-10)),
 
-            feelL.topAnchor.constraint(equalTo: chordsL.bottomAnchor, constant: 3),
-            feelL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
-            feelL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -10),
-            feelL.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: -10),
+            feelL.topAnchor.constraint(equalTo: chordsL.bottomAnchor, constant: DeviceLayout.s(3)),
+            feelL.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
+            feelL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: DeviceLayout.s(-10)),
+            feelL.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: DeviceLayout.s(-10)),
         ])
         return bg
     }
@@ -925,43 +925,43 @@ class LessonDetailViewController: UIViewController {
         bg.backgroundColor = number % 2 == 0
             ? ComponentColors.LessonScreen.cardFill
             : ComponentColors.LessonScreen.background
-        bg.layer.cornerRadius = 12
+        bg.layer.cornerRadius = DeviceLayout.s(12)
         bg.layer.borderWidth = lessonCardBorderWidth()
         bg.layer.borderColor = ComponentColors.LessonScreen.cardBorder.cgColor
 
         let numCircle = UIView()
         numCircle.translatesAutoresizingMaskIntoConstraints = false
         numCircle.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        numCircle.layer.cornerRadius = 12
+        numCircle.layer.cornerRadius = DeviceLayout.s(12)
 
         let numL = UILabel()
         numL.translatesAutoresizingMaskIntoConstraints = false
         numL.text = "\(number)"
-        numL.font = .systemFont(ofSize: 11, weight: .bold)
+        numL.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .bold)
         numL.textColor = .white; numL.textAlignment = .center
         numCircle.addSubview(numL)
 
         let taskL = UILabel()
         taskL.translatesAutoresizingMaskIntoConstraints = false
         taskL.text = text
-        taskL.font = .systemFont(ofSize: 13)
+        taskL.font = .systemFont(ofSize: DeviceLayout.s(13))
         taskL.textColor = ComponentColors.LessonScreen.labelPrimary
         taskL.numberOfLines = 0
 
         bg.addSubview(numCircle); bg.addSubview(numL); bg.addSubview(taskL)
         NSLayoutConstraint.activate([
-            numCircle.topAnchor.constraint(equalTo: bg.topAnchor, constant: 10),
-            numCircle.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 10),
-            numCircle.widthAnchor.constraint(equalToConstant: 24),
-            numCircle.heightAnchor.constraint(equalToConstant: 24),
+            numCircle.topAnchor.constraint(equalTo: bg.topAnchor, constant: DeviceLayout.s(10)),
+            numCircle.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: DeviceLayout.s(10)),
+            numCircle.widthAnchor.constraint(equalToConstant: DeviceLayout.s(24)),
+            numCircle.heightAnchor.constraint(equalToConstant: DeviceLayout.s(24)),
 
             numL.centerXAnchor.constraint(equalTo: numCircle.centerXAnchor),
             numL.centerYAnchor.constraint(equalTo: numCircle.centerYAnchor),
 
-            taskL.topAnchor.constraint(equalTo: bg.topAnchor, constant: 10),
-            taskL.leadingAnchor.constraint(equalTo: numCircle.trailingAnchor, constant: 10),
-            taskL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -10),
-            taskL.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: -10),
+            taskL.topAnchor.constraint(equalTo: bg.topAnchor, constant: DeviceLayout.s(10)),
+            taskL.leadingAnchor.constraint(equalTo: numCircle.trailingAnchor, constant: DeviceLayout.s(10)),
+            taskL.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: DeviceLayout.s(-10)),
+            taskL.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: DeviceLayout.s(-10)),
         ])
         return bg
     }
@@ -1060,8 +1060,8 @@ class LessonDetailViewController: UIViewController {
         NSLayoutConstraint.activate([
             popup.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             popup.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            popup.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
-            popup.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            popup.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(28)),
+            popup.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-28)),
         ])
 
         UIView.animate(withDuration: 0.5, delay: 0,
@@ -1165,7 +1165,7 @@ class LessonDetailViewController: UIViewController {
     private func updateEnglishLabel(with index: Int) {
         englishPrefixLabel?.text = item(at: index)?.detailPrefix
         englishLabel.text = item(at: index)?.detail
-        englishLabel.font = .systemFont(ofSize: 14, weight: .bold)
+        englishLabel.font = .systemFont(ofSize: DeviceLayout.s(14), weight: .bold)
         englishLabel.textColor = ComponentColors.LessonScreen.labelPrimary
     }
 
@@ -1276,7 +1276,7 @@ class LessonCompletionPopupView: UIView {
 
     private func build(stars: Int, lessonTitle: String) {
         backgroundColor = .white
-        layer.cornerRadius = 28
+        layer.cornerRadius = DeviceLayout.s(28)
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.20; layer.shadowRadius = 28
         layer.shadowOffset = CGSize(width: 0, height: 10)
@@ -1284,29 +1284,29 @@ class LessonCompletionPopupView: UIView {
         // Top accent bar
         let bar = UIView()
         bar.translatesAutoresizingMaskIntoConstraints = false
-        bar.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; bar.layer.cornerRadius = 4
+        bar.backgroundColor = ComponentColors.HomeScreen.actionButtonFill; bar.layer.cornerRadius = DeviceLayout.s(4)
         addSubview(bar)
 
         // Icon circle
         let iconCircle = UIView()
         iconCircle.translatesAutoresizingMaskIntoConstraints = false
         iconCircle.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
-        iconCircle.layer.cornerRadius = 40
+        iconCircle.layer.cornerRadius = DeviceLayout.s(40)
         addSubview(iconCircle)
 
         let iconLabel = UILabel()
         iconLabel.translatesAutoresizingMaskIntoConstraints = false
         iconLabel.text = stars == 3 ? "🏆" : stars == 2 ? "🎯" : "🎵"
-        iconLabel.font = .systemFont(ofSize: 44); iconLabel.textAlignment = .center
+        iconLabel.font = .systemFont(ofSize: DeviceLayout.s(44)); iconLabel.textAlignment = .center
         iconCircle.addSubview(iconLabel)
 
         // Stars row — filled ⭐ for earned, hollow ☆ for remaining
         let starsRow = UIStackView()
         starsRow.translatesAutoresizingMaskIntoConstraints = false
-        starsRow.axis = .horizontal; starsRow.spacing = 8; starsRow.alignment = .center
+        starsRow.axis = .horizontal; starsRow.spacing = DeviceLayout.s(8); starsRow.alignment = .center
         for i in 0..<3 {
             let lbl = UILabel()
-            lbl.font = .systemFont(ofSize: 32)
+            lbl.font = .systemFont(ofSize: DeviceLayout.s(32))
             if i < stars {
                 lbl.text = "⭐"
             } else {
@@ -1329,7 +1329,7 @@ class LessonCompletionPopupView: UIView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         let titles = ["Keep Practising!", "Well Done! 👏", "Lesson Complete! 🎉"]
         titleLabel.text = titles[min(stars - 1, 2)]
-        titleLabel.font = .systemFont(ofSize: 22, weight: .heavy)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(22), weight: .heavy)
         titleLabel.textColor = .label; titleLabel.textAlignment = .center
         addSubview(titleLabel)
 
@@ -1342,7 +1342,7 @@ class LessonCompletionPopupView: UIView {
             "You earned \(stars) stars — perfect run!"
         ]
         descLabel.text = descs[min(stars - 1, 2)]
-        descLabel.font = .systemFont(ofSize: 13); descLabel.textColor = .systemGray
+        descLabel.font = .systemFont(ofSize: DeviceLayout.s(13)); descLabel.textColor = .systemGray
         descLabel.textAlignment = .center; descLabel.numberOfLines = 2
         addSubview(descLabel)
 
@@ -1350,13 +1350,13 @@ class LessonCompletionPopupView: UIView {
         let pill = UIView()
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
-        pill.layer.cornerRadius = 16
+        pill.layer.cornerRadius = DeviceLayout.s(16)
         addSubview(pill)
 
         let pillLabel = UILabel()
         pillLabel.translatesAutoresizingMaskIntoConstraints = false
         pillLabel.text = "🔓  Next lesson is now unlocked!"
-        pillLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        pillLabel.font = .systemFont(ofSize: DeviceLayout.s(14), weight: .semibold)
         pillLabel.textColor = ComponentColors.HomeScreen.actionButtonFill; pillLabel.textAlignment = .center
         pill.addSubview(pillLabel)
 
@@ -1364,10 +1364,10 @@ class LessonCompletionPopupView: UIView {
         let contBtn = UIButton(type: .system)
         contBtn.translatesAutoresizingMaskIntoConstraints = false
         contBtn.setTitle("Continue  →", for: .normal)
-        contBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
+        contBtn.titleLabel?.font = .systemFont(ofSize: DeviceLayout.s(17), weight: .bold)
         contBtn.setTitleColor(.white, for: .normal)
         contBtn.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        contBtn.layer.cornerRadius = 26
+        contBtn.layer.cornerRadius = DeviceLayout.s(26)
         contBtn.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         contBtn.layer.shadowOpacity = 0.35; contBtn.layer.shadowRadius = 12
         contBtn.layer.shadowOffset = CGSize(width: 0, height: 5)
@@ -1375,41 +1375,41 @@ class LessonCompletionPopupView: UIView {
         addSubview(contBtn)
 
         NSLayoutConstraint.activate([
-            bar.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            bar.topAnchor.constraint(equalTo: topAnchor, constant: DeviceLayout.s(14)),
             bar.centerXAnchor.constraint(equalTo: centerXAnchor),
-            bar.widthAnchor.constraint(equalToConstant: 48),
-            bar.heightAnchor.constraint(equalToConstant: 5),
+            bar.widthAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
+            bar.heightAnchor.constraint(equalToConstant: DeviceLayout.s(5)),
 
-            iconCircle.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: 18),
+            iconCircle.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: DeviceLayout.s(18)),
             iconCircle.centerXAnchor.constraint(equalTo: centerXAnchor),
-            iconCircle.widthAnchor.constraint(equalToConstant: 80),
-            iconCircle.heightAnchor.constraint(equalToConstant: 80),
+            iconCircle.widthAnchor.constraint(equalToConstant: DeviceLayout.s(80)),
+            iconCircle.heightAnchor.constraint(equalToConstant: DeviceLayout.s(80)),
             iconLabel.centerXAnchor.constraint(equalTo: iconCircle.centerXAnchor),
             iconLabel.centerYAnchor.constraint(equalTo: iconCircle.centerYAnchor),
 
-            starsRow.topAnchor.constraint(equalTo: iconCircle.bottomAnchor, constant: 14),
+            starsRow.topAnchor.constraint(equalTo: iconCircle.bottomAnchor, constant: DeviceLayout.s(14)),
             starsRow.centerXAnchor.constraint(equalTo: centerXAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: starsRow.bottomAnchor, constant: 10),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+            titleLabel.topAnchor.constraint(equalTo: starsRow.bottomAnchor, constant: DeviceLayout.s(10)),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: DeviceLayout.s(20)),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-20)),
 
-            descLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
-            descLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            descLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+            descLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: DeviceLayout.s(6)),
+            descLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: DeviceLayout.s(24)),
+            descLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-24)),
 
-            pill.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 16),
+            pill.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: DeviceLayout.s(16)),
             pill.centerXAnchor.constraint(equalTo: centerXAnchor),
-            pillLabel.topAnchor.constraint(equalTo: pill.topAnchor, constant: 10),
-            pillLabel.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -10),
-            pillLabel.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 18),
-            pillLabel.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -18),
+            pillLabel.topAnchor.constraint(equalTo: pill.topAnchor, constant: DeviceLayout.s(10)),
+            pillLabel.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: DeviceLayout.s(-10)),
+            pillLabel.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: DeviceLayout.s(18)),
+            pillLabel.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: DeviceLayout.s(-18)),
 
-            contBtn.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: 20),
-            contBtn.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            contBtn.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-            contBtn.heightAnchor.constraint(equalToConstant: 52),
-            contBtn.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -26),
+            contBtn.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: DeviceLayout.s(20)),
+            contBtn.leadingAnchor.constraint(equalTo: leadingAnchor, constant: DeviceLayout.s(24)),
+            contBtn.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(-24)),
+            contBtn.heightAnchor.constraint(equalToConstant: DeviceLayout.s(52)),
+            contBtn.bottomAnchor.constraint(equalTo: bottomAnchor, constant: DeviceLayout.s(-26)),
         ])
     }
 
@@ -1475,7 +1475,7 @@ class TryYourselfViewController: UIViewController {
         let titleLabel = UILabel()
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text = "Try Yourself"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(28), weight: .bold)
         titleLabel.textAlignment = .center
 
         let closeButton = UIButton(type: .system)
@@ -1488,11 +1488,11 @@ class TryYourselfViewController: UIViewController {
         let notePill = UIView()
         notePill.translatesAutoresizingMaskIntoConstraints = false
         notePill.backgroundColor = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.1)
-        notePill.layer.cornerRadius = 25
+        notePill.layer.cornerRadius = DeviceLayout.s(25)
         let noteLabel = UILabel()
         noteLabel.translatesAutoresizingMaskIntoConstraints = false
         noteLabel.text = item.title
-        noteLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        noteLabel.font = .systemFont(ofSize: DeviceLayout.s(28), weight: .bold)
         noteLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         noteLabel.textAlignment = .center
         noteLabel.adjustsFontSizeToFitWidth = true
@@ -1501,8 +1501,8 @@ class TryYourselfViewController: UIViewController {
         NSLayoutConstraint.activate([
             noteLabel.centerXAnchor.constraint(equalTo: notePill.centerXAnchor),
             noteLabel.centerYAnchor.constraint(equalTo: notePill.centerYAnchor),
-            noteLabel.leadingAnchor.constraint(equalTo: notePill.leadingAnchor, constant: 24),
-            noteLabel.trailingAnchor.constraint(equalTo: notePill.trailingAnchor, constant: -24),
+            noteLabel.leadingAnchor.constraint(equalTo: notePill.leadingAnchor, constant: DeviceLayout.s(24)),
+            noteLabel.trailingAnchor.constraint(equalTo: notePill.trailingAnchor, constant: DeviceLayout.s(-24)),
         ])
 
         // Target hint
@@ -1510,21 +1510,21 @@ class TryYourselfViewController: UIViewController {
         targetHintLabel.translatesAutoresizingMaskIntoConstraints = false
         targetHintLabel.numberOfLines = 0
         updateTargetHint()
-        targetHintLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        targetHintLabel.font = .systemFont(ofSize: DeviceLayout.s(12), weight: .medium)
         targetHintLabel.textColor = .systemGray2
         targetHintLabel.textAlignment = .center
 
         let subLabel = UILabel()
         subLabel.translatesAutoresizingMaskIntoConstraints = false
         subLabel.text = item.instruction
-        subLabel.font = .systemFont(ofSize: 15)
+        subLabel.font = .systemFont(ofSize: DeviceLayout.s(15))
         subLabel.textColor = .systemGray; subLabel.textAlignment = .center
         subLabel.numberOfLines = 0
 
         instructionLabel = UILabel()
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
         instructionLabel.text = "Tap the microphone, then play on your piano."
-        instructionLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        instructionLabel.font = .systemFont(ofSize: DeviceLayout.s(13), weight: .medium)
         instructionLabel.textColor = ComponentColors.LessonScreen.labelSecondary
         instructionLabel.textAlignment = .center
         instructionLabel.numberOfLines = 0
@@ -1533,7 +1533,7 @@ class TryYourselfViewController: UIViewController {
         detectedNoteLabel = UILabel()
         detectedNoteLabel.translatesAutoresizingMaskIntoConstraints = false
         detectedNoteLabel.text = "—"
-        detectedNoteLabel.font = .systemFont(ofSize: 36, weight: .heavy)
+        detectedNoteLabel.font = .systemFont(ofSize: DeviceLayout.s(36), weight: .heavy)
         detectedNoteLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
         detectedNoteLabel.textAlignment = .center
         detectedNoteLabel.alpha = 0
@@ -1542,7 +1542,7 @@ class TryYourselfViewController: UIViewController {
         attemptCounterLabel = UILabel()
         attemptCounterLabel.translatesAutoresizingMaskIntoConstraints = false
         attemptCounterLabel.text = "Attempts: 0  •  1st attempt = ⭐⭐⭐"
-        attemptCounterLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        attemptCounterLabel.font = .systemFont(ofSize: DeviceLayout.s(11), weight: .medium)
         attemptCounterLabel.textColor = .systemGray; attemptCounterLabel.textAlignment = .center
 
         // Rings + mic
@@ -1567,11 +1567,11 @@ class TryYourselfViewController: UIViewController {
         micButton = UIButton(type: .system)
         micButton.translatesAutoresizingMaskIntoConstraints = false
         micButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
-        micButton.layer.cornerRadius = 42
+        micButton.layer.cornerRadius = DeviceLayout.s(42)
         micButton.layer.shadowColor = ComponentColors.HomeScreen.actionButtonFill.cgColor
         micButton.layer.shadowOpacity = 0.4; micButton.layer.shadowRadius = 20
         micButton.layer.shadowOffset = CGSize(width: 0, height: 8)
-        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(24), weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         micButton.tintColor = .white
         micButton.addTarget(self, action: #selector(toggleListening), for: .touchUpInside)
@@ -1579,21 +1579,21 @@ class TryYourselfViewController: UIViewController {
         NSLayoutConstraint.activate([
             micButton.centerXAnchor.constraint(equalTo: ringContainer.centerXAnchor),
             micButton.centerYAnchor.constraint(equalTo: ringContainer.centerYAnchor),
-            micButton.widthAnchor.constraint(equalToConstant: 84),
-            micButton.heightAnchor.constraint(equalToConstant: 84),
+            micButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(84)),
+            micButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(84)),
         ])
 
         let grad = CAGradientLayer()
         grad.colors = [ComponentColors.HomeScreen.actionButtonFill.cgColor, UIColor.orange.cgColor]
         grad.startPoint = CGPoint(x: 0, y: 0); grad.endPoint = CGPoint(x: 1, y: 1)
-        grad.frame = CGRect(x: 0, y: 0, width: 84, height: 84); grad.cornerRadius = 42
+        grad.frame = CGRect(x: 0, y: 0, width: 84, height: 84); grad.cornerRadius = DeviceLayout.s(42)
         micButton.layer.insertSublayer(grad, at: 0)
         micButton.bringSubviewToFront(micButton.imageView ?? UIView())
 
         statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.text = "Tap the microphone to start listening"
-        statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        statusLabel.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .medium)
         statusLabel.textColor = .systemGray; statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 2
 
@@ -1601,11 +1601,11 @@ class TryYourselfViewController: UIViewController {
         doneButton = UIButton(type: .system)
         doneButton.translatesAutoresizingMaskIntoConstraints = false
         doneButton.setTitle("✓  Done Practicing", for: .normal)
-        doneButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        doneButton.titleLabel?.font = .systemFont(ofSize: DeviceLayout.s(16), weight: .bold)
         doneButton.setTitleColor(.white, for: .normal)
         let green = ComponentColors.LessonScreen.correctAnswer
         doneButton.backgroundColor = green
-        doneButton.layer.cornerRadius = 24
+        doneButton.layer.cornerRadius = DeviceLayout.s(24)
         doneButton.layer.shadowColor = green.cgColor
         doneButton.layer.shadowOpacity = 0.35; doneButton.layer.shadowRadius = 10
         doneButton.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -1617,53 +1617,53 @@ class TryYourselfViewController: UIViewController {
          ringContainer, statusLabel, doneButton].forEach { view.addSubview($0) }
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 24),
+            titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: DeviceLayout.s(24)),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            closeButton.widthAnchor.constraint(equalToConstant: 36),
-            closeButton.heightAnchor.constraint(equalToConstant: 36),
+            closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-20)),
+            closeButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(36)),
+            closeButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(36)),
 
-            notePill.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
+            notePill.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: DeviceLayout.s(10)),
             notePill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             notePill.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
             notePill.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
-            notePill.heightAnchor.constraint(equalToConstant: 50),
+            notePill.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)),
             noteLabel.centerXAnchor.constraint(equalTo: notePill.centerXAnchor),
             noteLabel.centerYAnchor.constraint(equalTo: notePill.centerYAnchor),
 
-            targetHintLabel.topAnchor.constraint(equalTo: notePill.bottomAnchor, constant: 4),
+            targetHintLabel.topAnchor.constraint(equalTo: notePill.bottomAnchor, constant: DeviceLayout.s(4)),
             targetHintLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            subLabel.topAnchor.constraint(equalTo: targetHintLabel.bottomAnchor, constant: 6),
-            subLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
-            subLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
+            subLabel.topAnchor.constraint(equalTo: targetHintLabel.bottomAnchor, constant: DeviceLayout.s(6)),
+            subLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(30)),
+            subLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-30)),
 
-            instructionLabel.topAnchor.constraint(equalTo: subLabel.bottomAnchor, constant: 8),
-            instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
-            instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            instructionLabel.topAnchor.constraint(equalTo: subLabel.bottomAnchor, constant: DeviceLayout.s(8)),
+            instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(28)),
+            instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-28)),
 
-            detectedNoteLabel.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 4),
+            detectedNoteLabel.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: DeviceLayout.s(4)),
             detectedNoteLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            attemptCounterLabel.topAnchor.constraint(equalTo: detectedNoteLabel.bottomAnchor, constant: 4),
+            attemptCounterLabel.topAnchor.constraint(equalTo: detectedNoteLabel.bottomAnchor, constant: DeviceLayout.s(4)),
             attemptCounterLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            ringContainer.topAnchor.constraint(equalTo: attemptCounterLabel.bottomAnchor, constant: 12),
+            ringContainer.topAnchor.constraint(equalTo: attemptCounterLabel.bottomAnchor, constant: DeviceLayout.s(12)),
             ringContainer.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            ringContainer.widthAnchor.constraint(equalToConstant: 220),
-            ringContainer.heightAnchor.constraint(equalToConstant: 220),
+            ringContainer.widthAnchor.constraint(equalToConstant: DeviceLayout.s(220)),
+            ringContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(220)),
 
-            statusLabel.topAnchor.constraint(equalTo: ringContainer.bottomAnchor, constant: 12),
-            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            statusLabel.topAnchor.constraint(equalTo: ringContainer.bottomAnchor, constant: DeviceLayout.s(12)),
+            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(24)),
+            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-24)),
 
-            doneButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
-            doneButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
-            doneButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
-            doneButton.heightAnchor.constraint(equalToConstant: 48),
-            doneButton.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            doneButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: DeviceLayout.s(10)),
+            doneButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DeviceLayout.s(32)),
+            doneButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-32)),
+            doneButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(48)),
+            doneButton.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: DeviceLayout.s(-20)),
         ])
     }
 
@@ -1715,7 +1715,7 @@ class TryYourselfViewController: UIViewController {
         attemptCounterLabel.text = "Attempts: \(attemptCount)  •  \(starsHint)"
         UIView.transition(with: attemptCounterLabel, duration: 0.2, options: .transitionCrossDissolve, animations: nil)
 
-        let activeMicConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        let activeMicConfig = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(24), weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: activeMicConfig), for: .normal)
         statusLabel.text = "Listening… play \(targetStep.label)"
         statusLabel.textColor = ComponentColors.HomeScreen.actionButtonFill
@@ -1787,7 +1787,7 @@ class TryYourselfViewController: UIViewController {
         pitchDetector.stopListening()
         isListening = false
         chordMatcher.reset()
-        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(24), weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Microphone access needed"
         statusLabel.textColor = .systemRed
@@ -1802,7 +1802,7 @@ class TryYourselfViewController: UIViewController {
         pitchDetector.stopListening()
         isListening = false
         chordMatcher.reset()
-        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(24), weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Microphone unavailable"
         statusLabel.textColor = .systemRed
@@ -1817,7 +1817,7 @@ class TryYourselfViewController: UIViewController {
         pitchDetector.stopListening()
         isListening = false
         chordMatcher.reset()
-        let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        let micConfig = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(24), weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Stopped. Tap the microphone to try again."
         statusLabel.textColor = .systemGray
@@ -1860,7 +1860,7 @@ class TryYourselfViewController: UIViewController {
             self.micButton.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
         }
 
-        let successConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        let successConfig = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(24), weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: successConfig), for: .normal)
 
         statusLabel.text = "🎉 Nailed it! Tap Done ✓"

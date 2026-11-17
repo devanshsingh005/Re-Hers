@@ -22,6 +22,20 @@ final class MiniPlayerView: UIView {
     private let playButton = UIButton(type: .system)
     private var artworkSize: NSLayoutConstraint?
 
+    /// iPad: a taller bar with bigger artwork, text and play button.
+    var isLarge = false {
+        didSet {
+            guard isLarge != oldValue else { return }
+            titleLabel.font = UIFont.preferredFont(forTextStyle: isLarge ? .headline : .subheadline).withWeight(.semibold)
+            detailLabel.font = UIFont.preferredFont(forTextStyle: isLarge ? .subheadline : .caption1)
+            playButton.configuration?.preferredSymbolConfigurationForImage =
+                UIImage.SymbolConfiguration(textStyle: isLarge ? .title2 : .title3)
+            artworkIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: isLarge ? 20 : 15,
+                                                                                  weight: .semibold)
+            applyEnvironment()
+        }
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         build()
@@ -161,7 +175,7 @@ final class MiniPlayerView: UIView {
             inline = traitCollection.tabAccessoryEnvironment == .inline
         }
         detailLabel.isHidden = inline
-        artworkSize?.constant = inline ? 26 : 32
+        artworkSize?.constant = inline ? 26 : (isLarge ? 48 : 32)
         openTarget?.accessibilityLabel = accessibilityLabel
     }
 

@@ -109,9 +109,10 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             columnLeading?.constant = margin
             columnTrailing?.constant = -margin
         }
-        // all 88 keys on both; on iPad's wider keys (about 26 pt) a taller keyboard keeps their shape
+        // all 88 keys on both. iPad: the keyboard takes 40% of the room under the top bar and
+        // the sheet the other 60%.
         let pianoHeight = DeviceLayout.isPad
-            ? (min(250, max(190, view.bounds.height * 0.24))).rounded()
+            ? (max(190, (view.bounds.height - navBar.frame.maxY - kGap) * 0.4)).rounded()
             : (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
         if pianoHeightConstraint?.constant != pianoHeight { pianoHeightConstraint?.constant = pianoHeight }
         
