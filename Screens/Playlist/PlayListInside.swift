@@ -312,7 +312,12 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
             return
         }
         
-        activityIndicator.startAnimating()
+        // the songs saved from an earlier visit show at once; the spinner only when there are none
+        if trackList.isEmpty, let saved = PlaylistsManager.shared.savedTracks(playlistId: playlistId), !saved.isEmpty {
+            trackList = saved
+            reloadTracksUI()
+        }
+        if trackList.isEmpty { activityIndicator.startAnimating() }
         
         Task {
             let existingTracks = self.trackList
@@ -332,8 +337,10 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
                         error: error,
                         fallback: "We couldn't load this playlist right now. Please try again."
                     )
-                    if !(self?.trackList.isEmpty ?? true) {
+                    if !existingTracks.isEmpty {
+                        // offline or a failed refresh: keep what is shown, without an error
                         self?.trackList = existingTracks
+                        self?.trackLoadErrorMessage = nil
                     }
                     self?.activityIndicator.stopAnimating()
                     self?.reloadTracksUI()

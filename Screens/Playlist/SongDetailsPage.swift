@@ -571,28 +571,9 @@ class PlaylistSongDetailViewController: UIViewController {
         return findMeasure(in: json)
     }
 
-    private func signedURL(from rawValue: String, fallbackBucket: String) async throws -> URL {
-        try await SupabaseManager.shared.signedAssetResolver.signedURL(
-            for: rawValue,
-            fallbackBucket: fallbackBucket
-        )
-    }
-
+    /// Kept on the device after the first download (see SheetDownloads).
     private func fetchRemoteData(from rawValue: String, fallbackBucket: String) async throws -> Data {
-        let url = try await signedURL(from: rawValue, fallbackBucket: fallbackBucket)
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200...299).contains(statusCode) else {
-            throw NSError(
-                domain: "PlaylistSongDetail",
-                code: statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "Remote asset fetch failed with status \(statusCode)"]
-            )
-        }
-        return data
+        try await SheetDownloads.data(for: rawValue, fallbackBucket: fallbackBucket)
     }
 
     private func fetchOriginalPDFFromSong(_ song: Song) async {

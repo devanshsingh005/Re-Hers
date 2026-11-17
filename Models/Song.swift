@@ -129,6 +129,16 @@ final class SongService {
         }
     }
 
+    /// The last song list fetched (this session or, saved on the device, an earlier one), to
+    /// show at once while a fresh one loads. nil before the first fetch ever.
+    var savedSongs: [Song]? {
+        cached?.songs ?? AppDataCache.shared.value([Song].self, for: Self.cacheKey, scope: .shared)
+    }
+
+    private static let cacheKey = "songs"
+
+    /// Fresh songs from the server (or this session's copy if under 5 minutes old). Offline,
+    /// or if the server fails, it returns the saved list when there is one.
     func fetchSongs(forceRefresh: Bool = false) async throws -> [Song] {
         if !forceRefresh, let cached, Date().timeIntervalSince(cached.fetchedAt) < Self.maxAge {
             return cached.songs
@@ -145,8 +155,14 @@ final class SongService {
         }
         inFlight = task
         defer { inFlight = nil }
-        let songs = try await task.value
-        cached = (songs, Date())
-        return songs
+        do {
+            let songs = try await task.value
+            cached = (songs, Date())
+            AppDataCache.shared.store(songs, for: Self.cacheKey, scope: .shared)
+            return songs
+        } catch {
+            if let saved = savedSongs { return saved }
+            throw error
+        }
     }
 }

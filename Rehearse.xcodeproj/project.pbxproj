@@ -16,6 +16,7 @@
 		0E0E0E0E0000000000000203 /* Services/SheetMusic/OnDeviceSheetConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */; };
 		0E0E0E0E0000000000000210 /* Services/SheetMusic/UploadCloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000110 /* Services/SheetMusic/UploadCloudSync.swift */; };
 		0E0E0E0E0000000000000400 /* Services/LastPlayedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */; };
+		0E0E0E0E0000000000000420 /* Services/AppDataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000320 /* Services/AppDataCache.swift */; };
 		0E0E0E0E0000000000000401 /* Services/InAppNotificationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */; };
 		0E0E0E0E0000000000000402 /* Components/MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000302 /* Components/MiniPlayerView.swift */; };
 		0E0E0E0E0000000000000403 /* Screens/Home/HomeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000303 /* Screens/Home/HomeComponents.swift */; };
@@ -137,6 +138,7 @@
 		0E0E0E0E0000000000000103 /* Services/SheetMusic/OnDeviceSheetConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/OnDeviceSheetConverter.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000110 /* Services/SheetMusic/UploadCloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SheetMusic/UploadCloudSync.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LastPlayedStore.swift; sourceTree = SOURCE_ROOT; };
+		0E0E0E0E0000000000000320 /* Services/AppDataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AppDataCache.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/InAppNotificationStore.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000302 /* Components/MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/MiniPlayerView.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000303 /* Screens/Home/HomeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Home/HomeComponents.swift; sourceTree = SOURCE_ROOT; };
@@ -527,6 +529,7 @@
 				0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */,
 				0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */,
 				0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */,
+				0E0E0E0E0000000000000320 /* Services/AppDataCache.swift */,
 				0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */,
 				0E0E0E0E0000000000000302 /* Components/MiniPlayerView.swift */,
 				0E0E0E0E0000000000000303 /* Screens/Home/HomeComponents.swift */,
@@ -736,6 +739,7 @@
 				0E0E0E0E0000000000000407 /* Extensions/UIImage+Normalization.swift in Sources */,
 				0E0E0E0E0000000000000406 /* Components/TabRootHeaderView.swift in Sources */,
 				0E0E0E0E0000000000000400 /* Services/LastPlayedStore.swift in Sources */,
+				0E0E0E0E0000000000000420 /* Services/AppDataCache.swift in Sources */,
 				0E0E0E0E0000000000000401 /* Services/InAppNotificationStore.swift in Sources */,
 				0E0E0E0E0000000000000402 /* Components/MiniPlayerView.swift in Sources */,
 				0E0E0E0E0000000000000403 /* Screens/Home/HomeComponents.swift in Sources */,

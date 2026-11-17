@@ -370,6 +370,13 @@ class PlaylistViewController: UIViewController {
             refreshControl.endRefreshing()
             return
         }
+        // playlists saved from an earlier fetch show at once; the fetch below updates them
+        if loadedPlaylists.isEmpty, let saved = playlistsManager.savedPlaylists, !saved.isEmpty {
+            loadedPlaylists = saved
+            playlistLoadErrorMessage = nil
+            collectionView.reloadData()
+            updateEmptyState()
+        }
         let shouldShowOverlayLoader = loadedPlaylists.isEmpty && !refreshControl.isRefreshing
         if shouldShowOverlayLoader {
             activityIndicator.startAnimating()

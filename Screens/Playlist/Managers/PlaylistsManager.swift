@@ -127,7 +127,7 @@ public final class PlaylistsManager {
             .execute()
             .value
         
-        return dbItems.map { item in
+        let tracks = dbItems.map { item in
             PlaylistTrack(
                 id: UUID(),
                 trackId: item.trackId,
@@ -137,6 +137,8 @@ public final class PlaylistsManager {
                 sheetScanId: item.sheetScanId
             )
         }
+        AppDataCache.shared.store(tracks, for: Self.tracksCacheKey(playlistId))
+        return tracks
     }
     
     // MARK: - Add Track to Playlist
@@ -552,5 +554,27 @@ public final class PlaylistsManager {
 
     private func cachePlaylists(_ playlists: [PlaylistData]) {
         playlistCache = playlists
+        // saved for the next visit or launch (covers kept as image data stay in memory only)
+        var forDisk = playlists
+        for i in forDisk.indices { forDisk[i].imageData = nil }
+        AppDataCache.shared.store(forDisk, for: Self.playlistsCacheKey)
+        for playlist in playlists {
+            AppDataCache.shared.store(playlist.tracks, for: Self.tracksCacheKey(playlist.id))
+        }
+    }
+
+    private static let playlistsCacheKey = "playlistsWithTracks"
+    private static func tracksCacheKey(_ id: UUID) -> String { "playlistTracks." + id.uuidString.lowercased() }
+
+    /// The playlists as last fetched (this session, or saved on the device), to show at once.
+    var savedPlaylists: [PlaylistData]? {
+        playlistCache.isEmpty
+            ? AppDataCache.shared.value([PlaylistData].self, for: Self.playlistsCacheKey)
+            : playlistCache
+    }
+
+    /// A playlist's songs as last fetched, to show at once.
+    func savedTracks(playlistId: UUID) -> [PlaylistTrack]? {
+        AppDataCache.shared.value([PlaylistTrack].self, for: Self.tracksCacheKey(playlistId))
     }
 }

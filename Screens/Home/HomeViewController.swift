@@ -103,7 +103,21 @@ class HomeViewController: UIViewController {
         loadPlaylists()
         loadGreeting()
 
+        // pull to refresh; and a fresh fetch when the connection comes back
+        let refresh = UIRefreshControl()
+        refresh.addAction(UIAction { [weak self] _ in
+            self?.loadPlaylists()
+            self?.loadRecentUploads()
+            self?.loadGreeting()
+        }, for: .valueChanged)
+        scrollView.refreshControl = refresh
+
         let center = NotificationCenter.default
+        center.addObserver(forName: Connectivity.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if Connectivity.shared.isOnline { self?.loadPlaylists(); self?.loadGreeting() }
+            }
+        }
         center.addObserver(self, selector: #selector(handleProfileUpdate),
                            name: NavigationBarHelper.profileDidUpdateNotification, object: nil)
         center.addObserver(self, selector: #selector(handleLibraryChange),
@@ -257,13 +271,18 @@ class HomeViewController: UIViewController {
             setGreeting(name: nil)
             return
         }
+        // the name saved last time shows at once; the fetch updates it
+        if let saved = AppDataCache.shared.value(String.self, for: "home.greetingName") {
+            setGreeting(name: saved)
+        }
         profileFetchTask = Task { [weak self] in
             let profile: UserProfile? = try? await SupabaseManager.shared.client
                 .from("profiles").select("id, full_name, username").eq("id", value: user.id).single().execute().value
-            guard let self, !Task.isCancelled else { return }
-            let fullName = profile?.full_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let firstName = fullName.split(separator: " ").first.map(String.init)
-            self.setGreeting(name: firstName ?? profile?.username)
+            guard let self, !Task.isCancelled, let profile else { return }   // offline: keep the saved name
+            let fullName = profile.full_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let name = fullName.split(separator: " ").first.map(String.init) ?? profile.username ?? ""
+            AppDataCache.shared.store(name, for: "home.greetingName")
+            self.setGreeting(name: name)
         }
     }
 
@@ -526,6 +545,11 @@ class HomeViewController: UIViewController {
             showPlaylists([])
             return
         }
+        // playlists saved from an earlier fetch show at once; the fetch updates them
+        if let saved = PlaylistService.shared.savedPlaylists {
+            showPlaylists(saved)
+            return
+        }
         playlistTilesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for _ in 0..<3 {
             let tile = SkeletonBox(height: Constants.playlistTileSize, cornerRadius: 14)
@@ -541,11 +565,26 @@ class HomeViewController: UIViewController {
         playlistFetchTask = Task { [weak self] in
             let playlists = try? await PlaylistService.shared.fetchPlaylists()
             guard let self, !Task.isCancelled else { return }
-            self.showPlaylists(playlists ?? [])
+            self.scrollView.refreshControl?.endRefreshing()
+            if let playlists {
+                self.showPlaylists(playlists)
+            } else if self.shownPlaylists == nil {
+                self.showPlaylists([])   // nothing saved and no connection: the New Playlist tile
+            }
         }
     }
 
+    /// What the tiles show now, so an unchanged refresh doesn't rebuild them (no flicker).
+    private var shownPlaylists: String?
+
     private func showPlaylists(_ playlists: [Playlist]) {
+        let signature = playlists.map {
+            // a cover's signed URL changes on each fetch; its path doesn't
+            let cover = $0.coverImageURL?.components(separatedBy: "?").first ?? ""
+            return "\($0.id)|\($0.name)|\(cover)|\($0.updatedAt.timeIntervalSince1970)"
+        }.joined(separator: ";")
+        guard signature != shownPlaylists else { return }
+        shownPlaylists = signature
         playlistTilesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if playlists.isEmpty {
             playlistTilesStack.addArrangedSubview(makeNewPlaylistTile())

@@ -192,6 +192,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         setupTabs()
         setupAppearance()
         setupMiniPlayer()
+        setupOfflineNote()
 
         InAppNotificationStore.shared.start()
         Task {
@@ -297,6 +298,59 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         appearance.configureWithDefaultBackground()
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
+    }
+
+    // MARK: - Offline note
+
+    private let offlineNote = UIView()
+
+    /// A small pill at the top while there's no connection: pages keep showing their saved data.
+    private func setupOfflineNote() {
+        let icon = UIImageView(image: UIImage(systemName: "wifi.slash"))
+        icon.tintColor = .white
+        icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        let label = UILabel()
+        label.text = "Offline · showing saved data"
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .white
+        let row = UIStackView(arrangedSubviews: [icon, label])
+        row.spacing = 6
+        row.alignment = .center
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        offlineNote.backgroundColor = UIColor(white: 0.18, alpha: 0.94)
+        offlineNote.layer.cornerRadius = 15
+        offlineNote.layer.cornerCurve = .continuous
+        offlineNote.isUserInteractionEnabled = false
+        offlineNote.isAccessibilityElement = true
+        offlineNote.accessibilityLabel = "Offline. Showing saved data."
+        offlineNote.translatesAutoresizingMaskIntoConstraints = false
+        offlineNote.addSubview(row)
+        view.addSubview(offlineNote)
+        NSLayoutConstraint.activate([
+            offlineNote.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            offlineNote.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            offlineNote.heightAnchor.constraint(equalToConstant: 30),
+            row.leadingAnchor.constraint(equalTo: offlineNote.leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(equalTo: offlineNote.trailingAnchor, constant: -12),
+            row.centerYAnchor.constraint(equalTo: offlineNote.centerYAnchor),
+        ])
+
+        Connectivity.shared.start()
+        updateOfflineNote(animated: false)
+        NotificationCenter.default.addObserver(forName: Connectivity.didChangeNotification, object: nil,
+                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateOfflineNote(animated: true) }
+        }
+    }
+
+    private func updateOfflineNote(animated: Bool) {
+        let offline = !Connectivity.shared.isOnline
+        view.bringSubviewToFront(offlineNote)
+        UIView.animate(withDuration: animated ? 0.25 : 0) {
+            self.offlineNote.alpha = offline ? 1 : 0
+            self.offlineNote.transform = offline ? .identity : CGAffineTransform(translationX: 0, y: -12)
+        }
     }
 
     // MARK: - Mini player

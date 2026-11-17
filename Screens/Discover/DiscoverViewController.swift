@@ -143,7 +143,21 @@ final class DiscoverViewController: UIViewController {
         setupKeyboardDismissal()
         setupNavBackground()
         buildFilterMenus()
+        setupRefresh()
         fetchSongs()
+    }
+
+    /// Pull to refresh, and a fresh fetch when the connection comes back.
+    private func setupRefresh() {
+        let refresh = UIRefreshControl()
+        refresh.addAction(UIAction { [weak self] _ in self?.fetchSongs(force: true) }, for: .valueChanged)
+        scrollView.refreshControl = refresh
+        NotificationCenter.default.addObserver(forName: Connectivity.didChangeNotification, object: nil,
+                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if Connectivity.shared.isOnline { self?.fetchSongs(force: true) }
+            }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -401,33 +415,43 @@ final class DiscoverViewController: UIViewController {
 
     // MARK: Data & Filtering
 
-    private func fetchSongs() {
-        discoverSkeleton.show(in: view)
-        tableView.isHidden = true
-        emptyLabel.isHidden = true
+    /// Shows the saved songs at once (no skeleton) and refreshes them in the background;
+    /// the skeleton only shows when nothing has ever been fetched. `force` skips the
+    /// session's 5-minute copy (pull to refresh).
+    private func fetchSongs(force: Bool = false) {
+        if allSongs.isEmpty, let saved = SongService.shared.savedSongs, !saved.isEmpty {
+            show(saved)
+        }
+        if allSongs.isEmpty {
+            discoverSkeleton.show(in: view)
+            tableView.isHidden = true
+            emptyLabel.isHidden = true
+        }
 
         Task {
+            defer { self.scrollView.refreshControl?.endRefreshing() }
             do {
-                let songs = try await SongService.shared.fetchSongs()
-                await MainActor.run {
-                    self.allSongs = songs
-                    self.updateDynamicFilters(from: songs)
-                    self.applyFilters()
-                    self.discoverSkeleton.hide()
-                    self.tableView.isHidden = false
-                }
+                let songs = try await SongService.shared.fetchSongs(forceRefresh: force)
+                self.show(songs)
             } catch {
-                let message = AppUserFacingError.message(
+                self.discoverSkeleton.hide()
+                // with songs on screen, a failed refresh (offline) keeps them quietly
+                guard self.allSongs.isEmpty else { return }
+                self.showError(AppUserFacingError.message(
                     for: "load songs",
                     error: error,
                     fallback: "We couldn't load songs right now. Please try again."
-                )
-                await MainActor.run {
-                    self.discoverSkeleton.hide()
-                    self.showError(message)
-                }
+                ))
             }
         }
+    }
+
+    private func show(_ songs: [Song]) {
+        allSongs = songs
+        updateDynamicFilters(from: songs)
+        applyFilters()
+        discoverSkeleton.hide()
+        tableView.isHidden = filteredSongs.isEmpty
     }
 
     private func applyFilters() {

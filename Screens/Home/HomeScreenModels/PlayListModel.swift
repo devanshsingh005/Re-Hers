@@ -48,7 +48,28 @@ final class PlaylistService {
     static let shared = PlaylistService()
     private init() {}
 
+    private static let cacheKey = "playlists"
+
+    /// The signed-in user's playlists as last fetched (saved on the device), to show at once
+    /// while fresh ones load. nil before the first fetch.
+    var savedPlaylists: [Playlist]? {
+        AppDataCache.shared.value([Playlist].self, for: Self.cacheKey)
+    }
+
+    /// Fresh playlists from the server, saved for next time. Offline, or if the server fails,
+    /// it returns the saved ones when there are any.
     func fetchPlaylists() async throws -> [Playlist] {
+        do {
+            let playlists = try await fetchFromServer()
+            AppDataCache.shared.store(playlists, for: Self.cacheKey)
+            return playlists
+        } catch {
+            if !(error is CancellationError), let saved = savedPlaylists { return saved }
+            throw error
+        }
+    }
+
+    private func fetchFromServer() async throws -> [Playlist] {
         let dbPlaylists: [Playlist] = try await SupabaseManager.shared.client
             .from("playlists")
             .select()

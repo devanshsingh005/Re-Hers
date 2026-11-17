@@ -154,6 +154,9 @@ final class AppSearchViewController: UIViewController {
     }
 
     private func loadRemoteData() {
+        // what was fetched before, at once; the fetch below replaces it
+        if songs.isEmpty, let saved = SongService.shared.savedSongs { songs = saved.filter(\.isActive) }
+        if playlists.isEmpty, let saved = PlaylistService.shared.savedPlaylists { playlists = saved }
         loadTask?.cancel()
         loadTask = Task { [weak self] in
             async let songs = try? SongService.shared.fetchSongs()

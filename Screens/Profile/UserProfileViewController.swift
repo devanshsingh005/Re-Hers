@@ -833,8 +833,55 @@ final class UserProfileViewController: UIViewController {
         }
     }
 
+    // MARK: - Saved snapshot
+    //
+    // What Settings showed last time for the signed-in account, so it opens instantly (no
+    // skeleton, and offline too); the fetch below updates it.
+
+    private struct Snapshot: Codable {
+        var name: String?
+        var username: String?
+        var avatar: String?
+        var goalMinutes: Int?
+        var practiceText: String?
+        var lessons: Int?
+        var streak: Int?
+        var weeklyText: String?
+        var weeklyHours: [Double]?
+    }
+
+    private static let snapshotKey = "settings.snapshot"
+
+    private func updateSnapshot(_ change: (inout Snapshot) -> Void) {
+        guard !GuestSessionManager.shared.isGuest() else { return }
+        var snapshot = AppDataCache.shared.value(Snapshot.self, for: Self.snapshotKey) ?? Snapshot()
+        change(&snapshot)
+        AppDataCache.shared.store(snapshot, for: Self.snapshotKey)
+    }
+
+    /// Shows the saved snapshot; false when there is none.
+    @discardableResult
+    private func showSavedSnapshot() -> Bool {
+        guard !GuestSessionManager.shared.isGuest(),
+              let s = AppDataCache.shared.value(Snapshot.self, for: Self.snapshotKey) else { return false }
+        if let name = s.name { nameLabel.text = name }
+        if let username = s.username { usernameLabel.text = username.isEmpty ? "" : "@\(username)" }
+        if let avatar = s.avatar { updateAvatar(with: avatar) }
+        if let goal = s.goalMinutes { goalBadgeLabel.text = goalBadgeText(for: goal) }
+        if let text = s.practiceText { practiceLabel.text = text }
+        if let lessons = s.lessons { lessonsLabel.text = "\(lessons)" }
+        if let streak = s.streak { streakLabel.text = "\(streak)" }
+        if let text = s.weeklyText { weeklyHoursLabel.text = text }
+        if let hours = s.weeklyHours, let chart = contentView.viewWithTag(9901) as? PracticeChartView {
+            chart.weeklyData = hours.map { CGFloat($0) }
+            chart.setNeedsDisplay()
+        }
+        return true
+    }
+
     // MARK: - Load Data
     private func loadData() {
+        if showSavedSnapshot() { profileSkeleton.hide() }
         Task {
             await DailyGoalManager.shared.refreshFromSupabase()
             await loadProfile()
@@ -881,10 +928,12 @@ final class UserProfileViewController: UIViewController {
             self.currentProfile = profile
 
             await MainActor.run {
-                nameLabel.text = profile.full_name?.isEmpty == false ? profile.full_name : "No Name"
+                let name = profile.full_name?.isEmpty == false ? profile.full_name ?? "" : "No Name"
+                nameLabel.text = name
                 let username = profile.username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 usernameLabel.text = username.isEmpty ? "" : "@\(username)"
                 updateAvatar(with: profile.avatar_url)
+                updateSnapshot { $0.name = name; $0.username = username; $0.avatar = profile.avatar_url }
             }
             
             // Fetch daily goal from user_onboarding (an account that skipped onboarding has no row)
@@ -902,13 +951,19 @@ final class UserProfileViewController: UIViewController {
                     let goalMins = onboarding.practice_mins
                     goalBadgeLabel.text = self.goalBadgeText(for: goalMins)
                     DailyGoalManager.shared.dailyGoalMinutes = goalMins
+                    updateSnapshot { $0.goalMinutes = goalMins }
                 }
             } catch {
                 debugLog("Error loading onboarding goal:", error)
             }
         } catch {
             debugLog("Error loading profile:", error)
-            await MainActor.run { nameLabel.text = "Error" }
+            // offline or a failed refresh: the saved profile stays; "Error" only with nothing saved
+            await MainActor.run {
+                if AppDataCache.shared.value(Snapshot.self, for: Self.snapshotKey)?.name == nil {
+                    nameLabel.text = "Error"
+                }
+            }
         }
     }
 
@@ -1068,6 +1123,13 @@ final class UserProfileViewController: UIViewController {
                 if let chart = contentView.viewWithTag(9901) as? PracticeChartView {
                     chart.weeklyData = weeklyHours.map { CGFloat($0) }
                     chart.setNeedsDisplay()
+                }
+                updateSnapshot {
+                    $0.practiceText = practiceLabel.text
+                    $0.lessons = totalLessons
+                    $0.streak = streak
+                    $0.weeklyText = weeklyHoursLabel.text
+                    $0.weeklyHours = weeklyHours
                 }
             }
         } catch {

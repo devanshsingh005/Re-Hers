@@ -609,25 +609,9 @@ class DiscoverSongDetailViewController: UIViewController {
         }
     }
 
-    private func signedURL(from rawValue: String, fallbackBucket: String) async throws -> URL {
-        try await SupabaseManager.shared.signedAssetResolver.signedURL(
-            for: rawValue,
-            fallbackBucket: fallbackBucket
-        )
-    }
-
+    /// Kept on the device after the first download (see SheetDownloads).
     private func fetchRemoteData(from rawValue: String, fallbackBucket: String) async throws -> Data {
-        let url = try await signedURL(from: rawValue, fallbackBucket: fallbackBucket)
-
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200...299).contains(statusCode) else {
-            throw AssetError.remoteFetchFailed(statusCode)
-        }
-        return data
+        try await SheetDownloads.data(for: rawValue, fallbackBucket: fallbackBucket)
     }
 
     private func loadOriginalPDF() async {
@@ -742,20 +726,6 @@ class DiscoverSongDetailViewController: UIViewController {
     private func showPDFError() {
         pdfSkeleton.hide()
         pdfErrorLabel.isHidden = false
-    }
-
-    private enum AssetError: LocalizedError {
-        case invalidURL
-        case remoteFetchFailed(Int)
-
-        var errorDescription: String? {
-            switch self {
-            case .invalidURL:
-                return "The converted asset URL is invalid."
-            case .remoteFetchFailed(let code):
-                return "Failed to fetch converted asset (HTTP \(code))."
-            }
-        }
     }
 
     private func presentPlaylistPicker() {

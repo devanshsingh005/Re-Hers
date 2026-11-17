@@ -395,11 +395,25 @@ class LessonMapViewController: UIViewController {
 
     // MARK: - Supabase Progress Load
 
+    /// The signed-in user's progress as last fetched, so the map opens at once (and offline).
+    private struct SavedProgress: Codable {
+        let currentChapter: Int
+        let stars: [Int: Int]
+    }
+    private static let progressCacheKey = "lessons.progress"
+
     private func loadProgressFromSupabase() {
-        // Only show skeleton on first load
+        let saved = GuestSessionManager.shared.isGuest()
+            ? nil : AppDataCache.shared.value(SavedProgress.self, for: Self.progressCacheKey)
+        // Only show skeleton on first load, and only with no saved progress to draw
         if !skeletonShown {
             skeletonShown = true
-            lessonSkeleton.show(in: view)
+            if let saved {
+                chapters = applyProgress(currentChapter: saved.currentChapter, chapterStars: saved.stars)
+                rebuildPath()
+            } else {
+                lessonSkeleton.show(in: view)
+            }
         }
         Task {
             if GuestSessionManager.shared.isGuest() {
@@ -420,7 +434,9 @@ class LessonMapViewController: UIViewController {
 
             do {
                 let (currentChapter, starsMap) = try await ChapterService.shared.fetchUserProgress()
-                
+                AppDataCache.shared.store(SavedProgress(currentChapter: currentChapter, stars: starsMap),
+                                          for: Self.progressCacheKey)
+
                 await MainActor.run {
                     self.chapters = applyProgress(
                         currentChapter: currentChapter,
@@ -434,6 +450,8 @@ class LessonMapViewController: UIViewController {
                 debugLog("[LessonMapViewController] loadProgressFromSupabase error: \(error)")
                 await MainActor.run {
                     self.lessonSkeleton.hide()
+                    // offline: the saved progress stays on screen; chapter 1 only with none saved
+                    guard saved == nil else { return }
                     self.chapters = applyProgress(currentChapter: 1)
                     self.rebuildPath()
                 }
