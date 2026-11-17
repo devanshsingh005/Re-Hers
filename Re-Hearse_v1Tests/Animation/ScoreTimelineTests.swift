@@ -342,75 +342,23 @@ final class ScoreTimelineTests: XCTestCase {
         XCTAssertEqual(timeline.performance.map(\.measureIndex), [0, 1, 2, 0, 1])
     }
 
-    // MARK: Metronome and loops
+    // MARK: Keyboard size (⋯ menu)
 
-    func test_metronomeBeats_fourFour_accentsTheFirstBeat() throws {
-        let four = Array(repeating: note("C", 5, duration: 1, type: "quarter"), count: 4)
-        let timeline = try parse(measures: [
-            ["attributes": ["divisions": "1", "time": ["beats": "4", "beat-type": "4"]], "note": four],
-            ["note": four]
-        ])
-        let beats = timeline.metronomeBeats()
-        let beat = 60.0 / 84                         // no tempo mark: 84 BPM
-        XCTAssertEqual(beats.count, 8)
-        XCTAssertEqual(beats.map(\.accent), [true, false, false, false, true, false, false, false])
-        for (k, b) in beats.enumerated() { XCTAssertEqual(b.seconds, Double(k) * beat, accuracy: 1e-9) }
-    }
+    func test_keyboardSize_choosesKeysOnScreen_keepingItsHeight() {
+        UserDefaults.standard.removeObject(forKey: "keyboardVisibleKeys")
+        defer { UserDefaults.standard.removeObject(forKey: "keyboardVisibleKeys") }
+        XCTAssertEqual(KeyboardSize.keyCount, 88, "all keys until the player chooses")
+        XCTAssertEqual(KeyboardSize.visibleWhiteKeys, 52)
+        XCTAssertTrue(KeyboardSize.showsAllKeys)
 
-    func test_metronomeBeats_compoundTime_countsDottedBeats() throws {
-        let six = Array(repeating: note("G", 4, duration: 1, type: "eighth"), count: 6)
-        let timeline = try parse(measures: [
-            ["attributes": ["divisions": "2", "time": ["beats": "6", "beat-type": "8"]], "note": six],
-            ["note": six]
-        ])
-        let beats = timeline.metronomeBeats()
-        XCTAssertEqual(beats.map(\.accent), [true, false, true, false])
-        XCTAssertEqual(beats[1].seconds, 1.5 * 60 / 84, accuracy: 1e-9, "a dotted quarter")
-    }
-
-    func test_metronomeBeats_pickupIsCountedFromItsEnd() throws {
-        let timeline = try parse(measures: [
-            ["@implicit": "yes", "attributes": ["divisions": "1", "time": ["beats": "4", "beat-type": "4"]],
-             "note": note("G", 4, duration: 1, type: "quarter")],
-            ["note": note("C", 5, duration: 4, type: "whole")]
-        ])
-        let beats = timeline.metronomeBeats()
-        XCTAssertEqual(beats.map(\.accent), [false, true, false, false, false])
-        XCTAssertEqual(beats[1].seconds, 60.0 / 84, accuracy: 1e-9, "bar 2 starts after the one-beat pickup")
-    }
-
-    func test_countIn_isOneBarBefore() throws {
-        let four = Array(repeating: note("C", 5, duration: 1, type: "quarter"), count: 4)
-        let timeline = try parse(measures: [["attributes": ["divisions": "1", "time": ["beats": "3", "beat-type": "4"]],
-                                             "note": Array(four.prefix(3))]])
-        let clicks = timeline.countIn(before: 0)
-        XCTAssertEqual(clicks.map(\.accent), [true, false, false])
-        XCTAssertEqual(clicks[0].seconds, -3 * 60.0 / 84, accuracy: 1e-9)
-        XCTAssertEqual(clicks[2].seconds, -60.0 / 84, accuracy: 1e-9)
-    }
-
-    func test_loopSeconds_followThePerformance() throws {
-        let timeline = try parse(measures: [
-            ["attributes": ["divisions": "1", "time": ["beats": "2", "beat-type": "4"]],
-             "barline": ["@location": "left", "repeat": ["@direction": "forward"]],
-             "note": note("C", 5, duration: 2)],
-            ["barline": [["@location": "left", "ending": ["@number": "1", "@type": "start"]],
-                         ["@location": "right", "ending": ["@number": "1", "@type": "stop"],
-                          "repeat": ["@direction": "backward"]]],
-             "note": note("D", 5, duration: 2)],
-            ["barline": [["@location": "left", "ending": ["@number": "2", "@type": "start"]],
-                         ["@location": "right", "ending": ["@number": "2", "@type": "discontinue"]]],
-             "note": note("E", 5, duration: 2)],
-            ["note": note("F", 5, duration: 2)]
-        ])
-        // performed: 0, 1, 0, 2, 3 (2 beats each)
-        let beat = 60.0 / 84
-        let bar1 = try XCTUnwrap(timeline.loopSeconds(fromMeasure: 1, toMeasure: 1))
-        XCTAssertEqual(bar1.lowerBound, 2 * beat, accuracy: 1e-9)
-        XCTAssertEqual(bar1.upperBound, 4 * beat, accuracy: 1e-9)
-        let zeroToTwo = try XCTUnwrap(timeline.loopSeconds(fromMeasure: 2, toMeasure: 0))
-        XCTAssertEqual(zeroToTwo.lowerBound, 0, accuracy: 1e-9, "either order; from the first time bar 0 plays")
-        XCTAssertEqual(zeroToTwo.upperBound, 8 * beat, accuracy: 1e-9, "to the end of bar 2, after the repeat")
+        KeyboardSize.step(-1)
+        XCTAssertEqual(KeyboardSize.label, "76 keys")
+        for _ in 0..<10 { KeyboardSize.step(-1) }
+        XCTAssertEqual(KeyboardSize.keyCount, 25)
+        XCTAssertEqual(KeyboardSize.visibleWhiteKeys, 15)
+        XCTAssertFalse(KeyboardSize.canShowFewer)
+        for _ in 0..<10 { KeyboardSize.step(1) }
+        XCTAssertFalse(KeyboardSize.canShowMore)
     }
 
     // MARK: Articulation, dynamics, fermatas

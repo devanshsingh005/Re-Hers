@@ -395,7 +395,21 @@ final class PlayAlongViewController: UIViewController {
                 }
             }
         }
-        return [metronome, loop]
+        return [metronome, loop, keyboardSizeMenu()]
+    }
+
+    /// "Keys on screen": − shows fewer, wider keys and + more, at once, with the menu left open
+    /// so the player can see the change and keep tapping (each stops at its end of the range;
+    /// they stay enabled, as an open menu isn't rebuilt between taps).
+    private func keyboardSizeMenu() -> UIMenu {
+        let fewer = UIAction(title: "Fewer keys", image: UIImage(systemName: "minus"),
+                             attributes: .keepsMenuPresented) { _ in KeyboardSize.step(-1) }
+        let more = UIAction(title: "More keys", image: UIImage(systemName: "plus"),
+                            attributes: .keepsMenuPresented) { _ in KeyboardSize.step(1) }
+        let menu = UIMenu(title: "Keys on screen", image: UIImage(systemName: "pianokeys"),
+                          options: .displayInline, children: [fewer, more])
+        menu.preferredElementSize = .small
+        return menu
     }
 
     /// The guide click runs while the metronome is on and a session is being played.

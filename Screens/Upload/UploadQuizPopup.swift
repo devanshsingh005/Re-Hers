@@ -260,7 +260,7 @@ class UploadQuizPopup: UIViewController {
         // Close button
         closeBtn.setImage(UIImage(systemName: "xmark"), for: .normal)
         closeBtn.tintColor = .tertiaryLabel
-        closeBtn.backgroundColor = UIColor.white.withAlphaComponent(0.06)
+        closeBtn.backgroundColor = .tertiarySystemFill
         closeBtn.layer.cornerRadius = 14
         closeBtn.clipsToBounds = true
         closeBtn.translatesAutoresizingMaskIntoConstraints = false
@@ -297,7 +297,7 @@ class UploadQuizPopup: UIViewController {
         cardView.addSubview(subtitleLabel)
 
         // Progress track
-        progressTrack.backgroundColor = UIColor.white.withAlphaComponent(0.08)
+        progressTrack.backgroundColor = .tertiarySystemFill
         progressTrack.layer.cornerRadius = 4
         progressTrack.clipsToBounds = true
         progressTrack.translatesAutoresizingMaskIntoConstraints = false
@@ -414,6 +414,7 @@ class UploadQuizPopup: UIViewController {
         feedbackLabel.textColor = .tertiaryLabel
         feedbackLabel.text = "Tap an answer to continue"
         feedbackLabel.numberOfLines = 1
+        feedbackLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         feedbackLabel.translatesAutoresizingMaskIntoConstraints = false
         quizCard.addSubview(feedbackLabel)
 
@@ -429,7 +430,15 @@ class UploadQuizPopup: UIViewController {
             staffContainer.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 18),
             staffContainer.leadingAnchor.constraint(equalTo: quizCard.leadingAnchor, constant: 14),
             staffContainer.trailingAnchor.constraint(equalTo: quizCard.trailingAnchor, constant: -14),
-            staffContainer.heightAnchor.constraint(equalToConstant: 150),
+            // the staff gives up height first when the sheet is short, so the answers and the
+            // line under them always fit
+            staffContainer.heightAnchor.constraint(lessThanOrEqualToConstant: 150),
+            staffContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 92),
+            {
+                let preferred = staffContainer.heightAnchor.constraint(equalToConstant: 150)
+                preferred.priority = .defaultHigh - 1
+                return preferred
+            }(),
 
             staffView.topAnchor.constraint(equalTo: staffContainer.topAnchor, constant: 6),
             staffView.bottomAnchor.constraint(equalTo: staffContainer.bottomAnchor, constant: -6),
@@ -922,13 +931,26 @@ class QuizAnswerButton: UIButton {
         titleLabel?.numberOfLines = 0
         titleLabel?.textAlignment = .center
         setTitleColor(SemanticColors.Text.primary, for: .normal)
+        titleLabel?.adjustsFontSizeToFitWidth = true
+        titleLabel?.minimumScaleFactor = 0.75
 
-        // Visible default state — subtle fill + border
-        backgroundColor = UIColor.white.withAlphaComponent(0.06)
+        // A tinted pill that reads in light and dark mode
+        backgroundColor = Self.fill
         layer.cornerRadius = 14
         layer.borderWidth = 1.5
-        layer.borderColor = UIColor.white.withAlphaComponent(0.10).cgColor
         clipsToBounds = true
+        updateBorderColor()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (button: QuizAnswerButton, _) in
+            button.updateBorderColor()
+        }
+    }
+
+    private static let fill = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.10)
+    private static let border = ComponentColors.HomeScreen.actionButtonFill.withAlphaComponent(0.35)
+    private var borderColor: UIColor = QuizAnswerButton.border
+
+    private func updateBorderColor() {
+        layer.borderColor = borderColor.resolvedColor(with: traitCollection).cgColor
     }
 
     override var isHighlighted: Bool {
@@ -944,7 +966,8 @@ class QuizAnswerButton: UIButton {
     func setCorrect() {
         backgroundColor = SemanticColors.State.correctSubtle
         setTitleColor(SemanticColors.State.correct, for: .normal)
-        layer.borderColor = SemanticColors.Border.success.cgColor
+        borderColor = SemanticColors.Border.success
+        updateBorderColor()
         transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
         UIView.animate(withDuration: 0.4, delay: 0,
                        usingSpringWithDamping: 0.4, initialSpringVelocity: 0.5) {
@@ -955,7 +978,8 @@ class QuizAnswerButton: UIButton {
     func setWrong() {
         backgroundColor = SemanticColors.State.incorrectSubtle
         setTitleColor(SemanticColors.State.incorrect, for: .normal)
-        layer.borderColor = SemanticColors.Border.error.cgColor
+        borderColor = SemanticColors.Border.error
+        updateBorderColor()
         let shake = CABasicAnimation(keyPath: "position")
         shake.duration = 0.05
         shake.repeatCount = 3

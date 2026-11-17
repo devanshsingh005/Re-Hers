@@ -186,9 +186,11 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     private let hands = GhostHandsView()
     private var lastLayoutSize = CGSize.zero
 
+    /// As many white keys as the player chose fit the width (all 52 = all 88 keys); with fewer,
+    /// the keyboard scrolls.
     private var whiteKeyW: CGFloat {
         guard !whiteKeys.isEmpty, bounds.width > 0 else { return 38 }
-        return bounds.width / CGFloat(whiteKeys.count)
+        return bounds.width / CGFloat(min(KeyboardSize.visibleWhiteKeys, whiteKeys.count))
     }
     private var blackKeyW: CGFloat { whiteKeyW * 0.58 }
     private let blackHRatio: CGFloat = 0.62
@@ -200,8 +202,25 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
         buildHands()
         updateInteraction()
         isMultipleTouchEnabled = true
+        NotificationCenter.default.addObserver(self, selector: #selector(visibleKeysChanged),
+                                               name: KeyboardSize.didChangeNotification, object: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    /// The ⋯ menu changed how many keys are on screen: the keys widen or narrow around the
+    /// middle of what is shown, then the notes in play are brought into view.
+    @objc private func visibleKeysChanged() {
+        let oldWidth = scrollView.contentSize.width
+        let middle = oldWidth > 0 ? (scrollView.contentOffset.x + scrollView.bounds.width / 2) / oldWidth : 0.5
+        UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseInOut) {
+            self.setNeedsLayout()
+            self.layoutIfNeeded()
+            self.scrollTo(middle * self.scrollView.contentSize.width - self.scrollView.bounds.width / 2)
+        } completion: { _ in
+            self.reveal(self.inPlay, newest: self.inPlay)
+        }
+        updateInteraction()
+    }
 
     // MARK: - Scroll View
     private func buildScrollView() {
@@ -257,6 +276,9 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     private func updateInteraction() {
         let enabled = mode == .playAlong
         (whiteKeys + blackKeys).forEach { $0.isUserInteractionEnabled = enabled }
+        // Animation's keys can't be played, so with fewer keys on screen they can be dragged
+        // sideways; Play Along's keys answer at a touch, and the keyboard follows the hints.
+        scrollView.isScrollEnabled = mode == .animation && !KeyboardSize.showsAllKeys
     }
 
     private func buildHands() {
@@ -293,9 +315,60 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
 
         hands.frame = bounds
         bringSubviewToFront(hands)
-        if bounds.size != lastLayoutSize {
-            lastLayoutSize = bounds.size
+        let layoutKey = CGSize(width: bounds.width, height: whiteKeyW)
+        if layoutKey != lastLayoutSize {
+            lastLayoutSize = layoutKey
             hands.keyWidth = whiteKeyW
+            scrollTo(scrollView.contentOffset.x)   // stay within the (new) keyboard width
+        }
+    }
+
+    // MARK: - Following the notes (fewer keys on screen)
+
+    /// Keys down in Animation, or to play in Play Along.
+    private var inPlay: Set<Int> = []
+    /// Keys pressed since the last follow (one chord or step).
+    private var justPressed: Set<Int> = []
+    private var followScheduled = false
+
+    private func scrollTo(_ x: CGFloat) {
+        let maxX = max(0, scrollView.contentSize.width - scrollView.bounds.width)
+        scrollView.contentOffset = CGPoint(x: max(0, min(maxX, x)).rounded(), y: 0)
+    }
+
+    /// Notes pressed together are followed once, after the last of them.
+    private func scheduleFollow() {
+        guard !followScheduled else { return }
+        followScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.followScheduled = false
+            self.reveal(self.inPlay, newest: self.justPressed)
+            self.justPressed = []
+        }
+    }
+
+    /// Scrolls so `midis` are on screen, if they aren't: centred on them all, or, when they
+    /// don't fit, on the newest ones (the right hand's, the melody, when those don't fit either).
+    private func reveal(_ midis: Set<Int>, newest: Set<Int>) {
+        let width = scrollView.bounds.width
+        guard scrollView.contentSize.width > width + 1, width > 0 else { return }
+        func span(_ set: Set<Int>) -> (min: CGFloat, max: CGFloat)? {
+            let frames = set.compactMap { keysByMidi[$0]?.frame }
+            guard let lo = frames.map(\.minX).min(), let hi = frames.map(\.maxX).max() else { return nil }
+            return (lo, hi)
+        }
+        let margin = whiteKeyW * 0.5
+        let fits: ((min: CGFloat, max: CGFloat)) -> Bool = { $0.max - $0.min + 2 * margin <= width }
+        var candidates = [midis, newest]
+        if let top = newest.max() { candidates.append([top]) }
+        guard let target = candidates.lazy.compactMap(span).first(where: fits) ?? span(newest) ?? span(midis)
+        else { return }
+        let shown = scrollView.contentOffset.x
+        if target.min >= shown + margin, target.max <= shown + width - margin { return }
+        let x = (target.min + target.max) / 2 - width / 2
+        UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseInOut, .allowUserInteraction]) {
+            self.scrollTo(x)
         }
     }
 
@@ -317,10 +390,14 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     /// Holds a key down in its hand's colour (left blue, right red) until `release`.
     func press(midi: Int, isLeft: Bool) {
         key(midi: midi)?.animatePress(color: isLeft ? AnimatedPianoKeyView.leftColor : AnimatedPianoKeyView.rightColor)
+        inPlay.insert(midi)
+        justPressed.insert(midi)
+        scheduleFollow()
     }
 
     func release(midi: Int) {
         key(midi: midi)?.animateRelease()
+        inPlay.remove(midi)
     }
 
     private func key(midi: Int) -> AnimatedPianoKeyView? {
@@ -331,6 +408,12 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     /// Play Along: the keys to play, in their hand's colour (others cleared).
     func hint(left: [Int], right: [Int]) {
         let l = Set(left), r = Set(right)
+        inPlay = l.union(r)
+        if !inPlay.isEmpty {
+            // the right hand's keys count as the newest: they are kept in view first
+            justPressed = r.isEmpty ? l : r
+            scheduleFollow()
+        }
         for (midi, key) in keysByMidi {
             if l.contains(midi) {
                 key.currentHand = .left; key.isHinted = true
@@ -350,6 +433,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     }
 
     func resetAllKeys() {
+        inPlay = []
         (whiteKeys + blackKeys).forEach { 
             $0.currentHand = nil
             $0.isHinted = false
@@ -397,5 +481,38 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
             if whitePC.contains(m % 12) { idx += 1 }
         }
         return idx < whiteKeys.count ? idx : nil
+    }
+}
+
+// MARK: - Keyboard size
+
+/// How many keys the player wants on screen in Animation and Play Along (both use the same
+/// setting): from all 88 down to two octaves. Fewer keys are wider; the keyboard scrolls to
+/// keep the notes being played (or to play) in view. Its height doesn't change.
+enum KeyboardSize {
+    static let didChangeNotification = Notification.Name("KeyboardSizeDidChange")
+    /// White keys across the screen, and how many keys (white and black) that shows.
+    static let options: [(white: Int, keys: Int)] = [(15, 25), (22, 37), (29, 49), (36, 61), (45, 76), (52, 88)]
+    private static let key = "keyboardVisibleKeys"
+
+    private static var index: Int {
+        let saved = UserDefaults.standard.object(forKey: key) as? Int ?? 88
+        return options.firstIndex { $0.keys == saved } ?? options.count - 1
+    }
+
+    static var visibleWhiteKeys: Int { options[index].white }
+    static var keyCount: Int { options[index].keys }
+    static var showsAllKeys: Bool { index == options.count - 1 }
+    static var canShowMore: Bool { index < options.count - 1 }
+    static var canShowFewer: Bool { index > 0 }
+    /// e.g. "61 keys"
+    static var label: String { "\(keyCount) keys" }
+
+    /// More keys on screen (+1) or fewer (-1); posts `didChangeNotification` if it changed.
+    static func step(_ delta: Int) {
+        let next = max(0, min(options.count - 1, index + delta))
+        guard next != index else { return }
+        UserDefaults.standard.set(options[next].keys, forKey: key)
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
     }
 }

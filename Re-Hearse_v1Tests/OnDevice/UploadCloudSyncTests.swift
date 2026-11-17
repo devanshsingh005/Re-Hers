@@ -64,6 +64,20 @@ final class UploadCloudSyncTests: XCTestCase {
         XCTAssertNil(OnDeviceSheetConverter.labeledPDF(pdfData: input, sheet: LabelSheet(pages: [sheet.pages[0]])))
     }
 
+    func test_labels_keepTheirHand_andOlderLabelsStillDecode() throws {
+        let left = NoteLabelRenderer.Label(text: "C3", x: 1, baseline: 2, fontSize: 3, isLeftHand: true)
+        let roundTrip = try JSONDecoder().decode(NoteLabelRenderer.Label.self, from: JSONEncoder().encode(left))
+        XCTAssertEqual(roundTrip.isLeftHand, true)
+        XCTAssertEqual(roundTrip.color, .systemBlue)
+
+        let older = Data(#"{"text":"E5","x":1,"baseline":2,"fontSize":3}"#.utf8)
+        let decoded = try JSONDecoder().decode(NoteLabelRenderer.Label.self, from: older)
+        XCTAssertNil(decoded.isLeftHand)
+        XCTAssertEqual(decoded.color, .black, "labels saved before hands were recorded stay black")
+        XCTAssertEqual(NoteLabelRenderer.Label(text: "E5", x: 1, baseline: 2, fontSize: 3, isLeftHand: false).color,
+                       .systemRed)
+    }
+
     @MainActor
     func test_add_rejectsFilesOver10MB() {
         let tooBig = Data(count: LocalSheetLibrary.maxFileBytes + 1)

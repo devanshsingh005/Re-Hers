@@ -18,6 +18,15 @@ nonisolated enum NoteLabelRenderer {
         let x: CGFloat
         let baseline: CGFloat
         let fontSize: CGFloat
+        /// Staff 2 and below (bass, left hand) as in Animation; nil in labels saved before the
+        /// hands were recorded, which stay black.
+        var isLeftHand: Bool? = nil
+
+        /// The hand colours of Animation's keys (AnimatedPianoKeyView): blue left, red right.
+        var color: UIColor {
+            guard let isLeftHand else { return .black }
+            return isLeftHand ? .systemBlue : .systemRed
+        }
     }
 
     /// The server's rules: label height 1.3 staff spaces, baseline 2.5 staff spaces below the
@@ -33,7 +42,7 @@ nonisolated enum NoteLabelRenderer {
     static let halfWidthScale: CGFloat = 0.9
     static let clearanceScale: CGFloat = 0.95
 
-    /// Lays out one label per note: "A4", "G#5", "Bb4" — the name OemerKit reports, or the one
+    /// Lays out one label per note, coloured by the hand that plays it: "A4", "G#5", "Bb4" — the name OemerKit reports, or the one
     /// `names` gives for that note (its index in `notes`) once the score has been corrected.
     static func layout(_ notes: [LocatedNote], names: [Int: String] = [:]) -> [Label] {
         struct StaffKey: Hashable { let system: Int; let staff: Int }
@@ -61,7 +70,8 @@ nonisolated enum NoteLabelRenderer {
                     y = p.y + lineHeight
                 }
                 placed.append((x, y))
-                labels.append(Label(text: names[index] ?? note.name, x: x, baseline: y, fontSize: fontSize))
+                labels.append(Label(text: names[index] ?? note.name, x: x, baseline: y, fontSize: fontSize,
+                                    isLeftHand: note.staff >= 2))
             }
         }
         return labels
@@ -73,7 +83,7 @@ nonisolated enum NoteLabelRenderer {
         for label in labels {
             let size = label.fontSize * scale
             let font = UIFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
-            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.black]
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: label.color]
             let text = label.text as NSString
             let width = text.size(withAttributes: attrs).width
             // draw(at:) takes the top-left of the line box; the baseline sits `ascender` below it

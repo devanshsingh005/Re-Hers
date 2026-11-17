@@ -42,20 +42,6 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     private var displayLink:     CADisplayLink?
     private var totalDuration:   Double = 0        // 1× length of the score in seconds
 
-    // Practice: metronome (with a bar of count-in), A–B loop, muted hands
-    private var beats: [ScoreTimeline.Beat] = []
-    private var nextBeatIndex = 0
-    private var countIn: [ScoreTimeline.Beat] = []     // clicks still to come before `countInEnd`
-    private var countInEnd: Double?                     // where playback starts after the count-in
-    private var metronomeOn = UserDefaults.standard.bool(forKey: AnimationViewController.metronomeKey) {
-        didSet { UserDefaults.standard.set(metronomeOn, forKey: Self.metronomeKey) }
-    }
-    private static let metronomeKey = "practice.metronome"
-    private var mutedLeft = false
-    private var mutedRight = false
-    private var loopBars: ClosedRange<Int>?
-    private var loopSeconds: ClosedRange<Double>?
-
     // MARK: - Child Views
     private let pianoVC   = PianoAnimationkeyboardViewController()
     private let sheetCard = SheetMusicView()
@@ -341,10 +327,6 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         self.timeline = timeline
         playNotes = Self.playNotes(in: timeline)
         totalDuration = timeline.performanceSeconds
-        beats = timeline.metronomeBeats()
-        nextBeatIndex = 0
-        loopBars = nil
-        loopSeconds = nil
         pianoVC.setHandPerformance(playNotes.map {
             HandNote(midi: $0.midi, isLeft: $0.isLeft, start: $0.start, release: $0.release)
         })
@@ -432,19 +414,8 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     private func startPlayback() {
         guard !playNotes.isEmpty else { return }
         if position >= totalDuration { position = 0 }
-        if sheetCard.isPickingLoop { sheetCard.cancelLoopPicking() }
-        // a loop plays from its start when playback begins outside it
-        if let loopSeconds, !loopSeconds.contains(position) { position = loopSeconds.lowerBound }
         // keys of notes already held at this point light up again (silently)
         seek(to: position)
-        // one bar of clicks before the music, at its tempo
-        if metronomeOn, let timeline {
-            countIn = timeline.countIn(before: position)
-            if let first = countIn.first {
-                countInEnd = position
-                position = first.seconds
-            }
-        }
         isPlaying = true
         lastFrameTime = nil
         overlay.setPlaying(true)
@@ -456,9 +427,6 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
 
     private func stopPlayback(reset: Bool) {
         isPlaying = false
-        if let countInEnd { position = countInEnd }   // stopped during the count-in
-        countIn = []
-        countInEnd = nil
         displayLink?.invalidate(); displayLink = nil
         releaseAllNotes()
         if reset {
@@ -507,16 +475,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     /// across that point are shown down.
     private func seek(to seconds: Double) {
         position = max(0, min(totalDuration, seconds))
-        countIn = []
-        countInEnd = nil
         releaseAllNotes()
-        // the next click is the first beat at or after the new position
-        var b = 0, e = beats.count
-        while b < e {
-            let mid = (b + e) / 2
-            if beats[mid].seconds < position - 0.0001 { b = mid + 1 } else { e = mid }
-        }
-        nextBeatIndex = b
         var lo = 0, hi = playNotes.count
         while lo < hi {
             let mid = (lo + hi) / 2
@@ -551,27 +510,6 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         }
         lastFrameTime = now
 
-        // the count-in: clicks only, then the music starts where it was asked to
-        if let end = countInEnd {
-            while let beat = countIn.first, beat.seconds <= position {
-                AudioEngineManager.shared.playClick(accent: beat.accent)
-                countIn.removeFirst()
-            }
-            guard position >= end else { return }
-            countInEnd = nil
-            position = end
-        }
-
-        // the loop: past B's end, back to A's start
-        if let loopSeconds, position >= loopSeconds.upperBound {
-            seek(to: loopSeconds.lowerBound)
-        }
-
-        while nextBeatIndex < beats.count && beats[nextBeatIndex].seconds <= position {
-            if metronomeOn { AudioEngineManager.shared.playClick(accent: beats[nextBeatIndex].accent) }
-            nextBeatIndex += 1
-        }
-
         // releases first, so a key struck again in the same frame goes down again
         holding.removeAll { i in
             guard playNotes[i].release <= position else { return false }
@@ -580,9 +518,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         }
         while nextNoteIndex < playNotes.count && playNotes[nextNoteIndex].start <= position {
             let note = playNotes[nextNoteIndex]
-            // a muted hand's keys still go down (to follow), without a sound
-            let muted = note.isLeft ? mutedLeft : mutedRight
-            pianoVC.noteOn(midi: note.midi, isLeft: note.isLeft, velocity: note.velocity, sound: !muted)
+            pianoVC.noteOn(midi: note.midi, isLeft: note.isLeft, velocity: note.velocity, sound: true)
             holding.append(nextNoteIndex)
             nextNoteIndex += 1
         }
@@ -618,17 +554,6 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         card.onInstrumentChanged = { inst in
             AudioEngineManager.shared.switchInstrument(to: inst)
         }
-        card.metronomeOn = metronomeOn
-        card.leftSoundOn = !mutedLeft
-        card.rightSoundOn = !mutedRight
-        card.loopState = sheetCard.isPickingLoop ? .picking : (loopBars == nil ? .none : .set)
-        card.onMetronomeChanged = { [weak self] on in self?.metronomeOn = on }
-        card.onHandSoundChanged = { [weak self] left, on in self?.setHand(left: left, muted: !on) }
-        card.onLoopAction = { [weak self] in
-            guard let self else { return }
-            self.toggleSettingsMenu()
-            self.loopAction()
-        }
         
         card.translatesAutoresizingMaskIntoConstraints = false
         card.alpha = 0
@@ -640,48 +565,13 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         NSLayoutConstraint.activate([
             card.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             card.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 16),
-            card.widthAnchor.constraint(equalToConstant: 268)
+            card.widthAnchor.constraint(equalToConstant: 240)
         ])
         
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
             card.alpha = 1
             card.transform = .identity
         }
-    }
-
-    // MARK: - Practice: hands and loop
-
-    /// Mutes or unmutes a hand; its keys keep showing. Notes of it sounding now stop.
-    private func setHand(left: Bool, muted: Bool) {
-        if left { mutedLeft = muted } else { mutedRight = muted }
-        guard muted else { return }
-        for i in holding where playNotes[i].isLeft == left {
-            if let midi = UInt8(exactly: playNotes[i].midi) { AudioEngineManager.shared.stopNote(midi: midi) }
-        }
-    }
-
-    /// Loop bars (pick two bars on the sheet), cancel picking, or clear the loop.
-    private func loopAction() {
-        if sheetCard.isPickingLoop {
-            sheetCard.cancelLoopPicking()
-        } else if loopBars != nil {
-            loopBars = nil
-            loopSeconds = nil
-            sheetCard.setLoop(nil)
-        } else {
-            if isPlaying { stopPlayback(reset: false) }
-            sheetCard.beginLoopPicking { [weak self] bars in self?.setLoop(bars) }
-        }
-    }
-
-    private func setLoop(_ bars: ClosedRange<Int>) {
-        guard let timeline, let seconds = timeline.loopSeconds(fromMeasure: bars.lowerBound, toMeasure: bars.upperBound)
-        else { return }
-        loopBars = bars
-        loopSeconds = seconds
-        sheetCard.setLoop(bars)
-        seek(to: seconds.lowerBound)
-        if !isPlaying { setOverlay(visible: true, animated: true) }
     }
 
     // MARK: - Gesture Delegate
@@ -694,9 +584,6 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             toggleSettingsMenu()
             return false
         }
-
-        // picking loop bars: taps on the sheet choose bars instead of playing
-        if sheetCard.isPickingLoop, sheetCard.frame.contains(loc) { return false }
 
         // Robust protection: if the touch is anywhere within the navbar's physical bounds, 
         // prevent the background playback gestures from firing.
@@ -711,28 +598,18 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
 
 // MARK: - Custom Settings Card UI (Stateful & Interactive)
 private final class SettingsMenuView: UIView {
-    enum MenuState { case main, tempo, sound, practice }
-    enum LoopState { case none, picking, set }
+    enum MenuState { case main, tempo, sound, keyboard }
     private var state: MenuState = .main
 
     var currentTempo: Double = 1.0 { didSet { tempoValLbl.text = String(format: "%.2g×", currentTempo) } }
     var onTempoChanged: ((Double) -> Void)?
     var onInstrumentChanged: ((AudioEngineManager.InstrumentType) -> Void)?
-
-    // Practice page
-    var metronomeOn = false
-    var leftSoundOn = true
-    var rightSoundOn = true
-    var loopState: LoopState = .none
-    var onMetronomeChanged: ((Bool) -> Void)?
-    var onHandSoundChanged: ((_ left: Bool, _ on: Bool) -> Void)?
-    /// Loop bars, cancel picking or clear the loop (by `loopState`).
-    var onLoopAction: (() -> Void)?
     
     private let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
     private let mainStack = UIStackView()
     private let titleLabel = UILabel()
     private let tempoValLbl = UILabel()
+    private let keyboardValLbl = UILabel()
     private let backBtn = UIButton(type: .system)
 
     init() {
@@ -796,19 +673,7 @@ private final class SettingsMenuView: UIView {
             titleLabel.text = "SETTINGS"
             mainStack.addArrangedSubview(makeMenuRow(title: "Change Tempo", icon: "metronome", action: #selector(showTempo)))
             mainStack.addArrangedSubview(makeMenuRow(title: "Choose Sound", icon: "pianokeys", action: #selector(showSound)))
-            mainStack.addArrangedSubview(makeMenuRow(title: "Practice", icon: "slider.horizontal.3", action: #selector(showPractice)))
-        case .practice:
-            titleLabel.text = "PRACTICE"
-            mainStack.addArrangedSubview(makeToggleRow(title: "Metronome", icon: "metronome", isOn: metronomeOn, tag: 0))
-            mainStack.addArrangedSubview(makeToggleRow(title: "Left hand sound", icon: "hand.raised", isOn: leftSoundOn, tag: 1))
-            mainStack.addArrangedSubview(makeToggleRow(title: "Right hand sound", icon: "hand.raised.fill", isOn: rightSoundOn, tag: 2))
-            let loopTitle: String
-            switch loopState {
-            case .none: loopTitle = "Loop bars…"
-            case .picking: loopTitle = "Cancel picking"
-            case .set: loopTitle = "Clear loop"
-            }
-            mainStack.addArrangedSubview(makeMenuRow(title: loopTitle, icon: "repeat", action: #selector(loopTapped)))
+            mainStack.addArrangedSubview(makeMenuRow(title: "Keys on Screen", icon: "arrow.left.and.right.square", action: #selector(showKeyboard)))
         case .tempo:
             titleLabel.text = "TEMPO"
             let minus = makeIconBtn(sym: "minus.circle.fill", action: #selector(doMinus))
@@ -817,6 +682,17 @@ private final class SettingsMenuView: UIView {
             tempoValLbl.textColor = .label
             
             let row = UIStackView(arrangedSubviews: [minus, tempoValLbl, plus])
+            row.axis = .horizontal; row.spacing = 24; row.alignment = .center; row.distribution = .equalCentering
+            mainStack.addArrangedSubview(row)
+        case .keyboard:
+            titleLabel.text = "KEYS ON SCREEN"
+            let minus = makeIconBtn(sym: "minus.circle.fill", action: #selector(fewerKeys))
+            let plus = makeIconBtn(sym: "plus.circle.fill", action: #selector(moreKeys))
+            keyboardValLbl.font = .monospacedDigitSystemFont(ofSize: 18, weight: .bold)
+            keyboardValLbl.textColor = .label
+            keyboardValLbl.textAlignment = .center
+            updateKeyboardRow(minus: minus, plus: plus)
+            let row = UIStackView(arrangedSubviews: [minus, keyboardValLbl, plus])
             row.axis = .horizontal; row.spacing = 24; row.alignment = .center; row.distribution = .equalCentering
             mainStack.addArrangedSubview(row)
         case .sound:
@@ -887,46 +763,26 @@ private final class SettingsMenuView: UIView {
         }
     }
 
-    /// A row with a switch (Metronome, a hand's sound); `tag` says which.
-    private func makeToggleRow(title: String, icon: String, isOn: Bool, tag: Int) -> UIView {
-        let img = UIImageView(image: UIImage(systemName: icon))
-        img.tintColor = BrandColors.brand; img.contentMode = .scaleAspectFit
-        img.widthAnchor.constraint(equalToConstant: 20).isActive = true
-        let lbl = UILabel()
-        lbl.text = title; lbl.font = .systemFont(ofSize: 15, weight: .medium); lbl.textColor = .label
-        lbl.adjustsFontSizeToFitWidth = true; lbl.minimumScaleFactor = 0.75
-        // the label gives way (shrinking its text) so the switch always fits in the card
-        lbl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let toggle = UISwitch()
-        toggle.setContentCompressionResistancePriority(.required, for: .horizontal)
-        toggle.isOn = isOn
-        toggle.onTintColor = BrandColors.brand
-        toggle.tag = tag
-        toggle.addTarget(self, action: #selector(toggleChanged(_:)), for: .valueChanged)
-        let row = UIStackView(arrangedSubviews: [img, lbl, toggle])
-        row.axis = .horizontal; row.spacing = 10; row.alignment = .center
-        row.isLayoutMarginsRelativeArrangement = true
-        row.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 10)
-        row.backgroundColor = UIColor.label.withAlphaComponent(0.04)
-        row.layer.cornerRadius = 14
-        row.heightAnchor.constraint(equalToConstant: 48).isActive = true
-        return row
-    }
-
-    @objc private func toggleChanged(_ sender: UISwitch) {
-        switch sender.tag {
-        case 0: metronomeOn = sender.isOn; onMetronomeChanged?(sender.isOn)
-        case 1: leftSoundOn = sender.isOn; onHandSoundChanged?(true, sender.isOn)
-        default: rightSoundOn = sender.isOn; onHandSoundChanged?(false, sender.isOn)
-        }
-    }
-
-    @objc private func loopTapped() { onLoopAction?() }
-    @objc private func showPractice() { renderState(.practice) }
-
     @objc private func goBack() { renderState(.main) }
     @objc private func showTempo() { renderState(.tempo) }
     @objc private func showSound() { renderState(.sound) }
+    @objc private func showKeyboard() { renderState(.keyboard) }
+    @objc private func fewerKeys(_ sender: UIButton) { stepKeyboard(-1, sender) }
+    @objc private func moreKeys(_ sender: UIButton) { stepKeyboard(1, sender) }
+
+    /// The keyboard behind the card changes at once (it listens for the change).
+    private func stepKeyboard(_ delta: Int, _ sender: UIButton) {
+        KeyboardSize.step(delta)
+        let row = sender.superview as? UIStackView
+        let buttons = row?.arrangedSubviews.compactMap { $0 as? UIButton } ?? []
+        updateKeyboardRow(minus: buttons.first, plus: buttons.last)
+    }
+
+    private func updateKeyboardRow(minus: UIButton?, plus: UIButton?) {
+        keyboardValLbl.text = KeyboardSize.label
+        minus?.isEnabled = KeyboardSize.canShowFewer
+        plus?.isEnabled = KeyboardSize.canShowMore
+    }
     @objc private func doMinus() { adjustTempo(-0.25) }
     @objc private func doPlus() { adjustTempo(0.25) }
     
