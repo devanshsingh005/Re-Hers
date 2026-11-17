@@ -891,9 +891,6 @@ final class UploadPageNextViewController: UIViewController {
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
-            sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 30),
             sheetHeaderLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 18),
@@ -904,7 +901,6 @@ final class UploadPageNextViewController: UIViewController {
             sheetPDFView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 14),
             sheetPDFView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 12),
             sheetPDFView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -12),
-            sheetPDFView.heightAnchor.constraint(equalToConstant: DeviceLayout.value(phone: 400, pad: 680)),
 
             sheetLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             sheetLoadingIndicator.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 200),
@@ -944,9 +940,6 @@ final class UploadPageNextViewController: UIViewController {
             metronomeLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -18),
             metronomeLabel.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -16),
 
-            tipsContainer.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 16),
-            tipsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            tipsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             tipsTitleLabel.topAnchor.constraint(equalTo: tipsContainer.topAnchor, constant: 18),
             tipsTitleLabel.leadingAnchor.constraint(equalTo: tipsContainer.leadingAnchor, constant: 18),
@@ -955,6 +948,21 @@ final class UploadPageNextViewController: UIViewController {
             tipsBodyLabel.leadingAnchor.constraint(equalTo: tipsContainer.leadingAnchor, constant: 18),
             tipsBodyLabel.trailingAnchor.constraint(equalTo: tipsContainer.trailingAnchor, constant: -18),
             tipsBodyLabel.bottomAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: -18),
+        ])
+        NSLayoutConstraint.activate(DeviceLayout.isPad ? twoPaneConstraints() : phoneConstraints())
+    }
+
+    /// Phone: the sheet card, then tips, then the two buttons side by side.
+    private func phoneConstraints() -> [NSLayoutConstraint] {
+        [
+            sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            sheetPDFView.heightAnchor.constraint(equalToConstant: 400),
+
+            tipsContainer.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 16),
+            tipsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            tipsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
             playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 24),
             playAlongButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
@@ -966,6 +974,49 @@ final class UploadPageNextViewController: UIViewController {
             animationButton.heightAnchor.constraint(equalToConstant: 46),
             animationButton.widthAnchor.constraint(equalTo: playAlongButton.widthAnchor),
             animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
-        ])
+        ]
     }
+
+    /// iPad: the sheet card fills the left at the screen's height; tips and the buttons sit in
+    /// a pane on the right instead of stretching under it.
+    private func twoPaneConstraints() -> [NSLayoutConstraint] {
+        let pane = UILayoutGuide()
+        contentView.addLayoutGuide(pane)
+        return [
+            pane.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            pane.widthAnchor.constraint(equalToConstant: 320),
+
+            sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            sheetContainer.trailingAnchor.constraint(equalTo: pane.leadingAnchor, constant: -24),
+            // the page fills what's left of the screen's height under the card's header and info
+            sheetPDFView.heightAnchor.constraint(equalTo: view.safeAreaLayoutGuide.heightAnchor, constant: -220),
+
+            tipsContainer.topAnchor.constraint(equalTo: sheetContainer.topAnchor),
+            tipsContainer.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            tipsContainer.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 24),
+            playAlongButton.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            playAlongButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            playAlongButton.heightAnchor.constraint(equalToConstant: 50),
+
+            animationButton.topAnchor.constraint(equalTo: playAlongButton.bottomAnchor, constant: 12),
+            animationButton.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            animationButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            animationButton.heightAnchor.constraint(equalToConstant: 50),
+
+            contentView.bottomAnchor.constraint(greaterThanOrEqualTo: animationButton.bottomAnchor, constant: 16),
+            contentView.bottomAnchor.constraint(greaterThanOrEqualTo: sheetContainer.bottomAnchor, constant: 16),
+            {
+                let fit = contentView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 16)
+                fit.priority = .defaultLow
+                return fit
+            }(),
+        ]
+    }
+}
+
+extension UploadPageNextViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1240 }
 }

@@ -360,6 +360,11 @@ class DiscoverSongDetailViewController: UIViewController {
     // MARK: - Constraints
 
     private func setupConstraints() {
+        NSLayoutConstraint.activate(sheetPaneConstraints())
+        if DeviceLayout.isPad {
+            setupTwoPaneConstraints()
+            return
+        }
         NSLayoutConstraint.activate([
             albumArt.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
             albumArt.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -386,13 +391,24 @@ class DiscoverSongDetailViewController: UIViewController {
             sheetContainer.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            sheetContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.value(phone: 430, pad: 700)),
+            sheetContainer.heightAnchor.constraint(equalToConstant: 430),
 
             buttonStack.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 24),
             buttonStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             buttonStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             buttonStack.heightAnchor.constraint(equalToConstant: 46),
 
+            bottomSpacer.topAnchor.constraint(equalTo: buttonStack.bottomAnchor),
+            bottomSpacer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            bottomSpacer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            bottomSpacer.heightAnchor.constraint(equalToConstant: 40),
+            bottomSpacer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+    }
+
+    /// The PDF, its placeholder and error inside the sheet card (both layouts).
+    private func sheetPaneConstraints() -> [NSLayoutConstraint] {
+        [
             pdfSkeleton.topAnchor.constraint(equalTo: sheetContainer.topAnchor),
             pdfSkeleton.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
             pdfSkeleton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
@@ -407,12 +423,58 @@ class DiscoverSongDetailViewController: UIViewController {
             pdfView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor),
             pdfView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor),
             pdfView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor),
+        ]
+    }
 
-            bottomSpacer.topAnchor.constraint(equalTo: buttonStack.bottomAnchor),
+    /// iPad: the song and its actions in a pane on the left, the sheet music filling the right
+    /// at the screen's height, so nothing has to stretch across the width.
+    private func setupTwoPaneConstraints() {
+        let pane = UILayoutGuide()
+        contentView.addLayoutGuide(pane)
+        buttonStack.axis = .vertical
+        let paneWidth: CGFloat = 340
+        NSLayoutConstraint.activate([
+            pane.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            pane.widthAnchor.constraint(equalToConstant: paneWidth),
+            pane.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+
+            albumArt.topAnchor.constraint(equalTo: pane.topAnchor),
+            albumArt.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
+            albumArt.widthAnchor.constraint(equalToConstant: 220),
+            albumArt.heightAnchor.constraint(equalToConstant: 220),
+
+            songTitleLabel.topAnchor.constraint(equalTo: albumArt.bottomAnchor, constant: 20),
+            songTitleLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            songTitleLabel.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            artistLabel.topAnchor.constraint(equalTo: songTitleLabel.bottomAnchor, constant: 2),
+            artistLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            artistLabel.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            sheetToggle.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 24),
+            sheetToggle.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            sheetToggle.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            buttonStack.topAnchor.constraint(equalTo: sheetToggle.bottomAnchor, constant: 24),
+            buttonStack.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            buttonStack.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            buttonStack.heightAnchor.constraint(equalToConstant: 2 * 50 + 12),
+
+            pageLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+            pageLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 4),
+
+            sheetContainer.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
+            sheetContainer.leadingAnchor.constraint(equalTo: pane.trailingAnchor, constant: 28),
+            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            // the sheet fills the visible height under the header
+            sheetContainer.heightAnchor.constraint(equalTo: view.safeAreaLayoutGuide.heightAnchor, constant: -70),
+
+            bottomSpacer.topAnchor.constraint(greaterThanOrEqualTo: buttonStack.bottomAnchor),
+            bottomSpacer.topAnchor.constraint(greaterThanOrEqualTo: sheetContainer.bottomAnchor),
             bottomSpacer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             bottomSpacer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            bottomSpacer.heightAnchor.constraint(equalToConstant: 40),
-            bottomSpacer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            bottomSpacer.heightAnchor.constraint(equalToConstant: 24),
+            bottomSpacer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
     }
 
@@ -855,4 +917,8 @@ final class DiscoverModerationService {
             .insert(payload)
             .execute()
     }
+}
+
+extension DiscoverSongDetailViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1240 }
 }

@@ -64,7 +64,8 @@ class HomeViewController: UIViewController {
     private let contentStack = UIStackView()
     /// "Home" and the greeting with the bell beside them, the same header as the other tabs.
     private let header = TabRootHeaderView(title: "Home", subtitle: "Welcome back",
-                                           accessory: NotificationBellButton())
+                                           accessory: NotificationBellButton(),
+                                           inset: DeviceLayout.isPad ? 40 : 20)
     private let navBackgroundView = UIVisualEffectView(effect: nil)
     private let navShadowLayer = UIView()
     private var inlineSubtitleLabel: UILabel?
@@ -431,6 +432,9 @@ class HomeViewController: UIViewController {
         rightColumn.spacing = Constants.sectionSpacing
         mainRow.axis = .horizontal
         mainRow.alignment = .top
+        // 20 pt more at the screen's edges: 40 pt there and between the columns, as in the design
+        mainRow.isLayoutMarginsRelativeArrangement = true
+        mainRow.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
 
         // wide: a tall card (about 45% of the screen) and a left column a little under half
         let cardHeight = card.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.45)
@@ -1427,4 +1431,9 @@ extension HomeViewController: UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         syncNavBarAlpha()
     }
+}
+
+extension HomeViewController: IPadContentWidth {
+    /// Two columns across the screen, as in the iPad design.
+    var iPadContentWidth: CGFloat { 1400 }
 }

@@ -17,7 +17,7 @@ final class TabRootHeaderView: UIView {
     let titleLabel = UILabel()
     let subtitleLabel = UILabel()
 
-    init(title: String, subtitle: String, accessory: UIView? = nil) {
+    init(title: String, subtitle: String, accessory: UIView? = nil, inset: CGFloat = 20) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -38,7 +38,7 @@ final class TabRootHeaderView: UIView {
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.height),
-            labelStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            labelStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
             labelStack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
 
@@ -46,14 +46,14 @@ final class TabRootHeaderView: UIView {
             accessory.translatesAutoresizingMaskIntoConstraints = false
             addSubview(accessory)
             NSLayoutConstraint.activate([
-                accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+                accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
                 accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
                 accessory.widthAnchor.constraint(equalToConstant: 44),
                 accessory.heightAnchor.constraint(equalToConstant: 44),
                 labelStack.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: -12),
             ])
         } else {
-            labelStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -20).isActive = true
+            labelStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -inset).isActive = true
         }
     }
 

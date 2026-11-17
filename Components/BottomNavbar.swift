@@ -8,9 +8,17 @@
 import Foundation
 import UIKit
 
+/// iPad: how wide a screen's content may grow. Its tab's column follows the screen on top;
+/// screens that don't say get a reading width.
+protocol IPadContentWidth {
+    var iPadContentWidth: CGFloat { get }
+}
+
 final class AppNavigationController: UINavigationController, UINavigationControllerDelegate {
     /// Called as a screen is about to show, with whether it is this tab's root.
     var onWillShow: ((_ isRoot: Bool) -> Void)?
+    /// Called as a screen is about to show (and again if a back swipe is cancelled).
+    var onWillShowController: ((UIViewController) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,10 +28,12 @@ final class AppNavigationController: UINavigationController, UINavigationControl
     func navigationController(_ navigationController: UINavigationController,
                               willShow viewController: UIViewController, animated: Bool) {
         onWillShow?(viewController === viewControllers.first)
+        onWillShowController?(viewController)
         // An interactive back swipe that is cancelled leaves the pushed screen showing.
         transitionCoordinator?.notifyWhenInteractionChanges { [weak self] context in
             guard context.isCancelled, let self else { return }
             self.onWillShow?(self.topViewController === self.viewControllers.first)
+            if let top = self.topViewController { self.onWillShowController?(top) }
         }
     }
 
@@ -39,24 +49,33 @@ final class AppNavigationController: UINavigationController, UINavigationControl
     }
 }
 
+extension NSLayoutConstraint {
+    /// The constraint at `priority`, for use inside `NSLayoutConstraint.activate([...])`.
+    func withPriority(_ priority: UILayoutPriority) -> NSLayoutConstraint {
+        self.priority = priority
+        return self
+    }
+}
+
 /// Sizes that grow on iPad, where the screen is far taller than the phone layouts assume.
 enum DeviceLayout {
     static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     static func value(phone: CGFloat, pad: CGFloat) -> CGFloat { isPad ? pad : phone }
 }
 
-/// On iPad, keeps a tab's screens in a centred column of readable width over the app's
-/// background, so phone-designed layouts don't stretch across a 13-inch screen. It fills the
-/// whole width when the window is narrower (Split View, Stage Manager, a small window).
+/// On iPad, keeps a tab's screens in a centred column over the app's background, so
+/// phone-designed layouts don't stretch across a 13-inch screen. The column's width follows
+/// the screen on top (`IPadContentWidth`): Home and the two-pane sheet pages are wide, lists
+/// and settings keep a reading width. It fills the window when that is narrower.
 final class ReadableColumnController: UIViewController {
-    static let maxWidth: CGFloat = 820
+    /// Lists, settings, forms: wide enough for rows, narrow enough to read.
+    static let readingWidth: CGFloat = 700
 
     let content: UIViewController
-    private let maxWidth: CGFloat
+    private var widthLimit: NSLayoutConstraint?
 
-    init(content: UIViewController, maxWidth: CGFloat = ReadableColumnController.maxWidth) {
+    init(content: UIViewController) {
         self.content = content
-        self.maxWidth = maxWidth
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -65,6 +84,10 @@ final class ReadableColumnController: UIViewController {
     override var tabBarItem: UITabBarItem! {
         get { content.tabBarItem }
         set { content.tabBarItem = newValue }
+    }
+
+    static func width(for screen: UIViewController?) -> CGFloat {
+        (screen as? IPadContentWidth)?.iPadContentWidth ?? readingWidth
     }
 
     override func viewDidLoad() {
@@ -76,15 +99,31 @@ final class ReadableColumnController: UIViewController {
         view.addSubview(column)
         let fill = column.widthAnchor.constraint(equalTo: view.widthAnchor)
         fill.priority = .defaultHigh
+        let top = (content as? UINavigationController)?.topViewController ?? content
+        let limit = column.widthAnchor.constraint(lessThanOrEqualToConstant: Self.width(for: top))
+        widthLimit = limit
         NSLayoutConstraint.activate([
             column.topAnchor.constraint(equalTo: view.topAnchor),
             column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             column.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            column.widthAnchor.constraint(lessThanOrEqualToConstant: maxWidth),
+            limit,
             column.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor),
             fill,
         ])
         content.didMove(toParent: self)
+    }
+
+    /// Resizes the column for the screen about to show, along with its push or pop.
+    func follow(_ screen: UIViewController, coordinator: UIViewControllerTransitionCoordinator?) {
+        let width = Self.width(for: screen)
+        guard let widthLimit, widthLimit.constant != width else { return }
+        widthLimit.constant = width
+        guard isViewLoaded, view.window != nil else { return }
+        if let coordinator {
+            coordinator.animate(alongsideTransition: { _ in self.view.layoutIfNeeded() })
+        } else {
+            view.layoutIfNeeded()
+        }
     }
 
     override var childForStatusBarStyle: UIViewController? { content }
@@ -116,8 +155,10 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func tabRoot(_ nav: AppNavigationController) -> UIViewController {
         guard usesColumns else { return nav }
         if let column = columns[ObjectIdentifier(nav)] { return column }
-        // Home lays its sections out in two columns across the screen; lists keep a reading width
-        let column = ReadableColumnController(content: nav, maxWidth: nav === homeNav ? 1400 : ReadableColumnController.maxWidth)
+        let column = ReadableColumnController(content: nav)
+        nav.onWillShowController = { [weak column, weak nav] screen in
+            column?.follow(screen, coordinator: nav?.transitionCoordinator)
+        }
         // the tab bar is told it is compact (so it sits at the bottom, as on iPhone); the screens
         // inside keep the iPad's regular width
         column.traitOverrides.horizontalSizeClass = .regular

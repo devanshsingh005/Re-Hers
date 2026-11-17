@@ -683,8 +683,10 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: 28),
-            signOutButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            signOutButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            // iPad: a button of its own size, centred, rather than one across the page
+            signOutButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            signOutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -48).withPriority(.defaultHigh),
+            signOutButton.widthAnchor.constraint(lessThanOrEqualToConstant: DeviceLayout.isPad ? 340 : .greatestFiniteMagnitude),
             signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
             signOutButton.heightAnchor.constraint(equalToConstant: 56),
         ])
