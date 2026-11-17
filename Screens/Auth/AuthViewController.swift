@@ -1069,22 +1069,18 @@ extension AuthViewController {
     /// The OTP code the user receives comes from Supabase's "Confirm signup"
     /// email template — set that template to use {{ .Token }} (not {{ .ConfirmationURL }})
     /// in the Supabase dashboard so a 6-digit code is sent instead of a magic link.
+    /// Asks the server whether the username is free. Sign-up runs signed out and profiles are
+    /// readable only by their owner, so this goes through `is_username_available` (a function
+    /// that returns just true or false) rather than reading profiles.
     func ensureUsernameAvailable(_ username: String) async throws {
-        struct UsernameRow: Decodable {
-            let id: String
-        }
-
         let normalizedUsername = InputValidator.trimOnSubmit(username)
 
-        let matches: [UsernameRow] = try await SupabaseManager.shared.client
-            .from("profiles")
-            .select("id")
-            .eq("username", value: normalizedUsername)
-            .limit(1)
+        let available: Bool = try await SupabaseManager.shared.client
+            .rpc("is_username_available", params: ["p_username": normalizedUsername])
             .execute()
             .value
 
-        if !matches.isEmpty {
+        if !available {
             throw AuthError.usernameAlreadyTaken
         }
     }
