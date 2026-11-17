@@ -43,6 +43,14 @@ final class AudioEngineManager {
     private var sfLoaded = false
     private var activePlaybackClients = 0
 
+    // Metronome clicks: short decaying tones on their own player
+    private var clickPlayer: AVAudioPlayerNode?
+    private var clickBuffers: (accent: AVAudioPCMBuffer, beat: AVAudioPCMBuffer)?
+
+    /// The clicks' pitches (A6 accented, E6 otherwise), so a listener can tell them from notes.
+    static let accentClickMidi = 93
+    static let beatClickMidi = 88
+
     // Fallback tone synth (used when no soundfont found)
     private var toneNodes: [UInt8: AVAudioPlayerNode] = [:]
     private var useFallback = false
@@ -74,6 +82,16 @@ final class AudioEngineManager {
         reverb.wetDryMix = 15
         engine.connect(sampler, to: reverb, format: nil)
         engine.connect(reverb, to: engine.mainMixerNode, format: nil)
+
+        let clickFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        let clickPlayer = AVAudioPlayerNode()
+        engine.attach(clickPlayer)
+        engine.connect(clickPlayer, to: engine.mainMixerNode, format: clickFormat)
+        if let accent = Self.makeClick(frequency: 1760, gain: 0.7, format: clickFormat),
+           let beat = Self.makeClick(frequency: 1318.5, gain: 0.5, format: clickFormat) {
+            clickBuffers = (accent, beat)
+        }
+        self.clickPlayer = clickPlayer
         engine.prepare()
 
         self.engine = engine
@@ -111,6 +129,11 @@ final class AudioEngineManager {
         if let reverb, engine.attachedNodes.contains(where: { $0 === reverb }) {
             engine.detach(reverb)
         }
+        if let clickPlayer, engine.attachedNodes.contains(where: { $0 === clickPlayer }) {
+            clickPlayer.stop()
+            engine.detach(clickPlayer)
+        }
+        clickPlayer = nil
 
         engine.stop()
         engine.reset()
@@ -183,6 +206,33 @@ final class AudioEngineManager {
             debugLog("❌ Engine start failed:", error); return
         }
         loadSoundFont(for: currentInstrument)
+    }
+
+    // MARK: - Metronome
+
+    /// One metronome click now: higher and louder on the bar's first beat.
+    func playClick(accent: Bool) {
+        startEngine()
+        guard let clickPlayer, let clickBuffers, isStarted else { return }
+        clickPlayer.scheduleBuffer(accent ? clickBuffers.accent : clickBuffers.beat, at: nil,
+                                   options: .interrupts, completionHandler: nil)
+        if !clickPlayer.isPlaying { clickPlayer.play() }
+    }
+
+    /// A 60 ms click: a tone with a 1 ms attack, decaying fast.
+    private static func makeClick(frequency: Double, gain: Float, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let rate = format.sampleRate
+        let frames = AVAudioFrameCount(rate * 0.06)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
+              let channel = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = frames
+        for i in 0..<Int(frames) {
+            let t = Double(i) / rate
+            let attack = min(1, t / 0.001)
+            let decay = exp(-t / 0.012)
+            channel[i] = gain * Float(attack * decay * sin(2 * .pi * frequency * t))
+        }
+        return buffer
     }
 
     // MARK: - Load SoundFont

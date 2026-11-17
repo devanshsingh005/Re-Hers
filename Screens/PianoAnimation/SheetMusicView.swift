@@ -122,7 +122,8 @@ final class SheetMusicView: UIView {
         cursorBand.frame = CGRect(x: spot.x - 0.9 * s, y: top, width: 1.8 * s, height: height)
         cursorBand.cornerRadius = 0.4 * s
         CATransaction.commit()
-        if spot.system != shownSystem { scroll(to: spot.system, animated: shownSystem >= 0) }
+        // while bars are being picked the reader may be on another line: stay there
+        if spot.system != shownSystem, !isPickingLoop { scroll(to: spot.system, animated: shownSystem >= 0) }
         updateNoteStates()
     }
 
@@ -172,6 +173,187 @@ final class SheetMusicView: UIView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
             marker.removeFromSuperlayer()
         }
+    }
+
+    // MARK: - A–B loop
+
+    /// The bars being looped (written measure indices), shaded on the page with A and B marks.
+    private(set) var loopBars: ClosedRange<Int>?
+    private var pickedFirstBar: Int?
+    private var onLoopPicked: ((ClosedRange<Int>) -> Void)?
+    private lazy var barTap = UITapGestureRecognizer(target: self, action: #selector(barTapped(_:)))
+    /// While picking, the page scrolls with the finger to reach any line.
+    private lazy var pageDrag = UIPanGestureRecognizer(target: self, action: #selector(pageDragged(_:)))
+    private var dragStartY: CGFloat = 0
+    private let hintLabel = UILabel()
+
+    var isPickingLoop: Bool { onLoopPicked != nil }
+
+    func setLoop(_ bars: ClosedRange<Int>?) {
+        loopBars = bars
+        drawLoopMarks()
+    }
+
+    /// Asks for the loop's first and last bar: two taps on the page (in either order; drag the
+    /// page to reach other lines). `completion` gets the bars.
+    func beginLoopPicking(completion: @escaping (ClosedRange<Int>) -> Void) {
+        onLoopPicked = completion
+        pickedFirstBar = nil
+        if barTap.view == nil {
+            addGestureRecognizer(barTap)
+            addGestureRecognizer(pageDrag)
+            setupHint()
+        }
+        barTap.isEnabled = true
+        pageDrag.isEnabled = true
+        showHint("Tap the first bar of the loop · drag to see more")
+        drawLoopMarks()
+    }
+
+    func cancelLoopPicking() {
+        onLoopPicked = nil
+        pickedFirstBar = nil
+        barTap.isEnabled = false
+        pageDrag.isEnabled = false
+        showHint(nil)
+        drawLoopMarks()
+        // back to the playing line
+        if let page, let timeline {
+            scroll(to: page.locate(min(currentTick, Double(timeline.totalTicks)), in: timeline).system, animated: true)
+        }
+    }
+
+    @objc private func barTapped(_ tap: UITapGestureRecognizer) {
+        guard let bar = bar(at: tap.location(in: self)) else { return }
+        if let first = pickedFirstBar {
+            let bars = min(first, bar)...max(first, bar)
+            let completion = onLoopPicked
+            cancelLoopPicking()
+            setLoop(bars)
+            completion?(bars)
+        } else {
+            pickedFirstBar = bar
+            showHint("Now tap the last bar · drag to see more")
+            drawLoopMarks()
+        }
+    }
+
+    @objc private func pageDragged(_ drag: UIPanGestureRecognizer) {
+        switch drag.state {
+        case .began:
+            dragStartY = pageOffset
+        case .changed:
+            setPageOffset(dragStartY - drag.translation(in: self).y, animated: false)
+        case .ended:
+            // a flick glides on a little
+            let glide = -drag.velocity(in: self).y * 0.25
+            setPageOffset(pageOffset + glide, animated: true)
+        default:
+            break
+        }
+    }
+
+    /// How far the page is scrolled (0 = its top).
+    var pageOffset: CGFloat { -pageLayer.transform.m42 }
+
+    /// Scrolls the page to `offset`, kept within its ends.
+    func setPageOffset(_ offset: CGFloat, animated: Bool) {
+        guard let page else { return }
+        let y = max(0, min(offset, page.height - bounds.height))
+        CATransaction.begin()
+        if animated {
+            CATransaction.setAnimationDuration(0.35)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut))
+        } else {
+            CATransaction.setDisableActions(true)
+        }
+        pageLayer.transform = CATransform3DMakeTranslation(0, -y, 0)
+        CATransaction.commit()
+    }
+
+    /// The bar under a point of the view (nil between lines).
+    func bar(at point: CGPoint) -> Int? {
+        guard let page else { return nil }
+        let y = point.y - pageLayer.transform.m42      // undo the scroll
+        guard let system = page.systems.firstIndex(where: { y >= $0.top - page.space && y <= $0.bottom + page.space })
+        else { return nil }
+        return page.bars.indices.first { i in
+            let bar = page.bars[i]
+            return bar.system == system && point.x >= bar.left && point.x < bar.right
+        }
+    }
+
+    private func drawLoopMarks() {
+        pageLayer.sublayers?.filter { $0.name == "LoopMark" }.forEach { $0.removeFromSuperlayer() }
+        guard let page else { return }
+        var shaded: [Int] = []
+        if let loopBars, onLoopPicked == nil { shaded = Array(loopBars) }
+        if let pickedFirstBar { shaded = [pickedFirstBar] }
+        let color = brandOrange
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for m in shaded where page.bars.indices.contains(m) {
+            let bar = page.bars[m]
+            let system = page.systems[bar.system]
+            let top = system.staffTops[0] - 1.2 * page.space
+            let bottom = (system.staffTops.last ?? top) + 5.2 * page.space
+            let shade = CALayer()
+            shade.name = "LoopMark"
+            shade.backgroundColor = color.withAlphaComponent(0.10).cgColor
+            shade.frame = CGRect(x: bar.left, y: top, width: bar.right - bar.left, height: bottom - top)
+            pageLayer.insertSublayer(shade, at: 0)
+        }
+        // A and B at the loop's ends
+        if let loopBars, onLoopPicked == nil, page.bars.indices.contains(loopBars.lowerBound),
+           page.bars.indices.contains(loopBars.upperBound) {
+            for (m, text, atLeft) in [(loopBars.lowerBound, "A", true), (loopBars.upperBound, "B", false)] {
+                let bar = page.bars[m]
+                let system = page.systems[bar.system]
+                let top = system.staffTops[0] - 1.2 * page.space
+                let bottom = (system.staffTops.last ?? top) + 5.2 * page.space
+                let edge = CALayer()
+                edge.name = "LoopMark"
+                edge.backgroundColor = color.cgColor
+                edge.frame = CGRect(x: (atLeft ? bar.left : bar.right) - 1.5, y: top, width: 3, height: bottom - top)
+                pageLayer.addSublayer(edge)
+                let label = CATextLayer()
+                label.name = "LoopMark"
+                label.string = text
+                label.font = UIFont.systemFont(ofSize: 11, weight: .heavy)
+                label.fontSize = 11
+                label.foregroundColor = UIColor.white.cgColor
+                label.backgroundColor = color.cgColor
+                label.alignmentMode = .center
+                label.cornerRadius = 8
+                label.contentsScale = displayScale
+                let x = atLeft ? bar.left - 1.5 : bar.right - 14.5
+                label.frame = CGRect(x: x, y: top - 16, width: 16, height: 16)
+                pageLayer.addSublayer(label)
+            }
+        }
+        CATransaction.commit()
+    }
+
+    private func setupHint() {
+        hintLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        hintLabel.textColor = .white
+        hintLabel.backgroundColor = brandOrange
+        hintLabel.textAlignment = .center
+        hintLabel.layer.cornerRadius = 13
+        hintLabel.clipsToBounds = true
+        hintLabel.alpha = 0
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hintLabel)
+        NSLayoutConstraint.activate([
+            hintLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            hintLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            hintLabel.heightAnchor.constraint(equalToConstant: 26),
+        ])
+    }
+
+    private func showHint(_ text: String?) {
+        if let text { hintLabel.text = "   \(text)   " }
+        UIView.animate(withDuration: 0.2) { self.hintLabel.alpha = text == nil ? 0 : 1 }
     }
 
     /// The measures on each line, top to bottom.
@@ -244,6 +426,7 @@ final class SheetMusicView: UIView {
         stateTick = -Double.infinity
         shownSystem = -1
         updateToTick(currentTick)
+        drawLoopMarks()
     }
 
     private var displayScale: CGFloat {
@@ -329,11 +512,19 @@ private struct MeasureSpot {
     var points: [(tick: Double, x: CGFloat)]
 }
 
+/// A measure's place on the page: its line and its barlines.
+private struct SheetBar {
+    let system: Int
+    let left: CGFloat
+    let right: CGFloat
+}
+
 private struct SheetPage {
     let space: CGFloat
     let height: CGFloat
     let systems: [SheetSystem]
     let spots: [MeasureSpot]
+    let bars: [SheetBar]
 
     func locate(_ tick: Double, in timeline: ScoreTimeline) -> (system: Int, x: CGFloat) {
         guard !spots.isEmpty else { return (0, 0) }
@@ -515,7 +706,8 @@ private struct PageBuilder {
             spots.append(MeasureSpot(system: lineOf[i], points: points))
         }
         let height = (systems.last?.bottom ?? 0) + 2 * s
-        let page = SheetPage(space: s, height: max(height, viewHeight), systems: systems, spots: spots)
+        let bars = timeline.measures.indices.map { SheetBar(system: lineOf[$0], left: measureX[$0], right: measureEndX[$0]) }
+        let page = SheetPage(space: s, height: max(height, viewHeight), systems: systems, spots: spots, bars: bars)
         return Result(layers: barLayers + lineLayers + ink + headLayers + textLayers, page: page, visuals: visuals)
     }
 

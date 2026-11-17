@@ -185,6 +185,38 @@ nonisolated final class PlayAlongSession {
         return events
     }
 
+    /// The bars being looped (written measure indices): after the last step of the last bar,
+    /// play goes back to the first step of the first.
+    private(set) var loopBars: ClosedRange<Int>?
+
+    /// Loops `bars` (nil: no loop). A step outside them moves to the loop's start.
+    @discardableResult
+    func setLoop(_ bars: ClosedRange<Int>?) -> [Event] {
+        loopBars = bars
+        guard let bars, let current, !bars.contains(current.measure) else { return [] }
+        return jumpToLoopStart()
+    }
+
+    /// Keys the app itself is sounding (accompaniment, metronome clicks): heard through the
+    /// microphone, they are not the player's mistakes until `time`.
+    func ignore(_ midis: [Int], until time: Double) {
+        for midi in midis { ringing.append((midi, time)) }
+    }
+
+    private func jumpToLoopStart() -> [Event] {
+        guard let bars = loopBars, let start = steps.firstIndex(where: { $0.measure >= bars.lowerBound }) else { return [] }
+        index = start
+        isFinished = false
+        hit = []
+        stepHadMistake = false
+        firstHitTime = nil
+        firstHitIsPrecise = false
+        stretch = []                          // no tempo across the jump back
+        skipEmptySteps()
+        if index >= steps.count { return [.finished] }
+        return [.advanced(to: index)]
+    }
+
     /// Moves on without the missing notes.
     func skip(at time: Double) -> [Event] {
         guard current != nil else { return [] }
@@ -339,12 +371,18 @@ nonisolated final class PlayAlongSession {
         // a chord have all been confirmed
         justPlayed = (expected, struck, time)
 
+        let finishedMeasure = step.measure
         index += 1
         hit = []
         stepHadMistake = false
         firstHitTime = nil
         firstHitIsPrecise = false
         skipEmptySteps()
+        // the loop: past its last bar, back to its first
+        if let bars = loopBars, bars.contains(finishedMeasure),
+           index >= steps.count || steps[index].measure > bars.upperBound {
+            return jumpToLoopStart()
+        }
         if index >= steps.count {
             isFinished = true
             return [.finished]

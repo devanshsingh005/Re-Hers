@@ -1639,3 +1639,93 @@ nonisolated private struct TimelineBuilder {
         }
     }
 }
+
+// MARK: - Metronome beats and loops
+
+nonisolated extension ScoreTimeline {
+    /// A metronome click in the performance: when (performance seconds) and whether it is the
+    /// bar's first beat.
+    struct Beat: Sendable, Equatable {
+        let seconds: Double
+        let accent: Bool
+    }
+
+    /// The time signature in force at each measure (4/4 until the first one).
+    func effectiveTimeSignatures() -> [ScoreTimeSignature] {
+        var current = ScoreTimeSignature(beats: 4, beatType: 4)
+        return measures.map { measure in
+            if let time = measure.time, time.beats > 0, time.beatType > 0 { current = time }
+            return current
+        }
+    }
+
+    /// Ticks of one counted beat and beats in a bar: the written beat, except compound time
+    /// (6/8, 9/8, 12/8…), which is counted in dotted beats.
+    func beatPattern(of time: ScoreTimeSignature) -> (beatTicks: Double, beatsPerBar: Int) {
+        let unit = Double(ticksPerQuarter) * 4 / Double(time.beatType)
+        if time.beatType >= 8, time.beats % 3 == 0, time.beats > 3 {
+            return (unit * 3, time.beats / 3)
+        }
+        return (unit, max(1, time.beats))
+    }
+
+    /// Every click through the performance (repeats unrolled), the first beat of each full bar
+    /// accented. A pickup bar (shorter than its time signature, at the start) is counted back
+    /// from its end, unaccented.
+    func metronomeBeats() -> [Beat] {
+        let signatures = effectiveTimeSignatures()
+        var beats: [Beat] = []
+        for (n, performed) in performance.enumerated() {
+            let measure = measures[performed.measureIndex]
+            let (beatTicks, beatsPerBar) = beatPattern(of: signatures[performed.measureIndex])
+            guard beatTicks > 0 else { continue }
+            let fullBar = beatTicks * Double(beatsPerBar)
+            let length = Double(measure.lengthTicks)
+            let isPickup = n == 0 && length + 1 < fullBar
+            var offsets: [Double] = []
+            if isPickup {
+                var t = length - beatTicks
+                while t > -0.5 { offsets.insert(max(0, t), at: 0); t -= beatTicks }
+            } else {
+                var t = 0.0
+                while t < length - 0.5 { offsets.append(t); t += beatTicks }
+            }
+            for (k, offset) in offsets.enumerated() {
+                let seconds = performanceTime.seconds(atTick: Double(performed.tick) + offset)
+                beats.append(Beat(seconds: seconds, accent: !isPickup && k == 0))
+            }
+        }
+        return beats
+    }
+
+    /// One bar of count-in before performance second `seconds`: its clicks' times (before
+    /// `seconds`), the first accented, at the tempo and beat of the bar playing there.
+    func countIn(before seconds: Double) -> [Beat] {
+        guard !performance.isEmpty else { return [] }
+        let tick = performanceTime.tick(atSeconds: max(0, seconds))
+        var lo = 0, hi = performance.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if Double(performance[mid].tick) <= tick { lo = mid } else { hi = mid - 1 }
+        }
+        let signature = effectiveTimeSignatures()[performance[lo].measureIndex]
+        let (beatTicks, beatsPerBar) = beatPattern(of: signature)
+        let beatSeconds = beatTicks / Double(ticksPerQuarter) * 60 / performanceTime.bpm(atTick: tick)
+        return (0..<beatsPerBar).map { k in
+            Beat(seconds: seconds - Double(beatsPerBar - k) * beatSeconds, accent: k == 0)
+        }
+    }
+
+    /// The performance seconds from the start of bar `first` to the end of bar `last` (written
+    /// measure indices, in either order): the first time bar `first` is played, through the
+    /// next time bar `last` is played after it.
+    func loopSeconds(fromMeasure first: Int, toMeasure last: Int) -> ClosedRange<Double>? {
+        let a = min(first, last), b = max(first, last)
+        guard let i = performance.firstIndex(where: { $0.measureIndex == a }),
+              let j = performance[i...].firstIndex(where: { $0.measureIndex == b }) else { return nil }
+        let start = performanceTime.seconds(atTick: Double(performance[i].tick))
+        let endTick = performance[j].tick + measures[performance[j].measureIndex].lengthTicks
+        let end = performanceTime.seconds(atTick: Double(endTick))
+        return end > start ? start...end : nil
+    }
+}

@@ -44,6 +44,19 @@ final class PlayAlongViewController: UIViewController {
     private var trackedPracticeSessionStartedAt: Date?
     private var lastHeard: CFTimeInterval = 0
 
+    // Practice: a guide click at the score's tempo, the A–B loop, the other hand played for you
+    private var metronomeOn = UserDefaults.standard.bool(forKey: "practice.metronome") {
+        didSet {
+            UserDefaults.standard.set(metronomeOn, forKey: "practice.metronome")
+            updateGuideClick()
+        }
+    }
+    private var signatures: [ScoreTimeSignature] = []
+    private var guideLink: CADisplayLink?
+    private var nextClickAt: CFTimeInterval = 0
+    private var clickCount = 0
+    private var accompanimentStarts: [DispatchWorkItem] = []
+
     init() {
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
@@ -91,11 +104,13 @@ final class PlayAlongViewController: UIViewController {
         super.viewDidAppear(animated)
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         if session != nil, session?.isFinished == false { startInput(askIfNeeded: true) }
+        updateGuideClick()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         listener.stop()
+        stopPracticeSounds()
         tabBarController?.tabBar.isHidden = false
         navigationController?.setNavigationBarHidden(false, animated: false)
         if #available(iOS 16.0, *), !DeviceLayout.isPad {
@@ -205,6 +220,9 @@ final class PlayAlongViewController: UIViewController {
         navBar.onMic = { [weak self] in self?.micTapped() }
         navBar.onHands = { [weak self] in self?.cycleHands() }
         navBar.onSkip = { [weak self] in self?.skip() }
+        navBar.setMenu(UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] done in
+            done(self?.practiceMenuItems() ?? [])
+        }]))
         keyboard.setPlayAlongMode { [weak self] midi in self?.touched(midi) }
         reportView.onRetry = { [weak self] in self?.restart() }
         reportView.onDone = { [weak self] in self?.close() }
@@ -254,6 +272,7 @@ final class PlayAlongViewController: UIViewController {
         guard !session.steps.isEmpty else { presentUnavailable(); return }
         self.session = session
         session.restart()
+        signatures = timeline.effectiveTimeSignatures()
         sheetMusic.load(timeline: timeline)
         // the fingers for every step (one second per step, for the hands' plan)
         var notes: [HandNote] = []
@@ -265,6 +284,7 @@ final class PlayAlongViewController: UIViewController {
         navBar.setHands(session.hands.label)
         refresh()
         if view.window != nil { startInput(askIfNeeded: true) }
+        updateGuideClick()
     }
 
     /// Shows the current step everywhere.
@@ -289,17 +309,31 @@ final class PlayAlongViewController: UIViewController {
         if frame.level > -50 { lastHeard = CACurrentMediaTime() }
         navBar.setMic(.listening(hearing: CACurrentMediaTime() - lastHeard < 0.4))
         guard let session, !session.isFinished, reportView.isHidden else { return }
-        handle(session.listen(frame))
+        perform { $0.listen(frame) }
     }
 
     private func pressed(_ midi: Int, at time: Double) {
         guard let session, !session.isFinished, reportView.isHidden else { return }
-        handle(session.key(midi, at: time))
+        perform { $0.key(midi, at: time) }
     }
 
     private func touched(_ midi: Int) {
         guard let session, !session.isFinished else { return }
-        handle(session.touch(midi, at: CACurrentMediaTime()))
+        perform { $0.touch(midi, at: CACurrentMediaTime()) }
+    }
+
+    /// Runs a session input and shows its events; when it moved on, the app plays the other
+    /// hand's part (one-hand practice) up to the next step.
+    private func perform(_ input: (PlayAlongSession) -> [PlayAlongSession.Event]) {
+        guard let session else { return }
+        let before = session.index
+        let events = input(session)
+        let moved = events.contains { event in
+            if case .advanced = event { return true }
+            return event == .finished
+        }
+        if moved { accompany(from: before, to: session.index) }
+        handle(events)
     }
 
     private func handle(_ events: [PlayAlongSession.Event]) {
@@ -333,8 +367,108 @@ final class PlayAlongViewController: UIViewController {
 
     private func skip() {
         guard let session, !session.isFinished else { return }
-        handle(session.skip(at: CACurrentMediaTime()))
+        perform { $0.skip(at: CACurrentMediaTime()) }
         refresh()
+    }
+
+    // MARK: Practice: metronome guide, loop, accompaniment
+
+    private func practiceMenuItems() -> [UIMenuElement] {
+        let metronome = UIAction(title: "Metronome", image: UIImage(systemName: "metronome"),
+                                 state: metronomeOn ? .on : .off) { [weak self] _ in self?.metronomeOn.toggle() }
+        let loop: UIAction
+        if sheetMusic.isPickingLoop {
+            loop = UIAction(title: "Cancel picking", image: UIImage(systemName: "xmark")) { [weak self] _ in
+                self?.sheetMusic.cancelLoopPicking()
+            }
+        } else if session?.loopBars != nil {
+            loop = UIAction(title: "Clear loop", image: UIImage(systemName: "repeat")) { [weak self] _ in
+                self?.session?.setLoop(nil)
+                self?.sheetMusic.setLoop(nil)
+            }
+        } else {
+            loop = UIAction(title: "Loop bars…", image: UIImage(systemName: "repeat")) { [weak self] _ in
+                self?.sheetMusic.beginLoopPicking { bars in
+                    guard let self else { return }
+                    self.perform { $0.setLoop(bars) }
+                    self.refresh()
+                }
+            }
+        }
+        return [metronome, loop]
+    }
+
+    /// The guide click runs while the metronome is on and a session is being played.
+    private func updateGuideClick() {
+        let run = metronomeOn && session?.isFinished == false && reportView.isHidden && view.window != nil
+        if run, guideLink == nil {
+            clickCount = 0
+            nextClickAt = CACurrentMediaTime() + 0.15
+            let link = CADisplayLink(target: self, selector: #selector(guideTick(_:)))
+            link.add(to: .main, forMode: .common)
+            guideLink = link
+        } else if !run {
+            guideLink?.invalidate()
+            guideLink = nil
+        }
+    }
+
+    /// A steady click at the score's tempo where the player is, beat 1 of each bar accented. It
+    /// doesn't wait for the player; the microphone ignores the click.
+    @objc private func guideTick(_ link: CADisplayLink) {
+        guard let session, let timeline else { return }
+        let now = CACurrentMediaTime()
+        guard now >= nextClickAt else { return }
+        let measure = session.current?.measure ?? 0
+        let signature = signatures.indices.contains(measure) ? signatures[measure] : ScoreTimeSignature(beats: 4, beatType: 4)
+        let (beatTicks, beatsPerBar) = timeline.beatPattern(of: signature)
+        let accent = clickCount % beatsPerBar == 0
+        AudioEngineManager.shared.playClick(accent: accent)
+        session.ignore([accent ? AudioEngineManager.accentClickMidi : AudioEngineManager.beatClickMidi], until: now + 0.25)
+        clickCount += 1
+        let beatSeconds = beatTicks / Double(timeline.ticksPerQuarter) * 60 / max(20, session.targetBPM)
+        nextClickAt = max(nextClickAt + beatSeconds, now + 0.05)   // no burst after a stall
+    }
+
+    /// One-hand practice: after the player completes step `before`, the app plays the other
+    /// hand's notes from that step up to the next one the player has to play, at the score's
+    /// timing scaled to the player's tempo, with the keys going down.
+    private func accompany(from before: Int, to after: Int) {
+        guard let session, let timeline, session.hands != .both, session.steps.indices.contains(before) else { return }
+        let steps = session.steps
+        let end = after > before ? min(after, steps.count) : before + 1   // a loop jump: just this step
+        let playsLeft = session.hands == .right
+        let scale = session.playedBPM.map { max(0.5, min(1.5, $0 / max(1, session.targetBPM))) } ?? 1
+        let time = timeline.writtenTime
+        let t0 = time.seconds(atTick: Double(steps[before].tick))
+        let now = CACurrentMediaTime()
+        accompanimentStarts.forEach { $0.cancel() }
+        accompanimentStarts = []
+        for s in before..<end {
+            let notes = playsLeft ? steps[s].left : steps[s].right
+            guard !notes.isEmpty else { continue }
+            let start = time.seconds(atTick: Double(steps[s].tick))
+            let at = (start - t0) / scale
+            let nextTick = s + 1 < steps.count ? Double(steps[s + 1].tick) : Double(steps[s].tick + timeline.ticksPerQuarter)
+            let length = max(0.12, min(1.2, (time.seconds(atTick: nextTick) - start) / scale - 0.03))
+            session.ignore(notes, until: now + at + length + 0.4)
+            let item = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                for midi in notes { self.keyboard.noteOn(midi: midi, isLeft: playsLeft, velocity: 80, sound: true) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + length) { [weak self] in
+                    for midi in notes { self?.keyboard.noteOff(midi: midi, isLeft: playsLeft) }
+                }
+            }
+            accompanimentStarts.append(item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + at, execute: item)
+        }
+    }
+
+    private func stopPracticeSounds() {
+        guideLink?.invalidate()
+        guideLink = nil
+        accompanimentStarts.forEach { $0.cancel() }
+        accompanimentStarts = []
     }
 
     // MARK: Microphone and MIDI
@@ -413,6 +547,8 @@ final class PlayAlongViewController: UIViewController {
     private func finish() {
         guard let session else { return }
         listener.stop()
+        guideLink?.invalidate()
+        guideLink = nil
         if !usesMIDI { navBar.setMic(.off) }
         navBar.setProgress(1)
         navBar.setPrompt(left: [], right: [], done: [], names: [:])
@@ -431,9 +567,11 @@ final class PlayAlongViewController: UIViewController {
         guard let session else { return }
         UIView.animate(withDuration: 0.2) { self.reportView.alpha = 0 } completion: { _ in self.reportView.isHidden = true }
         session.restart()
+        session.setLoop(session.loopBars)      // a loop stays on: start at its first bar
         sheetMusic.resetProgress()
         refresh()
         startInput(askIfNeeded: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.updateGuideClick() }
     }
 
     private func close() {
@@ -479,6 +617,7 @@ final class PlayAlongNavBar: UIView {
     private let micButton = UIButton(type: .system)
     private let handsButton = UIButton(type: .system)
     private let skipButton = UIButton(type: .system)
+    private let menuButton = UIButton(type: .system)
     private var progressWidth: NSLayoutConstraint?
     private var progress: CGFloat = 0
 
@@ -528,7 +667,12 @@ final class PlayAlongNavBar: UIView {
         skipButton.tintColor = .label
         skipButton.addTarget(self, action: #selector(skip), for: .touchUpInside)
 
-        let status = UIStackView(arrangedSubviews: [progressTrack, progressLabel, tempoLabel, micButton, handsButton, skipButton])
+        menuButton.setImage(UIImage(systemName: "ellipsis.circle", withConfiguration: small), for: .normal)
+        menuButton.tintColor = .label
+        menuButton.showsMenuAsPrimaryAction = true
+        menuButton.accessibilityLabel = "Practice options"
+
+        let status = UIStackView(arrangedSubviews: [progressTrack, progressLabel, tempoLabel, micButton, handsButton, skipButton, menuButton])
         status.axis = .horizontal
         status.alignment = .center
         status.spacing = 10
@@ -580,9 +724,13 @@ final class PlayAlongNavBar: UIView {
             tempoLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 66),
             micButton.widthAnchor.constraint(equalToConstant: 26),
             handsButton.widthAnchor.constraint(equalToConstant: 34),
-            skipButton.widthAnchor.constraint(equalToConstant: 26)
+            skipButton.widthAnchor.constraint(equalToConstant: 26),
+            menuButton.widthAnchor.constraint(equalToConstant: 26)
         ])
     }
+
+    /// The practice options (metronome, loop), built when opened.
+    func setMenu(_ menu: UIMenu) { menuButton.menu = menu }
 
     private func pill(radius: CGFloat) -> UIView {
         let view = UIView()

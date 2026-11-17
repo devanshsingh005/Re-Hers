@@ -141,4 +141,22 @@ final class PlayAlongSessionTests: XCTestCase {
         XCTAssertEqual(session.touch(midi("G4"), at: 2), [.hit(midi: midi("G4")), .finished])
         XCTAssertEqual(session.result.accuracy, 75)
     }
+
+    func test_loop_goesBackToItsFirstBar() throws {
+        // three bars of four quarter notes (right hand only)
+        let names = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5", "F5", "G5"]
+        let timeline = try score(names.map { ([$0], []) })
+        let session = PlayAlongSession(timeline: timeline)
+        session.restart()
+        XCTAssertEqual(session.setLoop(1...1), [.advanced(to: 4)], "outside the loop: to its first step")
+        var time = 1.0
+        for name in ["G4", "A4", "B4"] { _ = session.touch(midi(name), at: time); time += 0.5 }
+        let events = session.touch(midi("C5"), at: time)
+        XCTAssertEqual(events.last, .advanced(to: 4), "after bar 2's last step, back to its first")
+        XCTAssertFalse(session.isFinished)
+        session.setLoop(nil)
+        for name in ["G4", "A4", "B4", "C5", "D5", "E5", "F5"] { time += 0.5; _ = session.touch(midi(name), at: time) }
+        XCTAssertEqual(session.touch(midi("G5"), at: time + 0.5).last, .finished, "no loop: on to the end")
+    }
 }
+
