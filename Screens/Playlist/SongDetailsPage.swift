@@ -277,7 +277,6 @@ class PlaylistSongDetailViewController: UIViewController {
         configure(animationButton,  title: "Animation",  isPrimary: true)
         configure(playAlongButton, title: "Play Along", isPrimary: false)
         guard !presentGuestAnimationGateIfNeeded() else { return }
-        guard canPresentAnimation() else { return }
 
         if sheetMusicJSON == nil {
             loadSheetData()
@@ -312,15 +311,6 @@ class PlaylistSongDetailViewController: UIViewController {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
-    }
-
-    private func canPresentAnimation() -> Bool {
-        guard UIDevice.current.userInterfaceIdiom == .phone else {
-            alert("Animation is currently available on iPhone only.")
-            return false
-        }
-
-        return true
     }
 
     private func updateActionButtonState() {

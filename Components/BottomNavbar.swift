@@ -39,6 +39,60 @@ final class AppNavigationController: UINavigationController, UINavigationControl
     }
 }
 
+/// Sizes that grow on iPad, where the screen is far taller than the phone layouts assume.
+enum DeviceLayout {
+    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    static func value(phone: CGFloat, pad: CGFloat) -> CGFloat { isPad ? pad : phone }
+}
+
+/// On iPad, keeps a tab's screens in a centred column of readable width over the app's
+/// background, so phone-designed layouts don't stretch across a 13-inch screen. It fills the
+/// whole width when the window is narrower (Split View, Stage Manager, a small window).
+final class ReadableColumnController: UIViewController {
+    static let maxWidth: CGFloat = 820
+
+    let content: UIViewController
+
+    init(content: UIViewController) {
+        self.content = content
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var tabBarItem: UITabBarItem! {
+        get { content.tabBarItem }
+        set { content.tabBarItem = newValue }
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = ComponentColors.App.screenBackground
+        addChild(content)
+        let column = content.view!
+        column.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(column)
+        let fill = column.widthAnchor.constraint(equalTo: view.widthAnchor)
+        fill.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            column.topAnchor.constraint(equalTo: view.topAnchor),
+            column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            column.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            column.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxWidth),
+            column.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor),
+            fill,
+        ])
+        content.didMove(toParent: self)
+    }
+
+    override var childForStatusBarStyle: UIViewController? { content }
+    override var childForStatusBarHidden: UIViewController? { content }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { content.supportedInterfaceOrientations }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        content.preferredInterfaceOrientationForPresentation
+    }
+}
+
 /// Home, Library and Settings, plus Search as its own tab (iOS 26 shows it apart, Apple Music style).
 /// The last-played sheet rides above the tab bar as a mini player.
 class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
@@ -51,6 +105,25 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private lazy var libraryNav  = makeNav(DiscoverViewController())
     private lazy var settingsNav = makeNav(UserProfileViewController())
     private lazy var searchNav   = makeNav(AppSearchViewController())
+
+    /// iPad: each tab's navigation sits in a readable-width column (see ReadableColumnController).
+    private let usesColumns = UIDevice.current.userInterfaceIdiom == .pad
+    private var columns: [ObjectIdentifier: ReadableColumnController] = [:]
+
+    /// What the tab shows for `nav`: the navigation controller itself, or its iPad column.
+    private func tabRoot(_ nav: AppNavigationController) -> UIViewController {
+        guard usesColumns else { return nav }
+        if let column = columns[ObjectIdentifier(nav)] { return column }
+        let column = ReadableColumnController(content: nav)
+        columns[ObjectIdentifier(nav)] = column
+        return column
+    }
+
+    /// The selected tab's navigation controller.
+    var selectedNav: UINavigationController? {
+        (selectedViewController as? UINavigationController)
+            ?? ((selectedViewController as? ReadableColumnController)?.content as? UINavigationController)
+    }
 
     private let miniPlayer = MiniPlayerView()
     /// Pre-iOS 26 the mini player floats above the tab bar in this container.
@@ -86,25 +159,39 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
 
     private func makeNav(_ root: UIViewController) -> AppNavigationController {
         let nav = AppNavigationController(rootViewController: root)
-        nav.onWillShow = { [weak self, weak nav] _ in
-            guard let self, let nav, nav === self.selectedViewController else { return }
+        nav.onWillShow = { [weak self, weak nav] isRoot in
+            guard let self, let nav, nav === self.selectedNav else { return }
+            // In a column the tab bar can't see the push, so hide it here like hidesBottomBarWhenPushed.
+            if self.usesColumns { self.setTabBarHiddenForPush(!isRoot) }
             self.refreshMiniPlayer()
         }
         return nav
     }
 
+    private func setTabBarHiddenForPush(_ hidden: Bool) {
+        let animated = viewIfLoaded?.window != nil
+        if #available(iOS 18.0, *) {
+            guard isTabBarHidden != hidden else { return }
+            setTabBarHidden(hidden, animated: animated)
+        } else {
+            tabBar.isHidden = hidden
+        }
+    }
+
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        if usesColumns { setTabBarHiddenForPush(!isShowingTabRoot) }
         refreshMiniPlayer()
     }
 
     @available(iOS 18.0, *)
     func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
+        if usesColumns { setTabBarHiddenForPush(!isShowingTabRoot) }
         refreshMiniPlayer()
     }
 
     /// Pushed screens hide the tab bar; the mini player goes with it so it never covers their buttons.
     private var isShowingTabRoot: Bool {
-        guard let nav = selectedViewController as? UINavigationController else { return true }
+        guard let nav = selectedNav else { return true }
         // During a push the new screen is already on the stack; during a pop it's already off.
         return nav.viewControllers.count <= 1
     }
@@ -114,12 +201,12 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func setupTabs() {
         if #available(iOS 18.0, *) {
             let home = UITab(title: "Home", image: UIImage(systemName: "house.fill"),
-                             identifier: TabID.home.rawValue) { [unowned self] _ in self.homeNav }
+                             identifier: TabID.home.rawValue) { [unowned self] _ in self.tabRoot(self.homeNav) }
             let library = UITab(title: "Library", image: UIImage(systemName: "music.note.list"),
-                                identifier: TabID.library.rawValue) { [unowned self] _ in self.libraryNav }
+                                identifier: TabID.library.rawValue) { [unowned self] _ in self.tabRoot(self.libraryNav) }
             let settings = UITab(title: "Settings", image: UIImage(systemName: "gearshape.fill"),
-                                 identifier: TabID.settings.rawValue) { [unowned self] _ in self.settingsNav }
-            let search = UISearchTab { [unowned self] _ in self.searchNav }
+                                 identifier: TabID.settings.rawValue) { [unowned self] _ in self.tabRoot(self.settingsNav) }
+            let search = UISearchTab { [unowned self] _ in self.tabRoot(self.searchNav) }
             if #available(iOS 26.0, *) {
                 search.automaticallyActivatesSearch = true
             }
@@ -131,14 +218,14 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
             settingsNav.tabBarItem = UITabBarItem(title: "Settings", image: UIImage(systemName: "gearshape"),
                                                   selectedImage: UIImage(systemName: "gearshape.fill"))
             searchNav.tabBarItem = UITabBarItem(tabBarSystemItem: .search, tag: 3)
-            viewControllers = [homeNav, libraryNav, settingsNav, searchNav]
+            viewControllers = [homeNav, libraryNav, settingsNav, searchNav].map(tabRoot)
         }
     }
 
     /// Switches to a tab and returns its navigation controller, popped to the root.
     @discardableResult
     func select(_ tab: TabID, popToRoot: Bool = true) -> UINavigationController {
-        let nav: UINavigationController
+        let nav: AppNavigationController
         switch tab {
         case .home:     nav = homeNav
         case .library:  nav = libraryNav
@@ -148,7 +235,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         if #available(iOS 18.0, *), let uiTab = self.tab(forIdentifier: tab.rawValue) {
             selectedTab = uiTab
         } else {
-            selectedViewController = nav
+            selectedViewController = tabRoot(nav)
         }
         if popToRoot { nav.popToRootViewController(animated: false) }
         return nav
@@ -228,7 +315,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
             refreshMiniPlayer()
             return
         }
-        let nav = (selectedViewController as? UINavigationController) ?? homeNav
+        let nav = selectedNav ?? homeNav
         nav.presentedViewController?.dismiss(animated: false)
 
         let detail: UIViewController

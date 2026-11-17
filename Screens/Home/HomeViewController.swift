@@ -199,7 +199,8 @@ class HomeViewController: UIViewController {
     }
 
     private func guestGatePresenter() -> UIViewController? {
-        if let navigationController = tabBarController?.selectedViewController as? UINavigationController {
+        if let navigationController = mainTabBarController?.selectedNav
+            ?? tabBarController?.selectedViewController as? UINavigationController {
             return navigationController.visibleViewController ?? navigationController.topViewController ?? navigationController
         }
 
@@ -922,8 +923,12 @@ class HomeViewController: UIViewController {
         let popup = UploadQuizPopup()
         popup.delegate = self
         
-        popup.modalPresentationStyle = .pageSheet
-        if let sheet = popup.sheetPresentationController {
+        // iPad: a centred card sized to the quiz rather than a sheet across the whole screen
+        popup.modalPresentationStyle = DeviceLayout.isPad ? .formSheet : .pageSheet
+        if DeviceLayout.isPad {
+            popup.preferredContentSize = CGSize(width: 520, height: 600)
+        }
+        if !DeviceLayout.isPad, let sheet = popup.sheetPresentationController {
             // Custom detent at ~65% of screen height for a "bigger" feel than medium
             let customDetent = UISheetPresentationController.Detent.custom { context in
                 context.maximumDetentValue * 0.65

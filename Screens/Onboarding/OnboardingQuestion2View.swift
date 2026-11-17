@@ -159,6 +159,9 @@ struct OnboardingQuestion2View: View {
             .padding(.bottom, 24)
             .padding(.top, 10)
         }
+        // iPad: a readable column; the background still fills the screen
+        .frame(maxWidth: DeviceLayout.isPad ? 640 : .infinity)
+        .frame(maxWidth: .infinity)
         .background(
             GlassBackgroundView()
                 .ignoresSafeArea()

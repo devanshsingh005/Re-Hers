@@ -557,8 +557,15 @@ private extension AuthViewController {
         // ScrollView and ContentView constraints
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // a form-width column on iPad; the full width on a phone
+            scrollView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            scrollView.widthAnchor.constraint(lessThanOrEqualToConstant: 560),
+            scrollView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor),
+            {
+                let fill = scrollView.widthAnchor.constraint(equalTo: view.widthAnchor)
+                fill.priority = .defaultHigh
+                return fill
+            }(),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),

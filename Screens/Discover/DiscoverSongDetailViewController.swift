@@ -386,7 +386,7 @@ class DiscoverSongDetailViewController: UIViewController {
             sheetContainer.topAnchor.constraint(equalTo: pageLabel.bottomAnchor, constant: 10),
             sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            sheetContainer.heightAnchor.constraint(equalToConstant: 430),
+            sheetContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.value(phone: 430, pad: 700)),
 
             buttonStack.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 24),
             buttonStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
@@ -484,7 +484,6 @@ class DiscoverSongDetailViewController: UIViewController {
 
     @objc private func didTapAnimation() {
         guard !presentGuestAnimationGateIfNeeded() else { return }
-        guard canPresentAnimation() else { return }
 
         if sheetMusicJSON == nil {
             loadSheetData()
@@ -522,15 +521,6 @@ class DiscoverSongDetailViewController: UIViewController {
         let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
-    }
-
-    private func canPresentAnimation() -> Bool {
-        guard UIDevice.current.userInterfaceIdiom == .phone else {
-            showAnimationError("Animation is currently available on iPhone only.")
-            return false
-        }
-
-        return true
     }
 
     private func showConvertedJSONMissingError() {

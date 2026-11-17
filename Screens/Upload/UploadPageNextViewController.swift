@@ -113,7 +113,7 @@ final class UploadPageNextViewController: UIViewController {
                   let json = validSheetMusicJSON(orPresentingFor: "Play Along") else { return }
             startPlayAlong(with: json)
         case .animation:
-            guard !presentGuestAnimationGateIfNeeded(), canPresentAnimation(),
+            guard !presentGuestAnimationGateIfNeeded(),
                   let json = validSheetMusicJSON(orPresentingFor: "Animation") else { return }
             navigateToAnimation(withJSON: json)
         }
@@ -648,7 +648,6 @@ final class UploadPageNextViewController: UIViewController {
         NavigationBarHelper.animateButtonPress(animationButton) { [weak self] in
             guard let self = self else { return }
             guard !self.presentGuestAnimationGateIfNeeded() else { return }
-            guard self.canPresentAnimation() else { return }
             guard let json = self.validSheetMusicJSON(orPresentingFor: "Animation") else { return }
             self.navigateToAnimation(withJSON: json)
         }
@@ -707,18 +706,6 @@ final class UploadPageNextViewController: UIViewController {
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
         recordLastPlayed(.animation)
-    }
-
-    private func canPresentAnimation() -> Bool {
-        guard UIDevice.current.userInterfaceIdiom == .phone else {
-            showFeatureUnavailableAlert(
-                title: "Unavailable",
-                message: "Animation is currently available on iPhone only."
-            )
-            return false
-        }
-
-        return true
     }
 
     private func showAnimationError(_ msg: String) {
@@ -917,7 +904,7 @@ final class UploadPageNextViewController: UIViewController {
             sheetPDFView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 14),
             sheetPDFView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 12),
             sheetPDFView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -12),
-            sheetPDFView.heightAnchor.constraint(equalToConstant: 400),
+            sheetPDFView.heightAnchor.constraint(equalToConstant: DeviceLayout.value(phone: 400, pad: 680)),
 
             sheetLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
             sheetLoadingIndicator.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 200),

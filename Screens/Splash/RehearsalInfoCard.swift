@@ -94,6 +94,9 @@ struct RehearsalFeaturesSheetView: View {
                     }
                     .padding(14)
                 }
+                // iPad: a floating card of form width instead of a sheet across the screen
+                .frame(maxWidth: DeviceLayout.isPad ? 560 : .infinity)
+                .padding(.bottom, DeviceLayout.isPad ? 40 : 0)
                 // Slide from fully below screen → resting position
                 .offset(y: isUp ? max(0, dragY) : geo.size.height + 60)
                 .animation(
