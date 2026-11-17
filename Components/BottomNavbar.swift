@@ -340,9 +340,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         if let item { miniPlayer.configure(with: item) }
 
         if #available(iOS 26.0, *) {
-            // iPad Home shows the last-played sheet in its own column instead
-            let homeHasItsOwn = usesColumns && selectedNav === homeNav
-            let wantsAccessory = item != nil && isShowingTabRoot && !homeHasItsOwn
+            let wantsAccessory = item != nil && isShowingTabRoot
             if wantsAccessory, bottomAccessory == nil {
                 setBottomAccessory(UITabAccessory(contentView: miniPlayer), animated: viewIfLoaded?.window != nil)
             } else if !wantsAccessory, bottomAccessory != nil {
@@ -353,7 +351,6 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
             tabBarMinimizeBehavior = wantsAccessory ? .onScrollDown : .never
         } else {
             legacyMiniPlayerContainer?.isHidden = item == nil || !isShowingTabRoot
-                || (usesColumns && selectedNav === homeNav)
             for nav in [homeNav, libraryNav, settingsNav, searchNav] {
                 nav.additionalSafeAreaInsets.bottom = item == nil ? 0 : 64
             }

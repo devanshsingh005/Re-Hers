@@ -24,7 +24,7 @@ class HomeViewController: UIViewController {
         static let horizontalPadding: CGFloat = 20
         static let sectionSpacing:    CGFloat = 32
         static let recentUploadsShown = 3
-        static let playlistTileSize:  CGFloat = DeviceLayout.isPad ? 200 : 140
+        static let playlistTileSize:  CGFloat = DeviceLayout.isPad ? 224 : 140
         static let pdfPageSize = CGSize(width: 612, height: 792)
         static let maxUploadSizeBytes = 10 * 1024 * 1024
     }
@@ -72,16 +72,14 @@ class HomeViewController: UIViewController {
     private let playlistTilesStack = UIStackView()
     private let recentUploadsStack = UIStackView()
 
-    // Wide layout (iPad): two columns. Left: the scan card, Scan to Play, Upload and the
-    // last-played sheet; right: playlists above recent uploads. Narrow (iPhone): one column.
+    // Wide layout (iPad): two columns. Left: the scan card (filling the column), Scan to Play
+    // and Upload; right: playlists above recent uploads. Narrow (iPhone): one column.
     private let heroColumn = UIStackView()
     private lazy var heroWrapper = padded(heroColumn)
     private var playlistSection = UIView()
     private var recentSection = UIView()
     private let rightColumn = UIStackView()
     private let mainRow = UIStackView()
-    private let homeMiniPlayer = MiniPlayerView()
-    private lazy var homeMiniPlayerCard = makeHomeMiniPlayerCard()
     private var wideConstraints: [NSLayoutConstraint] = []
 
     /// The theme's card surface, as on the other screens.
@@ -436,11 +434,13 @@ class HomeViewController: UIViewController {
         mainRow.isLayoutMarginsRelativeArrangement = true
         mainRow.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
 
-        // wide: a tall card (about 45% of the screen) and a left column a little under half
-        let cardHeight = card.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.45)
+        // wide: the card fills the left column down to the buttons, which end just above the
+        // tab bar and its mini player (the header, buttons and bars take about 470 pt)
+        let cardHeight = card.heightAnchor.constraint(equalTo: view.heightAnchor, constant: -468)
         cardHeight.priority = .required - 1
         wideConstraints = [
             cardHeight,
+            card.heightAnchor.constraint(greaterThanOrEqualToConstant: 300),
             heroWrapper.widthAnchor.constraint(equalTo: mainRow.widthAnchor, multiplier: 0.47),
         ]
     }
@@ -448,13 +448,11 @@ class HomeViewController: UIViewController {
     /// Two columns on a wide screen, one on a narrow one (iPhone, or a narrow iPad window).
     private func applyWidthLayout() {
         let wide = traitCollection.horizontalSizeClass == .regular
-        [heroWrapper, playlistSection, recentSection, mainRow, rightColumn, homeMiniPlayerCard].forEach {
+        [heroWrapper, playlistSection, recentSection, mainRow, rightColumn].forEach {
             $0.removeFromSuperview()
         }
         NSLayoutConstraint.deactivate(wideConstraints)
         if wide {
-            heroColumn.addArrangedSubview(homeMiniPlayerCard)
-            heroColumn.setCustomSpacing(24, after: heroColumn.arrangedSubviews[heroColumn.arrangedSubviews.count - 2])
             rightColumn.addArrangedSubview(playlistSection)
             rightColumn.addArrangedSubview(recentSection)
             mainRow.addArrangedSubview(heroWrapper)
@@ -466,40 +464,6 @@ class HomeViewController: UIViewController {
             contentStack.addArrangedSubview(playlistSection)
             contentStack.addArrangedSubview(recentSection)
         }
-        refreshHomeMiniPlayer()
-    }
-
-    // MARK: - Last played (wide layout)
-
-    /// The last-played sheet as a card under the scan buttons; on iPad Home it takes the place
-    /// of the tab bar's mini player.
-    private func makeHomeMiniPlayerCard() -> UIView {
-        let card = UIView()
-        card.backgroundColor = Self.cardColor
-        card.layer.cornerRadius = 18
-        card.layer.cornerCurve = .continuous
-        card.layer.borderWidth = 1
-        card.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
-        homeMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(homeMiniPlayer)
-        NSLayoutConstraint.activate([
-            homeMiniPlayer.topAnchor.constraint(equalTo: card.topAnchor, constant: 4),
-            homeMiniPlayer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -4),
-            homeMiniPlayer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 8),
-            homeMiniPlayer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -8),
-            card.heightAnchor.constraint(equalToConstant: 68),
-        ])
-        homeMiniPlayer.onOpen = { [weak self] in self?.mainTabBarController?.openLastPlayed(resume: false) }
-        homeMiniPlayer.onResume = { [weak self] in self?.mainTabBarController?.openLastPlayed(resume: true) }
-        NotificationCenter.default.addObserver(self, selector: #selector(refreshHomeMiniPlayer),
-                                               name: LastPlayedStore.didChangeNotification, object: nil)
-        return card
-    }
-
-    @objc private func refreshHomeMiniPlayer() {
-        let item = LastPlayedStore.shared.current
-        if let item { homeMiniPlayer.configure(with: item) }
-        homeMiniPlayerCard.isHidden = item == nil
     }
 
     @objc private func scanTapped() {

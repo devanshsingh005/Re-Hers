@@ -59,7 +59,7 @@ final class ScanCardView: UIControl {
         NSLayoutConstraint.activate([
             height,
             // a phone-sized cap; iPad Home sets the card's height itself
-            heightAnchor.constraint(lessThanOrEqualToConstant: DeviceLayout.isPad ? 640 : 380),
+            heightAnchor.constraint(lessThanOrEqualToConstant: DeviceLayout.isPad ? 900 : 380),
             heightAnchor.constraint(greaterThanOrEqualTo: stack.heightAnchor, constant: 80),
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -217,16 +217,17 @@ final class UploadRowView: UIControl {
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         let icon = UIImageView(image: UIImage(systemName: "doc.text"))
         icon.tintColor = BrandColors.brand
-        icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+        icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: DeviceLayout.value(phone: 18, pad: 22), weight: .medium)
         icon.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.addSubview(icon)
 
-        titleLabel.font = .preferredFont(forTextStyle: .subheadline)
+        // iPad: a larger row (title, meta, icon) to match the bigger screen
+        titleLabel.font = .preferredFont(forTextStyle: DeviceLayout.isPad ? .body : .subheadline)
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
         titleLabel.lineBreakMode = .byTruncatingTail
 
-        metaLabel.font = .preferredFont(forTextStyle: .caption1)
+        metaLabel.font = .preferredFont(forTextStyle: DeviceLayout.isPad ? .footnote : .caption1)
         metaLabel.adjustsFontForContentSizeCategory = true
         metaLabel.textColor = .secondaryLabel
         metaLabel.numberOfLines = 1
@@ -247,14 +248,14 @@ final class UploadRowView: UIControl {
         addSubview(textStack)
         addSubview(moreButton)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 62),
-            iconWrap.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            heightAnchor.constraint(greaterThanOrEqualToConstant: DeviceLayout.value(phone: 62, pad: 78)),
+            iconWrap.leadingAnchor.constraint(equalTo: leadingAnchor, constant: DeviceLayout.value(phone: 12, pad: 16)),
             iconWrap.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconWrap.widthAnchor.constraint(equalToConstant: 38),
-            iconWrap.heightAnchor.constraint(equalToConstant: 38),
+            iconWrap.widthAnchor.constraint(equalToConstant: DeviceLayout.value(phone: 38, pad: 48)),
+            iconWrap.heightAnchor.constraint(equalToConstant: DeviceLayout.value(phone: 38, pad: 48)),
             icon.centerXAnchor.constraint(equalTo: iconWrap.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: iconWrap.centerYAnchor),
-            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: 12),
+            textStack.leadingAnchor.constraint(equalTo: iconWrap.trailingAnchor, constant: DeviceLayout.value(phone: 12, pad: 16)),
             textStack.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 10),
             textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             textStack.trailingAnchor.constraint(equalTo: moreButton.leadingAnchor, constant: -4),
