@@ -75,6 +75,10 @@ class HomeViewController: UIViewController {
     // Wide layout (iPad): two columns. Left: the scan card (filling the column), Scan to Play
     // and Upload; right: playlists above recent uploads. Narrow (iPhone): one column.
     private let heroColumn = UIStackView()
+    // pointed at by the first-run tour
+    private weak var scanCard: UIView?
+    private weak var scanButton: UIView?
+    private weak var uploadButton: UIView?
     private lazy var heroWrapper = padded(heroColumn)
     private var playlistSection = UIView()
     private var recentSection = UIView()
@@ -172,6 +176,38 @@ class HomeViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         syncNavBarAlpha()
+        showTourIfNeeded()
+    }
+
+    // MARK: - First-run tour
+
+    private func showTourIfNeeded() {
+        AppTour.showIfNeeded(.home, in: self) { [weak self] in
+            guard let self else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.scanButton },
+                         title: "Scan to Play",
+                         message: "Point your camera at a page of sheet music. Re-Hearse reads it and plays it back."),
+                TourStep(target: { [weak self] in self?.uploadButton },
+                         title: "Upload a sheet",
+                         message: "Add a PDF or a photo from Files or Photos. It becomes a song you can watch, hear and play along with."),
+                TourStep(target: { [weak self] in self?.playlistSection },
+                         title: "Your playlists",
+                         message: "Keep the pieces you're practising together. Tap See more to make a new one."),
+                TourStep(target: { [weak self] in
+                             guard let self, !self.latestRecentUploads.isEmpty else { return nil }
+                             return self.recentSection
+                         },
+                         title: "Recent uploads",
+                         message: "Every sheet you add is here, ready to open again."),
+                TourStep(target: { [weak self] in self?.header.accessoryView },
+                         title: "Notifications",
+                         message: "Practice reminders and news show up here."),
+                TourStep(target: { [weak self] in self?.tabBarController?.tabBar },
+                         title: "Find your way around",
+                         message: "Library has songs to learn, Settings has your profile and step-by-step lessons, and Search finds anything."),
+            ]
+        }
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -438,6 +474,9 @@ class HomeViewController: UIViewController {
             },
         ])
 
+        self.scanCard = card
+        self.scanButton = scanButton
+        self.uploadButton = uploadButton
         heroColumn.axis = .vertical
         heroColumn.spacing = 16
         heroColumn.addArrangedSubview(card)

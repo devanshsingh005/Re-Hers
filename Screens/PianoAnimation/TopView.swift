@@ -23,6 +23,10 @@ final class LessonNavBarView: UIView {
     // Pill containers
     private var progressPill: UIView?
     private var rightPill:    UIView?
+
+    /// For the first-run tour.
+    var progressTarget: UIView? { progressPill }
+    var menuTarget: UIView? { rightPill }
     
     func updateProgress(_ process: Double) {
         guard !isScrubbing else { return }

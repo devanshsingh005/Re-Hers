@@ -169,6 +169,20 @@ final class DiscoverViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         syncNavBarAlpha()
+        AppTour.showIfNeeded(.library, in: self) { [weak self] in
+            guard self != nil else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.searchBar },
+                         title: "Find a song",
+                         message: "Search by title or composer."),
+                TourStep(target: { [weak self] in self?.filterRow },
+                         title: "Filter by level and skill",
+                         message: "Narrow the list to songs that suit where you are."),
+                TourStep(target: { [weak self] in self?.tableView.visibleCells.first },
+                         title: "Open a song",
+                         message: "See the sheet, then play along or watch it played."),
+            ]
+        }
     }
 
     override func viewSafeAreaInsetsDidChange() {

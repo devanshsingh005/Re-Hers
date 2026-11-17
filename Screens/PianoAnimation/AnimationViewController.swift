@@ -129,6 +129,23 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         super.viewDidAppear(animated)
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         setOverlay(visible: true, animated: true)
+        AppTour.showIfNeeded(.animation, in: self, after: 1.0) { [weak self] in
+            guard self != nil else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.sheetCard },
+                         title: "Follow the sheet",
+                         message: "The orange line shows where the music is. Tap to play or pause, double-tap a side to skip back or ahead."),
+                TourStep(target: { [weak self] in self?.pianoVC.view },
+                         title: "Watch the keys",
+                         message: "Keys light up blue for the left hand and red for the right. The hands in the corner show the fingers."),
+                TourStep(target: { [weak self] in self?.navBar.progressTarget },
+                         title: "Jump anywhere",
+                         message: "Slide along the bar to move through the piece."),
+                TourStep(target: { [weak self] in self?.navBar.menuTarget },
+                         title: "Settings",
+                         message: "Change the tempo and the sound, and choose how many keys fit on screen."),
+            ]
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {

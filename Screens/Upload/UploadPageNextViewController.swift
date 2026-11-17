@@ -98,6 +98,23 @@ final class UploadPageNextViewController: UIViewController {
         presentUnavailableReasonIfNeeded()
         // Next run loop: the push transition has fully finished by then.
         DispatchQueue.main.async { [weak self] in self?.performAutoStartIfReady() }
+        AppTour.showIfNeeded(.uploadResult, in: self, after: 1.0) { [weak self] in
+            guard self != nil else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.previewButton },
+                         title: "Your sheet",
+                         message: "Preview it full screen, with or without note names."),
+                TourStep(target: { [weak self] in self?.tipsContainer },
+                         title: "Tips for this piece",
+                         message: "Worked out from your sheet: its key, tricky rhythms and what each hand does."),
+                TourStep(target: { [weak self] in self?.playAlongButton },
+                         title: "Play Along",
+                         message: "You play, Re-Hearse listens and waits for each note."),
+                TourStep(target: { [weak self] in self?.animationButton },
+                         title: "Animation",
+                         message: "Watch and hear it played, with every key lit up."),
+            ]
+        }
     }
 
     /// Resumes Play Along or Animation for the mini player, once the sheet has loaded and this

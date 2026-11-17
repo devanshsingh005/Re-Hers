@@ -82,6 +82,7 @@
 		6CD6C36EC70B026C3388770A /* Screens/LearningCurve/AppChapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3402881BBA84B7B8951F3EFE /* Screens/LearningCurve/AppChapters.swift */; };
 		7EE8CA699BBE8A91FA58F801 /* Screens/Auth/PasswordRecoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86215F0DE3A86CE2226A37BA /* Screens/Auth/PasswordRecoveryService.swift */; };
 		84114B6E2EBCF6B100E86F71 /* Components/BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* Components/BottomNavbar.swift */; };
+		0E0E0E0E0000000000000422 /* Components/AppTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000322 /* Components/AppTour.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
 		84ADF6952F5EAABA009F3D7D /* AnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6882F5EAABA009F3D7D /* AnimationViewController.swift */; };
 		84ADF6972F5EAABA009F3D7D /* AudioEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6892F5EAABA009F3D7D /* AudioEngineManager.swift */; };
@@ -201,6 +202,7 @@
 		75B21B7FD3E9474336B214FA /* Extensions/UIImage+Normalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Extensions/UIImage+Normalization.swift"; sourceTree = SOURCE_ROOT; };
 		81A17EECA87264A9EA407FA9 /* Components/PitchDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Components/PitchDetector.swift; sourceTree = SOURCE_ROOT; };
 		84114B6D2EBCF6B100E86F71 /* Components/BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
+		0E0E0E0E0000000000000322 /* Components/AppTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/AppTour.swift; sourceTree = SOURCE_ROOT; };
 		842B083B2EBA0465001AC579 /* Rehearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rehearse_v1.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		84ADF6882F5EAABA009F3D7D /* AnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationViewController.swift; sourceTree = "<group>"; };
@@ -501,6 +503,7 @@
 			children = (
 				2B9B8F5B2F485DE70049535B /* Components/GuestFeatureGateModal.swift */,
 				84114B6D2EBCF6B100E86F71 /* Components/BottomNavbar.swift */,
+				0E0E0E0E0000000000000322 /* Components/AppTour.swift */,
 				B0110DC55172A44C69E9FCC1 /* Components/NavigationBarHelper.swift */,
 				2BDE12342EBA0712001AC579 /* Components/LandscapeNavigationController.swift */,
 				2B1DAEBB2F68002400BE5943 /* Components/ImageLoader.swift */,
@@ -750,6 +753,7 @@
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
 				2B9B8F572F48562D0049535B /* AllUploadsViewController.swift in Sources */,
 				84114B6E2EBCF6B100E86F71 /* Components/BottomNavbar.swift in Sources */,
+				0E0E0E0E0000000000000422 /* Components/AppTour.swift in Sources */,
 				2BC06DAD2EEE905100CBDC03 /* OnboardingQuestion1View.swift in Sources */,
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
 				0E0E0E0E0000000000000421 /* PracticeTipsView.swift in Sources */,

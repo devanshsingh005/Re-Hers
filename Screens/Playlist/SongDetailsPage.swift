@@ -79,6 +79,20 @@ class PlaylistSongDetailViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
+        AppTour.showIfNeeded(.songPage, in: self) { [weak self] in
+            guard self != nil else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.segmentControl },
+                         title: "Original or labeled",
+                         message: "Labeled writes each note's name under it: red for the right hand, blue for the left."),
+                TourStep(target: { [weak self] in self?.playAlongButton },
+                         title: "Play Along",
+                         message: "You play, on your piano or the on-screen keys. Re-Hearse listens and waits for each note."),
+                TourStep(target: { [weak self] in self?.animationButton },
+                         title: "Animation",
+                         message: "Watch and hear the piece played, with every key lit up and hands showing the fingering."),
+            ]
+        }
     }
 
     override func viewDidDisappear(_ animated: Bool) {

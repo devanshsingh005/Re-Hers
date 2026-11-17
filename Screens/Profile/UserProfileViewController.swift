@@ -35,6 +35,9 @@ final class UserProfileViewController: UIViewController {
     // MARK: - UI
     private let scrollView = UIScrollView()
     private let contentView = UIView()
+    // pointed at by the first-run tour
+    private weak var lessonsRow: UIView?
+    private weak var tipsRow: UIView?
 
     // Header
     private let profileImageView = UIImageView()
@@ -146,6 +149,21 @@ final class UserProfileViewController: UIViewController {
     /// Settings is a tab now; other screens may still push it.
     private var isTabRoot: Bool {
         navigationController?.viewControllers.first?.screen === self   // (iPad: inside its container)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        AppTour.showIfNeeded(.settings, in: self) { [weak self] in
+            guard self != nil else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.lessonsRow },
+                         title: "Practice lessons",
+                         message: "Step-by-step lessons, from reading notes to playing chords."),
+                TourStep(target: { [weak self] in self?.tipsRow },
+                         title: "See the tips again",
+                         message: "Skipped something? This brings every tip back."),
+            ]
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -507,11 +525,25 @@ final class UserProfileViewController: UIViewController {
         let notifications = makeLinkRow(title: "Notifications", symbolName: "bell") { [weak self] in
             self?.navigationController?.pushViewController(NotificationsViewController(), animated: true)
         }
-        let divider = UIView()
-        divider.backgroundColor = ComponentColors.ProfileScreen.statCardBorder
-        divider.translatesAutoresizingMaskIntoConstraints = false
+        let tips = makeLinkRow(title: "Show Tips Again", symbolName: "lightbulb") { [weak self] in
+            AppTour.resetAll()
+            let alert = UIAlertController(title: "Tips are back",
+                                          message: "You'll see the tips again as you open each screen.",
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self?.present(alert, animated: true)
+        }
+        lessonsRow = lessons
+        tipsRow = tips
+        func makeDivider() -> UIView {
+            let divider = UIView()
+            divider.backgroundColor = ComponentColors.ProfileScreen.statCardBorder
+            divider.translatesAutoresizingMaskIntoConstraints = false
+            divider.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+            return divider
+        }
 
-        let stack = UIStackView(arrangedSubviews: [lessons, divider, notifications])
+        let stack = UIStackView(arrangedSubviews: [lessons, makeDivider(), notifications, makeDivider(), tips])
         stack.axis = .vertical
         stack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(stack)
@@ -533,7 +565,7 @@ final class UserProfileViewController: UIViewController {
 
             lessons.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
             notifications.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
-            divider.heightAnchor.constraint(equalToConstant: 0.5)
+            tips.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
         ])
     }
 

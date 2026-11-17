@@ -105,6 +105,33 @@ final class PlayAlongViewController: UIViewController {
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         if session != nil, session?.isFinished == false { startInput(askIfNeeded: true) }
         updateGuideClick()
+        AppTour.showIfNeeded(.playAlong, in: self, after: 1.2) { [weak self] in
+            guard let self else { return [] }
+            let bar = self.navBar.tourTargets
+            return [
+                TourStep(target: { bar.prompt },
+                         title: "What to play",
+                         message: "The notes for this step. Each one is crossed out once you've played it."),
+                TourStep(target: { [weak self] in self?.sheetMusic },
+                         title: "Your place in the music",
+                         message: "The orange line moves on as you play. Nothing runs ahead: it waits for you."),
+                TourStep(target: { [weak self] in self?.keyboard.view },
+                         title: "Play here or on your piano",
+                         message: "Tap the keys on screen, or play your own piano: Re-Hearse listens through the microphone."),
+                TourStep(target: { bar.mic },
+                         title: "Microphone",
+                         message: "Turn listening on or off."),
+                TourStep(target: { bar.hands },
+                         title: "One hand or both",
+                         message: "Practise the left hand, the right hand, or both together."),
+                TourStep(target: { bar.skip },
+                         title: "Skip a step",
+                         message: "Stuck on a note? Move on to the next one."),
+                TourStep(target: { bar.menu },
+                         title: "More practice tools",
+                         message: "A metronome, looping a few bars, and how many keys fit on screen."),
+            ]
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -633,6 +660,11 @@ final class PlayAlongNavBar: UIView {
     private let skipButton = UIButton(type: .system)
     private let menuButton = UIButton(type: .system)
     private var progressWidth: NSLayoutConstraint?
+
+    /// For the first-run tour.
+    var tourTargets: (prompt: UIView, mic: UIView, hands: UIView, skip: UIView, menu: UIView) {
+        (promptPill, micButton, handsButton, skipButton, menuButton)
+    }
     private var progress: CGFloat = 0
 
     override init(frame: CGRect) {

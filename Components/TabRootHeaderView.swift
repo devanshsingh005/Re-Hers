@@ -16,6 +16,8 @@ final class TabRootHeaderView: UIView {
 
     let titleLabel = UILabel()
     let subtitleLabel = UILabel()
+    /// The view beside the title (the notification bell), if any.
+    private(set) weak var accessoryView: UIView?
 
     init(title: String, subtitle: String, accessory: UIView? = nil, inset: CGFloat = 20) {
         super.init(frame: .zero)
@@ -43,6 +45,7 @@ final class TabRootHeaderView: UIView {
         ])
 
         if let accessory {
+            accessoryView = accessory
             accessory.translatesAutoresizingMaskIntoConstraints = false
             addSubview(accessory)
             NSLayoutConstraint.activate([
