@@ -61,16 +61,24 @@ final class AnimatedPianoKeyView: UIView {
 
         addSubview(noteLabel)
 
+        let bottom = noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: keyType == .white ? -22 : -6)
+        labelBottom = bottom
+        NSLayoutConstraint.activate([
+            noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            bottom,
+        ])
+    }
+
+    private var labelBottom: NSLayoutConstraint?
+
+    /// Note names sized to the key: tiny on a phone's 88-key strip, readable on iPad's wide keys.
+    func sizeLabel(forWhiteKeyWidth w: CGFloat) {
         if keyType == .white {
-            NSLayoutConstraint.activate([
-                noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -22),
-            ])
+            noteLabel.font = .systemFont(ofSize: min(15, max(7, (w * 0.3).rounded())), weight: .bold)
+            labelBottom?.constant = w >= 30 ? -max(22, (w * 0.5).rounded()) : -22
         } else {
-            NSLayoutConstraint.activate([
-                noteLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-                noteLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
-            ])
+            noteLabel.font = .systemFont(ofSize: min(11, max(4, (w * 0.2).rounded())), weight: .semibold)
+            labelBottom?.constant = w >= 30 ? -10 : -6
         }
     }
 
@@ -178,10 +186,17 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     private let hands = GhostHandsView()
     private var lastLayoutSize = CGSize.zero
 
+    /// The narrowest a white key may get. 0 (iPhone) fits all 88 keys to the width; on iPad keys
+    /// keep a playable size and the keyboard shows a window of them (see `focus(on:)`).
+    var minimumWhiteKeyWidth: CGFloat = 0 { didSet { setNeedsLayout() } }
+
     private var whiteKeyW: CGFloat {
         guard !whiteKeys.isEmpty, bounds.width > 0 else { return 38 }
-        return bounds.width / CGFloat(whiteKeys.count)
+        return max(bounds.width / CGFloat(whiteKeys.count), minimumWhiteKeyWidth)
     }
+
+    /// The notes the keyboard should keep in view (the song's range), from `focus(on:)`.
+    private var focusRange: ClosedRange<Int>?
     private var blackKeyW: CGFloat { whiteKeyW * 0.58 }
     private let blackHRatio: CGFloat = 0.62
 
@@ -252,7 +267,8 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     }
 
     private func buildHands() {
-        contentView.addSubview(hands)
+        // the hands sit in a corner of the visible keyboard, so they don't scroll with the keys
+        addSubview(hands)
     }
 
     // MARK: - Layout
@@ -279,12 +295,52 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
             }
         }
 
-        hands.frame = contentView.bounds
-        contentView.bringSubviewToFront(hands)
+        let labelWidth = whiteKeyW
+        (whiteKeys + blackKeys).forEach { $0.sizeLabel(forWhiteKeyWidth: labelWidth) }
+
+        hands.frame = bounds
+        bringSubviewToFront(hands)
         if bounds.size != lastLayoutSize {
             lastLayoutSize = bounds.size
             hands.keyWidth = whiteKeyW
+            if let focusRange { scroll(toShow: focusRange, animated: false) }
         }
+    }
+
+    // MARK: - Window (iPad)
+
+    /// Frames the keyboard on these notes (a song's range): centred when they fit, otherwise
+    /// the window starts at the lowest. With all keys on screen it does nothing.
+    func focus(on midis: [Int]) {
+        guard let low = midis.min(), let high = midis.max() else { return }
+        focusRange = low...high
+        layoutIfNeeded()
+        scroll(toShow: low...high, animated: false)
+    }
+
+    /// Slides the window when a key that must be played is outside it.
+    private func follow(_ midis: [Int]) {
+        guard scrollView.contentSize.width > scrollView.bounds.width + 1, !midis.isEmpty else { return }
+        let visible = scrollView.bounds
+        let frames = midis.compactMap { key(midi: $0)?.frame }
+        guard frames.contains(where: { $0.minX < visible.minX || $0.maxX > visible.maxX }) else { return }
+        if let low = midis.min(), let high = midis.max() { scroll(toShow: low...high, animated: true) }
+    }
+
+    private func scroll(toShow range: ClosedRange<Int>, animated: Bool) {
+        let width = scrollView.bounds.width
+        guard width > 0, scrollView.contentSize.width > width + 1 else { return }
+        let lowKey = key(midi: max(21, range.lowerBound)) ?? key(midi: range.lowerBound + 1)
+        let highKey = key(midi: min(108, range.upperBound)) ?? key(midi: range.upperBound - 1)
+        guard let lowX = lowKey?.frame.minX, let highX = highKey?.frame.maxX else { return }
+        let target: CGFloat
+        if highX - lowX <= width {
+            target = (lowX + highX) / 2 - width / 2          // centre the range
+        } else {
+            target = lowX - whiteKeyW                         // too wide: start at its low end
+        }
+        let maxOffset = scrollView.contentSize.width - width
+        scrollView.setContentOffset(CGPoint(x: max(0, min(target, maxOffset)), y: 0), animated: animated)
     }
 
     // MARK: - Ghost hands
@@ -304,6 +360,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
 
     /// Holds a key down in its hand's colour (left blue, right red) until `release`.
     func press(midi: Int, isLeft: Bool) {
+        follow([midi])
         key(midi: midi)?.animatePress(color: isLeft ? AnimatedPianoKeyView.leftColor : AnimatedPianoKeyView.rightColor)
     }
 
@@ -319,6 +376,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
     /// Play Along: the keys to play, in their hand's colour (others cleared).
     func hint(left: [Int], right: [Int]) {
         let l = Set(left), r = Set(right)
+        follow(left + right)
         for (midi, key) in keysByMidi {
             if l.contains(midi) {
                 key.currentHand = .left; key.isHinted = true
@@ -347,6 +405,7 @@ final class AnimatedPianoKeyboardView: UIView, UIScrollViewDelegate {
 
     /// Snap instantly to centre on a note — call after layout for initial position
     func centerOn(note: String) {
+        guard focusRange == nil else { return }   // the song's range wins
         layoutIfNeeded()
         guard let key = findKey(note) else { return }
         let mid    = key.frame.midX

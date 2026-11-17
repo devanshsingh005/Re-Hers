@@ -109,7 +109,10 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             columnLeading?.constant = margin
             columnTrailing?.constant = -margin
         }
-        let pianoHeight = (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
+        // iPad: a taller keyboard with keys sized for fingers; phone: at most 170 pt
+        let pianoHeight = DeviceLayout.isPad
+            ? (min(340, max(200, view.bounds.height * 0.3))).rounded()
+            : (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
         if pianoHeightConstraint?.constant != pianoHeight { pianoHeightConstraint?.constant = pianoHeight }
         
         // Center keyboard on C4 exactly once after layout is done
@@ -141,8 +144,11 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         navigationController?.setNavigationBarHidden(false, animated: false)
         teardownPlaybackResources(reset: true)
 
-        // Force portrait on exit so the app doesn't stay stuck in landscape mode
-        if #available(iOS 16.0, *) {
+        // Force portrait on exit so the app doesn't stay stuck in landscape mode (phone only:
+        // an iPad stays however it is held)
+        if DeviceLayout.isPad {
+            // nothing to undo
+        } else if #available(iOS 16.0, *) {
             let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
             windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
         } else {
@@ -159,13 +165,17 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     }
 
     // MARK: - Fix 1: Force Landscape
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
+    // a phone turns to landscape for Animation; an iPad stays however it is held
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { DeviceLayout.isPad ? .all : .landscape }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        DeviceLayout.isPad ? super.preferredInterfaceOrientationForPresentation : .landscapeRight
+    }
     override var shouldAutorotate: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func forceLandscape() {
+        guard !DeviceLayout.isPad else { return }
         if #available(iOS 16.0, *) {
             self.setNeedsUpdateOfSupportedInterfaceOrientations()
         }

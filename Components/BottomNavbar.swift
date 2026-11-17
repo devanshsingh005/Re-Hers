@@ -52,9 +52,11 @@ final class ReadableColumnController: UIViewController {
     static let maxWidth: CGFloat = 820
 
     let content: UIViewController
+    private let maxWidth: CGFloat
 
-    init(content: UIViewController) {
+    init(content: UIViewController, maxWidth: CGFloat = ReadableColumnController.maxWidth) {
         self.content = content
+        self.maxWidth = maxWidth
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -78,7 +80,7 @@ final class ReadableColumnController: UIViewController {
             column.topAnchor.constraint(equalTo: view.topAnchor),
             column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             column.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            column.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxWidth),
+            column.widthAnchor.constraint(lessThanOrEqualToConstant: maxWidth),
             column.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor),
             fill,
         ])
@@ -114,7 +116,8 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func tabRoot(_ nav: AppNavigationController) -> UIViewController {
         guard usesColumns else { return nav }
         if let column = columns[ObjectIdentifier(nav)] { return column }
-        let column = ReadableColumnController(content: nav)
+        // Home lays its sections out side by side, so it gets a wider area than the lists
+        let column = ReadableColumnController(content: nav, maxWidth: nav === homeNav ? 1100 : ReadableColumnController.maxWidth)
         columns[ObjectIdentifier(nav)] = column
         return column
     }

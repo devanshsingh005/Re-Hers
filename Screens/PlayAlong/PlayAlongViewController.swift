@@ -79,7 +79,8 @@ final class PlayAlongViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
         tabBarController?.tabBar.isHidden = true
-        if #available(iOS 16.0, *) {
+        // a phone turns to landscape for Play Along; an iPad stays however it is held
+        if #available(iOS 16.0, *), !DeviceLayout.isPad {
             setNeedsUpdateOfSupportedInterfaceOrientations()
             (view.window?.windowScene ?? UIApplication.shared.connectedScenes.first as? UIWindowScene)?
                 .requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
@@ -97,7 +98,7 @@ final class PlayAlongViewController: UIViewController {
         listener.stop()
         tabBarController?.tabBar.isHidden = false
         navigationController?.setNavigationBarHidden(false, animated: false)
-        if #available(iOS 16.0, *) {
+        if #available(iOS 16.0, *), !DeviceLayout.isPad {
             (view.window?.windowScene ?? UIApplication.shared.connectedScenes.first as? UIWindowScene)?
                 .requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
         }
@@ -117,12 +118,17 @@ final class PlayAlongViewController: UIViewController {
             columnLeading?.constant = margin
             columnTrailing?.constant = -margin
         }
-        let height = (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
+        // iPad: a taller keyboard with keys sized for fingers; phone: at most 170 pt
+        let height = DeviceLayout.isPad
+            ? (min(340, max(200, view.bounds.height * 0.3))).rounded()
+            : (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
         if keyboardHeight?.constant != height { keyboardHeight?.constant = height }
     }
 
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { DeviceLayout.isPad ? .all : .landscape }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+        DeviceLayout.isPad ? super.preferredInterfaceOrientationForPresentation : .landscapeRight
+    }
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
 

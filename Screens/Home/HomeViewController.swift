@@ -23,8 +23,8 @@ class HomeViewController: UIViewController {
     private enum Constants {
         static let horizontalPadding: CGFloat = 20
         static let sectionSpacing:    CGFloat = 32
-        static let recentUploadsShown = 3
-        static let playlistTileSize:  CGFloat = 140
+        static let recentUploadsShown = DeviceLayout.isPad ? 4 : 3
+        static let playlistTileSize:  CGFloat = DeviceLayout.isPad ? 168 : 140
         static let pdfPageSize = CGSize(width: 612, height: 792)
         static let maxUploadSizeBytes = 10 * 1024 * 1024
     }
@@ -71,6 +71,13 @@ class HomeViewController: UIViewController {
     private let playlistTilesStack = UIStackView()
     private let recentUploadsStack = UIStackView()
 
+    // Wide layout (iPad, regular width): the scan card with its buttons beside it, then
+    // playlists and recent uploads side by side. Narrow: everything stacked, as on iPhone.
+    private let heroStack = UIStackView()
+    private let heroActions = UIStackView()
+    private let lowerRow = UIStackView()
+    private var wideConstraints: [NSLayoutConstraint] = []
+
     /// The theme's card surface, as on the other screens.
     static let cardColor = ComponentColors.HomeScreen.cardBackground
 
@@ -84,6 +91,11 @@ class HomeViewController: UIViewController {
         buildScanSection()
         buildPlaylistSection()
         buildRecentUploadsSection()
+        contentStack.addArrangedSubview(lowerRow)
+        applyWidthLayout()
+        registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in
+            self.applyWidthLayout()
+        }
         loadRecentUploads()
         loadPlaylists()
         loadGreeting()
@@ -404,11 +416,35 @@ class HomeViewController: UIViewController {
             },
         ])
 
-        let stack = UIStackView(arrangedSubviews: [card, scanButton, uploadButton])
-        stack.axis = .vertical
-        stack.spacing = 16
-        stack.setCustomSpacing(8, after: scanButton)
-        contentStack.addArrangedSubview(padded(stack))
+        heroActions.addArrangedSubview(scanButton)
+        heroActions.addArrangedSubview(uploadButton)
+        heroActions.axis = .vertical
+        heroActions.spacing = 8
+        heroStack.addArrangedSubview(card)
+        heroStack.addArrangedSubview(heroActions)
+        heroStack.spacing = 16
+        contentStack.addArrangedSubview(padded(heroStack))
+
+        // wide: a card of fixed height, the buttons in a column beside it
+        let cardHeight = card.heightAnchor.constraint(equalToConstant: 300)
+        cardHeight.priority = .required - 1
+        wideConstraints = [
+            cardHeight,
+            heroActions.widthAnchor.constraint(equalTo: heroStack.widthAnchor, multiplier: 0.36),
+        ]
+    }
+
+    /// Wide or stacked, from the window's width (an iPad app can be narrow in Split View).
+    private func applyWidthLayout() {
+        let wide = traitCollection.horizontalSizeClass == .regular
+        heroStack.axis = wide ? .horizontal : .vertical
+        heroStack.alignment = wide ? .center : .fill
+        heroStack.spacing = wide ? 24 : 16
+        lowerRow.axis = wide ? .horizontal : .vertical
+        lowerRow.alignment = wide ? .top : .fill
+        lowerRow.distribution = wide ? .fillEqually : .fill
+        lowerRow.spacing = wide ? 0 : Constants.sectionSpacing    // sections carry their own margins
+        if wide { NSLayoutConstraint.activate(wideConstraints) } else { NSLayoutConstraint.deactivate(wideConstraints) }
     }
 
     @objc private func scanTapped() {
@@ -456,7 +492,7 @@ class HomeViewController: UIViewController {
         let section = UIStackView(arrangedSubviews: [header, tiles])
         section.axis = .vertical
         section.spacing = 10
-        contentStack.addArrangedSubview(section)
+        lowerRow.addArrangedSubview(section)
         showPlaylistPlaceholders()
 
         // Tiles plus their caption; resized for the caption's Dynamic Type size.
@@ -534,7 +570,7 @@ class HomeViewController: UIViewController {
         let section = UIStackView(arrangedSubviews: [header, padded(recentUploadsStack)])
         section.axis = .vertical
         section.spacing = 10
-        contentStack.addArrangedSubview(section)
+        lowerRow.addArrangedSubview(section)
     }
 
     // MARK: - Load & Display Recent Uploads

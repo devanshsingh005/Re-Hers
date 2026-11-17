@@ -19,6 +19,8 @@ final class PianoAnimationkeyboardViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
+        // iPad: keys a finger can play (about 3 octaves upright, 4 across) instead of all 88
+        if DeviceLayout.isPad { pianoKeyboard.minimumWhiteKeyWidth = 46 }
         buildKeyboard()
         buildLabels()
     }
@@ -223,6 +225,7 @@ final class PianoAnimationkeyboardViewController: UIViewController {
     /// Fingers the performance for the ghost hands.
     func setHandPerformance(_ notes: [HandNote]) {
         pianoKeyboard.setHandPerformance(notes)
+        pianoKeyboard.focus(on: notes.map(\.midi))
     }
 
     /// Poses the ghost hands for second `time` of the performance (at 1× tempo).
