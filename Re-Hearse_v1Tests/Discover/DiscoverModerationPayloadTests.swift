@@ -162,7 +162,6 @@ final class GuestFeatureAccessPolicyTests: XCTestCase {
         XCTAssertTrue(GuestFeatureAccessPolicy.requiresAuthenticationForSheetUpload)
         XCTAssertTrue(GuestFeatureAccessPolicy.allowsPlayAlong)
         XCTAssertTrue(GuestFeatureAccessPolicy.allowsAnimation)
-        XCTAssertTrue(GuestFeatureAccessPolicy.allowsChordRecognition)
     }
 }
 

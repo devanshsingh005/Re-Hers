@@ -81,7 +81,6 @@
 		6CD6C36EC70B026C3388770A /* Screens/LearningCurve/AppChapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3402881BBA84B7B8951F3EFE /* Screens/LearningCurve/AppChapters.swift */; };
 		7EE8CA699BBE8A91FA58F801 /* Screens/Auth/PasswordRecoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86215F0DE3A86CE2226A37BA /* Screens/Auth/PasswordRecoveryService.swift */; };
 		84114B6E2EBCF6B100E86F71 /* Components/BottomNavbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84114B6D2EBCF6B100E86F71 /* Components/BottomNavbar.swift */; };
-		8416D6382F2BD83C00E0E638 /* MainChordRecognitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */; };
 		842B088B2EBA594A001AC579 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 842B088A2EBA5936001AC579 /* .gitignore */; };
 		84ADF6952F5EAABA009F3D7D /* AnimationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6882F5EAABA009F3D7D /* AnimationViewController.swift */; };
 		84ADF6972F5EAABA009F3D7D /* AudioEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84ADF6892F5EAABA009F3D7D /* AudioEngineManager.swift */; };
@@ -200,7 +199,6 @@
 		75B21B7FD3E9474336B214FA /* Extensions/UIImage+Normalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Extensions/UIImage+Normalization.swift"; sourceTree = SOURCE_ROOT; };
 		81A17EECA87264A9EA407FA9 /* Components/PitchDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Components/PitchDetector.swift; sourceTree = SOURCE_ROOT; };
 		84114B6D2EBCF6B100E86F71 /* Components/BottomNavbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/BottomNavbar.swift; sourceTree = SOURCE_ROOT; };
-		8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChordRecognitionScreen.swift; sourceTree = "<group>"; };
 		842B083B2EBA0465001AC579 /* Rehearse_v1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rehearse_v1.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		842B088A2EBA5936001AC579 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		84ADF6882F5EAABA009F3D7D /* AnimationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationViewController.swift; sourceTree = "<group>"; };
@@ -434,7 +432,6 @@
 				2B3828BE2EC643A80025933F /* Splash */,
 				84114B682EBCF66100E86F71 /* Upload */,
 				84DBA8602EBA7420006DF51E /* Playlist */,
-				84DBA85F2EBA73F7006DF51E /* ChordRecognition */,
 				84DBA85E2EBA7394006DF51E /* PlayAlong */,
 				84DBA85C2EBA735F006DF51E /* Home */,
 				84DBA85B2EBA7315006DF51E /* Discover */,
@@ -472,14 +469,6 @@
 				5A1D0E0F2F60000100000006 /* PlayAlongSession.swift */,
 			);
 			path = PlayAlong;
-			sourceTree = "<group>";
-		};
-		84DBA85F2EBA73F7006DF51E /* ChordRecognition */ = {
-			isa = PBXGroup;
-			children = (
-				8416D6372F2BD83C00E0E638 /* MainChordRecognitionScreen.swift */,
-			);
-			path = ChordRecognition;
 			sourceTree = "<group>";
 		};
 		84DBA8602EBA7420006DF51E /* Playlist */ = {
@@ -755,7 +744,6 @@
 				2B9B8F592F485DE70049535B /* UploadQuizPopup.swift in Sources */,
 				2B9B8F5A2F485DE70049535B /* Components/GuestFeatureGateModal.swift in Sources */,
 				236CF2DE2EBE33E100DE5E71 /* MainPlayListScreen.swift in Sources */,
-				8416D6382F2BD83C00E0E638 /* MainChordRecognitionScreen.swift in Sources */,
 				2B3828C02EC6441A0025933F /* SplashViewController.swift in Sources */,
 				2B9B8F572F48562D0049535B /* AllUploadsViewController.swift in Sources */,
 				84114B6E2EBCF6B100E86F71 /* Components/BottomNavbar.swift in Sources */,

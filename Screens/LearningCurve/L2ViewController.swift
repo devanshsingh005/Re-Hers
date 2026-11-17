@@ -1437,16 +1437,15 @@ class TryYourselfViewController: UIViewController {
     private var attemptCounterLabel: UILabel!
     private var doneButton: UIButton!
     private var instructionLabel: UILabel!
-    private var lastDetectedRoot: String?
-    private var stableRootFrameCount = 0
     private let minimumDetectionAmplitude: CGFloat = 0.3
     private let minimumMatchFrequency: Float = 70
 
     // Real pitch detection
     private let pitchDetector = PitchDetector()
-    /// How many consecutive correct-note callbacks to require before marking done
-    private var correctStreak = 0
-    private let streakRequired = 5   // ~1 second at typical callback rate
+    /// Every target note, no other note, held 150 ms (see ChordHoldMatcher)
+    private var chordMatcher = ChordHoldMatcher()
+    /// Dots in the "hold it" progress
+    private let holdDots = 5
     private var alreadyMarkedCorrect = false
 
     /// Delivers the number of mic taps (attempts) the user made — used to compute stars
@@ -1709,9 +1708,7 @@ class TryYourselfViewController: UIViewController {
 
         isListening = true
         attemptCount += 1
-        correctStreak = 0
-        stableRootFrameCount = 0
-        lastDetectedRoot = nil
+        chordMatcher.reset()
         stepIndex = 0
         updateTargetHint()
         let starsHint = attemptCount == 1 ? "⭐⭐⭐" : attemptCount == 2 ? "⭐⭐" : "⭐"
@@ -1789,9 +1786,7 @@ class TryYourselfViewController: UIViewController {
     private func showMicrophonePermissionNeededState() {
         pitchDetector.stopListening()
         isListening = false
-        correctStreak = 0
-        stableRootFrameCount = 0
-        lastDetectedRoot = nil
+        chordMatcher.reset()
         let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Microphone access needed"
@@ -1806,9 +1801,7 @@ class TryYourselfViewController: UIViewController {
     private func showMicrophoneUnavailableState() {
         pitchDetector.stopListening()
         isListening = false
-        correctStreak = 0
-        stableRootFrameCount = 0
-        lastDetectedRoot = nil
+        chordMatcher.reset()
         let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Microphone unavailable"
@@ -1823,9 +1816,7 @@ class TryYourselfViewController: UIViewController {
     private func stopListeningAndReset() {
         pitchDetector.stopListening()
         isListening = false
-        correctStreak = 0
-        stableRootFrameCount = 0
-        lastDetectedRoot = nil
+        chordMatcher.reset()
         let micConfig = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
         micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: micConfig), for: .normal)
         statusLabel.text = "Stopped. Tap the microphone to try again."
@@ -1924,65 +1915,71 @@ class TryYourselfViewController: UIViewController {
 // MARK: - PitchDetectorDelegate
 
 extension TryYourselfViewController: PitchDetectorDelegate {
-    public func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat) {
+    public func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat, time: Double) {
         guard isListening, !alreadyMarkedCorrect else { return }
-        guard amplitude >= minimumDetectionAmplitude, frequency >= minimumMatchFrequency else {
-            correctStreak = 0
-            stableRootFrameCount = 0
-            lastDetectedRoot = nil
-            return
-        }
-        let heardMidi = notes.compactMap { AudioEngineManager.shared.midiNumber(from: $0) }.map(Int.init)
-        guard !heardMidi.isEmpty else { return }
+        // too quiet (or below the piano's range) counts as nothing heard: a short dip doesn't
+        // break a hold, a longer one does
+        let loudEnough = amplitude >= minimumDetectionAmplitude && frequency >= minimumMatchFrequency
+        let heardMidi = loudEnough ? notes.compactMap { AudioEngineManager.shared.midiNumber(from: $0) }.map(Int.init) : []
         let heard = Set(heardMidi.map { $0 % 12 })
         let target = targetStep.pitchClasses
-
-        detectedNoteLabel.text = notes.prefix(3).joined(separator: " ")
-        // every note of the target sounding (any octave)
-        let allHeard = target.isSubset(of: heard)
+        let verdict = chordMatcher.feed(heard: heard, target: target, at: time)
         let someHeard = !target.isDisjoint(with: heard)
-        let key = heard.sorted().map(String.init).joined(separator: ",")
-        if key == lastDetectedRoot { stableRootFrameCount += 1 } else { lastDetectedRoot = key; stableRootFrameCount = 1 }
-        let isMatch = allHeard && stableRootFrameCount >= 2
 
-        let color: UIColor = isMatch ? ComponentColors.LessonScreen.correctAnswer : (someHeard ? .systemOrange : .systemRed)
-        detectedNoteLabel.textColor = color
-        let scale = 1.0 + amplitude * 0.18
-        UIView.animate(withDuration: 0.1) {
-            for (i, ring) in self.pulseViews.enumerated() {
-                let s = scale + CGFloat(i) * 0.03
-                ring.transform = CGAffineTransform(scaleX: s, y: s)
-                ring.layer.borderColor = color.withAlphaComponent(amplitude * 0.5).cgColor
+        let color: UIColor
+        switch verdict {
+        case .matched, .holding: color = ComponentColors.LessonScreen.correctAnswer
+        case .notMatching: color = someHeard ? .systemOrange : .systemRed
+        }
+        if loudEnough {
+            detectedNoteLabel.text = notes.prefix(3).joined(separator: " ")
+            detectedNoteLabel.textColor = color
+            let scale = 1.0 + amplitude * 0.18
+            UIView.animate(withDuration: 0.1) {
+                for (i, ring) in self.pulseViews.enumerated() {
+                    let s = scale + CGFloat(i) * 0.03
+                    ring.transform = CGAffineTransform(scaleX: s, y: s)
+                    ring.layer.borderColor = color.withAlphaComponent(amplitude * 0.5).cgColor
+                }
             }
         }
 
-        guard isMatch else {
-            correctStreak = 0
-            let missing = targetStep.pitches.filter { !heard.contains($0.pitchClass) }.map(\.display)
-            statusLabel.text = someHeard && !missing.isEmpty
-                ? "Almost — also play \(missing.joined(separator: ", "))"
-                : "Heard \(notes.first ?? "") — play \(targetStep.label)"
+        switch verdict {
+        case .notMatching(let missing, let extra):
+            guard loudEnough else { return }   // silence: keep the last hint
+            if someHeard, !extra.isEmpty {
+                // the target's notes plus others: say which to let go of
+                let names = notes.filter { note in
+                    AudioEngineManager.shared.midiNumber(from: note).map { extra.contains(Int($0) % 12) } ?? false
+                }.map { $0.filter { !$0.isNumber } }
+                var seen = Set<String>()
+                let unique = names.filter { seen.insert($0).inserted }
+                statusLabel.text = "Almost — let go of \(unique.joined(separator: ", ")), play only \(targetStep.label)"
+            } else if someHeard, !missing.isEmpty {
+                let missingNames = targetStep.pitches.filter { missing.contains($0.pitchClass) }.map(\.display)
+                statusLabel.text = "Almost — also play \(missingNames.joined(separator: ", "))"
+            } else {
+                statusLabel.text = "Heard \(notes.first ?? "") — play \(targetStep.label)"
+            }
             statusLabel.textColor = someHeard ? .systemOrange : .systemRed
-            return
-        }
 
-        correctStreak += 1
-        let filled = String(repeating: "●", count: min(correctStreak, streakRequired))
-        let empty = String(repeating: "○", count: max(0, streakRequired - correctStreak))
-        statusLabel.text = "✅ \(targetStep.label) — hold it!  \(filled)\(empty)"
-        statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
-        guard correctStreak >= streakRequired else { return }
+        case .holding(let progress):
+            let filled = min(holdDots, Int((progress * Double(holdDots)).rounded(.down)))
+            statusLabel.text = "✅ \(targetStep.label) — hold it!  "
+                + String(repeating: "●", count: filled) + String(repeating: "○", count: holdDots - filled)
+            statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
 
-        if stepIndex < item.steps.count - 1 {
-            // next chord of the progression
-            stepIndex += 1
-            correctStreak = 0
-            stableRootFrameCount = 0
-            lastDetectedRoot = nil
-            updateTargetHint()
-            statusLabel.text = "Great — now play \(targetStep.label)"
-        } else {
-            flashCorrect()
+        case .matched:
+            chordMatcher.reset()
+            if stepIndex < item.steps.count - 1 {
+                // next chord of the progression
+                stepIndex += 1
+                updateTargetHint()
+                statusLabel.text = "Great — now play \(targetStep.label)"
+                statusLabel.textColor = ComponentColors.LessonScreen.correctAnswer
+            } else {
+                flashCorrect()
+            }
         }
     }
 }

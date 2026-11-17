@@ -138,10 +138,12 @@ final class PianoListener {
 
 /// Reports the notes heard, strongest first.
 public protocol PitchDetectorDelegate: AnyObject {
-    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat)
+    /// `notes`: the clearly sounding keys (see `PitchDetector.strongNotes`), strongest first;
+    /// `time`: when they were heard, on the CACurrentMediaTime() clock.
+    func pitchDetectorDidDetect(notes: [String], frequency: Float, amplitude: CGFloat, time: Double)
 }
 
-/// The chord-recognition screen's listener: the notes PianoPitchAnalyzer hears, by name.
+/// The Try Yourself listener: the notes PianoPitchAnalyzer hears, by name.
 public final class PitchDetector {
     typealias StartFailure = PianoListener.StartFailure
 
@@ -166,12 +168,83 @@ public final class PitchDetector {
 
     func stopListening() { listener.stop() }
 
-    private func report(_ frame: PianoPitchAnalyzer.Frame) {
-        guard let first = frame.notes.first else { return }
-        let names = frame.notes.prefix(4).map(PianoPitchAnalyzer.name(of:))
-        let amplitude = CGFloat(max(0, min(1, (frame.level + 60) / 45)))
-        delegate?.pitchDetectorDidDetect(notes: names, frequency: Float(PianoPitchAnalyzer.frequency(of: first)),
-                                         amplitude: amplitude)
+    /// A note this much weaker than the strongest (by salience) is a faint stray detection
+    /// (a resonance, a neighbour's ring), not a key the player is holding.
+    static let strongShare: Float = 0.25
+
+    /// The frame's notes that are clearly sounding, strongest first (at most six).
+    static func strongNotes(in frame: PianoPitchAnalyzer.Frame, share: Float = strongShare) -> [Int] {
+        guard let first = frame.notes.first else { return [] }
+        let floor = frame.salience(of: first) * share
+        return Array(frame.notes.filter { frame.salience(of: $0) >= floor }.prefix(6))
     }
 
+    private func report(_ frame: PianoPitchAnalyzer.Frame) {
+        let notes = Self.strongNotes(in: frame)
+        guard let first = notes.first else { return }
+        let amplitude = CGFloat(max(0, min(1, (frame.level + 60) / 45)))
+        delegate?.pitchDetectorDidDetect(notes: notes.map(PianoPitchAnalyzer.name(of:)),
+                                         frequency: Float(PianoPitchAnalyzer.frequency(of: first)),
+                                         amplitude: amplitude, time: frame.time)
+    }
+}
+
+// MARK: - ChordHoldMatcher
+
+/// Decides when what the player sounds matches a target chord (or single note), frame by frame:
+/// - every target note heard (any octave) within the last `memory` seconds: the analyzer
+///   doesn't report every note of a chord in every frame (high triads lose their top note in
+///   many frames);
+/// - nothing else sounding in this frame: a wrong extra note fails it;
+/// - and that for `holdTime`. A dropout shorter than `gapTolerance` (one missed frame) doesn't
+///   restart the hold; silence or a longer break does.
+struct ChordHoldMatcher {
+    var holdTime: Double = 0.15
+    var gapTolerance: Double = 0.06
+    var memory: Double = 0.3
+
+    enum Verdict: Equatable {
+        /// Not matching: which target notes are missing, which other notes are sounding
+        /// (pitch classes, C = 0).
+        case notMatching(missing: Set<Int>, extra: Set<Int>)
+        /// Matching, not yet for `holdTime`: 0…1.
+        case holding(progress: Double)
+        /// Matched for `holdTime`.
+        case matched
+    }
+
+    private var matchStart: Double?
+    private var lastMatch: Double?
+    private var lastHeard: [Int: Double] = [:]   // pitch class → when it was last heard
+
+    /// `heard`: the pitch classes sounding now; `target`: the chord's pitch classes.
+    mutating func feed(heard: Set<Int>, target: Set<Int>, at time: Double) -> Verdict {
+        for pc in heard { lastHeard[pc] = time }
+        let recent = Set(lastHeard.filter { time - $0.value <= memory }.keys)
+        let missing = target.subtracting(recent)
+        let extra = heard.subtracting(target)
+        if !heard.isEmpty, missing.isEmpty, extra.isEmpty, !target.isEmpty {
+            if let lastMatch, matchStart != nil, time - lastMatch <= gapTolerance {
+                self.lastMatch = time   // still holding
+            } else {
+                matchStart = time
+                lastMatch = time
+            }
+            let held = time - (matchStart ?? time)
+            return held >= holdTime ? .matched : .holding(progress: max(0, min(1, held / holdTime)))
+        }
+        // a short dropout keeps the hold going
+        if let lastMatch, let matchStart, time - lastMatch <= gapTolerance {
+            return .holding(progress: max(0, min(1, (time - matchStart) / holdTime)))
+        }
+        matchStart = nil
+        lastMatch = nil
+        return .notMatching(missing: missing, extra: extra)
+    }
+
+    mutating func reset() {
+        matchStart = nil
+        lastMatch = nil
+        lastHeard = [:]
+    }
 }

@@ -96,4 +96,116 @@ final class PracticeMusicTests: XCTestCase {
         print("[Practice] \(unique.count) notes/chords, \(heard)/\(total) pitches heard; incomplete: \(misses)")
         XCTAssertGreaterThanOrEqual(Double(heard) / Double(total), 0.95)
     }
+
+    // MARK: - Try Yourself's chord check
+
+    func test_chordMatcher_needsTheHold() {
+        // frames arrive about every 21 ms
+        var m = ChordHoldMatcher()
+        let cMajor: Set<Int> = [0, 4, 7]
+        var t = 0.0, verdicts: [ChordHoldMatcher.Verdict] = []
+        while t <= 0.2 { verdicts.append(m.feed(heard: cMajor, target: cMajor, at: t)); t += 0.021 }
+        let firstMatch = verdicts.firstIndex(of: .matched).map { Double($0) * 0.021 }
+        XCTAssertNotNil(firstMatch)
+        XCTAssertGreaterThanOrEqual(firstMatch ?? 0, 0.15)
+        XCTAssertLessThan(firstMatch ?? 1, 0.18)
+    }
+
+    func test_chordMatcher_rejectsMissingAndExtraNotes() {
+        var m = ChordHoldMatcher()
+        let cMajor: Set<Int> = [0, 4, 7]
+        XCTAssertEqual(m.feed(heard: [0, 4], target: cMajor, at: 0), .notMatching(missing: [7], extra: []))
+        XCTAssertEqual(m.feed(heard: [0, 2, 4, 7], target: cMajor, at: 0.05), .notMatching(missing: [], extra: [2]))
+        for t in stride(from: 0.1, through: 1.0, by: 0.02) {
+            XCTAssertNotEqual(m.feed(heard: [0, 2, 4, 7], target: cMajor, at: t), .matched)
+        }
+    }
+
+    func test_chordMatcher_toleratesOneDroppedFrame_notALongGap() {
+        let a: Set<Int> = [9]
+        // one frame (21 ms) heard as nothing in the middle of the hold
+        var m = ChordHoldMatcher()
+        var matched = false
+        for k in 0..<10 {
+            let heard: Set<Int> = k == 4 ? [] : a
+            if m.feed(heard: heard, target: a, at: Double(k) * 0.021) == .matched { matched = true }
+        }
+        XCTAssertTrue(matched)
+
+        // let go for 200 ms: the hold starts again
+        var n = ChordHoldMatcher()
+        for k in 0..<5 { _ = n.feed(heard: a, target: a, at: Double(k) * 0.021) }
+        _ = n.feed(heard: [], target: a, at: 0.3)
+        XCTAssertNotEqual(n.feed(heard: a, target: a, at: 0.32), .matched)
+    }
+
+    func test_chordMatcher_aChordTappedAndReleased_isNotAccepted() {
+        // struck for three frames (~60 ms), then quiet: the memory of its notes must not finish the hold
+        var m = ChordHoldMatcher()
+        let cMajor: Set<Int> = [0, 4, 7]
+        var verdicts: [ChordHoldMatcher.Verdict] = []
+        for k in 0..<20 {
+            let heard: Set<Int> = k < 3 ? cMajor : []
+            verdicts.append(m.feed(heard: heard, target: cMajor, at: Double(k) * 0.021))
+        }
+        XCTAssertFalse(verdicts.contains(.matched))
+    }
+
+    /// Every lesson step (and ear-training chord), played correctly on the bundled piano, is
+    /// accepted by Try Yourself's check; with a wrong note added, it isn't.
+    func test_everyLessonStep_isAcceptedByTryYourself_andAWrongNoteIsNot() throws {
+        var steps: [[Int]] = []
+        for chapter in allChapters where chapter.chapterIndex != 10 {
+            for variant in chapter.lesson.variants {
+                steps += PracticeMusic.item(for: variant, in: chapter.lesson)?.steps.map(\.midiNotes) ?? []
+            }
+        }
+        for (i, variant) in chapter(10).lesson.variants.enumerated() {
+            let round = PracticeMusic.earRound(for: variant, index: i)
+            steps += [round.reference.notes.map(\.midi), round.mystery.notes.map(\.midi)]
+        }
+        let unique = Array(Set(steps.map { $0.sorted() })).sorted { $0.lexicographicallyPrecedes($1) }
+        // the same chords with a wrong note: a whole step above the lowest note, when that isn't in it
+        let wrong = unique.compactMap { s -> [Int]? in
+            guard s.count >= 3, let low = s.first, !Set(s.map { $0 % 12 }).contains((low + 2) % 12) else { return nil }
+            return (s + [low + 2]).sorted()
+        }
+
+        func accepted(_ played: [[Int]], targets: [[Int]]) throws -> [Bool] {
+            var events: [(midis: [Int], at: Double, length: Double)] = []
+            for (i, s) in played.enumerated() { events.append((s, Double(i) + 0.2, 0.8)) }
+            let frames = PianoPitchAnalyzerTests.frames(
+                try PianoPitchAnalyzerTests.render(events, duration: Double(played.count) + 0.6))
+            return targets.enumerated().map { i, target in
+                var matcher = ChordHoldMatcher()
+                let from = Double(i) + 0.2, to = from + 0.8
+                let targetClasses = Set(target.map { $0 % 12 })
+                var reasons: [String: Int] = [:]
+                let ok = frames.filter { $0.time >= from && $0.time <= to }.contains { frame in
+                    let heard = Set(PitchDetector.strongNotes(in: frame).map { $0 % 12 })
+                    let verdict = matcher.feed(heard: heard, target: targetClasses, at: frame.time)
+                    if case .notMatching(let missing, let extra) = verdict {
+                        let why = "missing \(missing.sorted()) extra \(extra.sorted()) strong \(PitchDetector.strongNotes(in: frame).map(PianoPitchAnalyzer.name(of:)))"
+                        reasons[why, default: 0] += 1
+                    }
+                    return verdict == .matched
+                }
+                if !ok {
+                    print("[TryYourself] \(target.map(PianoPitchAnalyzer.name(of:))) not accepted:",
+                          reasons.sorted { $0.value > $1.value }.prefix(3).map { "\($0.value)× \($0.key)" })
+                }
+                return ok
+            }
+        }
+
+        let right = try accepted(unique, targets: unique)
+        let rejected = zip(unique, right).filter { !$0.1 }.map { $0.0.map(PianoPitchAnalyzer.name(of:)).joined(separator: " ") }
+        print("[TryYourself] \(right.filter { $0 }.count)/\(unique.count) played correctly accepted; not accepted: \(rejected)")
+        XCTAssertGreaterThanOrEqual(Double(right.filter { $0 }.count) / Double(unique.count), 0.95)
+
+        let targetsOfWrong = wrong.map { w in w.filter { $0 != w.first! + 2 } }
+        let wrongAccepted = try accepted(wrong, targets: targetsOfWrong)
+        print("[TryYourself] \(wrongAccepted.filter { $0 }.count)/\(wrong.count) chords with a wrong note accepted")
+        XCTAssertLessThanOrEqual(Double(wrongAccepted.filter { $0 }.count) / Double(max(1, wrong.count)), 0.1)
+    }
 }
