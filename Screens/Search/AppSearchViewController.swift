@@ -289,7 +289,7 @@ final class AppSearchViewController: UIViewController {
         switch action {
         case .scan:
             let nav = mainTabBarController?.select(.home)
-            (nav?.viewControllers.first as? HomeViewController)?.startUploadFlow()
+            (nav?.viewControllers.first?.screen as? HomeViewController)?.startUploadFlow()
         case .library:
             mainTabBarController?.select(.library)
         case .playlists:
@@ -303,7 +303,7 @@ final class AppSearchViewController: UIViewController {
             navigationController?.pushViewController(LessonMapViewController(), animated: true)
         case .settingsItem(let item):
             let nav = mainTabBarController?.select(.settings)
-            (nav?.viewControllers.first as? UserProfileViewController)?.perform(item)
+            (nav?.viewControllers.first?.screen as? UserProfileViewController)?.perform(item)
         }
     }
 }

@@ -136,8 +136,8 @@ final class UploadPageNextViewController: UIViewController {
         isOnScreen = false
         jobLoadTask?.cancel()
 
-        let movedOffNavigationStack = navigationController?.topViewController.map { $0 !== self } ?? false
-        if isMovingFromParent || isBeingDismissed || movedOffNavigationStack {
+        let movedOffNavigationStack = navigationController?.topViewController.map { $0.screen !== self } ?? false
+        if isLeavingNavigationStack || isBeingDismissed || movedOffNavigationStack {
             releasePreviewResources()
         }
     }

@@ -8,8 +8,8 @@
 import Foundation
 import UIKit
 
-/// iPad: how wide a screen's content may grow. Its tab's column follows the screen on top;
-/// screens that don't say get a reading width.
+/// iPad: how wide a screen's content may grow (see `IPadScreenContainer`); screens that don't
+/// say get a reading width.
 protocol IPadContentWidth {
     var iPadContentWidth: CGFloat { get }
 }
@@ -17,8 +17,6 @@ protocol IPadContentWidth {
 final class AppNavigationController: UINavigationController, UINavigationControllerDelegate {
     /// Called as a screen is about to show, with whether it is this tab's root.
     var onWillShow: ((_ isRoot: Bool) -> Void)?
-    /// Called as a screen is about to show (and again if a back swipe is cancelled).
-    var onWillShowController: ((UIViewController) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -28,16 +26,17 @@ final class AppNavigationController: UINavigationController, UINavigationControl
     func navigationController(_ navigationController: UINavigationController,
                               willShow viewController: UIViewController, animated: Bool) {
         onWillShow?(viewController === viewControllers.first)
-        onWillShowController?(viewController)
         // An interactive back swipe that is cancelled leaves the pushed screen showing.
         transitionCoordinator?.notifyWhenInteractionChanges { [weak self] context in
             guard context.isCancelled, let self else { return }
             self.onWillShow?(self.topViewController === self.viewControllers.first)
-            if let top = self.topViewController { self.onWillShowController?(top) }
         }
     }
 
-    override func pushViewController(_ viewController: UIViewController, animated: Bool) {
+    override func pushViewController(_ pushed: UIViewController, animated: Bool) {
+        // iPad: the screen comes in its own width-limited container, so the navigation never
+        // resizes and pushes and pops animate as usual
+        let viewController = IPadScreenContainer.wrapIfNeeded(pushed)
         if !viewControllers.isEmpty {
             viewController.hidesBottomBarWhenPushed = true
             // Only tab roots use large titles; pushed screens keep their own headers.
@@ -63,74 +62,97 @@ enum DeviceLayout {
     static func value(phone: CGFloat, pad: CGFloat) -> CGFloat { isPad ? pad : phone }
 }
 
-/// On iPad, keeps a tab's screens in a centred column over the app's background, so
-/// phone-designed layouts don't stretch across a 13-inch screen. The column's width follows
-/// the screen on top (`IPadContentWidth`): Home and the two-pane sheet pages are wide, lists
-/// and settings keep a reading width. It fills the window when that is narrower.
-final class ReadableColumnController: UIViewController {
+/// iPad: holds one screen in a centred column of the width it asks for (`IPadContentWidth`,
+/// else a reading width), over the screen's own background. Each screen in a navigation stack
+/// has its own container, so the stack never changes size and transitions stay smooth.
+/// Navigation items, status bar, orientation and the scroll view the bars follow come from
+/// the screen inside.
+final class IPadScreenContainer: UIViewController {
     /// Lists, settings, forms: wide enough for rows, narrow enough to read.
     static let readingWidth: CGFloat = 700
+    /// Screens at least this wide (Home) fill the window and need no container.
+    static let fullWidth: CGFloat = 1400
 
     let content: UIViewController
-    private var widthLimit: NSLayoutConstraint?
+    private let maxWidth: CGFloat
+    private var widthConstraint: NSLayoutConstraint?
 
-    init(content: UIViewController) {
+    /// `viewController` on a phone or when it fills the screen; otherwise in a container.
+    static func wrapIfNeeded(_ viewController: UIViewController) -> UIViewController {
+        guard DeviceLayout.isPad, !(viewController is IPadScreenContainer) else { return viewController }
+        let width = (viewController as? IPadContentWidth)?.iPadContentWidth ?? readingWidth
+        guard width < fullWidth else { return viewController }
+        return IPadScreenContainer(content: viewController, maxWidth: width)
+    }
+
+    private init(content: UIViewController, maxWidth: CGFloat) {
         self.content = content
+        self.maxWidth = maxWidth
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override var navigationItem: UINavigationItem { content.navigationItem }
+    override var title: String? {
+        get { content.title }
+        set { content.title = newValue }
+    }
     override var tabBarItem: UITabBarItem! {
         get { content.tabBarItem }
         set { content.tabBarItem = newValue }
     }
 
-    static func width(for screen: UIViewController?) -> CGFloat {
-        (screen as? IPadContentWidth)?.iPadContentWidth ?? readingWidth
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = ComponentColors.App.screenBackground
         addChild(content)
         let column = content.view!
+        view.backgroundColor = column.backgroundColor ?? ComponentColors.App.screenBackground
         column.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(column)
-        let fill = column.widthAnchor.constraint(equalTo: view.widthAnchor)
-        fill.priority = .defaultHigh
-        let top = (content as? UINavigationController)?.topViewController ?? content
-        let limit = column.widthAnchor.constraint(lessThanOrEqualToConstant: Self.width(for: top))
-        widthLimit = limit
+        // an exact width, min(window, limit), set on each layout: a "fill but at most" pair of
+        // constraints conflicts on a wide screen and lets screens settle at their compact width
+        let width = column.widthAnchor.constraint(equalToConstant: maxWidth)
+        widthConstraint = width
         NSLayoutConstraint.activate([
             column.topAnchor.constraint(equalTo: view.topAnchor),
             column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             column.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            limit,
-            column.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor),
-            fill,
+            width,
         ])
         content.didMove(toParent: self)
     }
 
-    /// Resizes the column for the screen about to show, along with its push or pop.
-    func follow(_ screen: UIViewController, coordinator: UIViewControllerTransitionCoordinator?) {
-        let width = Self.width(for: screen)
-        guard let widthLimit, widthLimit.constant != width else { return }
-        widthLimit.constant = width
-        guard isViewLoaded, view.window != nil else { return }
-        if let coordinator {
-            coordinator.animate(alongsideTransition: { _ in self.view.layoutIfNeeded() })
-        } else {
-            view.layoutIfNeeded()
-        }
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        let width = min(view.bounds.width, maxWidth)
+        if widthConstraint?.constant != width { widthConstraint?.constant = width }
     }
 
+    override func contentScrollView(for edge: NSDirectionalRectEdge) -> UIScrollView? {
+        content.contentScrollView(for: edge)
+    }
     override var childForStatusBarStyle: UIViewController? { content }
     override var childForStatusBarHidden: UIViewController? { content }
+    override var childForHomeIndicatorAutoHidden: UIViewController? { content }
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { content.supportedInterfaceOrientations }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         content.preferredInterfaceOrientationForPresentation
+    }
+}
+
+extension UIViewController {
+    /// The screen itself, out of its iPad container if it has one.
+    var screen: UIViewController { (self as? IPadScreenContainer)?.content ?? self }
+
+    /// Being popped (or removed) from its navigation stack, directly or in its iPad container.
+    var isLeavingNavigationStack: Bool {
+        isMovingFromParent || ((parent as? IPadScreenContainer)?.isMovingFromParent ?? false)
+    }
+
+    /// Being pushed onto its navigation stack, directly or in its iPad container.
+    var isArrivingInNavigationStack: Bool {
+        isMovingToParent || ((parent as? IPadScreenContainer)?.isMovingToParent ?? false)
     }
 }
 
@@ -147,30 +169,13 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private lazy var settingsNav = makeNav(UserProfileViewController())
     private lazy var searchNav   = makeNav(AppSearchViewController())
 
-    /// iPad: each tab's navigation sits in a readable-width column (see ReadableColumnController).
-    private let usesColumns = UIDevice.current.userInterfaceIdiom == .pad
-    private var columns: [ObjectIdentifier: ReadableColumnController] = [:]
+    private let isPad = UIDevice.current.userInterfaceIdiom == .pad
 
-    /// What the tab shows for `nav`: the navigation controller itself, or its iPad column.
-    private func tabRoot(_ nav: AppNavigationController) -> UIViewController {
-        guard usesColumns else { return nav }
-        if let column = columns[ObjectIdentifier(nav)] { return column }
-        let column = ReadableColumnController(content: nav)
-        nav.onWillShowController = { [weak column, weak nav] screen in
-            column?.follow(screen, coordinator: nav?.transitionCoordinator)
-        }
-        // the tab bar is told it is compact (so it sits at the bottom, as on iPhone); the screens
-        // inside keep the iPad's regular width
-        column.traitOverrides.horizontalSizeClass = .regular
-        columns[ObjectIdentifier(nav)] = column
-        return column
-    }
+    /// What the tab shows for `nav`.
+    private func tabRoot(_ nav: AppNavigationController) -> UIViewController { nav }
 
     /// The selected tab's navigation controller.
-    var selectedNav: UINavigationController? {
-        (selectedViewController as? UINavigationController)
-            ?? ((selectedViewController as? ReadableColumnController)?.content as? UINavigationController)
-    }
+    var selectedNav: UINavigationController? { selectedViewController as? UINavigationController }
 
     private let miniPlayer = MiniPlayerView()
     /// Pre-iOS 26 the mini player floats above the tab bar in this container.
@@ -183,7 +188,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
             mode = .tabBar
         }
         // iPad: the tab bar floats at the bottom like the phone's instead of across the top
-        if usesColumns { traitOverrides.horizontalSizeClass = .compact }
+        if isPad { traitOverrides.horizontalSizeClass = .compact }
         setupTabs()
         setupAppearance()
         setupMiniPlayer()
@@ -207,34 +212,23 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     }
 
     private func makeNav(_ root: UIViewController) -> AppNavigationController {
-        let nav = AppNavigationController(rootViewController: root)
-        nav.onWillShow = { [weak self, weak nav] isRoot in
+        let nav = AppNavigationController(rootViewController: IPadScreenContainer.wrapIfNeeded(root))
+        // the tab bar is told it is compact (so it sits at the bottom); its screens keep the
+        // iPad's regular width
+        if isPad { nav.traitOverrides.horizontalSizeClass = .regular }
+        nav.onWillShow = { [weak self, weak nav] _ in
             guard let self, let nav, nav === self.selectedNav else { return }
-            // In a column the tab bar can't see the push, so hide it here like hidesBottomBarWhenPushed.
-            if self.usesColumns { self.setTabBarHiddenForPush(!isRoot) }
             self.refreshMiniPlayer()
         }
         return nav
     }
 
-    private func setTabBarHiddenForPush(_ hidden: Bool) {
-        let animated = viewIfLoaded?.window != nil
-        if #available(iOS 18.0, *) {
-            guard isTabBarHidden != hidden else { return }
-            setTabBarHidden(hidden, animated: animated)
-        } else {
-            tabBar.isHidden = hidden
-        }
-    }
-
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        if usesColumns { setTabBarHiddenForPush(!isShowingTabRoot) }
         refreshMiniPlayer()
     }
 
     @available(iOS 18.0, *)
     func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
-        if usesColumns { setTabBarHiddenForPush(!isShowingTabRoot) }
         refreshMiniPlayer()
     }
 

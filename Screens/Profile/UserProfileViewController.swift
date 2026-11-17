@@ -145,7 +145,7 @@ final class UserProfileViewController: UIViewController {
 
     /// Settings is a tab now; other screens may still push it.
     private var isTabRoot: Bool {
-        navigationController?.viewControllers.first === self
+        navigationController?.viewControllers.first?.screen === self   // (iPad: inside its container)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -176,7 +176,7 @@ final class UserProfileViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         // Post notification so Home nav bar can refresh profile image when user navigates back
-        if isMovingFromParent {
+        if isLeavingNavigationStack {
             activeImagePicker?.delegate = nil
             activeImagePicker = nil
             NotificationCenter.default.post(name: NavigationBarHelper.profileDidUpdateNotification, object: nil)

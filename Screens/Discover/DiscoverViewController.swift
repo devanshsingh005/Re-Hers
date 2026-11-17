@@ -125,8 +125,6 @@ final class DiscoverViewController: UIViewController {
         return v
     }()
 
-    // iPad adaptive width — swapped on rotation
-    private var iPadWidthConstraints: [NSLayoutConstraint] = []
     private lazy var dismissKeyboardTapGesture: UITapGestureRecognizer = {
         let gesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         gesture.cancelsTouchesInView = false
@@ -164,11 +162,6 @@ final class DiscoverViewController: UIViewController {
         updateScrollInsets()
     }
 
-    override func viewWillTransition(to size: CGSize,
-                                     with coordinator: UIViewControllerTransitionCoordinator) {
-        super.viewWillTransition(to: size, with: coordinator)
-        coordinator.animate(alongsideTransition: { _ in self.applyAdaptiveWidth(for: size.width) })
-    }
 
     // MARK: NavBar
 
@@ -315,7 +308,6 @@ final class DiscoverViewController: UIViewController {
         chipsHeightConstraint = chipsScrollView.heightAnchor.constraint(equalToConstant: 0)
         chipsHeightConstraint?.isActive = true
 
-        applyAdaptiveWidth(for: view.bounds.width)
         updateScrollInsets()
     }
 
@@ -343,25 +335,6 @@ final class DiscoverViewController: UIViewController {
         )
         scrollView.contentInset.bottom = bottomInset
         scrollView.verticalScrollIndicatorInsets.bottom = bottomInset
-    }
-
-    // MARK: iPad Adaptive Width
-
-    private func applyAdaptiveWidth(for viewWidth: CGFloat) {
-        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
-        NSLayoutConstraint.deactivate(iPadWidthConstraints)
-
-        let maxW = min(viewWidth * 0.74, 800)
-        iPadWidthConstraints = [
-            contentView.widthAnchor.constraint(equalToConstant: maxW),
-            contentView.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
-        ]
-        // Deactivate the phone leading-pin so centering works cleanly
-        scrollView.constraints
-            .first { $0.firstItem === contentView && $0.firstAttribute == .leading }
-            .map { $0.isActive = false }
-
-        NSLayoutConstraint.activate(iPadWidthConstraints)
     }
 
     // MARK: Filter Menus
