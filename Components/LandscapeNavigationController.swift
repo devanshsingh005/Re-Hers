@@ -8,11 +8,8 @@ import UIKit
 /// A navigation controller that forces its top view controller into landscape orientation.
 /// Used for screens like Play Along and Animation that require a horizontal layout.
 final class LandscapeNavigationController: UINavigationController {
-    // phone only: an iPad keeps whatever orientation it is held in
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { DeviceLayout.isPad ? .all : .landscape }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        DeviceLayout.isPad ? super.preferredInterfaceOrientationForPresentation : .landscapeRight
-    }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
     override var shouldAutorotate: Bool { true }
     override var prefersStatusBarHidden: Bool { topViewController?.prefersStatusBarHidden ?? true }
 
@@ -21,7 +18,7 @@ final class LandscapeNavigationController: UINavigationController {
         
         // When this landscape controller is dismissed, force the system back to portrait
         if DeviceLayout.isPad {
-            // the iPad was never turned
+            // the iPad app is always landscape
         } else if #available(iOS 16.0, *) {
             let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
             windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))

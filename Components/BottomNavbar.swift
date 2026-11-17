@@ -116,8 +116,11 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private func tabRoot(_ nav: AppNavigationController) -> UIViewController {
         guard usesColumns else { return nav }
         if let column = columns[ObjectIdentifier(nav)] { return column }
-        // Home lays its sections out side by side, so it gets a wider area than the lists
-        let column = ReadableColumnController(content: nav, maxWidth: nav === homeNav ? 1100 : ReadableColumnController.maxWidth)
+        // Home lays its sections out in two columns across the screen; lists keep a reading width
+        let column = ReadableColumnController(content: nav, maxWidth: nav === homeNav ? 1400 : ReadableColumnController.maxWidth)
+        // the tab bar is told it is compact (so it sits at the bottom, as on iPhone); the screens
+        // inside keep the iPad's regular width
+        column.traitOverrides.horizontalSizeClass = .regular
         columns[ObjectIdentifier(nav)] = column
         return column
     }
@@ -138,6 +141,8 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         if #available(iOS 18.0, *) {
             mode = .tabBar
         }
+        // iPad: the tab bar floats at the bottom like the phone's instead of across the top
+        if usesColumns { traitOverrides.horizontalSizeClass = .compact }
         setupTabs()
         setupAppearance()
         setupMiniPlayer()
@@ -294,7 +299,9 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
         if let item { miniPlayer.configure(with: item) }
 
         if #available(iOS 26.0, *) {
-            let wantsAccessory = item != nil && isShowingTabRoot
+            // iPad Home shows the last-played sheet in its own column instead
+            let homeHasItsOwn = usesColumns && selectedNav === homeNav
+            let wantsAccessory = item != nil && isShowingTabRoot && !homeHasItsOwn
             if wantsAccessory, bottomAccessory == nil {
                 setBottomAccessory(UITabAccessory(contentView: miniPlayer), animated: viewIfLoaded?.window != nil)
             } else if !wantsAccessory, bottomAccessory != nil {
@@ -305,6 +312,7 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
             tabBarMinimizeBehavior = wantsAccessory ? .onScrollDown : .never
         } else {
             legacyMiniPlayerContainer?.isHidden = item == nil || !isShowingTabRoot
+                || (usesColumns && selectedNav === homeNav)
             for nav in [homeNav, libraryNav, settingsNav, searchNav] {
                 nav.additionalSafeAreaInsets.bottom = item == nil ? 0 : 64
             }
@@ -344,12 +352,12 @@ class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     /// with their own landscape mask, and closing them rotates the app back to portrait.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         if traitCollection.userInterfaceIdiom == .phone { return .portrait }
-        return selectedViewController?.supportedInterfaceOrientations ?? .portrait
+        return .landscape   // the iPad app is landscape throughout
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         if traitCollection.userInterfaceIdiom == .phone { return .portrait }
-        return selectedViewController?.preferredInterfaceOrientationForPresentation ?? .portrait
+        return .landscapeRight
     }
 }
 

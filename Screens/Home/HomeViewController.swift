@@ -23,8 +23,8 @@ class HomeViewController: UIViewController {
     private enum Constants {
         static let horizontalPadding: CGFloat = 20
         static let sectionSpacing:    CGFloat = 32
-        static let recentUploadsShown = DeviceLayout.isPad ? 4 : 3
-        static let playlistTileSize:  CGFloat = DeviceLayout.isPad ? 168 : 140
+        static let recentUploadsShown = 3
+        static let playlistTileSize:  CGFloat = DeviceLayout.isPad ? 200 : 140
         static let pdfPageSize = CGSize(width: 612, height: 792)
         static let maxUploadSizeBytes = 10 * 1024 * 1024
     }
@@ -71,11 +71,16 @@ class HomeViewController: UIViewController {
     private let playlistTilesStack = UIStackView()
     private let recentUploadsStack = UIStackView()
 
-    // Wide layout (iPad, regular width): the scan card with its buttons beside it, then
-    // playlists and recent uploads side by side. Narrow: everything stacked, as on iPhone.
-    private let heroStack = UIStackView()
-    private let heroActions = UIStackView()
-    private let lowerRow = UIStackView()
+    // Wide layout (iPad): two columns. Left: the scan card, Scan to Play, Upload and the
+    // last-played sheet; right: playlists above recent uploads. Narrow (iPhone): one column.
+    private let heroColumn = UIStackView()
+    private lazy var heroWrapper = padded(heroColumn)
+    private var playlistSection = UIView()
+    private var recentSection = UIView()
+    private let rightColumn = UIStackView()
+    private let mainRow = UIStackView()
+    private let homeMiniPlayer = MiniPlayerView()
+    private lazy var homeMiniPlayerCard = makeHomeMiniPlayerCard()
     private var wideConstraints: [NSLayoutConstraint] = []
 
     /// The theme's card surface, as on the other screens.
@@ -91,7 +96,6 @@ class HomeViewController: UIViewController {
         buildScanSection()
         buildPlaylistSection()
         buildRecentUploadsSection()
-        contentStack.addArrangedSubview(lowerRow)
         applyWidthLayout()
         registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in
             self.applyWidthLayout()
@@ -416,35 +420,82 @@ class HomeViewController: UIViewController {
             },
         ])
 
-        heroActions.addArrangedSubview(scanButton)
-        heroActions.addArrangedSubview(uploadButton)
-        heroActions.axis = .vertical
-        heroActions.spacing = 8
-        heroStack.addArrangedSubview(card)
-        heroStack.addArrangedSubview(heroActions)
-        heroStack.spacing = 16
-        contentStack.addArrangedSubview(padded(heroStack))
+        heroColumn.axis = .vertical
+        heroColumn.spacing = 16
+        heroColumn.addArrangedSubview(card)
+        heroColumn.addArrangedSubview(scanButton)
+        heroColumn.addArrangedSubview(uploadButton)
+        heroColumn.setCustomSpacing(8, after: scanButton)
 
-        // wide: a card of fixed height, the buttons in a column beside it
-        let cardHeight = card.heightAnchor.constraint(equalToConstant: 300)
+        rightColumn.axis = .vertical
+        rightColumn.spacing = Constants.sectionSpacing
+        mainRow.axis = .horizontal
+        mainRow.alignment = .top
+
+        // wide: a tall card (about 45% of the screen) and a left column a little under half
+        let cardHeight = card.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.45)
         cardHeight.priority = .required - 1
         wideConstraints = [
             cardHeight,
-            heroActions.widthAnchor.constraint(equalTo: heroStack.widthAnchor, multiplier: 0.36),
+            heroWrapper.widthAnchor.constraint(equalTo: mainRow.widthAnchor, multiplier: 0.47),
         ]
     }
 
-    /// Wide or stacked, from the window's width (an iPad app can be narrow in Split View).
+    /// Two columns on a wide screen, one on a narrow one (iPhone, or a narrow iPad window).
     private func applyWidthLayout() {
         let wide = traitCollection.horizontalSizeClass == .regular
-        heroStack.axis = wide ? .horizontal : .vertical
-        heroStack.alignment = wide ? .center : .fill
-        heroStack.spacing = wide ? 24 : 16
-        lowerRow.axis = wide ? .horizontal : .vertical
-        lowerRow.alignment = wide ? .top : .fill
-        lowerRow.distribution = wide ? .fillEqually : .fill
-        lowerRow.spacing = wide ? 0 : Constants.sectionSpacing    // sections carry their own margins
-        if wide { NSLayoutConstraint.activate(wideConstraints) } else { NSLayoutConstraint.deactivate(wideConstraints) }
+        [heroWrapper, playlistSection, recentSection, mainRow, rightColumn, homeMiniPlayerCard].forEach {
+            $0.removeFromSuperview()
+        }
+        NSLayoutConstraint.deactivate(wideConstraints)
+        if wide {
+            heroColumn.addArrangedSubview(homeMiniPlayerCard)
+            heroColumn.setCustomSpacing(24, after: heroColumn.arrangedSubviews[heroColumn.arrangedSubviews.count - 2])
+            rightColumn.addArrangedSubview(playlistSection)
+            rightColumn.addArrangedSubview(recentSection)
+            mainRow.addArrangedSubview(heroWrapper)
+            mainRow.addArrangedSubview(rightColumn)
+            contentStack.addArrangedSubview(mainRow)
+            NSLayoutConstraint.activate(wideConstraints)
+        } else {
+            contentStack.addArrangedSubview(heroWrapper)
+            contentStack.addArrangedSubview(playlistSection)
+            contentStack.addArrangedSubview(recentSection)
+        }
+        refreshHomeMiniPlayer()
+    }
+
+    // MARK: - Last played (wide layout)
+
+    /// The last-played sheet as a card under the scan buttons; on iPad Home it takes the place
+    /// of the tab bar's mini player.
+    private func makeHomeMiniPlayerCard() -> UIView {
+        let card = UIView()
+        card.backgroundColor = Self.cardColor
+        card.layer.cornerRadius = 18
+        card.layer.cornerCurve = .continuous
+        card.layer.borderWidth = 1
+        card.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
+        homeMiniPlayer.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(homeMiniPlayer)
+        NSLayoutConstraint.activate([
+            homeMiniPlayer.topAnchor.constraint(equalTo: card.topAnchor, constant: 4),
+            homeMiniPlayer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -4),
+            homeMiniPlayer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 8),
+            homeMiniPlayer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -8),
+            card.heightAnchor.constraint(equalToConstant: 68),
+        ])
+        homeMiniPlayer.onOpen = { [weak self] in self?.mainTabBarController?.openLastPlayed(resume: false) }
+        homeMiniPlayer.onResume = { [weak self] in self?.mainTabBarController?.openLastPlayed(resume: true) }
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshHomeMiniPlayer),
+                                               name: LastPlayedStore.didChangeNotification, object: nil)
+        return card
+    }
+
+    @objc private func refreshHomeMiniPlayer() {
+        let item = LastPlayedStore.shared.current
+        if let item { homeMiniPlayer.configure(with: item) }
+        homeMiniPlayerCard.isHidden = item == nil
     }
 
     @objc private func scanTapped() {
@@ -492,7 +543,7 @@ class HomeViewController: UIViewController {
         let section = UIStackView(arrangedSubviews: [header, tiles])
         section.axis = .vertical
         section.spacing = 10
-        lowerRow.addArrangedSubview(section)
+        playlistSection = section
         showPlaylistPlaceholders()
 
         // Tiles plus their caption; resized for the caption's Dynamic Type size.
@@ -570,7 +621,7 @@ class HomeViewController: UIViewController {
         let section = UIStackView(arrangedSubviews: [header, padded(recentUploadsStack)])
         section.axis = .vertical
         section.spacing = 10
-        lowerRow.addArrangedSubview(section)
+        recentSection = section
     }
 
     // MARK: - Load & Display Recent Uploads

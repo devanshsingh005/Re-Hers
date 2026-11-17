@@ -109,9 +109,9 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             columnLeading?.constant = margin
             columnTrailing?.constant = -margin
         }
-        // iPad: a taller keyboard with keys sized for fingers; phone: at most 170 pt
+        // all 88 keys on both; on iPad's wider keys (about 26 pt) a taller keyboard keeps their shape
         let pianoHeight = DeviceLayout.isPad
-            ? (min(340, max(200, view.bounds.height * 0.3))).rounded()
+            ? (min(250, max(190, view.bounds.height * 0.24))).rounded()
             : (min(170, max(110, view.bounds.height * kPianoShare))).rounded()
         if pianoHeightConstraint?.constant != pianoHeight { pianoHeightConstraint?.constant = pianoHeight }
         
@@ -145,7 +145,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         teardownPlaybackResources(reset: true)
 
         // Force portrait on exit so the app doesn't stay stuck in landscape mode (phone only:
-        // an iPad stays however it is held)
+        // the iPad app is always landscape)
         if DeviceLayout.isPad {
             // nothing to undo
         } else if #available(iOS 16.0, *) {
@@ -165,11 +165,8 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     }
 
     // MARK: - Fix 1: Force Landscape
-    // a phone turns to landscape for Animation; an iPad stays however it is held
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { DeviceLayout.isPad ? .all : .landscape }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        DeviceLayout.isPad ? super.preferredInterfaceOrientationForPresentation : .landscapeRight
-    }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
     override var shouldAutorotate: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }

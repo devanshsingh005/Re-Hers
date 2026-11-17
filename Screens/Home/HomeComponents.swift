@@ -58,7 +58,8 @@ final class ScanCardView: UIControl {
         height.priority = .defaultHigh
         NSLayoutConstraint.activate([
             height,
-            heightAnchor.constraint(lessThanOrEqualToConstant: 380),
+            // a phone-sized cap; iPad Home sets the card's height itself
+            heightAnchor.constraint(lessThanOrEqualToConstant: DeviceLayout.isPad ? 640 : 380),
             heightAnchor.constraint(greaterThanOrEqualTo: stack.heightAnchor, constant: 80),
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
