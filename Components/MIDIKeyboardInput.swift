@@ -26,6 +26,12 @@ final class MIDIKeyboardInput {
 
     deinit { stop() }
 
+    /// CoreMIDI's first call connects to the system's MIDI service, a quarter of a second of
+    /// waiting; done here in the background at launch, Play Along opens without that pause.
+    static func prewarm() {
+        DispatchQueue.global(qos: .utility).async { _ = MIDIGetNumberOfSources() }
+    }
+
     @discardableResult
     func start() -> Bool {
         guard !isRunning else { return true }

@@ -34,6 +34,9 @@ final class PianoListener {
 
     private let engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "rehearse.piano-listener", qos: .userInteractive)
+    /// A background start is under way (see `start(completion:)`).
+    private var isStarting = false
+    private var stopWhenStarted = false
     private var analyzer: PianoPitchAnalyzer?
 
     static var permission: AVAudioApplication.recordPermission { AVAudioApplication.shared.recordPermission }
@@ -63,13 +66,51 @@ final class PianoListener {
             lastStartFailure = .microphonePermissionMissing
             return false
         }
+        // set up in turn with the playback engine (see AudioEngineManager.runExclusively)
+        let started = AudioEngineManager.shared.runExclusively { setUpOnAudioQueue() }
+        guard started else { return false }
+        isListening = true
+        return true
+    }
+
+    /// As `start()`, but the audio setup (a few hundred milliseconds) runs in the background;
+    /// `completion` gets the result on the main thread.
+    func start(completion: @escaping (Bool) -> Void) {
+        guard !isListening, !isStarting else { completion(isListening); return }
+        lastStartFailure = nil
+        guard Self.permission == .granted else {
+            lastStartFailure = .microphonePermissionMissing
+            completion(false)
+            return
+        }
+        isStarting = true
+        stopWhenStarted = false
+        AudioEngineManager.shared.runExclusivelyLater { [weak self] in
+            let started = self?.setUpOnAudioQueue() ?? false
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isStarting = false
+                if started { self.isListening = true }
+                // stopped while starting (the screen closed): stop now that there's something to stop
+                if self.stopWhenStarted {
+                    self.stop()
+                    completion(false)
+                    return
+                }
+                completion(started)
+            }
+        }
+    }
+
+    /// The session, the tap and the engine. Runs on AudioEngineManager's queue.
+    private func setUpOnAudioQueue() -> Bool {
         do {
             let session = AVAudioSession.sharedInstance()
             // measurement mode: no automatic gain or voice processing colouring the sound
             try session.setCategory(.playAndRecord, mode: .measurement,
                                     options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
             try session.setActive(true)
-            AudioEngineManager.shared.microphoneIsActive = true
+            AudioEngineManager.shared.setMicrophoneActiveOnQueue(true)
         } catch {
             lastStartFailure = .audioSessionConfigurationFailed(error)
             return false
@@ -106,18 +147,21 @@ final class PianoListener {
             lastStartFailure = .engineStartFailed(error)
             return false
         }
-        isListening = true
         debugLog("🎙️ [PianoListener] listening at \(Int(format.sampleRate)) Hz")
         return true
+    
     }
 
     func stop() {
+        if isStarting { stopWhenStarted = true }
         guard isListening else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        AudioEngineManager.shared.runExclusively {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            AudioEngineManager.shared.setMicrophoneActiveOnQueue(false)
+        }
         isListening = false
         queue.async { [analyzer] in analyzer?.reset() }
-        AudioEngineManager.shared.microphoneIsActive = false
         debugLog("🛑 [PianoListener] stopped")
     }
 

@@ -537,10 +537,9 @@ final class PlayAlongViewController: UIViewController {
     private func startListening(askIfNeeded: Bool) {
         switch PianoListener.permission {
         case .granted:
-            if listener.start() {
-                navBar.setMic(.listening(hearing: false))
-            } else {
-                navBar.setMic(.off)
+            // the audio setup runs in the background, so the screen doesn't stall opening
+            listener.start { [weak self] started in
+                self?.navBar.setMic(started ? .listening(hearing: false) : .off)
             }
         case .undetermined where askIfNeeded:
             // the system's own prompt only; Play Along also works with the screen keyboard

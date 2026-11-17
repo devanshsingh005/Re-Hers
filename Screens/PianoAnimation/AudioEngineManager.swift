@@ -9,6 +9,40 @@ final class AudioEngineManager {
 
     static let shared = AudioEngineManager()
 
+    /// Every engine call runs here, in order: setting up and starting AVAudioEngine takes a few
+    /// hundred milliseconds, which on the main thread froze the screen opening Animation, Play
+    /// Along or a lesson. Notes and clicks go through the same queue, so they keep their order.
+    private let queue = DispatchQueue(label: "rehearse.audio-engine", qos: .userInteractive)
+
+    // MARK: - Public (any thread; the work runs on `queue`)
+
+    /// Runs `work` on the audio queue and waits for it. For other audio engines (the
+    /// microphone): Core Audio sets up one I/O unit at a time, and an engine starting on another
+    /// thread while this one starts left both waiting on each other for seconds.
+    func runExclusively<T>(_ work: () throws -> T) rethrows -> T {
+        try queue.sync(execute: work)
+    }
+
+    /// `work` on the audio queue, without waiting for it.
+    func runExclusivelyLater(_ work: @escaping () -> Void) {
+        queue.async(execute: work)
+    }
+
+    /// Sets the microphone flag right away (inside `runExclusively`, where the queue is busy).
+    func setMicrophoneActiveOnQueue(_ active: Bool) {
+        dispatchPrecondition(condition: .onQueue(queue))
+        micActive = active
+    }
+
+    func acquirePlaybackSession() { queue.async { self._acquirePlaybackSession() } }
+    func releasePlaybackSession() { queue.async { self._releasePlaybackSession() } }
+    func startEngine() { queue.async { self._startEngine() } }
+    func playClick(accent: Bool) { queue.async { self._playClick(accent: accent) } }
+    func switchInstrument(to instrument: InstrumentType) { queue.async { self._switchInstrument(to: instrument) } }
+    func startNote(midi: UInt8, velocity: UInt8 = 90) { queue.async { self._startNote(midi: midi, velocity: velocity) } }
+    func stopNote(midi: UInt8) { queue.async { self._stopNote(midi: midi) } }
+    func stopAllNotes() { queue.async { self._stopAllNotes() } }
+
     // MARK: - Instrument Types
     enum InstrumentType: CaseIterable {
         case grandPiano, electricPiano
@@ -57,7 +91,11 @@ final class AudioEngineManager {
 
     /// Set while the microphone listens (Play Along, chord recognition): playback then keeps the
     /// record-capable audio session instead of switching it to playback only.
-    var microphoneIsActive = false
+    var microphoneIsActive: Bool {
+        get { queue.sync { micActive } }
+        set { queue.async { self.micActive = newValue } }
+    }
+    private var micActive = false
 
     private var activeNotes: Set<UInt8> = []
     private var samplerChannelsByNote: [UInt8: UInt8] = [:]
@@ -102,7 +140,7 @@ final class AudioEngineManager {
     }
 
     private func teardownGraph() {
-        stopAllNotes()
+        _stopAllNotes()
 
         guard let engine else {
             toneNodes.removeAll()
@@ -152,6 +190,10 @@ final class AudioEngineManager {
     }
 
     @objc private func handleInterruption(notification: Notification) {
+        queue.async { self.interruptionChanged(notification) }
+    }
+
+    private func interruptionChanged(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
@@ -163,39 +205,39 @@ final class AudioEngineManager {
             if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
                 let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                 if options.contains(.shouldResume), activePlaybackClients > 0 {
-                    startEngine()
+                    _startEngine()
                 }
             }
         }
     }
 
     // MARK: - Ownership
-    func acquirePlaybackSession() {
+    private func _acquirePlaybackSession() {
         activePlaybackClients += 1
-        startEngine()
+        _startEngine()
     }
 
-    func releasePlaybackSession() {
+    private func _releasePlaybackSession() {
         if activePlaybackClients > 0 {
             activePlaybackClients -= 1
         }
 
         guard activePlaybackClients == 0 else { return }
 
-        stopAllNotes()
+        _stopAllNotes()
         teardownGraph()
-        guard !microphoneIsActive else { return }
+        guard !micActive else { return }
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     // MARK: - Start
-    func startEngine() {
+    private func _startEngine() {
         ensureGraphInitialized()
         guard !isStarted else { return }
         guard let engine else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            if !microphoneIsActive {
+            if !micActive {
                 try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             }
             try session.setActive(true)
@@ -211,8 +253,8 @@ final class AudioEngineManager {
     // MARK: - Metronome
 
     /// One metronome click now: higher and louder on the bar's first beat.
-    func playClick(accent: Bool) {
-        startEngine()
+    private func _playClick(accent: Bool) {
+        _startEngine()
         guard let clickPlayer, let clickBuffers, isStarted else { return }
         clickPlayer.scheduleBuffer(accent ? clickBuffers.accent : clickBuffers.beat, at: nil,
                                    options: .interrupts, completionHandler: nil)
@@ -287,9 +329,9 @@ final class AudioEngineManager {
     }
 
     // MARK: - Switch Instrument
-    func switchInstrument(to instrument: InstrumentType) {
+    private func _switchInstrument(to instrument: InstrumentType) {
         currentInstrument = instrument
-        stopAllNotes()
+        _stopAllNotes()
         if engine != nil {
             loadSoundFont(for: instrument)
         }
@@ -297,7 +339,7 @@ final class AudioEngineManager {
 
     // MARK: - Note On/Off
 
-    func startNote(midi: UInt8, velocity: UInt8 = 90) {
+    private func _startNote(midi: UInt8, velocity: UInt8 = 90) {
         guard isStarted else { return }
 
         // If this MIDI note is already active, stop it cleanly first
@@ -317,7 +359,7 @@ final class AudioEngineManager {
         activeNotes.insert(midi)
     }
 
-    func stopNote(midi: UInt8) {
+    private func _stopNote(midi: UInt8) {
         guard isStarted else { return }
         activeNotes.remove(midi)
 
@@ -330,7 +372,7 @@ final class AudioEngineManager {
         }
     }
 
-    func stopAllNotes() {
+    private func _stopAllNotes() {
         let snapshot = activeNotes
         for m in snapshot { stopNote(midi: m) }
         activeNotes.removeAll()
