@@ -157,6 +157,8 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
         tracksTableView.dataSource = self
         tracksTableView.delegate = self
         tracksTableView.register(TrackTableViewCell.self, forCellReuseIdentifier: "TrackCell")
+        tracksTableView.register(PadCardPairCell.self, forCellReuseIdentifier: PadCardPairCell.reuseID)
+        if DeviceLayout.isPad { tracksTableView.allowsSelection = false }   // the cards take the taps
         tracksTableView.translatesAutoresizingMaskIntoConstraints = false
         
         view.addSubview(tracksTableView)
@@ -434,10 +436,60 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     // MARK: - UITableViewDataSource
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return trackList.count
+        DeviceLayout.isPad ? (trackList.count + 1) / 2 : trackList.count
     }
-    
+
+    /// iPad card: the track's artwork, title and artist.
+    private func content(for track: PlaylistTrack) -> UIListContentConfiguration {
+        var content = UIListContentConfiguration.subtitleCell()
+        content.image = trackImagePlaceholder(for: track.title)
+        content.imageProperties.maximumSize = CGSize(width: 64, height: 64)
+        content.imageProperties.reservedLayoutSize = CGSize(width: 64, height: 64)
+        content.imageProperties.cornerRadius = 12
+        content.imageToTextPadding = 16
+        content.text = track.title
+        content.textProperties.font = .systemFont(ofSize: 19, weight: .semibold)
+        content.secondaryText = track.artist
+        content.secondaryTextProperties.font = .systemFont(ofSize: 15)
+        content.secondaryTextProperties.color = .secondaryLabel
+        content.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 0)
+        return content
+    }
+
+    private func openTrack(_ track: PlaylistTrack) {
+        let vc = PlaylistSongDetailViewController()
+        vc.passedImage = trackImagePlaceholder(for: track.title)
+        vc.passedSongTitle = track.title
+        vc.passedArtist = track.artist
+        vc.passedTrackId = track.trackId
+        vc.passedSheetScanId = track.sheetScanId
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if DeviceLayout.isPad {
+            // two tracks to a row, as cards (like the Library); long-press to remove
+            let cell = tableView.dequeueReusableCell(withIdentifier: PadCardPairCell.reuseID,
+                                                     for: indexPath) as! PadCardPairCell
+            let first = indexPath.row * 2
+            let pair = [trackList[first]] + (first + 1 < trackList.count ? [trackList[first + 1]] : [])
+            let menus: [UIMenu?] = (0..<2).map { side in
+                guard side < pair.count else { return nil }
+                return UIMenu(children: [UIAction(title: "Remove from Playlist", image: UIImage(systemName: "trash"),
+                                                  attributes: .destructive) { [weak self] _ in
+                    guard let self, let index = self.trackList.firstIndex(where: { $0.id == pair[side].id })
+                    else { return }
+                    self.removeTrack(at: index)
+                }])
+            }
+            cell.configure(left: content(for: pair[0]), right: pair.count > 1 ? content(for: pair[1]) : nil,
+                           menus: menus)
+            cell.onTap = { [weak self] side in
+                guard side < pair.count else { return }
+                self?.openTrack(pair[side])
+            }
+            return cell
+        }
         let cell = tableView.dequeueReusableCell(withIdentifier: "TrackCell", for: indexPath) as! TrackTableViewCell
         let track = trackList[indexPath.row]
         cell.configure(with: track)
@@ -453,7 +505,7 @@ class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UIT
     
     // MARK: - UITableViewDelegate
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return DeviceLayout.s(92)
+        DeviceLayout.isPad ? 104 : 92
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -562,4 +614,9 @@ class TrackTableViewCell: UITableViewCell {
         artistLabel.text = track.artist
         artwork.image = trackImagePlaceholder(for: track.title)   // ← stable random image
     }
+}
+
+/// iPad: wide, two tracks to a row, like the Library.
+extension PlaylistDetailViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
 }

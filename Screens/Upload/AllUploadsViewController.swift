@@ -100,7 +100,20 @@ class AllUploadsViewController: UIViewController {
             contentStack.addArrangedSubview(makeEmptyState(message: uploadLoadErrorMessage))
             return
         }
-        for upload in uploads { contentStack.addArrangedSubview(makeRow(for: upload)) }
+        guard DeviceLayout.isPad else {
+            for upload in uploads { contentStack.addArrangedSubview(makeRow(for: upload)) }
+            return
+        }
+        // iPad: two to a row, like the Library
+        for start in stride(from: 0, to: uploads.count, by: 2) {
+            let pair = uploads[start..<min(start + 2, uploads.count)].map(makeRow(for:))
+            let row = UIStackView(arrangedSubviews: pair + (pair.count == 1 ? [UIView()] : []))
+            row.axis = .horizontal
+            row.spacing = 16
+            row.distribution = .fillEqually
+            row.alignment = .top
+            contentStack.addArrangedSubview(row)
+        }
     }
 
     private func makeRow(for upload: LocalSheetLibrary.Upload) -> UIView {
@@ -396,3 +409,8 @@ class AllUploadsViewController: UIViewController {
 
 }
 
+
+/// iPad: wide, two uploads to a row, like the Library.
+extension AllUploadsViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
+}

@@ -199,7 +199,7 @@ class PlaylistViewController: UIViewController {
             layout.itemSize = CGSize(width: itemWidth, height: DeviceLayout.s(110))
             layout.minimumInteritemSpacing = spacing
             layout.minimumLineSpacing = spacing
-            layout.sectionInset = UIEdgeInsets(top: 16, left: spacing, bottom: 0, right: spacing)
+            layout.sectionInset = UIEdgeInsets(top: 16, left: spacing, bottom: 16, right: spacing)
         } else {
             layout.itemSize = CGSize(width: view.bounds.width - 32, height: DeviceLayout.s(98))
             layout.minimumLineSpacing = 12
@@ -1340,4 +1340,9 @@ class AddPlaylistViewController: UIViewController,
         }
         return true
     }
+}
+
+/// iPad: wide, like the Library (three playlists to a row).
+extension PlaylistViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
 }

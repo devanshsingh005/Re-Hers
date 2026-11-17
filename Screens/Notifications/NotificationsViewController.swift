@@ -31,7 +31,12 @@ final class NotificationsViewController: UITableViewController {
         tableView.backgroundColor = ComponentColors.HomeScreen.background
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         // iPad: rows and their text a size up, in proportion with the other pages
-        if DeviceLayout.isPad { tableView.traitOverrides.preferredContentSizeCategory = .extraExtraLarge }
+        if DeviceLayout.isPad {
+            tableView.traitOverrides.preferredContentSizeCategory = .extraExtraLarge
+            tableView.register(PadCardPairCell.self, forCellReuseIdentifier: PadCardPairCell.reuseID)
+            tableView.separatorStyle = .none
+            tableView.allowsSelection = false   // the cards take the taps
+        }
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: makeMenu())
         navigationItem.rightBarButtonItem?.accessibilityLabel = "More"
         NotificationCenter.default.addObserver(self, selector: #selector(reload),
@@ -89,12 +94,10 @@ final class NotificationsViewController: UITableViewController {
     // MARK: - Table
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        items.count
+        DeviceLayout.isPad ? (items.count + 1) / 2 : items.count
     }
 
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let item = items[indexPath.row]
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+    private func content(for item: InAppNotification) -> UIListContentConfiguration {
         var content = UIListContentConfiguration.subtitleCell()
         content.image = UIImage(systemName: item.kind.symbolName)
         content.imageProperties.tintColor = tint(for: item.kind)
@@ -106,7 +109,43 @@ final class NotificationsViewController: UITableViewController {
         content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
         content.secondaryTextProperties.color = .secondaryLabel
         content.textToSecondaryTextVerticalPadding = 3
-        cell.contentConfiguration = content
+        return content
+    }
+
+    /// iPad: long-press menu in place of the phone's swipe actions.
+    private func menu(for item: InAppNotification) -> UIMenu {
+        var actions: [UIMenuElement] = []
+        if !item.isRead {
+            actions.append(UIAction(title: "Mark as Read", image: UIImage(systemName: "envelope.open")) { [weak self] _ in
+                self?.store.markRead(id: item.id)
+            })
+        }
+        actions.append(UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+            self?.store.delete(id: item.id)
+        })
+        return UIMenu(children: actions)
+    }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if DeviceLayout.isPad {
+            // two to a row, as cards (like the Library)
+            let cell = tableView.dequeueReusableCell(withIdentifier: PadCardPairCell.reuseID,
+                                                     for: indexPath) as! PadCardPairCell
+            let first = indexPath.row * 2
+            let pair = [items[first]] + (first + 1 < items.count ? [items[first + 1]] : [])
+            cell.configure(left: content(for: pair[0]), right: pair.count > 1 ? content(for: pair[1]) : nil,
+                           menus: pair.map(menu(for:)) + [nil],
+                           dots: pair.map { $0.isRead ? nil : BrandColors.brand } + [nil])
+            cell.onTap = { [weak self] side in
+                guard let self, side < pair.count else { return }
+                self.store.markRead(id: pair[side].id)
+                self.open(pair[side])
+            }
+            return cell
+        }
+        let item = items[indexPath.row]
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        cell.contentConfiguration = content(for: item)
         cell.backgroundColor = ComponentColors.HomeScreen.cardBackground
 
         if item.isRead {
@@ -203,4 +242,9 @@ final class NotificationsViewController: UITableViewController {
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
+}
+
+/// iPad: wide, two notifications to a row, like the Library.
+extension NotificationsViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
 }

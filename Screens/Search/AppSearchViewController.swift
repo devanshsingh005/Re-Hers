@@ -87,6 +87,17 @@ final class AppSearchViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // iPad: the search field lines up with the cards below it (the minimal bar draws its
+        // field 8 pt inside its frame)
+        guard DeviceLayout.isPad, let top = tableView.tableHeaderView else { return }
+        let inset = tableView.layoutMargins.left - 8
+        let frame = CGRect(x: inset, y: TabRootHeaderView.height + 6,
+                           width: top.bounds.width - 2 * inset, height: 52)
+        if padSearchBar.frame != frame { padSearchBar.frame = frame }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ComponentColors.HomeScreen.background
@@ -101,6 +112,11 @@ final class AppSearchViewController: UIViewController {
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        tableView.register(PadCardPairCell.self, forCellReuseIdentifier: PadCardPairCell.reuseID)
+        if DeviceLayout.isPad {
+            tableView.allowsSelection = false   // the cards take the taps
+            tableView.separatorStyle = .none
+        }
         tableView.keyboardDismissMode = .onDrag
         tableView.contentInsetAdjustmentBehavior = .never
         tableView.contentInset.top = TabRootHeaderView.topOffset
@@ -246,16 +262,16 @@ final class AppSearchViewController: UIViewController {
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        sections[section].results.count
+        let count = sections[section].results.count
+        return DeviceLayout.isPad ? (count + 1) / 2 : count
     }
 
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+    private func content(for result: Result) -> UIListContentConfiguration {
         var content = UIListContentConfiguration.subtitleCell()
         content.secondaryTextProperties.color = .secondaryLabel
         content.imageProperties.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body)
         content.imageProperties.tintColor = BrandColors.brand
-        switch sections[indexPath.section].results[indexPath.row] {
+        switch result {
         case .upload(let upload):
             content.image = UIImage(systemName: "doc.text")
             content.text = upload.title
@@ -282,7 +298,27 @@ final class AppSearchViewController: UIViewController {
             content.text = shortcut.title
             content.secondaryText = shortcut.subtitle
         }
-        cell.contentConfiguration = content
+        return content
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let results = sections[indexPath.section].results
+        if DeviceLayout.isPad {
+            // two results to a row, as cards (like the Library)
+            let cell = tableView.dequeueReusableCell(withIdentifier: PadCardPairCell.reuseID,
+                                                     for: indexPath) as! PadCardPairCell
+            let first = indexPath.row * 2
+            let second = first + 1 < results.count ? results[first + 1] : nil
+            cell.configure(left: content(for: results[first]), right: second.map { content(for: $0) })
+            cell.onTap = { [weak self] side in
+                guard let self, first + side < results.count else { return }
+                self.activeSearchBar.resignFirstResponder()
+                self.open(results[first + side])
+            }
+            return cell
+        }
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        cell.contentConfiguration = content(for: results[indexPath.row])
         cell.accessoryType = .disclosureIndicator
         cell.backgroundColor = ComponentColors.HomeScreen.cardBackground
         return cell
@@ -291,7 +327,11 @@ final class AppSearchViewController: UIViewController {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         activeSearchBar.resignFirstResponder()
-        switch sections[indexPath.section].results[indexPath.row] {
+        open(sections[indexPath.section].results[indexPath.row])
+    }
+
+    private func open(_ result: Result) {
+        switch result {
         case .upload(let upload):
             if upload.status == .failed { LocalSheetLibrary.shared.retry(id: upload.id) }
             let vc = UploadPageNextViewController()
@@ -367,4 +407,9 @@ extension AppSearchViewController: UISearchBarDelegate {
         searchBar.resignFirstResponder()
         refresh()
     }
+}
+
+/// iPad: wide, with results in two columns, like the Library.
+extension AppSearchViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
 }

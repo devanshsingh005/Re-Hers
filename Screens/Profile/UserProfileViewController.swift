@@ -36,6 +36,8 @@ final class UserProfileViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     // pointed at by the first-run tour
+    private let leftColumn = UILayoutGuide()
+    private let rightColumn = UILayoutGuide()
     private weak var lessonsRow: UIView?
     private weak var tipsRow: UIView?
 
@@ -235,6 +237,21 @@ final class UserProfileViewController: UIViewController {
                 tabHeader.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             ])
         }
+        // iPad: two columns, profile and progress on the left, settings on the right (on the
+        // phone both columns are the whole width, one after the other)
+        contentView.addLayoutGuide(leftColumn)
+        contentView.addLayoutGuide(rightColumn)
+        NSLayoutConstraint.activate(DeviceLayout.isPad ? [
+            leftColumn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            rightColumn.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            rightColumn.leadingAnchor.constraint(equalTo: leftColumn.trailingAnchor),
+            leftColumn.widthAnchor.constraint(equalTo: rightColumn.widthAnchor),
+        ] : [
+            leftColumn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            leftColumn.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            rightColumn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            rightColumn.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+        ])
         buildHeaderSection()
         buildStatsSection()
         buildPracticeProgressSection()
@@ -294,7 +311,7 @@ final class UserProfileViewController: UIViewController {
             isTabRoot
                 ? ringView.topAnchor.constraint(equalTo: tabHeader.bottomAnchor, constant: DeviceLayout.s(12))
                 : ringView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: DeviceLayout.s(28)),
-            ringView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            ringView.centerXAnchor.constraint(equalTo: leftColumn.centerXAnchor),
             ringView.widthAnchor.constraint(equalToConstant: ringSize),
             ringView.heightAnchor.constraint(equalToConstant: ringSize),
 
@@ -304,10 +321,10 @@ final class UserProfileViewController: UIViewController {
             profileImageView.heightAnchor.constraint(equalToConstant: ringSize - 8),
 
             nameLabel.topAnchor.constraint(equalTo: ringView.bottomAnchor, constant: DeviceLayout.s(16)),
-            nameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            nameLabel.centerXAnchor.constraint(equalTo: leftColumn.centerXAnchor),
 
             usernameLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: DeviceLayout.s(4)),
-            usernameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            usernameLabel.centerXAnchor.constraint(equalTo: leftColumn.centerXAnchor),
         ])
 
         DispatchQueue.main.async {
@@ -347,8 +364,8 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             statsContainer.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: DeviceLayout.s(28)),
-            statsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
-            statsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            statsContainer.leadingAnchor.constraint(equalTo: leftColumn.leadingAnchor, constant: DeviceLayout.s(20)),
+            statsContainer.trailingAnchor.constraint(equalTo: leftColumn.trailingAnchor, constant: DeviceLayout.s(-20)),
             statsContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(100)),
         ])
     }
@@ -463,8 +480,8 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: statsContainer.bottomAnchor, constant: DeviceLayout.s(20)),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            card.leadingAnchor.constraint(equalTo: leftColumn.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: leftColumn.trailingAnchor, constant: DeviceLayout.s(-20)),
 
             titleLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
             titleLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
@@ -490,6 +507,12 @@ final class UserProfileViewController: UIViewController {
             chartContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(130)),
             chartContainer.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: DeviceLayout.s(-16)),
         ])
+        if DeviceLayout.isPad {
+            // the left column can be the longer one
+            card.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72)).isActive = true
+            card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72))
+                .withPriority(.defaultLow).isActive = true
+        }
     }
 
     private func buildAreaChartView() -> UIView {
@@ -551,9 +574,13 @@ final class UserProfileViewController: UIViewController {
         let previousView = contentView.subviews.last(where: { $0 != card })!
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            // iPad: the right column starts level with the profile, under the page header
+            DeviceLayout.isPad
+                ? card.topAnchor.constraint(equalTo: isTabRoot ? tabHeader.bottomAnchor : contentView.topAnchor,
+                                            constant: DeviceLayout.s(12))
+                : card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
+            card.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor, constant: DeviceLayout.s(-20)),
 
             sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
             sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
@@ -563,9 +590,14 @@ final class UserProfileViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: DeviceLayout.s(-8)),
 
-            lessons.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
-            notifications.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
-            tips.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
+            // a set height (taller text may still grow them); "at least" alone left the rows free
+            // to stretch
+            lessons.heightAnchor.constraint(greaterThanOrEqualToConstant: DeviceLayout.s(50)),
+            notifications.heightAnchor.constraint(greaterThanOrEqualToConstant: DeviceLayout.s(50)),
+            tips.heightAnchor.constraint(greaterThanOrEqualToConstant: DeviceLayout.s(50)),
+            lessons.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)).withPriority(.defaultHigh),
+            notifications.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)).withPriority(.defaultHigh),
+            tips.heightAnchor.constraint(equalToConstant: DeviceLayout.s(50)).withPriority(.defaultHigh),
         ])
     }
 
@@ -576,11 +608,11 @@ final class UserProfileViewController: UIViewController {
         config.imagePadding = 12
         config.baseForegroundColor = ComponentColors.ProfileScreen.userName
         config.imageColorTransformer = UIConfigurationColorTransformer { _ in BrandColors.brand }
-        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: DeviceLayout.s(17))
         config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 44)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var attrs = attrs
-            attrs.font = UIFont.preferredFont(forTextStyle: .body)
+            attrs.font = DeviceLayout.isPad ? .systemFont(ofSize: DeviceLayout.s(16), weight: .medium) : UIFont.preferredFont(forTextStyle: .body)
             return attrs
         }
         let button = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
@@ -675,8 +707,8 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            card.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor, constant: DeviceLayout.s(-20)),
 
             sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
             sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
@@ -716,8 +748,8 @@ final class UserProfileViewController: UIViewController {
         NSLayoutConstraint.activate([
             signOutButton.topAnchor.constraint(equalTo: practiceCard.bottomAnchor, constant: DeviceLayout.s(28)),
             // iPad: a button of its own size, centred, rather than one across the page
-            signOutButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            signOutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: DeviceLayout.s(-48)).withPriority(.defaultHigh),
+            signOutButton.centerXAnchor.constraint(equalTo: rightColumn.centerXAnchor),
+            signOutButton.widthAnchor.constraint(equalTo: rightColumn.widthAnchor, constant: DeviceLayout.s(-48)).withPriority(.defaultHigh),
             signOutButton.widthAnchor.constraint(lessThanOrEqualToConstant: DeviceLayout.isPad ? 340 : .greatestFiniteMagnitude),
             signOutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-48)),
             signOutButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
@@ -759,8 +791,8 @@ final class UserProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: previousView.bottomAnchor, constant: DeviceLayout.s(20)),
-            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(20)),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-20)),
+            card.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor, constant: DeviceLayout.s(20)),
+            card.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor, constant: DeviceLayout.s(-20)),
 
             sectionTitle.topAnchor.constraint(equalTo: card.topAnchor, constant: DeviceLayout.s(20)),
             sectionTitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: DeviceLayout.s(20)),
@@ -776,7 +808,14 @@ final class UserProfileViewController: UIViewController {
         ])
 
         if !GuestSessionManager.shared.isGuest() {
-            card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72)).isActive = true
+            if DeviceLayout.isPad {
+                // the page is as tall as the taller column; this one doesn't stretch to fill
+                card.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72)).isActive = true
+                card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72))
+                    .withPriority(.defaultLow).isActive = true
+            } else {
+                card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-72)).isActive = true
+            }
         }
     }
 
@@ -1991,4 +2030,9 @@ extension UserProfileViewController: UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         syncNavBarAlpha()
     }
+}
+
+/// iPad: wide, in two columns, like the Library.
+extension UserProfileViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
 }

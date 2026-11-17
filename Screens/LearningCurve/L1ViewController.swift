@@ -861,3 +861,8 @@ class PathCanvasView: UIView {
         return CGPoint(x: x, y: y)
     }
 }
+
+/// iPad: as wide as the Library.
+extension LessonMapViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
+}
