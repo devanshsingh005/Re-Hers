@@ -186,3 +186,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // to restore the scene back to its current state.
     }
 }
+
+extension UIApplication {
+    /// The app's main window, whatever has focus. Looking for the "foreground active" scene's
+    /// key window fails while a system prompt (such as Save Password after signing in), Stage
+    /// Manager or another app's window has focus, and screens then silently stay put.
+    var appWindow: UIWindow? {
+        let scenes = connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.lazy.compactMap { ($0.delegate as? SceneDelegate)?.window }.first
+            ?? scenes.flatMap(\.windows).first(where: \.isKeyWindow)
+            ?? scenes.first?.windows.first
+    }
+}

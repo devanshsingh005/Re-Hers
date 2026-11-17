@@ -1385,10 +1385,7 @@ extension AuthViewController {
 
     @MainActor
     private func showProgressSavedToast() {
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first,
-              let window = windowScene.windows.first(where: { $0.isKeyWindow }) else { return }
+        guard let window = UIApplication.shared.appWindow else { return }
 
         let toast = UILabel()
         toast.text = "Your progress has been saved"
@@ -1423,10 +1420,7 @@ extension AuthViewController {
     /// Replaces the window's root view controller with a smooth cross-dissolve.
     /// Always use this instead of present() for top-level navigation transitions.
     private func replaceRootViewController(with vc: UIViewController) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-              let window = scene.windows.first(where: { $0.isKeyWindow }) else { return }
+        guard let window = view.window ?? UIApplication.shared.appWindow else { return }
 
         UIView.transition(with: window,
                           duration: 0.35,

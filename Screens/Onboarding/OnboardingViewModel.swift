@@ -135,10 +135,7 @@ class OnboardingViewModel: ObservableObject {
 
     private func navigateToHome() {
         let home = MainTabBarController()
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-              let window = scene.windows.first(where: { $0.isKeyWindow }) else { return }
+        guard let window = UIApplication.shared.appWindow else { return }
 
         UIView.transition(with: window,
                           duration: 0.35,
