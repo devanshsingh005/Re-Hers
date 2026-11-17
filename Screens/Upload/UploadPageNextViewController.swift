@@ -57,9 +57,8 @@ final class UploadPageNextViewController: UIViewController {
     private let chordLabel    = UILabel()
 
     // Tips
-    private let tipsContainer  = UIView()
-    private let tipsTitleLabel = UILabel()
-    private let tipsBodyLabel  = UILabel()
+    private let tipsContainer  = PracticeTipsView()
+    private var tipsTask: Task<Void, Never>?
 
     // Action buttons
     private let playAlongButton = UIButton(type: .system)
@@ -490,7 +489,8 @@ final class UploadPageNextViewController: UIViewController {
         statusLabel.isHidden   = false
         refreshButton.isHidden = false
         animateProgress()
-        tipsBodyLabel.text = "• Your sheet is being read on this device — nothing is uploaded\n• Results will appear automatically"
+        tipsContainer.setMessage(icon: "doc.text.magnifyingglass", title: "Reading your sheet",
+                                 detail: "On this device, nothing is uploaded. Tips for the piece appear when it's done.")
     }
 
     private func animateProgress() {
@@ -538,7 +538,7 @@ final class UploadPageNextViewController: UIViewController {
         keyLabel.text = "Key: Unavailable"
         timeLabel.text = "Time: Unavailable"
         chordLabel.text = "Chords: Unavailable"
-        tipsBodyLabel.text = message
+        tipsContainer.setMessage(icon: "exclamationmark.triangle", title: "Sheet unavailable", detail: message)
         progressView.isHidden = true
         statusLabel.text = message
         statusLabel.isHidden = false
@@ -564,12 +564,21 @@ final class UploadPageNextViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    /// Tips worked out from this piece's score (read off the main thread).
     private func updatePracticeTips() {
-        var tips = ""
-        if timeSignature == "3/4" { tips += "• Count aloud: 1-2-3 for waltz feel\n" }
-        if timeSignature == "6/8" { tips += "• Feel in 2: 1-2-3, 4-5-6\n" }
-        tips += "• Keep wrists relaxed and fingers curved.\n• Listen for even timing between notes."
-        tipsBodyLabel.text = tips
+        tipsTask?.cancel()
+        guard let json = sheetMusicJSON, let data = try? JSONSerialization.data(withJSONObject: json) else {
+            tipsContainer.setTips([PracticeTips.general])
+            return
+        }
+        tipsTask = Task { [weak self] in
+            let tips = await Task.detached(priority: .userInitiated) { () -> [PracticeTip] in
+                guard let timeline = try? ScoreTimeline.parse(data: data) else { return [PracticeTips.general] }
+                return PracticeTips.tips(for: timeline)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.tipsContainer.setTips(tips)
+        }
     }
 
     // MARK: - Actions
@@ -823,20 +832,8 @@ final class UploadPageNextViewController: UIViewController {
         metronomeLabel.textAlignment = .right
         metronomeLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        tipsContainer.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicCardFill
-        tipsContainer.layer.cornerRadius = 20
         tipsContainer.translatesAutoresizingMaskIntoConstraints = false
-
-        tipsTitleLabel.text      = "Tips"
-        tipsTitleLabel.font      = .systemFont(ofSize: 22, weight: .bold)
-        tipsTitleLabel.textColor = .label
-        tipsTitleLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        tipsBodyLabel.text        = "Keep wrists relaxed and fingers curved.\nListen for even timing."
-        tipsBodyLabel.numberOfLines = 0
-        tipsBodyLabel.font        = .systemFont(ofSize: 15)
-        tipsBodyLabel.textColor   = .label
-        tipsBodyLabel.translatesAutoresizingMaskIntoConstraints = false
+        tipsContainer.setTips([PracticeTips.general])
 
         playAlongButton.setTitle("Play Along", for: .normal)
         playAlongButton.setTitleColor(.white, for: .normal)
@@ -865,7 +862,6 @@ final class UploadPageNextViewController: UIViewController {
         sheetContainer.addSubview(refreshButton);    sheetContainer.addSubview(infoStackView)
         sheetContainer.addSubview(metronomeLabel)
         contentView.addSubview(tipsContainer)
-        tipsContainer.addSubview(tipsTitleLabel); tipsContainer.addSubview(tipsBodyLabel)
         contentView.addSubview(playAlongButton);  contentView.addSubview(animationButton)
     }
 
@@ -883,7 +879,9 @@ final class UploadPageNextViewController: UIViewController {
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            // to the screen's edge: content scrolls under the home indicator (no hard cut above
+            // it) and the safe area becomes a bottom inset, so the buttons end above it
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
@@ -941,13 +939,6 @@ final class UploadPageNextViewController: UIViewController {
             metronomeLabel.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -16),
 
 
-            tipsTitleLabel.topAnchor.constraint(equalTo: tipsContainer.topAnchor, constant: 18),
-            tipsTitleLabel.leadingAnchor.constraint(equalTo: tipsContainer.leadingAnchor, constant: 18),
-
-            tipsBodyLabel.topAnchor.constraint(equalTo: tipsTitleLabel.bottomAnchor, constant: 8),
-            tipsBodyLabel.leadingAnchor.constraint(equalTo: tipsContainer.leadingAnchor, constant: 18),
-            tipsBodyLabel.trailingAnchor.constraint(equalTo: tipsContainer.trailingAnchor, constant: -18),
-            tipsBodyLabel.bottomAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: -18),
         ])
         NSLayoutConstraint.activate(DeviceLayout.isPad ? twoPaneConstraints() : phoneConstraints())
     }

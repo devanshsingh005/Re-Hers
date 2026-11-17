@@ -46,6 +46,7 @@
 		239529CB2F719A67002A14FD /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239529BC2F719A67002A14FD /* HomeViewController.swift */; };
 		23C736422ED579D100BCD95B /* UserProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C736412ED579D100BCD95B /* UserProfileViewController.swift */; };
 		23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */; };
+		0E0E0E0E0000000000000421 /* PracticeTipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000321 /* PracticeTipsView.swift */; };
 		23E442E52ED6306000A2F5AC /* MaximizeUploadPageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */; };
 		24E90089F6C0C58DF6655CDD /* Utilities/FileValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C2A15518CEEA56FE0B229 /* Utilities/FileValidator.swift */; };
 		24FA2E8E2EE5986D0028C205 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 24FA2E8F2EE5986D0028C205 /* FirebaseCore */; };
@@ -159,6 +160,7 @@
 		239529BC2F719A67002A14FD /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 		23C736412ED579D100BCD95B /* UserProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileViewController.swift; sourceTree = "<group>"; };
 		23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPageNextViewController.swift; sourceTree = "<group>"; };
+		0E0E0E0E0000000000000321 /* PracticeTipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeTipsView.swift; sourceTree = "<group>"; };
 		23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaximizeUploadPageViewController.swift; sourceTree = "<group>"; };
 		27E69262581C4EDB99E906DD /* SkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SkeletonView.swift; path = Utilities/SkeletonView.swift; sourceTree = "<group>"; };
 		2B12BD8A2EBA7D0F009795DF /* DiscoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewController.swift; sourceTree = "<group>"; };
@@ -361,6 +363,7 @@
 			isa = PBXGroup;
 			children = (
 				23E442E22ED61EFE00A2F5AC /* UploadPageNextViewController.swift */,
+				0E0E0E0E0000000000000321 /* PracticeTipsView.swift */,
 				23E442E42ED6306000A2F5AC /* MaximizeUploadPageViewController.swift */,
 				2B9B8F562F48562D0049535B /* AllUploadsViewController.swift */,
 				2B9B8F582F485DE70049535B /* UploadQuizPopup.swift */,
@@ -749,6 +752,7 @@
 				84114B6E2EBCF6B100E86F71 /* Components/BottomNavbar.swift in Sources */,
 				2BC06DAD2EEE905100CBDC03 /* OnboardingQuestion1View.swift in Sources */,
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
+				0E0E0E0E0000000000000421 /* PracticeTipsView.swift in Sources */,
 				2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */,
 				A2F0A1B32EFA000100000001 /* Services/AppThemeManager.swift in Sources */,
 				A2F0A1B12EFA000100000001 /* Services/GuestSessionManager.swift in Sources */,

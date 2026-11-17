@@ -273,6 +273,43 @@ final class ScoreTimelineTests: XCTestCase {
         XCTAssertNil(picked)
     }
 
+    // MARK: Practice tips
+
+    func test_tips_keyAndMetre() throws {
+        let three = Array(repeating: note("G", 4, duration: 1, type: "quarter"), count: 3)
+        let timeline = try parse(measures: [
+            ["attributes": ["divisions": "1", "key": ["fifths": "1"], "time": ["beats": "3", "beat-type": "4"]], "note": three],
+            ["note": three]
+        ])
+        let titles = PracticeTips.tips(for: timeline).map(\.title)
+        XCTAssertTrue(titles.contains("1 sharp: F♯"), "\(titles)")
+        XCTAssertTrue(titles.contains("3/4 time"), "\(titles)")
+    }
+
+    func test_tips_findTheHardestBar_first() throws {
+        let quarters = Array(repeating: note("C", 5, duration: 4, type: "quarter"), count: 4)
+        let sixteenths = Array(repeating: note("D", 5, duration: 1, type: "16th"), count: 16)
+        var measures: [[String: Any]] = (0..<6).map { _ in ["note": quarters] }
+        measures[0]["attributes"] = ["divisions": "4", "time": ["beats": "4", "beat-type": "4"]]
+        measures[3]["note"] = sixteenths
+        let tips = PracticeTips.tips(for: try parse(measures: measures))
+        XCTAssertEqual(tips.first?.title, "Hardest spot: bar 4")
+    }
+
+    func test_tips_featureEverywhere_saysThroughoutThePiece() throws {
+        let sixteenths = Array(repeating: note("D", 5, duration: 1, type: "16th"), count: 16)
+        var measures: [[String: Any]] = (0..<6).map { _ in ["note": sixteenths] }
+        measures[0]["attributes"] = ["divisions": "4", "time": ["beats": "4", "beat-type": "4"]]
+        let fast = PracticeTips.tips(for: try parse(measures: measures)).first { $0.title == "Fast sixteenth notes" }
+        XCTAssertEqual(fast?.detail, "Throughout the piece: keep them even, slowly at first.")
+    }
+
+    func test_tips_plainPiece_fallsBackToAGeneralTip() throws {
+        let four = Array(repeating: note("C", 5, duration: 1, type: "quarter"), count: 4)
+        let timeline = try parse(measures: [["attributes": ["divisions": "1", "time": ["beats": "4", "beat-type": "4"]], "note": four]])
+        XCTAssertEqual(PracticeTips.tips(for: timeline), [PracticeTips.general])
+    }
+
     // MARK: Performance order
 
     func test_repeatWithEndings_playsFirstEndingThenSecond() throws {
