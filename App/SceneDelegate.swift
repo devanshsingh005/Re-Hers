@@ -107,6 +107,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func showMainApp() {
         let tabBar = MainTabBarController()
         setRootViewController(tabBar)
+        // A skippable "Update available" prompt waits until Home is on screen.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            AppConfigService.shared.mainInterfaceDidAppear(in: self?.window)
+        }
     }
 
     private func showInfoCardOverlay() {
@@ -162,6 +166,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         SupabaseManager.shared.startAutoRefresh()
         (scene as? UIWindowScene)?.windows.first?.viewWithTag(9999)?.removeFromSuperview()
+        if let windowScene = scene as? UIWindowScene {
+            AppConfigService.shared.refresh(for: windowScene)
+        }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {

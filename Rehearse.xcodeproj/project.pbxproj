@@ -101,6 +101,7 @@
 		867E80A2512F71E7772A0675 /* Services/SignedURLSigning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9B4E591B7B4295CA181462 /* Services/SignedURLSigning.swift */; };
 		A00425C242F1160EF65C7373 /* Screens/LearningCurve/L2ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027315FF15B94D5F94BA2547 /* Screens/LearningCurve/L2ViewController.swift */; };
 		A2F0A1B12EFA000100000001 /* Services/GuestSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A1B22EFA000100000001 /* Services/GuestSessionManager.swift */; };
+		0E0E0E0E0000000000000600 /* Services/AppConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000500 /* Services/AppConfigService.swift */; };
 		A2F0A1B32EFA000100000001 /* Services/AppThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A1B42EFA000100000001 /* Services/AppThemeManager.swift */; };
 		AA1BC2D42F8000010001ABCD /* UploadPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */; };
 		AD7C4B846110441DD3A6B8F8 /* Extensions/BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3367193AA38D44495E77159 /* Extensions/BrandColors.swift */; };
@@ -229,6 +230,7 @@
 		A1B2C3D52F90000100000001 /* Re-Hearse_v1/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Debug.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A1B2C3D62F90000100000001 /* Re-Hearse_v1/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Re-Hearse_v1/Release.xcconfig"; sourceTree = SOURCE_ROOT; };
 		A2F0A1B22EFA000100000001 /* Services/GuestSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/GuestSessionManager.swift; sourceTree = SOURCE_ROOT; };
+		0E0E0E0E0000000000000500 /* Services/AppConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AppConfigService.swift; sourceTree = SOURCE_ROOT; };
 		A2F0A1B42EFA000100000001 /* Services/AppThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AppThemeManager.swift; sourceTree = SOURCE_ROOT; };
 		A8F3940AEE400465FE0D1BFD /* App/AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppDelegate.swift; sourceTree = SOURCE_ROOT; };
 		AA1BC2D32F8000010001ABCD /* UploadPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPickerViewController.swift; sourceTree = "<group>"; };
@@ -540,6 +542,7 @@
 				0E0E0E0E0000000000000110 /* Services/SheetMusic/UploadCloudSync.swift */,
 				BB5D556F9727BE03E27BD881 /* Services/AnalyticsManager.swift */,
 				DFE55467143C308902EDA1BC /* Services/GuestFeatureAccessPolicy.swift */,
+				0E0E0E0E0000000000000500 /* Services/AppConfigService.swift */,
 				A2F0A1B42EFA000100000001 /* Services/AppThemeManager.swift */,
 				A2F0A1B22EFA000100000001 /* Services/GuestSessionManager.swift */,
 				1CFC9321FE800128237EB674 /* Services/SupabaseManager.swift */,
@@ -762,6 +765,7 @@
 				23E442E32ED61EFE00A2F5AC /* UploadPageNextViewController.swift in Sources */,
 				0E0E0E0E0000000000000421 /* PracticeTipsView.swift in Sources */,
 				2BC06DA92EEE8FFD00CBDC03 /* OnboardingViewModel.swift in Sources */,
+				0E0E0E0E0000000000000600 /* Services/AppConfigService.swift in Sources */,
 				A2F0A1B32EFA000100000001 /* Services/AppThemeManager.swift in Sources */,
 				A2F0A1B12EFA000100000001 /* Services/GuestSessionManager.swift in Sources */,
 				2BC4A97D2F656AB4004FC90E /* RehearsalInfoCard.swift in Sources */,
