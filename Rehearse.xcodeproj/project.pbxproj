@@ -862,7 +862,8 @@
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Re-Hearse";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Re-Hearse uses the camera so you can capture sheet music pages for import and practice tools.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses the microphone to listen while you play and provide real-time chord recognition feedback.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse listens through the microphone while you play your piano, so Play Along and the lessons can tell which notes you played.";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Re-Hearse accesses your photo library so you can import sheet music images into the app.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -902,7 +903,8 @@
 				INFOPLIST_FILE = "Re-Hearse_v1/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Re-Hearse";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Re-Hearse uses the camera so you can capture sheet music pages for import and practice tools.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse uses the microphone to listen while you play and provide real-time chord recognition feedback.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Re-Hearse listens through the microphone while you play your piano, so Play Along and the lessons can tell which notes you played.";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Re-Hearse accesses your photo library so you can import sheet music images into the app.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
