@@ -92,6 +92,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         self.edgesForExtendedLayout = .all
         view.backgroundColor = ComponentColors.HomeScreen.background
         buildLayout()
+        ChristmasDecor.installPlayerEdges(in: view)   // Christmas theme only; behind everything
         embedPiano()
         wireCallbacks()
         loadChords()

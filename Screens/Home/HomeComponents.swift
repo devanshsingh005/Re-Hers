@@ -66,6 +66,8 @@ final class ScanCardView: UIControl {
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 32),
         ])
 
+        addChristmasDecorations()
+
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityLabel = "Scan sheet music"
@@ -79,6 +81,29 @@ final class ScanCardView: UIControl {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Christmas theme: a snowy scene along the bottom (behind the text), a few snowflakes and a
+    /// Santa hat on the top-right corner. All hidden with the default theme.
+    private func addChristmasDecorations() {
+        let scene = ChristmasScanCardScene(cornerRadius: layer.cornerRadius)
+        insertSubview(scene, at: 0)
+        NSLayoutConstraint.activate([
+            scene.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scene.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scene.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        ChristmasDecor.addSnowflake(to: self, x: 0.2, y: 0.22, size: 18)
+        ChristmasDecor.addSnowflake(to: self, x: 0.8, y: 0.3, size: 13)
+        ChristmasDecor.addSnowflake(to: self, x: 0.12, y: 0.45, size: 11)
+        layer.addSublayer(bracketLayer)   // the corner brackets stay above the scene
+
+        let hat = ChristmasArtView("xmas-santa-hat").sized(76, 60)
+        addSubview(hat)
+        NSLayoutConstraint.activate([
+            hat.trailingAnchor.constraint(equalTo: trailingAnchor, constant: DeviceLayout.s(12)),
+            hat.topAnchor.constraint(equalTo: topAnchor, constant: DeviceLayout.s(-24)),
+        ])
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -120,6 +145,8 @@ final class ScanCardView: UIControl {
 final class PlaylistTileView: UIControl {
     private let gradient = CAGradientLayer()
     private let art = UIView()
+    /// Christmas theme: snow along the top of the artwork.
+    private let snowCap = SnowCapView()
 
     init(title: String, colors: [UIColor], symbolName: String, size: CGFloat) {
         super.init(frame: .zero)
@@ -147,9 +174,14 @@ final class PlaylistTileView: UIControl {
         caption.lineBreakMode = .byTruncatingTail
         caption.translatesAutoresizingMaskIntoConstraints = false
 
+        art.addSubview(snowCap)
         addSubview(art)
         addSubview(caption)
         NSLayoutConstraint.activate([
+            snowCap.topAnchor.constraint(equalTo: art.topAnchor),
+            snowCap.leadingAnchor.constraint(equalTo: art.leadingAnchor),
+            snowCap.trailingAnchor.constraint(equalTo: art.trailingAnchor),
+            snowCap.heightAnchor.constraint(equalToConstant: min(size * 0.16, 20).rounded()),
             widthAnchor.constraint(equalToConstant: size),
             art.topAnchor.constraint(equalTo: topAnchor),
             art.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -182,6 +214,7 @@ final class PlaylistTileView: UIControl {
             cover.leadingAnchor.constraint(equalTo: art.leadingAnchor),
             cover.trailingAnchor.constraint(equalTo: art.trailingAnchor),
         ])
+        art.bringSubviewToFront(snowCap)
         loadPlaylistCoverImage(into: cover, playlistId: playlistId, coverUrl: coverUrl)
     }
 

@@ -68,6 +68,8 @@ class HomeViewController: UIViewController {
                                            inset: DeviceLayout.isPad ? 40 : 20)
     private let navBackgroundView = UIVisualEffectView(effect: nil)
     private let navShadowLayer = UIView()
+    /// Christmas theme only: light snow over Home while it's on screen.
+    private let snowfall = SnowfallView()
     private var inlineSubtitleLabel: UILabel?
     private let playlistTilesStack = UIStackView()
     private let recentUploadsStack = UIStackView()
@@ -96,6 +98,7 @@ class HomeViewController: UIViewController {
         setupNavigationBar()
         setupScrollView()
         setupNavBackground()
+        installChristmasDecorations()
         buildScanSection()
         buildPlaylistSection()
         buildRecentUploadsSection()
@@ -177,6 +180,25 @@ class HomeViewController: UIViewController {
         super.viewDidAppear(animated)
         syncNavBarAlpha()
         showTourIfNeeded()
+        snowfall.setOnScreen(true)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        snowfall.setOnScreen(false)
+    }
+
+    /// Christmas theme (set in the admin dashboard): the pine branch by the bell and the snowfall.
+    /// Both hide themselves with the default theme; the scan card and tiles add their own art.
+    private func installChristmasDecorations() {
+        ChristmasDecor.addHeaderBranch(to: header)
+        view.addSubview(snowfall)
+        NSLayoutConstraint.activate([
+            snowfall.topAnchor.constraint(equalTo: view.topAnchor),
+            snowfall.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            snowfall.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            snowfall.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
     }
 
     // MARK: - First-run tour

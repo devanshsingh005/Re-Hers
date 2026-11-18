@@ -32,13 +32,43 @@ enum AppTheme: Int {
     }
 }
 
+/// The seasonal look published from the admin dashboard's Theme Studio (`app_config.theme`).
+/// A seasonal theme only adds decorations: the app's colours and layout never change.
+enum SeasonalTheme: String, Codable {
+    case `default`
+    case christmas
+
+    /// Anything missing or unknown (a theme added after this build) means `.default`.
+    init(remoteValue: String?) {
+        let value = remoteValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        self = SeasonalTheme(rawValue: value) ?? .default
+    }
+}
+
 final class AppThemeManager {
     static let shared = AppThemeManager()
 
     static let themeDidChangeNotification = Notification.Name("AppThemeDidChange")
+    /// Posted on the main queue when the seasonal theme changes.
+    static let seasonalThemeDidChangeNotification = Notification.Name("AppSeasonalThemeDidChange")
 
     private let storageKey = "appThemePreference"
+    private let seasonalStorageKey = "seasonalTheme"
     private(set) var currentTheme: AppTheme
+    private var storedSeasonalTheme: SeasonalTheme
+    #if DEBUG
+    /// For checking a theme on a simulator without publishing it: launch with
+    /// `-seasonalThemeOverride christmas` (or `default`).
+    private let seasonalOverride = UserDefaults.standard.string(forKey: "seasonalThemeOverride").map(SeasonalTheme.init(remoteValue:))
+    #endif
+
+    /// The seasonal theme to show now (the last one published, kept across launches).
+    var seasonalTheme: SeasonalTheme {
+        #if DEBUG
+        if let seasonalOverride { return seasonalOverride }
+        #endif
+        return storedSeasonalTheme
+    }
 
     private init() {
         let defaults = UserDefaults.standard
@@ -49,6 +79,18 @@ final class AppThemeManager {
             currentTheme = .dark
             defaults.set(AppTheme.dark.rawValue, forKey: storageKey)
         }
+        storedSeasonalTheme = SeasonalTheme(remoteValue: defaults.string(forKey: seasonalStorageKey))
+    }
+
+    /// Called with each config the app reads (and its cached copy at launch).
+    func setSeasonalTheme(_ theme: SeasonalTheme) {
+        guard theme != storedSeasonalTheme else { return }
+        let before = seasonalTheme
+        storedSeasonalTheme = theme
+        UserDefaults.standard.set(theme.rawValue, forKey: seasonalStorageKey)
+        guard seasonalTheme != before else { return }
+        let post = { NotificationCenter.default.post(name: Self.seasonalThemeDidChangeNotification, object: nil) }
+        if Thread.isMainThread { post() } else { DispatchQueue.main.async(execute: post) }
     }
 
     var isDarkModeEnabled: Bool {

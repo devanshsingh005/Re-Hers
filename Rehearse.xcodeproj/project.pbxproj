@@ -22,6 +22,7 @@
 		0E0E0E0E0000000000000404 /* Screens/Notifications/NotificationsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000304 /* Screens/Notifications/NotificationsViewController.swift */; };
 		0E0E0E0E0000000000000405 /* Screens/Search/AppSearchViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000305 /* Screens/Search/AppSearchViewController.swift */; };
 		0E0E0E0E0000000000000406 /* Components/TabRootHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */; };
+		0E0E0E0E0000000000000424 /* Components/SeasonalDecorations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000324 /* Components/SeasonalDecorations.swift */; };
 		0E0E0E0E0000000000000407 /* Extensions/UIImage+Normalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B21B7FD3E9474336B214FA /* Extensions/UIImage+Normalization.swift */; };
 		0E0E0E0E0000000000000408 /* Components/ViewControllerPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */; };
 		0E0E0E0E0000000000000409 /* Components/PlaylistCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0E0E0E0000000000000309 /* Components/PlaylistCover.swift */; };
@@ -147,6 +148,7 @@
 		0E0E0E0E0000000000000304 /* Screens/Notifications/NotificationsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Notifications/NotificationsViewController.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000305 /* Screens/Search/AppSearchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/Search/AppSearchViewController.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/TabRootHeaderView.swift; sourceTree = SOURCE_ROOT; };
+		0E0E0E0E0000000000000324 /* Components/SeasonalDecorations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/SeasonalDecorations.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ViewControllerPresentation.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000309 /* Components/PlaylistCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/PlaylistCover.swift; sourceTree = SOURCE_ROOT; };
 		0E0E0E0E0000000000000310 /* Screens/LearningCurve/PracticeMusic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens/LearningCurve/PracticeMusic.swift; sourceTree = SOURCE_ROOT; };
@@ -528,6 +530,7 @@
 				0E0E0E0E0000000000000309 /* Components/PlaylistCover.swift */,
 				0E0E0E0E0000000000000308 /* Components/ViewControllerPresentation.swift */,
 				0E0E0E0E0000000000000306 /* Components/TabRootHeaderView.swift */,
+				0E0E0E0E0000000000000324 /* Components/SeasonalDecorations.swift */,
 				0E0E0E0E0000000000000300 /* Services/LastPlayedStore.swift */,
 				0E0E0E0E0000000000000320 /* Services/AppDataCache.swift */,
 				0E0E0E0E0000000000000301 /* Services/InAppNotificationStore.swift */,
@@ -739,6 +742,7 @@
 				0E0E0E0E0000000000000408 /* Components/ViewControllerPresentation.swift in Sources */,
 				0E0E0E0E0000000000000407 /* Extensions/UIImage+Normalization.swift in Sources */,
 				0E0E0E0E0000000000000406 /* Components/TabRootHeaderView.swift in Sources */,
+				0E0E0E0E0000000000000424 /* Components/SeasonalDecorations.swift in Sources */,
 				0E0E0E0E0000000000000400 /* Services/LastPlayedStore.swift in Sources */,
 				0E0E0E0E0000000000000420 /* Services/AppDataCache.swift in Sources */,
 				0E0E0E0E0000000000000401 /* Services/InAppNotificationStore.swift in Sources */,

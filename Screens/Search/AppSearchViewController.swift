@@ -13,6 +13,8 @@ final class AppSearchViewController: UIViewController {
     private let header = TabRootHeaderView(title: "Search", subtitle: "Uploads, songs, playlists and lessons")
     private let navBackgroundView = UIVisualEffectView(effect: nil)
     private let navShadowLayer = UIView()
+    /// Christmas theme only: snowy hills with a gift at the bottom of Browse (hidden while searching).
+    private let snowLandscape = ChristmasArtView("xmas-snow-gift")
 
     private enum Result {
         case upload(LocalSheetLibrary.Upload)
@@ -128,6 +130,7 @@ final class AppSearchViewController: UIViewController {
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
+        installChristmasDecorations()
         header.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: TabRootHeaderView.height)
         header.translatesAutoresizingMaskIntoConstraints = true
         header.autoresizingMask = [.flexibleWidth]
@@ -213,6 +216,28 @@ final class AppSearchViewController: UIViewController {
         }
     }
 
+    /// Christmas theme: the pine branch with an ornament in the header, and the snowy landscape
+    /// behind the list at the bottom of the screen (the cards scroll over it). Hidden otherwise.
+    private func installChristmasDecorations() {
+        let branch = ChristmasDecor.addHeaderBranch(to: header)
+        let ornament = ChristmasArtView("xmas-ornament").sized(24, 56)
+        header.insertSubview(ornament, aboveSubview: branch)
+        NSLayoutConstraint.activate([
+            ornament.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: DeviceLayout.s(-46)),
+            ornament.topAnchor.constraint(equalTo: branch.topAnchor, constant: DeviceLayout.s(10)),
+        ])
+
+        snowLandscape.contentMode = .scaleAspectFill
+        snowLandscape.clipsToBounds = true
+        view.insertSubview(snowLandscape, belowSubview: tableView)
+        NSLayoutConstraint.activate([
+            snowLandscape.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            snowLandscape.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            snowLandscape.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            snowLandscape.heightAnchor.constraint(equalTo: snowLandscape.widthAnchor, multiplier: 104.0 / 400.0),
+        ])
+    }
+
     // MARK: - Searching
 
     private var query: String {
@@ -221,6 +246,7 @@ final class AppSearchViewController: UIViewController {
 
     @objc private func refresh() {
         let q = query
+        snowLandscape.alpha = q.isEmpty ? 1 : 0
         if q.isEmpty {
             sections = [Section(title: "Browse", results: Self.browse.map { .setting($0) })]
             contentUnavailableConfiguration = nil
