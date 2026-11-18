@@ -70,6 +70,13 @@ Deno.serve(async (req) => {
   const { data: targetAdmin } = await service.from("admins").select("user_id").eq("user_id", targetId).maybeSingle();
   if (targetAdmin) return json(req, { error: "Admins can't be suspended here" }, 400);
 
+  if (action === "suspend") {
+    const { data: protectedRow } = await service.from("protected_accounts").select("reason").eq("user_id", targetId).maybeSingle();
+    if (protectedRow) {
+      return json(req, { error: `This account is protected (${protectedRow.reason}). Remove the protection first if you really mean to suspend it.` }, 400);
+    }
+  }
+
   const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetId, {
     ban_duration: action === "suspend" ? SUSPEND_DURATION : "none",
   });

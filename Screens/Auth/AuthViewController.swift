@@ -988,13 +988,20 @@ private extension AuthViewController {
         forgotPasswordButton.isEnabled = !isLoading
         forgotPasswordButton.alpha = isLoading ? 0.55 : 1.0
     }
+}
 
+// Internal (not private) so the sign-in messages can be unit tested.
+extension AuthViewController {
     func userFacingAuthErrorMessage(_ error: Error, mode: AuthMode) -> String {
         if let authError = error as? AuthError, let message = authError.errorDescription {
             return message
         }
         
         let errorString = "\(error.localizedDescription) \(String(describing: error))".lowercased()
+        // Suspended from the admin dashboard (Supabase error code user_banned).
+        if errorString.contains("banned") {
+            return "This account has been suspended. If you think this is a mistake, contact letsrehearse.studio@gmail.com."
+        }
         if errorString.contains("username") || errorString.contains("duplicate") || errorString.contains("unique") || errorString.contains("already exists") || errorString.contains("database error saving new user") {
             return AuthError.usernameAlreadyTaken.errorDescription!
         }

@@ -123,15 +123,41 @@ Deno.serve(async (req) => {
   if (adminError || isAdmin !== true) return json(req, { error: "Not authorized" }, 403);
 
   let range = "28d";
+  let statusOnly = false;
   try {
     const body = await req.json();
     if (typeof body?.range === "string" && body.range in RANGES) range = body.range;
+    statusOnly = body?.status === true;
   } catch { /* default range */ }
 
   const propertyId = (Deno.env.get("GA_PROPERTY_ID") ?? "").trim().replace(/^properties\//, "");
   const keyJson = Deno.env.get("GA_SERVICE_ACCOUNT_KEY") ?? "";
   const missing = [!propertyId && "GA_PROPERTY_ID", !keyJson && "GA_SERVICE_ACCOUNT_KEY"].filter(Boolean);
   if (missing.length) return json(req, { connected: false, missing });
+
+  // System Settings health check: one tiny report proves the key, the API and the property access all work.
+  if (statusOnly) {
+    let serviceAccount = "";
+    try {
+      const parsed = JSON.parse(keyJson);
+      serviceAccount = String(parsed.client_email ?? "");
+      const accessToken = await googleAccessToken(parsed);
+      await ga(`properties/${propertyId}:runReport`, accessToken, {
+        dateRanges: [{ startDate: "today", endDate: "today" }],
+        metrics: [{ name: "activeUsers" }],
+        limit: 1,
+      });
+      return json(req, { connected: true, ok: true, property_id: propertyId, service_account: serviceAccount });
+    } catch (error) {
+      return json(req, {
+        connected: true,
+        ok: false,
+        property_id: propertyId,
+        service_account: serviceAccount,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   const cached = cache.get(range);
   if (cached && Date.now() - cached.at < CACHE_MS) return json(req, cached.body);
