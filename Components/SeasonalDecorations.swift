@@ -53,6 +53,24 @@ final class ChristmasArtView: UIImageView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Keeps the art inside the window's edges when constraints of lower priority push it out
+    /// (art hanging off a button that sits near the screen's edge, as on iPad).
+    var staysOnScreen = false
+    private var screenConstraints: [NSLayoutConstraint] = []
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        NSLayoutConstraint.deactivate(screenConstraints)
+        screenConstraints = []
+        guard staysOnScreen, let window else { return }
+        screenConstraints = [
+            leadingAnchor.constraint(greaterThanOrEqualTo: window.leadingAnchor),
+            trailingAnchor.constraint(lessThanOrEqualTo: window.trailingAnchor),
+            topAnchor.constraint(greaterThanOrEqualTo: window.topAnchor),
+        ]
+        NSLayoutConstraint.activate(screenConstraints)
+    }
+
     /// Fixed size, scaled up on iPad like the rest of the layout.
     @discardableResult
     func sized(_ width: CGFloat, _ height: CGFloat) -> Self {
@@ -84,8 +102,24 @@ class ChristmasContainerView: UIView {
 }
 
 enum ChristmasDecor {
-    /// Amber like the app's accent, soft enough to stay in the background.
-    static var snowflakeColor: UIColor { BrandColors.brand.withAlphaComponent(0.45) }
+    /// Soft white on the red scan card, enough to stay in the background.
+    static var snowflakeColor: UIColor { UIColor.white.withAlphaComponent(0.4) }
+
+    /// Christmas red of the Home upload section (Figma "Christmas theme"): the Scan to Play button.
+    static let red = UIColor(hex: "#C8302C")
+    /// The scan card's red, dark at the top and warmer at the bottom.
+    static let cardRedTop = UIColor(hex: "#4A1513")
+    static let cardRedBottom = UIColor(hex: "#8C2622")
+    /// Gold for the scan card's brackets and note, and the Upload Music Sheet link.
+    static let gold = UIColor(hex: "#E3B663")
+
+    /// `normal`, or `christmas` while the Christmas theme is on. UIKit redraws it by itself when
+    /// the theme changes (it reads `SeasonalThemeTrait`).
+    static func color(_ normal: UIColor, christmas: UIColor) -> UIColor {
+        UIColor { traits in
+            (traits.seasonalTheme == .christmas ? christmas : normal).resolvedColor(with: traits)
+        }
+    }
 
     /// The pine branch hanging in at the top-right of a tab's header (Home, Library, Search),
     /// behind the bell. It scrolls away with the header.
@@ -115,30 +149,31 @@ enum ChristmasDecor {
         ])
     }
 
-    /// Holly in the top corners and pine in the bottom-left of a piano player (Play Along, the
-    /// piano animation). Placed behind everything else on the screen, so it only shows in the
-    /// margins around the toolbar, the sheet music and the keyboard and can never cover them.
-    static func installPlayerEdges(in view: UIView) {
-        let container = ChristmasContainerView()
-        view.insertSubview(container, at: 0)
-        let topLeft = ChristmasArtView("xmas-holly-corner").sized(48, 59)
-        let topRight = ChristmasArtView("xmas-holly-corner", mirrored: true).sized(48, 59)
-        let bottomLeft = ChristmasArtView("xmas-pine-corner").sized(70, 81)
-        let bottomRight = ChristmasArtView("xmas-pine-corner", mirrored: true).sized(70, 81)
-        [topLeft, topRight, bottomLeft, bottomRight].forEach(container.addSubview)
+    /// Holly hanging from the outer corners of a piano player's top bar (Play Along, the piano
+    /// animation): on the back button and on the buttons at the right end, drawn over them. The
+    /// sheet music and the keyboard fill the rest of the screen (on iPad edge to edge), so the bar
+    /// is the one place the art shows without covering notes or keys. Call after laying out `bar`.
+    static func installPlayerBar(leading: UIView, trailing: UIView, in bar: UIView) {
+        // the sprig grows down the art's left edge and its leaves fan along the top, so sitting
+        // half outside the button it covers only the button's rim, never its icon
+        // Same size on iPad: the buttons aren't scaled up there either. Where a button is near the
+        // screen's edge (iPad), the sprig slides in to stay on screen.
+        let left = ChristmasArtView("xmas-holly-corner")
+        let right = ChristmasArtView("xmas-holly-corner", mirrored: true)
+        for art in [left, right] {
+            art.staysOnScreen = true
+            bar.addSubview(art)
+            NSLayoutConstraint.activate([
+                art.widthAnchor.constraint(equalToConstant: 38),
+                art.heightAnchor.constraint(equalToConstant: 47),
+            ])
+        }
+        let side: CGFloat = 14, up: CGFloat = 6
         NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: view.topAnchor),
-            container.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topLeft.topAnchor.constraint(equalTo: container.topAnchor),
-            topLeft.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            topRight.topAnchor.constraint(equalTo: container.topAnchor),
-            topRight.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            bottomLeft.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            bottomLeft.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            bottomRight.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            bottomRight.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            left.leadingAnchor.constraint(equalTo: leading.leadingAnchor, constant: -side).withPriority(.defaultHigh),
+            left.topAnchor.constraint(equalTo: leading.topAnchor, constant: -up).withPriority(.defaultHigh),
+            right.trailingAnchor.constraint(equalTo: trailing.trailingAnchor, constant: side).withPriority(.defaultHigh),
+            right.topAnchor.constraint(equalTo: trailing.topAnchor, constant: -up).withPriority(.defaultHigh),
         ])
     }
 }
@@ -167,6 +202,27 @@ final class ChristmasScanCardScene: ChristmasContainerView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+}
+
+/// The Home scan card's red (dark at the top, warmer at the bottom), filling the card under
+/// everything else on it.
+final class ChristmasCardFill: ChristmasContainerView {
+    private let gradient = CAGradientLayer()
+
+    init(cornerRadius: CGFloat) {
+        super.init(frame: .zero)
+        gradient.colors = [ChristmasDecor.cardRedTop.cgColor, ChristmasDecor.cardRedBottom.cgColor]
+        gradient.cornerRadius = cornerRadius
+        gradient.cornerCurve = .continuous
+        layer.addSublayer(gradient)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradient.frame = bounds
+    }
 }
 
 /// A layer of snow along the top of a playlist tile, with a few drips.
@@ -214,17 +270,33 @@ final class SnowCapView: ChristmasContainerView {
     }
 }
 
-/// Gently falling snow for Home. It only runs while Home is on screen and the Christmas theme is
-/// on, and never with Reduce Motion or Low Power Mode. It takes no touches.
+/// A few faint snowflakes drifting slowly down behind a tab's content (Home, Library, Search,
+/// Settings): add it to the screen's view under everything else with `install(in:)`. It snows
+/// only while the view is in a window and the Christmas theme is on, never with Reduce Motion or
+/// Low Power Mode. It takes no touches.
 final class SnowfallView: UIView {
     private let emitter = CAEmitterLayer()
     private var observer: SeasonalThemeObserver?
-    private var isOnScreen = false
+
+    /// Adds the snow filling `view`, behind everything in it (or just behind `content`).
+    @discardableResult
+    static func install(in view: UIView, below content: UIView? = nil) -> SnowfallView {
+        let snow = SnowfallView()
+        if let content { view.insertSubview(snow, belowSubview: content) } else { view.insertSubview(snow, at: 0) }
+        NSLayoutConstraint.activate([
+            snow.topAnchor.constraint(equalTo: view.topAnchor),
+            snow.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            snow.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            snow.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        return snow
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         makeDecorative()
+        clipsToBounds = true
         emitter.emitterShape = .line
         emitter.emitterMode = .outline
         emitter.renderMode = .unordered
@@ -238,7 +310,7 @@ final class SnowfallView: UIView {
                            name: .NSProcessInfoPowerStateDidChange, object: nil)
         observer = SeasonalThemeObserver { [weak self] _ in self?.update() }
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
-            self.emitter.emitterCells = [self.makeCell()]
+            if self.isSnowing { self.emitter.emitterCells = [self.makeCell()] }
         }
     }
 
@@ -246,66 +318,89 @@ final class SnowfallView: UIView {
 
     deinit { NotificationCenter.default.removeObserver(self) }
 
-    /// Home calls this as it appears and disappears.
-    func setOnScreen(_ onScreen: Bool) {
-        isOnScreen = onScreen
+    var isSnowing: Bool { emitter.birthRate > 0 }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
         update()
     }
-
-    var isSnowing: Bool { emitter.birthRate > 0 }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         emitter.frame = bounds
-        emitter.emitterPosition = CGPoint(x: bounds.midX, y: -12)
-        emitter.emitterSize = CGSize(width: bounds.width * 1.1, height: 1)
+        emitter.emitterPosition = CGPoint(x: bounds.midX, y: -10)
+        emitter.emitterSize = CGSize(width: bounds.width * 1.2, height: 1)
     }
 
     @objc private func update() {
-        let snow = isOnScreen
-            && AppThemeManager.shared.seasonalTheme == .christmas
+        let allowed = AppThemeManager.shared.seasonalTheme == .christmas
             && !UIAccessibility.isReduceMotionEnabled
             && !ProcessInfo.processInfo.isLowPowerModeEnabled
-        isHidden = !snow
-        if snow, emitter.birthRate == 0 {
-            emitter.emitterCells = [makeCell()]
-            emitter.beginTime = CACurrentMediaTime()
-            emitter.birthRate = 1
-        } else if !snow, emitter.birthRate > 0 {
+        isHidden = !allowed
+        if !allowed {
             emitter.birthRate = 0
             emitter.emitterCells = nil   // clears the flakes already falling
+        } else if emitter.birthRate == 0, window != nil {
+            // Starts as if it had been snowing a while, so the screen isn't bare at first. It
+            // keeps going while the screen is away (nothing is drawn then), so no flakes jump.
+            emitter.emitterCells = [makeCell()]
+            emitter.beginTime = CACurrentMediaTime() - 45
+            emitter.birthRate = 1
         }
     }
 
     private func makeCell() -> CAEmitterCell {
         let cell = CAEmitterCell()
         cell.contents = Self.flakeImage.cgImage
-        // sparse, small and slow: a hint of snow, not a storm
-        cell.birthRate = DeviceLayout.isPad ? 3.5 : 2
-        cell.lifetime = 26
-        cell.velocity = 34
-        cell.velocityRange = 10
-        cell.yAcceleration = 2
-        cell.xAcceleration = 1
+        // few, faint and slow: a hint of snow far behind the content
+        cell.birthRate = DeviceLayout.isPad ? 0.28 : 0.15
+        cell.lifetime = 90
+        cell.velocity = 11
+        cell.velocityRange = 4
+        cell.yAcceleration = 0.4
+        cell.xAcceleration = 0.3
         cell.emissionLongitude = .pi
-        cell.emissionRange = .pi / 12
-        cell.scale = 0.42
-        cell.scaleRange = 0.22
-        cell.alphaRange = 0.35
+        cell.emissionRange = .pi / 14
+        cell.spin = 0.15
+        cell.spinRange = 0.3
+        cell.scale = 0.4
+        cell.scaleRange = 0.15
+        cell.alphaRange = 0.08
         // white on dark; a soft blue-grey on light, where white snow wouldn't show
         let dark = traitCollection.userInterfaceStyle == .dark
-        cell.color = (dark ? UIColor.white.withAlphaComponent(0.7)
-                           : UIColor(hex: "#9FB1C5").withAlphaComponent(0.8)).cgColor
+        cell.color = (dark ? UIColor.white.withAlphaComponent(0.18)
+                           : UIColor(hex: "#9FB1C5").withAlphaComponent(0.35)).cgColor
         return cell
     }
 
+    /// A six-armed snowflake, drawn once (white, tinted by the cell's colour).
     private static let flakeImage: UIImage = {
-        let size = CGSize(width: 12, height: 12)
-        return UIGraphicsImageRenderer(size: size).image { ctx in
-            let colors = [UIColor.white.cgColor, UIColor.white.withAlphaComponent(0).cgColor] as CFArray
-            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.55, 1])!
-            ctx.cgContext.drawRadialGradient(gradient, startCenter: CGPoint(x: 6, y: 6), startRadius: 0,
-                                             endCenter: CGPoint(x: 6, y: 6), endRadius: 6, options: [])
+        let side: CGFloat = 28
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { ctx in
+            let cg = ctx.cgContext
+            cg.translateBy(x: side / 2, y: side / 2)
+            cg.setStrokeColor(UIColor.white.cgColor)
+            cg.setLineWidth(1.6)
+            cg.setLineCap(.round)
+            let arm = side / 2 - 2
+            for i in 0..<6 {
+                cg.saveGState()
+                cg.rotate(by: CGFloat(i) * .pi / 3)
+                cg.move(to: .zero)
+                cg.addLine(to: CGPoint(x: 0, y: -arm))
+                // two small branches on each arm
+                for (at, len) in [(0.5, 0.28), (0.75, 0.2)] as [(CGFloat, CGFloat)] {
+                    let y = -arm * at, l = arm * len
+                    cg.move(to: CGPoint(x: 0, y: y))
+                    cg.addLine(to: CGPoint(x: -l * 0.8, y: y - l * 0.7))
+                    cg.move(to: CGPoint(x: 0, y: y))
+                    cg.addLine(to: CGPoint(x: l * 0.8, y: y - l * 0.7))
+                }
+                cg.strokePath()
+                cg.restoreGState()
+            }
         }
     }()
 }

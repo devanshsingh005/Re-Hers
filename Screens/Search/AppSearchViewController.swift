@@ -230,6 +230,7 @@ final class AppSearchViewController: UIViewController {
         snowLandscape.contentMode = .scaleAspectFill
         snowLandscape.clipsToBounds = true
         view.insertSubview(snowLandscape, belowSubview: tableView)
+        SnowfallView.install(in: view, below: tableView)   // over the landscape, behind the list
         NSLayoutConstraint.activate([
             snowLandscape.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             snowLandscape.trailingAnchor.constraint(equalTo: view.trailingAnchor),

@@ -17,7 +17,7 @@ final class ScanCardView: UIControl {
         layer.cornerRadius = 28
         layer.cornerCurve = .continuous
 
-        bracketLayer.strokeColor = BrandColors.brand.cgColor
+        bracketLayer.strokeColor = Self.accent.resolvedColor(with: traitCollection).cgColor
         bracketLayer.fillColor = UIColor.clear.cgColor
         bracketLayer.lineWidth = 3
         bracketLayer.lineCap = .round
@@ -25,7 +25,7 @@ final class ScanCardView: UIControl {
         layer.addSublayer(bracketLayer)
 
         let icon = UIImageView(image: UIImage(systemName: "music.note"))
-        icon.tintColor = BrandColors.brand
+        icon.tintColor = Self.accent
         icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 46, weight: .regular)
         icon.contentMode = .center
 
@@ -33,7 +33,7 @@ final class ScanCardView: UIControl {
         title.text = "Turn your sheet into music"
         title.font = UIFont.preferredFont(forTextStyle: .title3).withWeight(.semibold)
         title.adjustsFontForContentSizeCategory = true
-        title.textColor = .label
+        title.textColor = ChristmasDecor.color(.label, christmas: .white)
         title.textAlignment = .center
         title.numberOfLines = 0
 
@@ -41,7 +41,7 @@ final class ScanCardView: UIControl {
         subtitle.text = "Scan one page to hear it\nand start playing."
         subtitle.font = .preferredFont(forTextStyle: .subheadline)
         subtitle.adjustsFontForContentSizeCategory = true
-        subtitle.textColor = .secondaryLabel
+        subtitle.textColor = ChristmasDecor.color(.secondaryLabel, christmas: UIColor.white.withAlphaComponent(0.72))
         subtitle.textAlignment = .center
         subtitle.numberOfLines = 0
 
@@ -74,20 +74,29 @@ final class ScanCardView: UIControl {
         accessibilityHint = "Scan one page to hear it and start playing."
 
         if #available(iOS 17.0, *) {
-            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
-                self.bracketLayer.strokeColor = BrandColors.brand.resolvedColor(with: self.traitCollection).cgColor
+            registerForTraitChanges([UITraitUserInterfaceStyle.self, SeasonalThemeTrait.self]) { (self: Self, _) in
+                self.bracketLayer.strokeColor = Self.accent.resolvedColor(with: self.traitCollection).cgColor
             }
         }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    /// Christmas theme: a snowy scene along the bottom (behind the text), a few snowflakes and a
-    /// Santa hat on the top-right corner. All hidden with the default theme.
+    /// The brackets and note: the app's orange, gold on the Christmas red.
+    private static let accent = ChristmasDecor.color(BrandColors.brand, christmas: ChristmasDecor.gold)
+
+    /// Christmas theme: a red card, a snowy scene along the bottom (behind the text), a few
+    /// snowflakes and a Santa hat on the top-right corner. All hidden with the default theme.
     private func addChristmasDecorations() {
         let scene = ChristmasScanCardScene(cornerRadius: layer.cornerRadius)
         insertSubview(scene, at: 0)
+        let fill = ChristmasCardFill(cornerRadius: layer.cornerRadius)
+        insertSubview(fill, at: 0)
         NSLayoutConstraint.activate([
+            fill.topAnchor.constraint(equalTo: topAnchor),
+            fill.bottomAnchor.constraint(equalTo: bottomAnchor),
+            fill.leadingAnchor.constraint(equalTo: leadingAnchor),
+            fill.trailingAnchor.constraint(equalTo: trailingAnchor),
             scene.leadingAnchor.constraint(equalTo: leadingAnchor),
             scene.trailingAnchor.constraint(equalTo: trailingAnchor),
             scene.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -95,6 +104,7 @@ final class ScanCardView: UIControl {
         ChristmasDecor.addSnowflake(to: self, x: 0.2, y: 0.22, size: 18)
         ChristmasDecor.addSnowflake(to: self, x: 0.8, y: 0.3, size: 13)
         ChristmasDecor.addSnowflake(to: self, x: 0.12, y: 0.45, size: 11)
+        sendSubviewToBack(fill)           // the red under the snowflakes and the scene
         layer.addSublayer(bracketLayer)   // the corner brackets stay above the scene
 
         let hat = ChristmasArtView("xmas-santa-hat").sized(76, 60)

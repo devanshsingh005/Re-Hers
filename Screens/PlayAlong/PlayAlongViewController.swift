@@ -80,7 +80,6 @@ final class PlayAlongViewController: UIViewController {
         edgesForExtendedLayout = .all
         view.backgroundColor = ComponentColors.HomeScreen.background
         buildLayout()
-        ChristmasDecor.installPlayerEdges(in: view)   // Christmas theme only; behind everything
         wireCallbacks()
         listener.onFrame = { [weak self] frame in self?.heard(frame) }
         midiInput.onNote = { [weak self] midi, _, time in self?.pressed(midi, at: time) }
@@ -775,6 +774,7 @@ final class PlayAlongNavBar: UIView {
             skipButton.widthAnchor.constraint(equalToConstant: 26),
             menuButton.widthAnchor.constraint(equalToConstant: 26)
         ])
+        ChristmasDecor.installPlayerBar(leading: backPill, trailing: statusPill, in: self)   // Christmas theme only
     }
 
     /// The practice options (metronome, loop), built when opened.

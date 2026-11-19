@@ -45,6 +45,17 @@ enum SeasonalTheme: String, Codable {
     }
 }
 
+/// The seasonal theme as a trait, set on every window: colours that change with the theme (the
+/// Christmas background) read it, and UIKit redraws them by itself when it changes.
+struct SeasonalThemeTrait: UITraitDefinition {
+    static let defaultValue = SeasonalTheme.default
+    static let affectsColorAppearance = true
+}
+
+extension UITraitCollection {
+    var seasonalTheme: SeasonalTheme { self[SeasonalThemeTrait.self] }
+}
+
 final class AppThemeManager {
     static let shared = AppThemeManager()
 
@@ -89,8 +100,18 @@ final class AppThemeManager {
         storedSeasonalTheme = theme
         UserDefaults.standard.set(theme.rawValue, forKey: seasonalStorageKey)
         guard seasonalTheme != before else { return }
-        let post = { NotificationCenter.default.post(name: Self.seasonalThemeDidChangeNotification, object: nil) }
+        let post = {
+            self.applySeasonalTrait(to: self.connectedWindows())
+            NotificationCenter.default.post(name: Self.seasonalThemeDidChangeNotification, object: nil)
+        }
         if Thread.isMainThread { post() } else { DispatchQueue.main.async(execute: post) }
+    }
+
+    /// Puts the seasonal theme on `windows` as a trait (see `SeasonalThemeTrait`).
+    func applySeasonalTrait(to windows: [UIWindow]) {
+        let theme = seasonalTheme
+        // (reading an override that was never set raises, so it's always written)
+        for window in windows { window.traitOverrides[SeasonalThemeTrait.self] = theme }
     }
 
     var isDarkModeEnabled: Bool {
@@ -111,6 +132,7 @@ final class AppThemeManager {
     private func apply(theme: AppTheme, to window: UIWindow?) {
         let windows = window.map { [$0] } ?? connectedWindows()
         windows.forEach { $0.overrideUserInterfaceStyle = theme.interfaceStyle }
+        applySeasonalTrait(to: windows)
     }
 
     private func connectedWindows() -> [UIWindow] {

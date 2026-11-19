@@ -279,6 +279,7 @@ final class AppConfigService {
         let window = UIWindow(windowScene: scene)
         window.windowLevel = .alert + 1
         window.overrideUserInterfaceStyle = AppThemeManager.shared.currentTheme.interfaceStyle
+        AppThemeManager.shared.applySeasonalTrait(to: [window])
         let controller = AppBlockingViewController(kind: kind)
         controller.onTryAgain = { [weak self, weak scene] in
             guard let self, let scene else { return }

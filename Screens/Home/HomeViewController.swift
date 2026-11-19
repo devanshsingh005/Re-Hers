@@ -69,7 +69,6 @@ class HomeViewController: UIViewController {
     private let navBackgroundView = UIVisualEffectView(effect: nil)
     private let navShadowLayer = UIView()
     /// Christmas theme only: light snow over Home while it's on screen.
-    private let snowfall = SnowfallView()
     private var inlineSubtitleLabel: UILabel?
     private let playlistTilesStack = UIStackView()
     private let recentUploadsStack = UIStackView()
@@ -90,6 +89,8 @@ class HomeViewController: UIViewController {
 
     /// The theme's card surface, as on the other screens.
     static let cardColor = ComponentColors.HomeScreen.cardBackground
+    /// Scan to Play: the app's orange, Christmas red while that theme is on.
+    private static let scanButtonFill = ChristmasDecor.color(BrandColors.brand, christmas: ChristmasDecor.red)
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -180,25 +181,13 @@ class HomeViewController: UIViewController {
         super.viewDidAppear(animated)
         syncNavBarAlpha()
         showTourIfNeeded()
-        snowfall.setOnScreen(true)
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        snowfall.setOnScreen(false)
     }
 
     /// Christmas theme (set in the admin dashboard): the pine branch by the bell and the snowfall.
     /// Both hide themselves with the default theme; the scan card and tiles add their own art.
     private func installChristmasDecorations() {
         ChristmasDecor.addHeaderBranch(to: header)
-        view.addSubview(snowfall)
-        NSLayoutConstraint.activate([
-            snowfall.topAnchor.constraint(equalTo: view.topAnchor),
-            snowfall.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            snowfall.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            snowfall.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        ])
+        SnowfallView.install(in: view)   // behind the scrolling content
     }
 
     // MARK: - First-run tour
@@ -457,12 +446,12 @@ class HomeViewController: UIViewController {
         } else {
             scanConfig = .filled()
             scanConfig.cornerStyle = .capsule
-            scanConfig.baseBackgroundColor = BrandColors.brand
+            scanConfig.baseBackgroundColor = Self.scanButtonFill
         }
         scanConfig.title = "Scan to Play"
         scanConfig.image = UIImage(systemName: "camera")
         scanConfig.imagePadding = 8
-        scanConfig.baseForegroundColor = .black
+        scanConfig.baseForegroundColor = ChristmasDecor.color(.black, christmas: .white)
         scanConfig.buttonSize = .large
         scanConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var attrs = attrs
@@ -472,14 +461,14 @@ class HomeViewController: UIViewController {
         let scanButton = UIButton(configuration: scanConfig, primaryAction: UIAction { [weak self] _ in
             self?.scanTapped()
         })
-        scanButton.tintColor = BrandColors.brand
+        scanButton.tintColor = Self.scanButtonFill
         scanButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
 
         var uploadConfig = UIButton.Configuration.plain()
         uploadConfig.title = "Upload Music Sheet"
         uploadConfig.image = UIImage(systemName: "icloud.and.arrow.up")
         uploadConfig.imagePadding = 8
-        uploadConfig.baseForegroundColor = BrandColors.brand
+        uploadConfig.baseForegroundColor = ChristmasDecor.color(BrandColors.brand, christmas: ChristmasDecor.gold)
         uploadConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
             var attrs = attrs
             attrs.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.semibold)
