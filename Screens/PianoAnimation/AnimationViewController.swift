@@ -1,4 +1,5 @@
 import UIKit
+import CryptoKit
 
 // MARK: - AnimationViewController
 //
@@ -19,6 +20,8 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     /// Set before pushing to drive playback from uploaded sheet data. Nil = demo song.
     var sheetMusicData: Data?
     var songTitle: String = "Animation"
+    /// The tempo when the score gives none (a Library song's slow / medium / fast setting).
+    var defaultTempoBPM = ScoreTimeline.defaultTempo
 
     // MARK: - Playback State
 
@@ -38,7 +41,11 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     private var holding:         [Int]  = []       // playNotes whose keys are down
     private var lastFrameTime:   CFTimeInterval?
     private var isPlaying:       Bool   = false
-    private var tempoMultiplier: Double = 1.0
+    private var tempoMultiplier: Double = 1.0 {
+        didSet { if let speedKey { UserDefaults.standard.set(tempoMultiplier, forKey: speedKey) } }
+    }
+    /// Where this sheet's chosen speed is kept, so it opens at the speed it was last played at.
+    private var speedKey: String?
     private var displayLink:     CADisplayLink?
     private var totalDuration:   Double = 0        // 1× length of the score in seconds
 
@@ -328,8 +335,13 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             debugLog("⚠️ [Animation] No sheet data provided")
             return
         }
+        let digest = SHA256.hash(data: data).prefix(12).map { String(format: "%02x", $0) }.joined()
+        speedKey = "animation.speed." + digest
+        let saved = UserDefaults.standard.double(forKey: speedKey!)
+        if (0.5...2.0).contains(saved) { tempoMultiplier = saved }
+        let defaultTempo = defaultTempoBPM
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let parsed = try? ScoreTimeline.parse(data: data)
+            let parsed = try? ScoreTimeline.parse(data: data, defaultTempoBPM: defaultTempo)
             DispatchQueue.main.async {
                 guard let self else { return }
                 guard let parsed else {
@@ -565,6 +577,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         
         overlay.isUserInteractionEnabled = false
         let card = SettingsMenuView()
+        card.baseBPM = timeline?.tempos.first?.bpm
         card.currentTempo = tempoMultiplier
         card.onTempoChanged = { [weak self] newT in
             self?.tempoMultiplier = newT
@@ -619,7 +632,18 @@ private final class SettingsMenuView: UIView {
     enum MenuState { case main, tempo, sound, keyboard }
     private var state: MenuState = .main
 
-    var currentTempo: Double = 1.0 { didSet { tempoValLbl.text = String(format: "%.2g×", currentTempo) } }
+    var currentTempo: Double = 1.0 { didSet { updateTempoLabel() } }
+    /// The score's opening tempo at 1×, shown with the speed ("♩ 99 · 1.1×").
+    var baseBPM: Double? { didSet { updateTempoLabel() } }
+
+    private func updateTempoLabel() {
+        let speed = String(format: "%g×", (currentTempo * 100).rounded() / 100)
+        if let baseBPM {
+            tempoValLbl.text = "♩ \(Int((baseBPM * currentTempo).rounded())) · \(speed)"
+        } else {
+            tempoValLbl.text = speed
+        }
+    }
     var onTempoChanged: ((Double) -> Void)?
     var onInstrumentChanged: ((AudioEngineManager.InstrumentType) -> Void)?
     
@@ -801,12 +825,12 @@ private final class SettingsMenuView: UIView {
         minus?.isEnabled = KeyboardSize.canShowFewer
         plus?.isEnabled = KeyboardSize.canShowMore
     }
-    @objc private func doMinus() { adjustTempo(-0.25) }
-    @objc private func doPlus() { adjustTempo(0.25) }
+    @objc private func doMinus() { adjustTempo(-0.1) }
+    @objc private func doPlus() { adjustTempo(0.1) }
     
     private func adjustTempo(_ delta: Double) {
         currentTempo = max(0.5, min(2.0, currentTempo + delta))
-        currentTempo = (currentTempo * 4).rounded() / 4
+        currentTempo = (currentTempo * 10).rounded() / 10
         onTempoChanged?(currentTempo)
     }
     

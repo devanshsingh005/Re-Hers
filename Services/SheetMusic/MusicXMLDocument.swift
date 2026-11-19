@@ -102,7 +102,34 @@ nonisolated enum MusicXMLDocument {
 
     /// 2: measures keep their element order; uploads carry the tempo printed on the sheet.
     /// 3: false clef and key changes from recognition are undone (ScoreCleanup).
-    static let currentFormat = 3
+    /// 4: the tempo is a <sound> in the first measure (valid MusicXML), and scans get the tempo
+    ///    read off the page image.
+    /// 5: measures the recognizer made too long are re-timed to fit (RhythmRepair).
+    static let currentFormat = 5
+
+    /// Moves a <sound tempo> written straight under <part> (the recognizer does this, which
+    /// MusicXML doesn't allow) into the part's first measure, where MusicXML puts it.
+    static func normalizeTempo(_ root: XMLElementNode) {
+        for part in root.children(named: "part") {
+            let loose = part.children.filter { $0.name == "sound" }
+            guard !loose.isEmpty else { continue }
+            part.children.removeAll { $0.name == "sound" }
+            guard let tempo = loose.compactMap({ $0.attribute("tempo") }).last,
+                  let measure = part.firstChild(named: "measure") else { continue }
+            setTempo(tempo, in: measure, replacing: false)
+        }
+    }
+
+    /// Sets the <sound tempo> of `measure` (after its attributes and print), adding one if it
+    /// has none; with `replacing` false an existing tempo is kept.
+    static func setTempo(_ bpm: String, in measure: XMLElementNode, replacing: Bool) {
+        if let sound = measure.children.first(where: { $0.name == "sound" && $0.attribute("tempo") != nil }) {
+            if replacing { sound.setAttribute("tempo", bpm) }
+            return
+        }
+        let after = (measure.children.lastIndex { $0.name == "attributes" || $0.name == "print" } ?? -1) + 1
+        measure.children.insert(XMLElementNode(name: "sound", attributes: [("tempo", bpm)]), at: after)
+    }
 
     /// Whether `json` was written by the current `jsonObject` (see `currentFormat`).
     static func isCurrentFormat(_ json: [String: Any]) -> Bool {

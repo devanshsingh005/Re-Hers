@@ -330,7 +330,7 @@ final class ScoreTimelineTests: XCTestCase {
         XCTAssertEqual(timeline.performance.map(\.tick), [0, 2, 4, 6, 8])
         XCTAssertEqual(timeline.measures[1].endingNumbers, [1])
         XCTAssertEqual(timeline.scoreTick(atPerformanceTick: 5), 1, "the second pass is measure 1 again")
-        XCTAssertEqual(timeline.performanceSeconds, 10 * 60 / 84, accuracy: 1e-9)
+        XCTAssertEqual(timeline.performanceSeconds, 10 * 60 / ScoreTimeline.defaultTempo, accuracy: 1e-9)
     }
 
     func test_daCapoAlFine() throws {
@@ -438,8 +438,49 @@ final class ScoreTimelineTests: XCTestCase {
             "direction": ["direction-type": ["words": "Andante con moto"]],
             "note": note("C", 5, duration: 4)
         ]])
-        XCTAssertEqual(timeline.tempos.first?.bpm, 92)
-        XCTAssertEqual(ScoreTimeline.tempo(forWords: "Allegretto"), 116)
+        XCTAssertEqual(timeline.tempos.first?.bpm, 100)
+        XCTAssertEqual(ScoreTimeline.tempo(forWords: "Allegretto"), 112)
+        XCTAssertEqual(ScoreTimeline.tempo(forWords: "Allegro moderato"), 116, "the phrase, not just Allegro")
+        XCTAssertEqual(ScoreTimeline.tempo(forWords: "Very slowly"), 52)
+        XCTAssertEqual(ScoreTimeline.tempo(forWords: "Moderately"), 100)
+        XCTAssertNil(ScoreTimeline.tempo(forWords: "Sentimentally"))
+    }
+
+    func test_noTempo_playsAtTheDefault_orTheGivenFallback() throws {
+        let measures: [[String: Any]] = [["attributes": ["divisions": "1"], "note": note("C", 5, duration: 4)]]
+        XCTAssertEqual(try parse(measures: measures).tempos.first?.bpm, ScoreTimeline.defaultTempo)
+        let root: [String: Any] = ["score-partwise": ["part": ["@id": "P1", "measure": measures]]]
+        XCTAssertEqual(try ScoreTimeline.parse(root: root, defaultTempoBPM: 70).tempos.first?.bpm, 70)
+    }
+
+    // MARK: Time signature (sheets read by the recognizer have none)
+
+    func test_noTimeSignature_isWorkedOutFromTheMeasures() throws {
+        // 3/4: three quarters a measure, after a one-beat pickup
+        var waltz: [[String: Any]] = [["attributes": ["divisions": "1"], "note": note("G", 4, duration: 1)]]
+        for _ in 0..<4 { waltz.append(["note": [note("C", 5, duration: 1), note("D", 5, duration: 1), note("E", 5, duration: 1)]]) }
+        let timeline = try parse(measures: waltz)
+        XCTAssertEqual(timeline.measures[0].time, ScoreTimeSignature(beats: 3, beatType: 4))
+        XCTAssertEqual(timeline.effectiveTimeSignatures().last, ScoreTimeSignature(beats: 3, beatType: 4))
+
+        // a written one is kept
+        let written = try parse(measures: [["attributes": ["divisions": "1", "time": ["beats": "2", "beat-type": "4"]],
+                                            "note": [note("C", 5, duration: 1), note("D", 5, duration: 1), note("E", 5, duration: 1)]]])
+        XCTAssertEqual(written.measures[0].time, ScoreTimeSignature(beats: 2, beatType: 4))
+    }
+
+    // MARK: Octave lines
+
+    func test_octaveLine_thatAddsLedgerLines_isIgnored() throws {
+        // middle C under an 8va line would be printed an octave lower, four ledger lines down
+        let notes = Array(repeating: note("C", 4, duration: 1), count: 4)
+        let timeline = try parse(measures: [[
+            "attributes": ["divisions": "1", "clef": ["sign": "G", "line": "2"]],
+            "direction": ["direction-type": ["octave-shift": ["@type": "down", "@size": "8"]]],
+            "note": notes
+        ]])
+        XCTAssertFalse(timeline.directions.contains { if case .octaveShift = $0.kind { return true } else { return false } })
+        XCTAssertEqual(timeline.notes[0].displayDiatonic, timeline.notes[0].diatonic)
     }
 
     // MARK: Printed tempo (uploads)
@@ -453,6 +494,12 @@ final class ScoreTimelineTests: XCTestCase {
         XCTAssertEqual(PrintedTempo.find(in: "Sonatina\nAllegro\nMuzio Clementi")?.perMinute, 132)
         XCTAssertNil(PrintedTempo.find(in: "Op. 23 = 5\nPiano"))
 
+        // read off a page image: the note glyph comes out as a stray letter, the title is skipped
+        XCTAssertEqual(PrintedTempo.find(inRecognized: ["Minuet in G", "J.S. Bach", "J = 112"])?.perMinute, 112)
+        XCTAssertEqual(PrintedTempo.find(inRecognized: ["Minuet in G", "J.S. Bach", "Allegro"])?.perMinute, 132)
+        XCTAssertEqual(PrintedTempo.find(inRecognized: ["Title", "Composed by", "J. = 60"])?.quarterBPM, 90, "a dotted quarter")
+        XCTAssertNil(PrintedTempo.find(inRecognized: ["Slow Dancing", "Words and Music", "Op. 2"]))
+
         let xml = """
         <score-partwise><part id="P1"><sound tempo="90"/><measure number="1">
           <attributes><divisions>1</divisions></attributes>
@@ -464,6 +511,8 @@ final class ScoreTimelineTests: XCTestCase {
         PrintedTempo.apply(PrintedTempo.Mark(perMinute: 108, beatUnit: "quarter", dots: 0, words: "Alla marcia"), to: root)
         let timeline = try ScoreTimeline.parse(root: MusicXMLDocument.jsonObject(root))
         XCTAssertEqual(timeline.tempos.map(\.bpm), [108])
+        XCTAssertNil(root.firstChild(named: "part")?.firstChild(named: "sound"), "no <sound> straight under <part>")
+        XCTAssertEqual(root.firstChild(named: "part")?.firstChild(named: "measure")?.firstChild(named: "sound")?.attribute("tempo"), "108")
         XCTAssertEqual(timeline.directions.filter { if case .metronome = $0.kind { return true } else { return false } }.count, 1,
                        "applied once")
     }

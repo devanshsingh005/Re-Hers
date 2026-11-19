@@ -36,6 +36,16 @@ public struct LocatedNote: Sendable {
     /// one chord share it.
     public let chord: Int
 
+    /// The same note on another staff of its system, with the pitch read against that staff
+    /// (for a caller that corrects which staff a note belongs to).
+    public func moved(toStaff staff: Int, step: String, alter: Int, octave: Int,
+                      staffTop: Double, staffBottom: Double, staffSpace: Double) -> LocatedNote {
+        let accidental = alter > 0 ? String(repeating: "#", count: alter) : String(repeating: "b", count: -alter)
+        return LocatedNote(name: step + accidental + String(octave), step: step, alter: alter, octave: octave,
+                           staff: staff, type: type, dotted: dotted, rect: rect, system: system,
+                           staffTop: staffTop, staffBottom: staffBottom, staffSpace: staffSpace, chord: chord)
+    }
+
     /// MIDI note number (C4 = 60).
     public var midi: Int {
         let semitone = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11][step] ?? 0

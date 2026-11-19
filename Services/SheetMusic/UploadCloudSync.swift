@@ -336,7 +336,12 @@ final class UploadCloudSync {
         let pdf = try inflate(input)
         let xmlData = try inflate(xml)
         guard let xmlString = String(data: xmlData, encoding: .utf8) else { throw SyncError.unreadableScore }
-        let score = MusicXMLDocument.jsonObject(try MusicXMLDocument.parse(xmlString))
+        // a backup made by an older version gets today's corrections before it's used here
+        let root = try MusicXMLDocument.parse(xmlString)
+        ScoreCleanup.clean(root)
+        RhythmRepair.repair(root)
+        MusicXMLDocument.normalizeTempo(root)
+        let score = MusicXMLDocument.jsonObject(root)
         try write(pdf, "input.pdf")
         try write(xmlData, "score.musicxml")
         try write(try JSONSerialization.data(withJSONObject: score), "output.json")

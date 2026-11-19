@@ -343,7 +343,7 @@ class PlaylistSongDetailViewController: UIViewController {
 
         let vc = PlayAlongViewController()
         vc.sheetMusicData = data
-    
+        if let song = loadedDiscoverSong { vc.defaultTempoBPM = song.fallbackTempoBPM }
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
@@ -387,6 +387,7 @@ class PlaylistSongDetailViewController: UIViewController {
         let vc = AnimationViewController()
         vc.sheetMusicData = data
         vc.songTitle = passedSongTitle ?? "Animation"
+        if let song = loadedDiscoverSong { vc.defaultTempoBPM = song.fallbackTempoBPM }
         let nav = LandscapeNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)

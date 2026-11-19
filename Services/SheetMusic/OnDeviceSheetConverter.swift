@@ -10,6 +10,7 @@
 import OemerKit
 import PDFKit
 import UIKit
+import Vision
 
 /// Everything one conversion produces.
 nonisolated struct SheetConversionResult {
@@ -90,6 +91,9 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
         var scales: [CGFloat] = Array(repeating: 1, count: pageCount)
         var skipped: [Int] = []
         var noteCount = 0
+        // the printed tempo: from the text layer, else read off the first page's image (once)
+        let textTempo = PrintedTempo.findInText(of: document)
+        let readTempo = textTempo == nil ? document.page(at: 0).flatMap(PrintedTempo.recognizedMark(on:)) : nil
 
         for index in 0..<pageCount {
             try Task.checkCancellation()
@@ -107,14 +111,18 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
                 }
                 let pageScore = try MusicXMLDocument.parse(result.musicXML)
                 var notes = result.notes
-                if let mark = PrintedTempo.markBounds(on: page) {
+                if let mark = PrintedTempo.markBounds(on: page) ?? (index == 0 ? readTempo?.bounds : nil) {
                     let rects = notes.map { CGRect(x: $0.rect.minX / scale, y: $0.rect.minY / scale,
                                                    width: $0.rect.width / scale, height: $0.rect.height / scale) }
                     let hidden = PrintedTempo.hideNotes(under: mark, at: rects, in: pageScore)
                     notes = notes.enumerated().filter { !hidden.contains($0.offset) }.map(\.element)
                 }
-                scores.append(pageScore)
                 let elements = PrintedTempo.pitchedNotes(in: pageScore)
+                if elements.count == notes.count {
+                    let moved = StaffAssignment.fix(&notes, elements: elements, score: pageScore)
+                    if moved > 0 { debugLog("[OnDevice] page \(index + 1): \(moved) note(s) moved to the staff they sit on") }
+                }
+                scores.append(pageScore)
                 pageNotes.append((index, notes, elements.count == notes.count ? elements : nil))
                 noteCount += notes.count
             } catch let error as OMRError {
@@ -136,9 +144,14 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
             throw SheetConversionError.noMusicFound
         }
         score.firstChild(named: "work")?.firstChild(named: "work-title")?.text = title
+        MusicXMLDocument.normalizeTempo(score)
         let cleanup = ScoreCleanup.clean(score)
         if cleanup != ScoreCleanup.Report() {
             debugLog("[OnDevice] undid \(cleanup.clefs) false clef change(s), \(cleanup.keys) false key change(s)")
+        }
+        let rhythm = RhythmRepair.repair(score)
+        if rhythm != RhythmRepair.Report() {
+            debugLog("[OnDevice] rhythm: \(rhythm.leadingGaps) empty opening beat(s) removed, \(rhythm.refitted) measure(s) re-timed")
         }
         for page in pageNotes {
             var names: [Int: String] = [:]
@@ -147,7 +160,7 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
             }
             labels[page.index] = NoteLabelRenderer.layout(page.notes, names: names)
         }
-        if let tempo = PrintedTempo.find(in: document) { PrintedTempo.apply(tempo, to: score) }
+        if let tempo = textTempo ?? readTempo?.mark { PrintedTempo.apply(tempo, to: score) }
         let json = MusicXMLDocument.jsonObject(score)
         let jsonData = try JSONSerialization.data(withJSONObject: json)
         let labeledPDF = Self.labeledPDF(document, labels: labels, scales: scales)
@@ -238,6 +251,90 @@ nonisolated final class OnDeviceSheetConverter: @unchecked Sendable {
     }
 }
 
+// MARK: - Staff of notes between the staves
+
+/// Notes written between the two staves of a piano system — high bass notes on ledger lines,
+/// low treble notes — that the recognizer gave to the wrong staff. It then read their pitch
+/// against the other staff's lines, so a bass E♭4 came out as a treble F3 four ledger lines
+/// down (and the bass lost the note). A note at least two ledger lines out is moved when it lies
+/// nearer the other staff, or about halfway with its stem pointing at the other staff; its pitch
+/// is read again from where it is printed.
+nonisolated enum StaffAssignment {
+    private static let steps = ["C", "D", "E", "F", "G", "A", "B"]
+
+    /// `notes[i]` is the recognizer's position of `elements[i]`. Returns how many moved.
+    static func fix(_ notes: inout [LocatedNote], elements: [XMLElementNode], score: XMLElementNode) -> Int {
+        guard notes.count == elements.count,
+              let measure = score.firstChild(named: "part")?.firstChild(named: "measure"),
+              let attributes = measure.firstChild(named: "attributes") else { return 0 }
+        // only a grand staff: treble clef above, bass clef below
+        let clefs = attributes.children(named: "clef")
+        func clef(_ number: String) -> String? {
+            let c = clefs.first { ($0.attribute("number") ?? "1") == number }
+            return c.map { ($0.firstChild(named: "sign")?.text ?? "") + ($0.firstChild(named: "line")?.text ?? "") }
+        }
+        guard clef("1") == "G2", clef("2") == "F4" else { return 0 }
+        let fifths = Int(attributes.firstChild(named: "key")?.firstChild(named: "fifths")?.text ?? "") ?? 0
+
+        func median(_ values: [Double]) -> Double? {
+            guard !values.isEmpty else { return nil }
+            return values.sorted()[values.count / 2]
+        }
+        var moved = 0
+        for system in Set(notes.map(\.system)) {
+            let upper = notes.filter { $0.system == system && $0.staff == 1 }
+            let lower = notes.filter { $0.system == system && $0.staff == 2 }
+            guard let upperBottom = median(upper.map(\.staffBottom)), let upperTop = median(upper.map(\.staffTop)),
+                  let upperSpace = median(upper.map(\.staffSpace)),
+                  let lowerTop = median(lower.map(\.staffTop)), let lowerBottom = median(lower.map(\.staffBottom)),
+                  let lowerSpace = median(lower.map(\.staffSpace)),
+                  lowerTop > upperBottom, upperSpace > 0, lowerSpace > 0 else { continue }
+            for i in notes.indices where notes[i].system == system {
+                let y = Double(notes[i].rect.midY)
+                var target: (staff: Int, diatonic: Int, top: Double, bottom: Double, space: Double)?
+                let stem = elements[i].firstChild(named: "stem")?.text
+                // nearer the other staff, or about halfway with its stem pointing at the other staff
+                // (high bass notes are printed with stems down toward the bass staff)
+                let towardLower = lowerTop - y < y - upperBottom
+                    || (stem == "down" && lowerTop - y <= y - upperBottom + upperSpace)
+                let towardUpper = y - upperBottom < lowerTop - y
+                    || (stem == "up" && y - upperBottom <= lowerTop - y + lowerSpace)
+                if notes[i].staff == 1, y > upperBottom + 1.75 * upperSpace, towardLower {
+                    // half spaces above the bass staff's top line (A3)
+                    let up = Int(((lowerTop - y) / (lowerSpace / 2)).rounded())
+                    target = (2, 3 * 7 + 5 + up, lowerTop, lowerBottom, lowerSpace)
+                } else if notes[i].staff == 2, y < lowerTop - 1.75 * lowerSpace, towardUpper {
+                    // half spaces below the treble staff's bottom line (E4)
+                    let down = Int(((y - upperBottom) / (upperSpace / 2)).rounded())
+                    target = (1, 4 * 7 + 2 - down, upperTop, upperBottom, upperSpace)
+                }
+                guard let target, target.diatonic > 0 else { continue }
+                let step = target.diatonic % 7, octave = target.diatonic / 7
+                let element = elements[i]
+                guard let pitch = element.firstChild(named: "pitch") else { continue }
+                // a printed accidental stays with its note; else the key signature decides
+                let alter = element.firstChild(named: "accidental") != nil
+                    ? (Int(pitch.firstChild(named: "alter")?.text ?? "") ?? 0)
+                    : ScoreCleanup.keyAlter(step: step, fifths: fifths)
+                pitch.firstChild(named: "step")?.text = steps[step]
+                pitch.firstChild(named: "octave")?.text = String(octave)
+                if let a = pitch.firstChild(named: "alter") {
+                    a.text = String(alter)
+                } else if alter != 0, let at = pitch.children.firstIndex(where: { $0.name == "step" }) {
+                    let a = XMLElementNode(name: "alter")
+                    a.text = String(alter)
+                    pitch.children.insert(a, at: at + 1)
+                }
+                element.firstChild(named: "staff")?.text = String(target.staff)
+                notes[i] = notes[i].moved(toStaff: target.staff, step: steps[step], alter: alter, octave: octave,
+                                          staffTop: target.top, staffBottom: target.bottom, staffSpace: target.space)
+                moved += 1
+            }
+        }
+        return moved
+    }
+}
+
 // MARK: - Printed tempo
 
 /// The tempo printed on the sheet, read from the PDF's text layer. PDFs exported by notation
@@ -259,10 +356,91 @@ nonisolated enum PrintedTempo {
     }
 
     static func find(in document: PDFDocument) -> Mark? {
+        if let mark = findInText(of: document) { return mark }
+        // scans, photos and image-only PDFs: read the words printed above the first system
+        return document.page(at: 0).flatMap(recognizedMark(on:))?.mark
+    }
+
+    /// A tempo in the PDF's text layer (first two pages).
+    static func findInText(of document: PDFDocument) -> Mark? {
         for index in 0..<min(document.pageCount, 2) {
             if let text = document.page(at: index)?.string, let mark = find(in: text) { return mark }
         }
         return nil
+    }
+
+    /// A tempo read off the page image, with where its metronome mark is printed (page points
+    /// from the top-left, as `markBounds` gives) when it is one.
+    static func recognizedMark(on page: PDFPage) -> (mark: Mark, bounds: CGRect?)? {
+        guard let lines = readTopOfPage(page), let mark = find(inRecognized: lines.map(\.text)) else { return nil }
+        let metronome = lines.first { line in
+            line.text.count <= 24 && line.text.range(of: #"=\s*\d{2,3}\b"#, options: .regularExpression) != nil
+        }
+        return (mark, metronome?.bounds)
+    }
+
+    /// A tempo in text recognized from the page image: the same marks as in a text layer, plus
+    /// "= 120" with the note itself not read as text (taken as a quarter note).
+    static func find(inRecognized all: [String]) -> Mark? {
+        // the first line read is usually the title ("Slow Dancing" isn't a tempo)
+        let lines = all.count >= 3 ? Array(all.dropFirst()) : all
+        if let mark = find(in: lines.joined(separator: "\n")) { return mark }
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.count <= 24,
+                  let range = trimmed.range(of: #"=\s*(\d{2,3})\b"#, options: .regularExpression),
+                  let perMinute = Double(trimmed[range].filter(\.isNumber)), (30...240).contains(perMinute)
+            else { continue }
+            let before = trimmed[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+            // the note glyph usually comes out as one or two odd characters ("J", "d", "♩"); a dot
+            // after it ("J.") is a dotted note, as in 6/8
+            guard before.count <= 3, !before.contains(where: \.isNumber) else { continue }
+            return Mark(perMinute: perMinute, beatUnit: "quarter", dots: before.hasSuffix(".") ? 1 : 0, words: nil)
+        }
+        return nil
+    }
+
+    /// Text recognized on the top third of `page` (where tempo marks are printed), top to bottom,
+    /// each line with its place on the page (points from the top-left). Runs on the device; nil
+    /// when nothing could be read.
+    static func readTopOfPage(_ page: PDFPage) -> [(text: String, bounds: CGRect)]? {
+        let box = page.bounds(for: .cropBox).size
+        let size = page.rotation % 180 == 0 ? box : CGSize(width: box.height, height: box.width)
+        guard size.width > 0, size.height > 0 else { return nil }
+        let scale = min(3, 1800 / size.width)
+        let crop = CGSize(width: size.width, height: size.height * 0.34)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let pixels = CGSize(width: (crop.width * scale).rounded(), height: (crop.height * scale).rounded())
+        let image = UIGraphicsImageRenderer(size: pixels, format: format).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: pixels))
+            ctx.cgContext.scaleBy(x: scale, y: scale)
+            ctx.cgContext.translateBy(x: 0, y: size.height)
+            ctx.cgContext.scaleBy(x: 1, y: -1)
+            page.draw(with: .cropBox, to: ctx.cgContext)
+        }
+        guard let cg = image.cgImage else { return nil }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["en-US", "it-IT"]
+        do {
+            try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request])
+        } catch {
+            return nil
+        }
+        let observations = (request.results ?? []).sorted { $0.boundingBox.maxY > $1.boundingBox.maxY }
+        let lines = observations.compactMap { o -> (text: String, bounds: CGRect)? in
+            guard let text = o.topCandidates(1).first?.string else { return nil }
+            // Vision's box is a fraction of the image, from the bottom-left
+            let b = o.boundingBox
+            let bounds = CGRect(x: b.minX * crop.width, y: (1 - b.maxY) * crop.height,
+                                width: b.width * crop.width, height: b.height * crop.height)
+            return (text, bounds)
+        }
+        return lines.isEmpty ? nil : lines
     }
 
     /// A metronome mark (a note glyph, then "= 108") anywhere in `text`, else a tempo word on
@@ -388,11 +566,9 @@ nonisolated enum PrintedTempo {
     static func apply(_ mark: Mark, to score: XMLElementNode) {
         guard let part = score.firstChild(named: "part") else { return }
         let bpm = String(format: "%g", mark.quarterBPM)
-        if let sound = part.firstChild(named: "sound") {
-            sound.setAttribute("tempo", bpm)
-        } else {
-            part.children.insert(XMLElementNode(name: "sound", attributes: [("tempo", bpm)]), at: 0)
-        }
+        MusicXMLDocument.normalizeTempo(score)
+        guard let first = part.firstChild(named: "measure") else { return }
+        MusicXMLDocument.setTempo(bpm, in: first, replacing: true)
         guard let measure = part.firstChild(named: "measure"),
               !measure.children(named: "direction").contains(where: { direction in
                   direction.children(named: "direction-type").contains { $0.firstChild(named: "metronome") != nil }

@@ -17,6 +17,8 @@ import AVFoundation
 final class PlayAlongViewController: UIViewController {
 
     var sheetMusicData: Data?
+    /// The tempo when the score gives none (a Library song's slow / medium / fast setting).
+    var defaultTempoBPM = ScoreTimeline.defaultTempo
 
     // MARK: Views
     private let navBar = PlayAlongNavBar()
@@ -271,8 +273,9 @@ final class PlayAlongViewController: UIViewController {
             presentUnavailable()
             return
         }
+        let defaultTempo = defaultTempoBPM
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let timeline = try? ScoreTimeline.parse(data: data)
+            let timeline = try? ScoreTimeline.parse(data: data, defaultTempoBPM: defaultTempo)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.hideLoading()

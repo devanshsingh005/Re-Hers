@@ -18,7 +18,7 @@ final class UploadPageNextViewController: UIViewController {
     private var sheetMusicText:   String       = ""
     private var extractedChords:  [String]     = []
     private var timeSignature:    String       = "4/4"
-    private var tempo:            String       = "120 BPM"
+    private var tempo:            String       = "\(Int(ScoreTimeline.defaultTempo)) BPM"
     private var keySignature:     String       = "C Major"
     private var sheetMusicJSON:   [String: Any]?
     private var isProcessing      = true
@@ -473,25 +473,10 @@ final class UploadPageNextViewController: UIViewController {
         return "A Minor"
     }
 
+    /// The opening tempo Animation and Play Along will use, read the way they read it.
     private func extractTempo(_ json: [String: Any]) -> String {
-        if let t = json["tempo"] as? String { return t }
-        if let t = (json["analysis"] as? [String: Any])?["tempo"] as? String { return t }
-        // MusicXML: direction → sound @tempo
-        if let sp = json["score-partwise"] as? [String: Any] {
-            for part in flatList(sp["part"]) {
-                for measure in flatList(part["measure"]) {
-                    if let dirs = measure["direction"] {
-                        for d in (dirs as? [[String: Any]] ?? (dirs as? [String: Any]).map { [$0] } ?? []) {
-                            if let sound = d["sound"] as? [String: Any],
-                               let bpm   = sound["@tempo"] as? String, !bpm.isEmpty {
-                                return "\(bpm) BPM"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return "120 BPM"
+        let bpm = (try? ScoreTimeline.parse(root: json))?.tempos.first?.bpm ?? ScoreTimeline.defaultTempo
+        return "\(Int(bpm.rounded())) BPM"
     }
 
     // MARK: - UI State

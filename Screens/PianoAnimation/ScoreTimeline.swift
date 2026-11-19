@@ -234,7 +234,9 @@ nonisolated struct ScoreMeasure: Sendable {
     let startTick: Int
     let lengthTicks: Int
     let keyFifths: Int
-    let time: ScoreTimeSignature?
+    /// As written; for a score without any (sheets read by the recognizer), worked out from
+    /// the measures' lengths (`inferTimeSignature`).
+    fileprivate(set) var time: ScoreTimeSignature?
     /// Clef of each staff at the measure's start (index 0 = staff 1).
     let clefs: [ScoreClef]
     let keyChanged: Bool
@@ -334,7 +336,7 @@ nonisolated struct TimeMap: Sendable {
                 segments.append(Segment(tick: mark.tick, seconds: 0, bpm: mark.bpm))
             }
         }
-        if segments.isEmpty { segments = [Segment(tick: 0, seconds: 0, bpm: 84)] }
+        if segments.isEmpty { segments = [Segment(tick: 0, seconds: 0, bpm: ScoreTimeline.defaultTempo)] }
         self.segments = segments
     }
 
@@ -436,7 +438,7 @@ extension ScoreTimeline {
         case noMeasures
     }
 
-    nonisolated static func parse(data: Data, defaultTempoBPM: Double = 84,
+    nonisolated static func parse(data: Data, defaultTempoBPM: Double = ScoreTimeline.defaultTempo,
                                   defaultDivisions: Int = 6) throws -> ScoreTimeline {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ParseError.invalidJSON
@@ -444,7 +446,7 @@ extension ScoreTimeline {
         return try parse(root: root, defaultTempoBPM: defaultTempoBPM, defaultDivisions: defaultDivisions)
     }
 
-    nonisolated static func parse(root: [String: Any], defaultTempoBPM: Double = 84,
+    nonisolated static func parse(root: [String: Any], defaultTempoBPM: Double = ScoreTimeline.defaultTempo,
                                   defaultDivisions: Int = 6) throws -> ScoreTimeline {
         let parts = RawPart.all(in: root)
         guard !parts.isEmpty else { throw ParseError.noMeasures }
@@ -453,17 +455,37 @@ extension ScoreTimeline {
         return builder.build()
     }
 
-    /// Quarter notes per minute for a tempo word ("Allegro", "Andante con moto", "Alla marcia").
+    /// The tempo when a score gives none (the recognizer writes this too), quarter notes per minute.
+    static let defaultTempo: Double = 90
+
+    /// Quarter notes per minute for a tempo marking in words: Italian ("Allegro", "Andante con
+    /// moto", "Allegro moderato") or English ("Moderately", "Slowly", "Brightly"). Longer phrases
+    /// are matched first, so "Allegro moderato" isn't read as "Allegro" and "Allegretto" isn't
+    /// read as "Allegro"; nil when nothing matches.
     nonisolated static func tempo(forWords text: String) -> Double? {
         let lower = text.lowercased()
-        // longer words first, so "allegretto" is not read as "allegro"
         let terms: [(String, Double)] = [
-            ("prestissimo", 200), ("presto", 176), ("vivacissimo", 172), ("vivace", 156),
-            ("allegretto", 116), ("allegro", 132), ("moderato", 112), ("marcia", 108),
-            ("andantino", 100), ("andante", 92), ("adagietto", 74), ("adagio", 70),
-            ("larghetto", 60), ("largo", 50), ("lento", 56), ("grave", 40)
+            // Italian phrases
+            ("allegro ma non troppo", 120), ("allegro moderato", 116), ("allegro assai", 152),
+            ("allegro vivace", 152), ("andante con moto", 100), ("andante moderato", 96),
+            ("andante cantabile", 84), ("poco allegro", 120), ("tempo di valse", 150),
+            ("tempo di marcia", 108), ("tempo di minuetto", 112), ("moderato cantabile", 100),
+            // Italian words, longer ones first
+            ("prestissimo", 200), ("vivacissimo", 172), ("allegretto", 112), ("andantino", 100),
+            ("adagietto", 74), ("larghetto", 60), ("moderato", 108), ("allegro", 132),
+            ("presto", 176), ("vivace", 156), ("andante", 88), ("adagio", 70), ("lento", 56),
+            ("largo", 50), ("grave", 40), ("marcia", 108), ("maestoso", 84), ("cantabile", 88),
+            ("rubato", 76),
+            // English
+            ("very slowly", 52), ("moderately slow", 80), ("moderately fast", 120),
+            ("moderately bright", 126), ("moderately", 100), ("moderate", 100),
+            ("slowly", 66), ("slow", 66), ("gently", 76), ("tenderly", 72), ("freely", 76),
+            ("with motion", 104), ("flowing", 104), ("steadily", 100), ("steady", 100),
+            ("medium", 100), ("march", 112), ("waltz", 150), ("brightly", 132), ("bright", 132),
+            ("lively", 144), ("quickly", 152), ("fast", 152), ("very fast", 184),
         ]
-        return terms.first { lower.contains($0.0) }?.1
+        // the longest matching phrase wins ("very slowly" over "slowly", "allegretto" over "allegro")
+        return terms.sorted { $0.0.count > $1.0.count }.first { lower.contains($0.0) }?.1
     }
 }
 
@@ -644,7 +666,7 @@ nonisolated private struct TimelineBuilder {
 
     init(parts: [RawPart], defaultTempo: Double, defaultDivisions: Int) {
         self.parts = parts
-        self.defaultTempo = (10...400).contains(defaultTempo) ? defaultTempo : 84
+        self.defaultTempo = (10...400).contains(defaultTempo) ? defaultTempo : ScoreTimeline.defaultTempo
         self.defaultDivisions = max(1, defaultDivisions)
         var divisions = Set<Int>()
         for part in parts {
@@ -847,11 +869,13 @@ nonisolated private struct TimelineBuilder {
             if a.staff != b.staff { return a.staff < b.staff }
             return (a.diatonic ?? 0) < (b.diatonic ?? 0)
         }
-        let directions = pairDirections(pendingDirections, end: start)
+        var directions = pairDirections(pendingDirections, end: start)
         finishRests(&notes, measures: measures)
         mergeTies(&notes)
+        directions = Self.plausibleOctaveShifts(notes, directions: directions)
         applyOctaveShifts(&notes, directions: directions)
         assignAccidentals(&notes, measures: measures)
+        Self.inferTimeSignature(&measures, notes: notes, ticksPerQuarter: tpq)
         assignBeams(&notes, measures: measures)
         let slurs = pairSlurs(&notes)
         let tuplets = groupTuplets(notes)
@@ -1419,6 +1443,60 @@ nonisolated private struct TimelineBuilder {
         }
     }
 
+    /// A score with no time signature at all (the recognizer doesn't read them) gets the one its
+    /// measures add up to: the most common full-measure length, in quarters — 2, 3, 4 or 5 as
+    /// x/4; lengths in dotted quarters (1½, 3, 4½, 6) as x/8 when its eighths are beamed in
+    /// threes. A short first measure (a pickup) and the last one don't vote.
+    static func inferTimeSignature(_ measures: inout [ScoreMeasure], notes: [ScoreNote], ticksPerQuarter tpq: Int) {
+        guard !measures.isEmpty, measures.allSatisfy({ $0.time == nil }), tpq > 0 else { return }
+        let voting = measures.count > 2 ? Array(measures.dropFirst().dropLast()) : measures
+        var counts: [Int: Int] = [:]
+        for m in voting where m.lengthTicks > 0 { counts[m.lengthTicks, default: 0] += 1 }
+        guard let length = counts.max(by: { ($0.value, $0.key) < ($1.value, $1.key) })?.key else { return }
+        // eighths beamed in threes say compound time (6/8, 9/8, 12/8)
+        var groupSizes: [Int: Int] = [:]
+        for note in notes where note.value == .eighth && !note.isRest && !note.isChordTone {
+            if let g = note.beamGroup { groupSizes[g, default: 0] += 1 }
+        }
+        let threes = groupSizes.values.filter { $0 == 3 }.count
+        let twosOrFours = groupSizes.values.filter { $0 == 2 || $0 == 4 }.count
+        let compound = threes > twosOrFours
+        let eighths = Double(length) / Double(tpq) * 2
+        let quarters = Double(length) / Double(tpq)
+        let time: ScoreTimeSignature
+        if compound, eighths.rounded() == eighths, [3, 6, 9, 12].contains(Int(eighths)) {
+            time = ScoreTimeSignature(beats: Int(eighths), beatType: 8)
+        } else if quarters.rounded() == quarters, (2...6).contains(Int(quarters)) {
+            time = ScoreTimeSignature(beats: Int(quarters), beatType: 4)
+        } else if eighths.rounded() == eighths, (3...12).contains(Int(eighths)) {
+            time = ScoreTimeSignature(beats: Int(eighths), beatType: 8)
+        } else {
+            return
+        }
+        measures[0].time = time
+    }
+
+    /// Drops octave lines that would push their notes further from the staff instead of nearer
+    /// (an 8va line exists to save ledger lines). Recognition sometimes reads one that isn't on
+    /// the page, which then printed a whole tune an octave low under four ledger lines.
+    static func plausibleOctaveShifts(_ notes: [ScoreNote], directions: [ScoreDirection]) -> [ScoreDirection] {
+        directions.filter { direction in
+            guard case .octaveShift(let size, let down, let endTick) = direction.kind else { return true }
+            let steps = size >= 22 ? 21 : size >= 15 ? 14 : 7
+            var without = 0, with = 0, count = 0
+            for note in notes where note.staff == direction.staff && !note.isRest
+                && note.startTick >= direction.tick && note.startTick <= endTick {
+                guard let d = note.diatonic else { continue }
+                let bottom = note.clef.bottomLineDiatonic
+                func outside(_ p: Int) -> Int { max(0, bottom - p, p - (bottom + 8)) }
+                without += outside(d)
+                with += outside(d + (down ? -steps : steps))
+                count += 1
+            }
+            return count == 0 || with < without
+        }
+    }
+
     /// Under an 8va line notes are printed an octave below their pitch (8vb: above).
     private func applyOctaveShifts(_ notes: inout [ScoreNote], directions: [ScoreDirection]) {
         for direction in directions {
@@ -1473,6 +1551,13 @@ nonisolated private struct TimelineBuilder {
     /// output — eighths and shorter grouped by beat.
     private func assignBeams(_ notes: inout [ScoreNote], measures: [ScoreMeasure]) {
         struct Lane: Hashable { let measure: Int; let staff: Int; let voice: String }
+        // the time signature in force in each measure (written once, it holds until it changes)
+        var signatures: [ScoreTimeSignature] = []
+        var current = ScoreTimeSignature(beats: 4, beatType: 4)
+        for measure in measures {
+            if let time = measure.time, time.beats > 0, time.beatType > 0 { current = time }
+            signatures.append(current)
+        }
         var lanes: [Lane: [Int]] = [:]
         for i in notes.indices where !notes[i].isGrace {
             lanes[Lane(measure: notes[i].measureIndex, staff: notes[i].staff, voice: notes[i].voice), default: []].append(i)
@@ -1511,21 +1596,21 @@ nonisolated private struct TimelineBuilder {
                 }
                 assign(group)
             } else {
+                // by beat, the way engravers do it: a group ends where a note starts on a beat, so
+                // notes that cross a beat (dotted eighths, syncopations) stay on one beam
                 let measure = measures[lane.measure]
-                let span = measure.time?.beamSpan(ticksPerQuarter: tpq) ?? tpq
+                let span = max(1, signatures[lane.measure].beamSpan(ticksPerQuarter: tpq))
                 var group: [Int] = []
-                var groupBeat = -1
                 var expectedStart = -1
                 for i in leaders {
                     let note = notes[i]
-                    let beat = (note.startTick - measure.startTick) / max(span, 1)
+                    let onBeat = (note.startTick - measure.startTick) % span == 0
                     let beamable = !note.isRest && note.value.flagCount > 0 && note.stem != ScoreNote.Stem.none
-                    if beamable && beat == groupBeat && note.startTick == expectedStart {
+                    if beamable && !onBeat && note.startTick == expectedStart && !group.isEmpty {
                         group.append(i)
                     } else {
                         assign(group)
                         group = beamable ? [i] : []
-                        groupBeat = beat
                     }
                     expectedStart = note.endTick
                 }

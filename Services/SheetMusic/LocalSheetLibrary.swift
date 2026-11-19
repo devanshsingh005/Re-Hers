@@ -128,7 +128,7 @@ final class LocalSheetLibrary {
 
     /// The converted score in the JSON shape Play Along and Animation read. JSON from an older
     /// converter is rebuilt once from the upload's MusicXML (keeping the measures' element order)
-    /// with the tempo printed on the sheet, when its PDF has one as text.
+    /// with the tempo printed on the sheet (from its text, else read off the page image).
     func scoreJSON(id: UUID) -> [String: Any]? {
         let url = file("output.json", of: id, owner: owner)
         guard let data = try? Data(contentsOf: url),
@@ -137,11 +137,13 @@ final class LocalSheetLibrary {
               let xml = musicXML(id: id),
               let root = try? MusicXMLDocument.parse(xml) else { return json }
         ScoreCleanup.clean(root)
+        RhythmRepair.repair(root)
+        MusicXMLDocument.normalizeTempo(root)
         if let pdf = inputPDF(id: id).flatMap(PDFDocument.init(data:)), let tempo = PrintedTempo.find(in: pdf) {
             PrintedTempo.apply(tempo, to: root)
-            try? MusicXMLDocument.serialize(root).write(to: file("score.musicxml", of: id, owner: owner),
-                                                        atomically: true, encoding: .utf8)
         }
+        try? MusicXMLDocument.serialize(root).write(to: file("score.musicxml", of: id, owner: owner),
+                                                    atomically: true, encoding: .utf8)
         let rebuilt = MusicXMLDocument.jsonObject(root)
         if let rebuiltData = try? JSONSerialization.data(withJSONObject: rebuilt) {
             try? rebuiltData.write(to: url, options: .atomic)
@@ -238,7 +240,37 @@ final class LocalSheetLibrary {
         if upload(id: id)?.filesOnDevice == false {
             await UploadCloudSync.shared.downloadFiles(of: id)
         }
+        if needsReconversion(id: id) {
+            reconvert(id: id)
+            if let task = tasks[id] { await task.value }
+        }
         return upload(id: id)
+    }
+
+    /// Uploads converted before the converter read notes between the staves and fixed measure
+    /// lengths (score format 5) are converted again from their PDF the first time they're opened:
+    /// those fixes need the page itself, so rebuilding from the saved score can't apply them.
+    static let reconvertBelowFormat = 5
+
+    private func needsReconversion(id: UUID) -> Bool {
+        guard let upload = upload(id: id), upload.status == .completed, upload.filesOnDevice != false,
+              tasks[id] == nil, FileManager.default.fileExists(atPath: file("input.pdf", of: id, owner: owner).path),
+              let data = try? Data(contentsOf: file("output.json", of: id, owner: owner)),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let score = json["score-partwise"] as? [String: Any] else { return false }
+        return (score["#format"] as? Int ?? 0) < Self.reconvertBelowFormat
+    }
+
+    /// Converts a finished upload again. If that fails, the upload keeps the result it had
+    /// (brought up to date from its saved score) rather than turning into a failed one.
+    private func reconvert(id: UUID) {
+        let owner = self.owner
+        var all = list(for: owner)
+        guard let i = all.firstIndex(where: { $0.id == id }), tasks[id] == nil else { return }
+        all[i].status = .processing
+        try? save(all, owner: owner)
+        startConversion(of: all[i], owner: owner, keepingPreviousOnFailure: true)
+        notify(id)
     }
 
     /// Restarts conversions that were cut off because the app was closed while converting.
@@ -251,7 +283,7 @@ final class LocalSheetLibrary {
 
     // MARK: - Conversion
 
-    private func startConversion(of upload: Upload, owner: String) {
+    private func startConversion(of upload: Upload, owner: String, keepingPreviousOnFailure: Bool = false) {
         let id = upload.id
         let title = upload.title
         let folder = folder(of: id, owner: owner)
@@ -274,7 +306,7 @@ final class LocalSheetLibrary {
                     return .failure(error)
                 }
             }.value
-            self?.finish(id: id, owner: owner, outcome: outcome)
+            self?.finish(id: id, owner: owner, outcome: outcome, keepingPreviousOnFailure: keepingPreviousOnFailure)
         }
     }
 
@@ -284,7 +316,8 @@ final class LocalSheetLibrary {
         notify(id)
     }
 
-    private func finish(id: UUID, owner: String, outcome: Result<SheetConversionResult, Error>) {
+    private func finish(id: UUID, owner: String, outcome: Result<SheetConversionResult, Error>,
+                        keepingPreviousOnFailure: Bool = false) {
         tasks[id] = nil
         progress[id] = nil
         var all = list(for: owner)
@@ -299,6 +332,14 @@ final class LocalSheetLibrary {
             all[i].conversionSeconds = result.seconds
             debugLog("[OnDevice] \(id): \(result.noteCount) notes, \(result.pageCount) page(s), "
                      + "skipped \(result.skippedPages), \(String(format: "%.1f", result.seconds))s")
+        case .failure(let error) where keepingPreviousOnFailure:
+            if error is CancellationError { return }
+            debugLog("[OnDevice] \(id) converting again failed, keeping the earlier result: \(error)")
+            all[i].status = .completed
+            try? save(all, owner: owner)
+            _ = scoreJSON(id: id)      // rebuilt from the saved score, so it isn't tried again
+            notify(id)
+            return
         case .failure(let error):
             if error is CancellationError { return }
             all[i].status = .failed

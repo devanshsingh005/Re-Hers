@@ -46,6 +46,16 @@ struct Song: Codable, Identifiable {
         case coverImageUrl    = "cover_image_url"
     }
 
+    /// The tempo to play at when the song's score gives none, from its slow / medium / fast
+    /// setting in the Library (quarter notes per minute).
+    var fallbackTempoBPM: Double {
+        switch tempo.lowercased() {
+        case "slow": return 70
+        case "fast": return 120
+        default:     return ScoreTimeline.defaultTempo
+        }
+    }
+
     /// Columns that exist on `songs`; userId, sheetFileId, sheetUrl and jsonUrl are no longer in the table and decode as nil.
     static let listColumns = "id, title, composer, level, tempo, hands, initials, skill_tags, skill_description, is_free, is_active, sort_order, original_pdf_path, labeled_pdf_path, output_json_path, cover_image_url"
 }

@@ -580,7 +580,14 @@ private struct PageBuilder {
         let writtenStem: ScoreNote.Stem?
         var up = true
         var hasStem = true
+        /// Stem direction from its voice, when another voice shares the staff in its measure
+        /// (the higher voice's stems go up, the lower's down).
+        var voiceUp: Bool?
+        /// Moved right of the onset to clear another voice's heads at the same moment.
+        var shift: CGFloat = 0
         var x: CGFloat = 0
+        /// The onset's x (where the note names go, whatever the shift).
+        var onsetX: CGFloat = 0
         var headDX: [Int: CGFloat] = [:]
         var accidentalDX: [Int: CGFloat] = [:]
         var y: [Int: CGFloat] = [:]
@@ -630,6 +637,11 @@ private struct PageBuilder {
     private var lineOf: [Int] = []
     private var systems: [SheetSystem] = []
     private var labelRows: [Int: CGFloat] = [:]          // chord → top of its first name, staff-relative
+    /// Chords starting at one moment on one staff ("measure|staff|tick", graces left out): they
+    /// share one column of note names.
+    private var onsetGroup: [Int: String] = [:]
+    private var groupMembers: [String: [Int]] = [:]
+    private var groupLabels: [String: [String: CATextLayer]] = [:]
     private var beams: [Int: [Int]] = [:]                // beam group → its chords, left to right
     private var drawnBeams = Set<Int>()
 
@@ -743,9 +755,10 @@ private struct PageBuilder {
         for c in chords.indices {
             chords[c].notes.sort { (notes[$0].displayDiatonic ?? 0) < (notes[$1].displayDiatonic ?? 0) }
             chords[c].hasStem = chords[c].value.hasStem && chords[c].writtenStem != ScoreNote.Stem.none
-            chords[c].up = defaultStemUp(chords[c])
             chordsByMeasure[chords[c].measure, default: []].append(c)
         }
+        assignVoiceStems()
+        for c in chords.indices { chords[c].up = defaultStemUp(chords[c]) }
 
         // a beam group shares one stem direction: as most of it is written, else by position
         var groups: [Int: [Int]] = [:]
@@ -756,7 +769,9 @@ private struct PageBuilder {
             let written = members.compactMap { chords[$0].writtenStem }
             let ups = written.filter { $0 == .up }.count, downs = written.filter { $0 == .down }.count
             var up = ups > downs
-            if ups == downs {
+            if ups == downs, let voiceUp = chords[members[0]].voiceUp {
+                up = voiceUp
+            } else if ups == downs {
                 var total = 0
                 for c in members {
                     let mid = middleLine(chords[c])
@@ -767,6 +782,65 @@ private struct PageBuilder {
             for c in members { chords[c].up = up }
         }
         for c in chords.indices { shape(&chords[c]) }
+        separateVoices()
+    }
+
+    /// Where two or more voices share a staff in a measure, the highest voice's stems go up and
+    /// the others' down (unless the score says otherwise), so the voices don't run into each other.
+    private mutating func assignVoiceStems() {
+        let notes = timeline.notes
+        var byMeasureStaff: [String: [Int]] = [:]
+        for (c, chord) in chords.enumerated() where !chord.isGrace {
+            byMeasureStaff["\(chord.measure)|\(chord.staff)", default: []].append(c)
+        }
+        for (_, members) in byMeasureStaff {
+            var pitches: [String: [Int]] = [:]
+            for c in members {
+                let voice = notes[chords[c].notes[0]].voice
+                pitches[voice, default: []] += chords[c].notes.compactMap { notes[$0].displayDiatonic }
+            }
+            guard pitches.count >= 2 else { continue }
+            let average = pitches.mapValues { Double($0.reduce(0, +)) / Double(max(1, $0.count)) }
+            guard let top = average.max(by: { $0.value < $1.value })?.key else { continue }
+            for c in members { chords[c].voiceUp = notes[chords[c].notes[0]].voice == top }
+        }
+    }
+
+    /// Voices starting together on a staff: their notes share one column of names, and when
+    /// their heads would touch (a second apart, or the same note of a different length) the
+    /// lower voice moves right by a head, as engravers do.
+    private mutating func separateVoices() {
+        let notes = timeline.notes
+        for (c, chord) in chords.enumerated() where !chord.isGrace {
+            let key = "\(chord.measure)|\(chord.staff)|\(chord.tick)"
+            onsetGroup[c] = key
+            groupMembers[key, default: []].append(c)
+        }
+        for (_, members) in groupMembers where members.count > 1 {
+            func average(_ c: Int) -> Double {
+                let d = chords[c].notes.compactMap { notes[$0].displayDiatonic }
+                return Double(d.reduce(0, +)) / Double(max(1, d.count))
+            }
+            let ordered = members.sorted { average($0) > average($1) }
+            for (k, lower) in ordered.enumerated() where k > 0 {
+                let lowerPitches = chords[lower].notes.compactMap { notes[$0].displayDiatonic }
+                for upper in ordered[..<k] where chords[upper].shift == chords[lower].shift {
+                    let upperPitches = chords[upper].notes.compactMap { notes[$0].displayDiatonic }
+                    let touches = lowerPitches.contains { a in
+                        upperPitches.contains { b in
+                            abs(a - b) == 1 || (a == b && chords[lower].value != chords[upper].value)
+                        }
+                    }
+                    // stems pointing at each other's heads (lower voice up, upper down) also clash
+                    let crossed = chords[lower].up && !chords[upper].up
+                        && (lowerPitches.max() ?? 0) >= (upperPitches.min() ?? 0) - 1
+                    if touches || crossed {
+                        let width = SheetGlyphs.headWidth(chords[upper].value, s: s * chords[upper].scale)
+                        chords[lower].shift = chords[upper].shift + width + 0.1 * s
+                    }
+                }
+            }
+        }
     }
 
     private func middleLine(_ chord: Chord) -> Int {
@@ -781,6 +855,7 @@ private struct PageBuilder {
         case .down?: return false
         default:     break
         }
+        if let voiceUp = chord.voiceUp { return voiceUp }
         let mid = middleLine(chord)
         let positions = chord.notes.compactMap { timeline.notes[$0].displayDiatonic }
         let high = positions.max() ?? mid, low = positions.min() ?? mid
@@ -864,8 +939,8 @@ private struct PageBuilder {
         let notes = timeline.notes
         for chord in chords where !chord.isGrace {
             var onset = onsets[chord.measure]?[chord.tick] ?? Onset()
-            onset.left = max(onset.left, chord.left)
-            onset.right = max(onset.right, chord.right)
+            onset.left = max(onset.left, chord.left - chord.shift)
+            onset.right = max(onset.right, chord.right + chord.shift)
             let names = chord.notes.filter { notes[$0].isStruck }.compactMap { notes[$0].writtenName }
             if let widest = names.map(labelWidth).max() { onset.labelHalf = max(onset.labelHalf, widest / 2) }
             let xs = chord.notes.compactMap { notes[$0].defaultX }
@@ -931,7 +1006,12 @@ private struct PageBuilder {
                 let isLast = k + 1 == plan.ticks.count
                 let nextTick = isLast ? measure.endTick : plan.ticks[k + 1]
                 let next = isLast ? nil : table[nextTick]
-                var minimum = here.right + (next?.left ?? 0) + 0.45 * s
+                // a little more air before a note with an accidental, so the sign doesn't read as
+                // belonging to the note before it
+                let hasAccidental = (chordsByMeasure[measure.index] ?? []).contains { c in
+                    chords[c].tick == nextTick && !chords[c].accidentalDX.isEmpty
+                }
+                var minimum = here.right + (next?.left ?? 0) + (hasAccidental ? 0.8 : 0.45) * s
                 if let next { minimum = max(minimum, here.labelHalf + next.labelHalf + 0.25 * s) }
                 if isLast { minimum = max(here.right + 1.0 * s, here.labelHalf + 0.6 * s) }
                 var gap = idealGap(nextTick - tick)
@@ -1084,7 +1164,9 @@ private struct PageBuilder {
             }
         }
         for c in chords.indices {
-            chords[c].x = onsetX[chords[c].measure]?[chords[c].tick] ?? measureX[chords[c].measure] + plans[chords[c].measure].lead
+            let x = onsetX[chords[c].measure]?[chords[c].tick] ?? measureX[chords[c].measure] + plans[chords[c].measure].lead
+            chords[c].onsetX = x
+            chords[c].x = x + chords[c].shift
         }
         // grace notes sit before the note they lead into
         var graces: [String: [Int]] = [:]
@@ -1133,11 +1215,30 @@ private struct PageBuilder {
 
     private func labelHeight() -> CGFloat { labelFont.lineHeight * 0.92 }
 
+    /// The notes named under one onset group: every struck note of its voices, one name per
+    /// pitch, highest first.
+    private func groupNames(_ key: String) -> [Int] {
+        let notes = timeline.notes
+        var seen = Set<String>()
+        var named: [Int] = []
+        let all = (groupMembers[key] ?? []).flatMap { chords[$0].notes }.filter { notes[$0].isStruck }
+        for i in all.sorted(by: { (notes[$0].displayDiatonic ?? 0, notes[$0].midi ?? 0) > (notes[$1].displayDiatonic ?? 0, notes[$1].midi ?? 0) }) {
+            guard let name = notes[i].writtenName, seen.insert(name).inserted else { continue }
+            named.append(i)
+        }
+        return named
+    }
+
     /// Staff-relative extent of everything printed with a staff in one line.
     private mutating func extents(line: Range<Int>, staff: Int) -> (top: CGFloat, bottom: CGFloat) {
         var top: CGFloat = -1.2 * s
         var bottom: CGFloat = 5.2 * s
         let notes = timeline.notes
+        // the names sit on one row under the staff for the whole line, below everything printed
+        // under it (stems, beams, low notes), so they never stagger or cross a beam
+        var lowest: CGFloat = 4 * s + 1.5 * s
+        var namedChords: [Int] = []
+        var mostNames = 0
         for m in line {
             for c in chordsByMeasure[m] ?? [] where chords[c].staff == staff {
                 let chord = chords[c]
@@ -1148,16 +1249,19 @@ private struct PageBuilder {
                 let marks = chord.notes.contains { !notes[$0].articulations.isEmpty || notes[$0].hasFermata }
                 if marks { t -= 1.4 * s; b += 1.2 * s }
                 if chord.isGrace { top = min(top, t); bottom = max(bottom, b); continue }
-                // the names go in a row under the staff (lower when the chord reaches below it)
-                let named = chord.notes.filter { notes[$0].isStruck }.count
-                if named > 0 {
-                    let row = max(4 * s + 1.9 * s, b + 0.4 * s)
-                    labelRows[c] = row
-                    b = row + CGFloat(named) * labelHeight()
+                lowest = max(lowest, b)
+                if let key = onsetGroup[c], groupNames(key).count > 0 {
+                    namedChords.append(c)
+                    mostNames = max(mostNames, groupNames(key).count)
                 }
                 top = min(top, t)
                 bottom = max(bottom, b)
             }
+        }
+        if !namedChords.isEmpty {
+            let row = lowest + 0.4 * s
+            for c in namedChords { labelRows[c] = row }
+            bottom = max(bottom, row + CGFloat(mostNames) * labelHeight())
         }
         return (top, bottom)
     }
@@ -1427,8 +1531,28 @@ private struct PageBuilder {
         drawArticulations(chord, path: path, staffTop: top)
 
         let rightmost = chord.x + (dxs.max() ?? 0) + headWidth / 2
-        let named = chord.isGrace ? [] : chord.notes.reversed().filter { notes[$0].isStruck }
         let step = labelHeight()
+        // the group's first chord draws the names for every voice starting with it
+        if !chord.isGrace, let key = onsetGroup[c], groupLabels[key] == nil, let row = labelRows[c] {
+            var layers: [String: CATextLayer] = [:]
+            for (k, i) in groupNames(key).enumerated() {
+                guard let name = notes[i].writtenName else { continue }
+                let hand = notes[i].isLeftHand ? AnimatedPianoKeyView.leftColor : AnimatedPianoKeyView.rightColor
+                let l = SheetGlyphs.textLayer(name, font: labelFont, color: hand.withAlphaComponent(0.85),
+                                              centerX: chord.onsetX, centerY: row + step / 2 + CGFloat(k) * step, scale: scale)
+                textLayers.append(l)
+                layers[name] = l
+            }
+            groupLabels[key] = layers
+        }
+        let labels = onsetGroup[c].flatMap { groupLabels[$0] } ?? [:]
+        // a duration bar ends at the barline, or at this voice's next note, whichever is first
+        let nextInVoice = (chordsByMeasure[chord.measure] ?? [])
+            .filter { chords[$0].staff == chord.staff && !chords[$0].isGrace && chords[$0].tick > chord.tick
+                && notes[chords[$0].notes[0]].voice == notes[chord.notes[0]].voice }
+            .map { chords[$0].x - SheetGlyphs.headWidth(chords[$0].value, s: s) * 0.6 }
+            .min()
+        let barLimit = min(measureEndX[chord.measure], nextInVoice ?? .infinity) - 0.4 * s
         for i in chord.notes {
             let note = notes[i]
             let x = chord.x + (chord.headDX[i] ?? 0)
@@ -1460,7 +1584,7 @@ private struct PageBuilder {
             let heldEnd = note.startTick + Int(Double(note.soundingTicks) * min(1, note.heldFraction ?? 1))
             var bar: CALayer?
             if note.isStruck {
-                let end = min(self.x(Double(heldEnd), line: line), systems[line].right) - 0.4 * s
+                let end = min(self.x(Double(heldEnd), line: line) - 0.4 * s, barLimit)
                 if end > x + headWidth * 0.9 {
                     let b = CALayer()
                     b.frame = CGRect(x: x, y: y - 0.3 * s, width: end - x, height: 0.6 * s)
@@ -1471,13 +1595,7 @@ private struct PageBuilder {
                 }
             }
 
-            var label: CATextLayer?
-            if let k = named.firstIndex(of: i), let name = note.writtenName, let row = labelRows[c] {
-                let l = SheetGlyphs.textLayer(name, font: labelFont, color: hand.withAlphaComponent(0.85),
-                                              centerX: chord.x, centerY: row + step / 2 + CGFloat(k) * step, scale: scale)
-                textLayers.append(l)
-                label = l
-            }
+            let label = note.isStruck ? note.writtenName.flatMap { labels[$0] } : nil
 
             let end = note.isStruck ? max(heldEnd, note.startTick + 1) : max(note.endTick, note.startTick + 1)
             visuals.append(SheetNoteVisual(start: Double(note.startTick), end: Double(end),
@@ -1587,6 +1705,9 @@ private struct PageBuilder {
             if overlapping.contains(where: { notes[$0].voice == note.voice }) { continue }   // contradicts its voice (OMR)
             if let d = note.restDiatonic {
                 centerY = top + 4 * s - CGFloat(d - note.clef.bottomLineDiatonic) * s / 2
+                // a whole (or whole-bar) rest's position names the line it hangs from; the glyph
+                // is drawn from the line above its centre, so it would sit a space too high
+                if note.isMeasureRest || note.value == .whole || note.value == .breve { centerY += s }
             } else if !overlapping.isEmpty {
                 // the other voice is above the middle line: the rest goes below, and the other way round
                 let middle = note.clef.bottomLineDiatonic + 4
