@@ -50,6 +50,15 @@ public extension UIColor {
         }
     }
 
+    /// Like `adaptive`, with its own dark value while the Christmas theme is on (pine greens
+    /// instead of the warm browns). Light Mode never changes with the theme.
+    static func seasonal(light: UIColor, dark: UIColor, christmasDark: UIColor) -> UIColor {
+        UIColor { traits in
+            guard traits.userInterfaceStyle == .dark else { return light }
+            return traits.seasonalTheme == .christmas ? christmasDark : dark
+        }
+    }
+
     /// Creates an adaptive UIColor that resolves to different values in Light vs Dark Mode.
     static func adaptive(light: UIColor, dark: UIColor) -> UIColor {
         return UIColor { traitCollection in
@@ -85,30 +94,39 @@ public enum BrandColors {
     // MARK: Backgrounds
     // ─────────────────────────────────────────────
 
+    /// Christmas theme background (Figma "Christmas theme": #031711), dark appearance only.
+    public static let christmasBackground: UIColor = UIColor(hex: "#031711")
+
     /// App-wide base background — Light: Modern Greige #F4F1ED / Dark: Deep charcoal #1A1714
-    public static let backgroundPrimary: UIColor = UIColor.adaptive(
+    /// (#031711 deep pine green while the Christmas theme is on).
+    public static let backgroundPrimary: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#F4F1ED"),
-        dark:  UIColor(hex: "#1A1714")
+        dark:  UIColor(hex: "#1A1714"),
+        christmasDark: christmasBackground
     )
 
     /// Card / surface layer — Light: #FFFFFF / Dark: #2A2520
     /// Always sits one level above backgroundPrimary.
-    public static let backgroundSurface: UIColor = UIColor.adaptive(
+    public static let backgroundSurface: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#FFFFFF"),
-        dark:  UIColor(hex: "#2A2520")
+        dark:  UIColor(hex: "#2A2520"),
+        christmasDark: UIColor(hex: "#0D2721")
     )
 
     /// Elevated card (modal, bottom sheet) — Light: #FFFFFF / Dark: #332D27
     /// Sits above backgroundSurface.
-    public static let backgroundElevated: UIColor = UIColor.adaptive(
+    public static let backgroundElevated: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#FFFFFF"),
-        dark:  UIColor(hex: "#332D27")
+        dark:  UIColor(hex: "#332D27"),
+        christmasDark: UIColor(hex: "#14322A")
     )
 
     /// Nav bar / tab bar background — Light: #FFFFFF / Dark: #1F1C18
-    public static let backgroundNavBar: UIColor = UIColor.adaptive(
+    /// (the Christmas background while that theme is on, so a scrolled header matches the page)
+    public static let backgroundNavBar: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#FFFFFF"),
-        dark:  UIColor(hex: "#1F1C18")
+        dark:  UIColor(hex: "#1F1C18"),
+        christmasDark: christmasBackground
     )
 
 
@@ -146,15 +164,17 @@ public enum BrandColors {
     // ─────────────────────────────────────────────
 
     /// Default 1px separator / card border — Light: #E9E3DB / Dark: #3D3630
-    public static let stroke: UIColor = UIColor.adaptive(
+    public static let stroke: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#f5a73e"),
-        dark:  UIColor(hex: "#3D3630")
+        dark:  UIColor(hex: "#3D3630"),
+        christmasDark: UIColor(hex: "#405048")
     )
 
     /// Strong border — used for focused inputs — Light: #C9C0B5 / Dark: #5A504A
-    public static let strokeStrong: UIColor = UIColor.adaptive(
+    public static let strokeStrong: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#C9C0B5"),
-        dark:  UIColor(hex: "#5A504A")
+        dark:  UIColor(hex: "#5A504A"),
+        christmasDark: UIColor(hex: "#557064")
     )
 
     /// Brand border — for selected / active card outlines.
@@ -195,15 +215,17 @@ public enum BrandColors {
     // ─────────────────────────────────────────────
 
     /// Disabled fill — for inactive buttons and controls.
-    public static let disabledFill: UIColor = UIColor.adaptive(
+    public static let disabledFill: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#E9E3DB"),
-        dark:  UIColor(hex: "#2E2925")
+        dark:  UIColor(hex: "#2E2925"),
+        christmasDark: UIColor(hex: "#13302A")
     )
 
     /// Disabled text — for labels on inactive elements.
-    public static let disabledText: UIColor = UIColor.adaptive(
+    public static let disabledText: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#B5ADA5"),
-        dark:  UIColor(hex: "#504840")
+        dark:  UIColor(hex: "#504840"),
+        christmasDark: UIColor(hex: "#4C6359")
     )
 
     /// Inactive tab icon / unselected nav icon.
@@ -218,15 +240,17 @@ public enum BrandColors {
     // ─────────────────────────────────────────────
 
     /// Base layer of the skeleton loading placeholder.
-    public static let skeletonBase: UIColor = UIColor.adaptive(
+    public static let skeletonBase: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#EAE6E1"),
-        dark:  UIColor(hex: "#2A2520")
+        dark:  UIColor(hex: "#2A2520"),
+        christmasDark: UIColor(hex: "#0D2721")
     )
 
     /// Highlight layer that animates across the skeleton.
-    public static let skeletonHighlight: UIColor = UIColor.adaptive(
+    public static let skeletonHighlight: UIColor = UIColor.seasonal(
         light: UIColor(hex: "#F5F2EE"),
-        dark:  UIColor(hex: "#3A342E")
+        dark:  UIColor(hex: "#3A342E"),
+        christmasDark: UIColor(hex: "#1A3B32")
     )
 
 

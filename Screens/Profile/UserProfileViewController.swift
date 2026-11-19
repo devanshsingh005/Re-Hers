@@ -136,6 +136,7 @@ final class UserProfileViewController: UIViewController {
         }
         
         setupUI()
+        SnowfallView.install(in: view)   // Christmas theme only; behind everything
         if isTabRoot {
             NavigationBarHelper.updateNavigationBackgroundAppearance(
                 navBackgroundView, shadowView: navShadowLayer, traitCollection: traitCollection

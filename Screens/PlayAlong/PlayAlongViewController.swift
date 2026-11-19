@@ -774,6 +774,7 @@ final class PlayAlongNavBar: UIView {
             skipButton.widthAnchor.constraint(equalToConstant: 26),
             menuButton.widthAnchor.constraint(equalToConstant: 26)
         ])
+        ChristmasDecor.installPlayerBar(leading: backPill, trailing: statusPill, in: self)   // Christmas theme only
     }
 
     /// The practice options (metronome, loop), built when opened.

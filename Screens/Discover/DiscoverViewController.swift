@@ -247,6 +247,8 @@ final class DiscoverViewController: UIViewController {
         notificationsButton.translatesAutoresizingMaskIntoConstraints = false
         
         headerContainer.addSubview(notificationsButton)
+        ChristmasDecor.addHeaderBranch(to: headerContainer)   // Christmas theme only
+        SnowfallView.install(in: view)                        // Christmas theme only; behind everything
         
         NSLayoutConstraint.activate([
             headerContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(80)),

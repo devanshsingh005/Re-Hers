@@ -95,6 +95,7 @@ final class LessonNavBarView: UIView {
             pPill.leadingAnchor.constraint(equalTo: bPill.trailingAnchor, constant: 8),
             pPill.trailingAnchor.constraint(equalTo: rPill.leadingAnchor, constant: -8)
         ])
+        ChristmasDecor.installPlayerBar(leading: bPill, trailing: rPill, in: self)   // Christmas theme only
     }
 
     private func makePill(for contentView: UIView, insets: UIEdgeInsets, cornerRadius: CGFloat) -> UIView {

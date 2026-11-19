@@ -6,6 +6,7 @@
 //    • maintenance mode on                → a full-screen maintenance screen that can't be closed
 //    • below `min_supported_version`      → a full-screen "Update required" screen that can't be closed
 //    • below `latest_version`             → a one-time "Update available" alert the person can skip
+//    • `theme`                            → the seasonal decorations from Theme Studio (AppThemeManager)
 //  Read when the app becomes active, every 2 minutes while it's open, and every 30 seconds while the
 //  maintenance screen is up (so people get back in soon after it's turned off). The last good config is
 //  cached, so a block still applies offline. Any missing or malformed value means "no block": this never
@@ -25,6 +26,8 @@ struct RemoteAppConfig: Codable, Equatable {
     let maintenanceMessage: String
     /// ISO 8601 time the admin expects maintenance to end, if they gave one.
     let maintenanceEndsAt: String?
+    /// The seasonal theme from Theme Studio ("default" or "christmas"); see `SeasonalTheme`.
+    let theme: String
     let version: Int
 
     enum CodingKeys: String, CodingKey {
@@ -36,10 +39,11 @@ struct RemoteAppConfig: Codable, Equatable {
         case maintenanceTitle = "maintenance_title"
         case maintenanceMessage = "maintenance_message"
         case maintenanceEndsAt = "maintenance_ends_at"
+        case theme
         case version
     }
 
-    static let selectColumns = "min_supported_version, latest_version, update_required_message, update_available_message, maintenance_enabled, maintenance_title, maintenance_message, maintenance_ends_at, version"
+    static let selectColumns = "min_supported_version, latest_version, update_required_message, update_available_message, maintenance_enabled, maintenance_title, maintenance_message, maintenance_ends_at, theme, version"
     static let defaultMaintenanceTitle = "Down for maintenance"
     static let defaultMaintenanceMessage = "Rehearse is getting an update. Please check back soon."
 
@@ -52,6 +56,7 @@ struct RemoteAppConfig: Codable, Equatable {
         maintenanceTitle: String = RemoteAppConfig.defaultMaintenanceTitle,
         maintenanceMessage: String = RemoteAppConfig.defaultMaintenanceMessage,
         maintenanceEndsAt: String? = nil,
+        theme: String = SeasonalTheme.default.rawValue,
         version: Int
     ) {
         self.minSupportedVersion = minSupportedVersion
@@ -62,10 +67,12 @@ struct RemoteAppConfig: Codable, Equatable {
         self.maintenanceTitle = maintenanceTitle
         self.maintenanceMessage = maintenanceMessage
         self.maintenanceEndsAt = maintenanceEndsAt
+        self.theme = theme
         self.version = version
     }
 
-    /// Maintenance fields are optional so a config cached before they existed still decodes (as "off").
+    /// Maintenance and theme fields are optional so a config cached before they existed still decodes
+    /// (as maintenance off and the default theme).
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         minSupportedVersion = try c.decode(String.self, forKey: .minSupportedVersion)
@@ -76,6 +83,8 @@ struct RemoteAppConfig: Codable, Equatable {
         maintenanceTitle = try c.decodeIfPresent(String.self, forKey: .maintenanceTitle) ?? Self.defaultMaintenanceTitle
         maintenanceMessage = try c.decodeIfPresent(String.self, forKey: .maintenanceMessage) ?? Self.defaultMaintenanceMessage
         maintenanceEndsAt = try c.decodeIfPresent(String.self, forKey: .maintenanceEndsAt)
+        // a wrong type here must not throw away the rest of the config
+        theme = (try? c.decodeIfPresent(String.self, forKey: .theme)) ?? SeasonalTheme.default.rawValue
         version = try c.decode(Int.self, forKey: .version)
     }
 
@@ -240,6 +249,7 @@ final class AppConfigService {
     // MARK: - Applying
 
     private func apply(_ config: RemoteAppConfig, in scene: UIWindowScene, allowPrompt: Bool) {
+        AppThemeManager.shared.setSeasonalTheme(SeasonalTheme(remoteValue: config.theme))
         switch AppVersion.gate(for: config, installed: AppVersion.current) {
         case .maintenance(let title, let message, let endsAt):
             pendingPrompt = nil
@@ -269,6 +279,7 @@ final class AppConfigService {
         let window = UIWindow(windowScene: scene)
         window.windowLevel = .alert + 1
         window.overrideUserInterfaceStyle = AppThemeManager.shared.currentTheme.interfaceStyle
+        AppThemeManager.shared.applySeasonalTrait(to: [window])
         let controller = AppBlockingViewController(kind: kind)
         controller.onTryAgain = { [weak self, weak scene] in
             guard let self, let scene else { return }

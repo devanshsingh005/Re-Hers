@@ -78,5 +78,42 @@ final class AppConfigServiceTests: XCTestCase {
         let json = #"{"min_supported_version":"1.0","latest_version":"1.1","update_required_message":"a","update_available_message":"b","version":2}"#
         let decoded = try JSONDecoder().decode(RemoteAppConfig.self, from: Data(json.utf8))
         XCTAssertFalse(decoded.maintenanceEnabled)
+        XCTAssertEqual(decoded.theme, "default")
+    }
+
+    // MARK: Seasonal theme
+
+    func test_decodesTheme() throws {
+        let json = #"{"min_supported_version":"1.0","latest_version":"1.1","update_required_message":"a","update_available_message":"b","maintenance_enabled":false,"maintenance_title":"T","maintenance_message":"M","maintenance_ends_at":null,"theme":"christmas","version":4}"#
+        let decoded = try JSONDecoder().decode(RemoteAppConfig.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.theme, "christmas")
+        XCTAssertEqual(SeasonalTheme(remoteValue: decoded.theme), .christmas)
+    }
+
+    func test_themeOfTheWrongTypeKeepsTheRestOfTheConfig() throws {
+        let json = #"{"min_supported_version":"1.0","latest_version":"1.1","update_required_message":"a","update_available_message":"b","maintenance_enabled":true,"theme":7,"version":4}"#
+        let decoded = try JSONDecoder().decode(RemoteAppConfig.self, from: Data(json.utf8))
+        XCTAssertTrue(decoded.maintenanceEnabled)
+        XCTAssertEqual(SeasonalTheme(remoteValue: decoded.theme), .default)
+    }
+
+    func test_cachedConfigRoundTripsTheTheme() throws {
+        let config = RemoteAppConfig(minSupportedVersion: "1.0", latestVersion: "1.0", updateRequiredMessage: "a",
+                                     updateAvailableMessage: "b", theme: "christmas", version: 9)
+        let decoded = try JSONDecoder().decode(RemoteAppConfig.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(decoded, config)
+    }
+
+    func test_unknownOrMissingThemeIsDefault() {
+        XCTAssertEqual(SeasonalTheme(remoteValue: nil), .default)
+        XCTAssertEqual(SeasonalTheme(remoteValue: ""), .default)
+        XCTAssertEqual(SeasonalTheme(remoteValue: "halloween"), .default)
+        XCTAssertEqual(SeasonalTheme(remoteValue: " Christmas "), .christmas)
+    }
+
+    func test_themeNeverBlocksTheApp() {
+        let config = RemoteAppConfig(minSupportedVersion: "1.0", latestVersion: "1.0", updateRequiredMessage: "a",
+                                     updateAvailableMessage: "b", theme: "christmas", version: 9)
+        XCTAssertEqual(AppVersion.gate(for: config, installed: "1.1"), .none)
     }
 }
