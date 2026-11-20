@@ -1,6 +1,11 @@
 # Xcode
 *.xcuserstate
 *.xcworkspace
+!Rehearse.xcodeproj/project.xcworkspace/
+!Rehearse.xcodeproj/project.xcworkspace/xcshareddata/
+!Rehearse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+!Rehearse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+xcuserdata/
 DerivedData/
 build/
 *.mode1v3
@@ -26,3 +31,6 @@ temp/
 .env
 !.env.example
 Re-Hearse_v1/Secrets.xcconfig
+
+# Local database/storage backups (contain user data)
+backups/

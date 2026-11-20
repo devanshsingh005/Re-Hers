@@ -1,0 +1,580 @@
+import Foundation
+import UIKit
+import Supabase
+import Auth
+internal import PostgREST
+
+public enum PlaylistError: Error {
+    case invalidData
+    case uploadFailed
+    case invalidName
+}
+
+/// Runs on the main actor (the project default), which serializes all access to its caches.
+public final class PlaylistsManager {
+    public static let shared = PlaylistsManager()
+    private let playlistCoverBucket = "PlayListCover"
+    private let coverSignedURLTTL = 60 * 60
+    private var resolvedCoverURLCache: [String: (url: String, expiresAt: Date)] = [:]
+    private var playlistCache: [PlaylistData] = []
+    private var playlistCacheWarmTask: Task<Void, Never>?
+    
+    private init() {}
+    
+    // MARK: - Fetch All Playlists
+    
+    public func fetchRemotePlaylists() async throws -> [PlaylistData] {
+        let session = try await SupabaseManager.shared.client.auth.session
+        let userId = session.user.id
+        
+        let dbPlaylists: [DBPlaylist] = try await SupabaseManager.shared.client
+            .from("playlists")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        var remotePlaylists: [PlaylistData] = []
+
+        // One request for every playlist's tracks instead of one request per playlist.
+        let allItems: [DBPlaylistItem] = dbPlaylists.isEmpty ? [] : try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .order("position", ascending: false)
+            .execute()
+            .value
+        let itemsByPlaylist = Dictionary(grouping: allItems, by: \.playlistId)
+
+        for dbPlaylist in dbPlaylists {
+            let dbItems = itemsByPlaylist[dbPlaylist.id] ?? []
+
+            let tracks = dbItems.map { item in
+                PlaylistTrack(
+                    id: UUID(),
+                    trackId: item.trackId,
+                    title: item.trackTitle,
+                    artist: item.artistName,
+                    playlistItemId: item.id,
+                    sheetScanId: item.sheetScanId
+                )
+            }
+            
+            // Sign the URL or load local data
+            let storedCoverReference = dbPlaylist.coverImageUrl?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            var displayImageUrl = storedCoverReference
+            var displayImageData: Data? = nil
+            
+            // Only photos the user picked are fetched; gradients and the old stock artwork
+            // draw as the playlist's gradient.
+            if let path = storedCoverReference, PlaylistCover.isUserPhoto(path) {
+                if path.hasPrefix("doc_") {
+                    // Local document storage fallback
+                    if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                        let url = documentsURL.appendingPathComponent(path)
+                        displayImageData = try? Data(contentsOf: url)
+                    }
+                } else {
+                    displayImageUrl = try await resolveCoverImageURL(from: path)
+                }
+            }
+            
+            let data = PlaylistData(
+                id: dbPlaylist.id,
+                title: dbPlaylist.name,
+                tags: dbPlaylist.description ?? "",
+                imageUrl: displayImageUrl,
+                imageData: displayImageData,
+                tracks: tracks,
+                createdAt: dbPlaylist.createdAt,
+                isPublic: dbPlaylist.isPublic
+            )
+            remotePlaylists.append(data)
+        }
+
+        cachePlaylists(remotePlaylists)
+        return remotePlaylists
+    }
+
+    public func cachedPlaylistsSnapshot() -> [PlaylistData] {
+        return playlistCache
+    }
+
+    public func prewarmPlaylistCacheIfNeeded() {
+        let hasCachedPlaylists = !playlistCache.isEmpty
+        let hasWarmTask = playlistCacheWarmTask != nil
+
+        guard !hasCachedPlaylists, !hasWarmTask else { return }
+
+        let warmTask = Task { [weak self] in
+            defer { self?.playlistCacheWarmTask = nil }
+            _ = try? await self?.fetchRemotePlaylists()
+        }
+
+        playlistCacheWarmTask = warmTask
+    }
+    
+    // MARK: - Fetch Tracks for a Specific Playlist
+    
+    public func fetchPlaylistTracks(playlistId: UUID) async throws -> [PlaylistTrack] {
+        let dbItems: [DBPlaylistItem] = try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .select()
+            .eq("playlist_id", value: playlistId.uuidString)
+            .order("position", ascending: false)
+            .execute()
+            .value
+        
+        let tracks = dbItems.map { item in
+            PlaylistTrack(
+                id: UUID(),
+                trackId: item.trackId,
+                title: item.trackTitle,
+                artist: item.artistName,
+                playlistItemId: item.id,
+                sheetScanId: item.sheetScanId
+            )
+        }
+        AppDataCache.shared.store(tracks, for: Self.tracksCacheKey(playlistId))
+        return tracks
+    }
+    
+    // MARK: - Add Track to Playlist
+    
+    public func addTrackToPlaylist(
+        playlistId: UUID,
+        title: String,
+        artist: String,
+        trackId: String? = nil
+    ) async throws -> PlaylistTrack {
+        let session = try await SupabaseManager.shared.client.auth.session
+        let userId = session.user.id
+        
+        // Get current max position
+        let existingItems: [DBPlaylistItem] = try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .select()
+            .eq("playlist_id", value: playlistId.uuidString)
+            .order("position", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        
+        let nextPosition = (existingItems.first?.position ?? -1) + 1
+        
+        let insertItem = DBPlaylistItemInsert(
+            playlistId: playlistId,
+            userId: userId,
+            trackId: trackId ?? UUID().uuidString,
+            trackTitle: title,
+            artistName: artist,
+            sheetScanId: nil,
+            position: nextPosition
+        )
+        
+        let inserted: DBPlaylistItem = try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .insert(insertItem)
+            .select()
+            .single()
+            .execute()
+            .value
+        
+        debugLog("✅ Added track '\(title)' to playlist \(playlistId)")
+        
+        return PlaylistTrack(
+            id: UUID(),
+            trackId: inserted.trackId,
+            title: inserted.trackTitle,
+            artist: inserted.artistName,
+            playlistItemId: inserted.id,
+            sheetScanId: inserted.sheetScanId
+        )
+    }
+    
+    // MARK: - Add Upload Scan to Playlist
+    
+    /// Inserts one of the user's uploads as a track. Uploads live on this device, so the track
+    /// points at it through `track_id` ("local-upload:<uuid>") and has no `sheet_scan_id`.
+    public func addScanToPlaylist(playlistId: UUID, scan: UploadScanItem) async throws -> PlaylistTrack {
+        let session = try await SupabaseManager.shared.client.auth.session
+        let userId = session.user.id
+        
+        let existingItems: [DBPlaylistItem] = try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .select()
+            .eq("playlist_id", value: playlistId.uuidString)
+            .order("position", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        
+        let nextPosition = (existingItems.first?.position ?? -1) + 1
+        
+        let insertItem = DBPlaylistItemInsert(
+            playlistId: playlistId,
+            userId: userId,
+            trackId: LocalSheetLibrary.playlistTrackId(for: scan.localUploadId),
+            trackTitle: scan.title,
+            artistName: "My Upload",       // uploads don't have an artist field
+            sheetScanId: nil,
+            position: nextPosition
+        )
+        
+        let inserted: DBPlaylistItem = try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .insert(insertItem)
+            .select()
+            .single()
+            .execute()
+            .value
+        
+        debugLog("✅ Added upload \(scan.localUploadId) '\(scan.title)' to playlist \(playlistId)")
+        
+        return PlaylistTrack(
+            id: UUID(),
+            trackId: inserted.trackId,
+            title: inserted.trackTitle,
+            artist: inserted.artistName,
+            playlistItemId: inserted.id,
+            sheetScanId: inserted.sheetScanId
+        )
+    }
+    
+    // MARK: - Fetch User Uploads
+
+    /// The user's converted uploads on this device, for adding to a playlist.
+    public func fetchUserUploads() async throws -> [UploadScanItem] {
+        LocalSheetLibrary.shared.uploads()
+            .filter { $0.status == .completed }
+            .map { upload in
+                UploadScanItem(id: upload.scanId, title: upload.title, fileType: "PDF",
+                               dateString: Self.relativeUploadDate(upload.uploadedAt),
+                               sizeString: Self.formatUploadSize(fileSizeBytes: upload.fileSizeBytes),
+                               localUploadId: upload.id)
+            }
+    }
+
+    private static func relativeUploadDate(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        return shortDateFormatter.string(from: date)
+    }
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
+    private static func formatUploadSize(fileSizeBytes: Int?) -> String {
+        guard let b = fileSizeBytes else { return "" }
+        let kb = Double(b) / 1024.0
+        return kb < 1024 ? String(format: "%.0f KB", kb) : String(format: "%.1f MB", kb / 1024.0)
+    }
+    
+    // MARK: - Remove Track from Playlist
+    
+    public func removeTrackFromPlaylist(playlistItemId: Int64) async throws {
+        try await SupabaseManager.shared.client
+            .from("playlist_items")
+            .delete()
+            .eq("id", value: Int(playlistItemId))
+            .execute()
+        
+        debugLog("✅ Removed playlist item \(playlistItemId)")
+    }
+    
+    // MARK: - Update Methods
+    
+    public func updatePlaylistName(id: UUID, newName: String) async throws {
+        let validatedName = InputValidator.limit(
+            InputValidator.trimOnSubmit(newName),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(validatedName, message: "Playlist name is required.") == nil else {
+            throw PlaylistError.invalidName
+        }
+
+        try await SupabaseManager.shared.client
+            .from("playlists")
+            .update(["name": validatedName])
+            .eq("id", value: id.uuidString)
+            .execute()
+        
+        debugLog("✅ Updated playlist \(id) name to: \(validatedName)")
+    }
+    
+    // MARK: - Delete Playlist
+    
+    public func deletePlaylist(id: UUID) async {
+        do {
+            // Delete all items first (in case no cascade)
+            try await SupabaseManager.shared.client
+                .from("playlist_items")
+                .delete()
+                .eq("playlist_id", value: id.uuidString)
+                .execute()
+            
+            try await SupabaseManager.shared.client
+                .from("playlists")
+                .delete()
+                .eq("id", value: id.uuidString)
+                .execute()
+            
+            debugLog("✅ Deleted playlist \(id)")
+        } catch {
+            debugLog("❌ Delete error: \(error)")
+        }
+    }
+    
+    // MARK: - Create Playlist
+    
+    func createPlaylist(name: String, cover: PlaylistCoverChoice) async throws -> UUID {
+        let session = try await SupabaseManager.shared.client.auth.session
+        let userId = session.user.id
+
+        let sanitizedName = InputValidator.limit(
+            InputValidator.trimOnSubmit(name),
+            maxLength: InputValidator.nameMaxLength
+        )
+        guard InputValidator.validateRequired(sanitizedName, message: "Playlist name is required.") == nil else {
+            throw PlaylistError.invalidName
+        }
+
+        var coverImageUrl: String?
+        switch cover {
+        case .gradient(let style):
+            coverImageUrl = PlaylistCover.reference(forStyle: style)
+        case .photo(let image):
+            do {
+                coverImageUrl = try await uploadImageToStorage(image: image, userId: userId)
+            } catch {
+                debugLog("⚠️ Image upload failed, falling back to local cache")
+                coverImageUrl = saveImageToDocuments(image: image)
+            }
+        }
+
+        let newPlaylist = DBPlaylistInsert(
+            userId: userId,
+            name: sanitizedName,
+            description: "Custom Playlist",
+            coverImageUrl: coverImageUrl,
+            isPublic: false
+        )
+
+        let inserted: DBPlaylist = try await SupabaseManager.shared.client
+            .from("playlists")
+            .insert(newPlaylist)
+            .select()
+            .single()
+            .execute()
+            .value
+
+        if let coverImageUrl,
+           inserted.coverImageUrl?.trimmingCharacters(in: .whitespacesAndNewlines) != coverImageUrl {
+            do {
+                try await persistCoverImageReference(coverImageUrl, forPlaylistID: inserted.id)
+            } catch {
+                debugLog("❌ Failed to persist cover path for playlist \(inserted.id):", error)
+            }
+        }
+
+        debugLog("✅ Created playlist with ID: \(inserted.id)")
+        return inserted.id
+    }
+    
+    // MARK: - Image Upload
+    
+    private func uploadImageToStorage(image: UIImage, userId: UUID) async throws -> String {
+        guard let sourceData = image.normalizedImageData(jpegQuality: 1.0) else {
+            throw PlaylistError.invalidData
+        }
+
+        let prepared: PreparedImage
+        switch ImageValidator.validateAndPrepareImageData(sourceData, typeIdentifier: nil) {
+        case .success(let result):
+            prepared = result
+        case .failure:
+            throw PlaylistError.invalidData
+        }
+        
+        let fileName = "\(PlaylistCover.photoFilePrefix)\(UUID().uuidString).\(prepared.fileExtension)"
+        let storagePath = "\(userId.uuidString)/\(fileName)"
+        
+        let client = SupabaseManager.shared.client.storage.from(playlistCoverBucket)
+        let options = FileOptions(contentType: prepared.mimeType)
+        
+        do {
+            try await client.upload(storagePath, data: prepared.data, options: options)
+        } catch let nsError as NSError where nsError.domain == NSURLErrorDomain && nsError.code == -1005 {
+            // Known iOS Simulator networking bug: "Network connection lost."
+            debugLog("⚠️ Re-attempting upload due to Simulator HTTP -1005 bug...")
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            try await client.upload(storagePath, data: prepared.data, options: options)
+        }
+        // Always return the storage path so the DB stores the exact object location.
+        // It will be resolved to a short-lived signed URL during fetch.
+        return storagePath
+    }
+    
+    private func saveImageToDocuments(image: UIImage) -> String? {
+        guard let data = image.normalized().pngData() else { return nil }
+        let filename = "doc_\(PlaylistCover.photoFilePrefix)\(UUID().uuidString).png"
+        guard let documentsURL = FileManager.default.urls(for: .documentDirectory,
+                                                          in: .userDomainMask).first else {
+            return nil
+        }
+        let url = documentsURL.appendingPathComponent(filename)
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            return filename
+        } catch {
+            debugLog("❌ Failed to save image to documents:", error)
+            return nil
+        }
+    }
+
+    public func resolveCoverImageURL(from storedValue: String) async throws -> String {
+        let trimmedValue = storedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else { return storedValue }
+
+        if let cachedURL = cachedResolvedCoverURL(for: trimmedValue) {
+            return cachedURL
+        }
+
+        let candidatePaths = normalizedRemoteCoverPaths(from: trimmedValue)
+        guard !candidatePaths.isEmpty else {
+            return trimmedValue
+        }
+
+        let storage = SupabaseManager.shared.client.storage.from(playlistCoverBucket)
+
+        for remotePath in candidatePaths {
+            do {
+                let resolvedURL = try await storage
+                    .createSignedURL(path: remotePath, expiresIn: coverSignedURLTTL)
+                    .absoluteString
+                cacheResolvedCoverURL(resolvedURL, for: trimmedValue)
+                return resolvedURL
+            } catch {
+                debugLog("⚠️ Failed to create signed cover URL for path \(remotePath):", error)
+            }
+        }
+
+        if let fallbackPath = candidatePaths.first {
+            do {
+                let resolvedURL = try storage
+                    .getPublicURL(path: fallbackPath)
+                    .absoluteString
+                cacheResolvedCoverURL(resolvedURL, for: trimmedValue)
+                return resolvedURL
+            } catch {
+                debugLog("❌ Failed to resolve cover URL for path \(fallbackPath):", error)
+            }
+        }
+
+        return trimmedValue
+    }
+
+    private func persistCoverImageReference(_ coverImageUrl: String, forPlaylistID playlistID: UUID) async throws {
+        try await SupabaseManager.shared.client
+            .from("playlists")
+            .update(["cover_image_url": coverImageUrl])
+            .eq("id", value: playlistID.uuidString)
+            .execute()
+    }
+
+    private func normalizedRemoteCoverPaths(from storedValue: String) -> [String] {
+        let trimmedValue = storedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else { return [] }
+        guard !trimmedValue.hasPrefix("doc_") else { return [] }
+
+        if let url = URL(string: trimmedValue), url.scheme != nil {
+            if let extracted = extractBucketObjectPath(from: url) {
+                return [extracted]
+            }
+            return []
+        }
+
+        let withoutLeadingSlash = trimmedValue.hasPrefix("/") ? String(trimmedValue.dropFirst()) : trimmedValue
+        let bucketPrefix = "\(playlistCoverBucket)/"
+        if withoutLeadingSlash.hasPrefix(bucketPrefix) {
+            return [String(withoutLeadingSlash.dropFirst(bucketPrefix.count))]
+        }
+
+        if UIImage(named: withoutLeadingSlash) != nil {
+            return []
+        }
+
+        if !withoutLeadingSlash.contains("/") && !withoutLeadingSlash.contains(".") {
+            return []
+        }
+
+        var candidates: [String] = []
+
+        if withoutLeadingSlash.contains("/") || withoutLeadingSlash.contains(".") {
+            candidates.append(withoutLeadingSlash)
+        }
+
+        if !withoutLeadingSlash.contains("/"),
+           let userId = SupabaseManager.shared.client.auth.currentUser?.id.uuidString {
+            candidates.append("\(userId)/\(withoutLeadingSlash)")
+        }
+
+        var uniqueCandidates: [String] = []
+        var seen = Set<String>()
+        for candidate in candidates where seen.insert(candidate).inserted {
+            uniqueCandidates.append(candidate)
+        }
+        return uniqueCandidates
+    }
+
+    private func extractBucketObjectPath(from url: URL) -> String? {
+        let decodedPath = url.path.removingPercentEncoding ?? url.path
+        let marker = "/\(playlistCoverBucket)/"
+        guard let range = decodedPath.range(of: marker) else { return nil }
+        return String(decodedPath[range.upperBound...])
+    }
+
+    private func cachedResolvedCoverURL(for storedValue: String) -> String? {
+
+        guard let cachedEntry = resolvedCoverURLCache[storedValue] else { return nil }
+        if cachedEntry.expiresAt <= Date() {
+            resolvedCoverURLCache.removeValue(forKey: storedValue)
+            return nil
+        }
+        return cachedEntry.url
+    }
+
+    private func cacheResolvedCoverURL(_ url: String, for storedValue: String) {
+
+        resolvedCoverURLCache[storedValue] = (
+            url: url,
+            expiresAt: Date().addingTimeInterval(TimeInterval(coverSignedURLTTL - 60))
+        )
+    }
+
+    private func cachePlaylists(_ playlists: [PlaylistData]) {
+        playlistCache = playlists
+        // saved for the next visit or launch (covers kept as image data stay in memory only)
+        var forDisk = playlists
+        for i in forDisk.indices { forDisk[i].imageData = nil }
+        AppDataCache.shared.store(forDisk, for: Self.playlistsCacheKey)
+        for playlist in playlists {
+            AppDataCache.shared.store(playlist.tracks, for: Self.tracksCacheKey(playlist.id))
+        }
+    }
+
+    private static let playlistsCacheKey = "playlistsWithTracks"
+    private static func tracksCacheKey(_ id: UUID) -> String { "playlistTracks." + id.uuidString.lowercased() }
+
+    /// The playlists as last fetched (this session, or saved on the device), to show at once.
+    var savedPlaylists: [PlaylistData]? {
+        playlistCache.isEmpty
+            ? AppDataCache.shared.value([PlaylistData].self, for: Self.playlistsCacheKey)
+            : playlistCache
+    }
+
+    /// A playlist's songs as last fetched, to show at once.
+    func savedTracks(playlistId: UUID) -> [PlaylistTrack]? {
+        AppDataCache.shared.value([PlaylistTrack].self, for: Self.tracksCacheKey(playlistId))
+    }
+}

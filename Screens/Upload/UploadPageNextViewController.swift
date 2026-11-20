@@ -1,0 +1,1020 @@
+//
+//  UploadPageNextViewController.swift
+//  Re-Hearse_v1
+//
+
+import UIKit
+import PDFKit
+
+final class UploadPageNextViewController: UIViewController {
+
+    // Set jobId from the previous screen: the id of an upload in LocalSheetLibrary.
+    var jobId:     UUID?
+    var onDataReady: (() -> Void)?
+    /// The conversion failed: true if the processing popup showed the reason (this page then
+    /// doesn't show its own alert).
+    var onConversionFailed: ((String) -> Bool)?
+
+    private var sheetMusicText:   String       = ""
+    private var extractedChords:  [String]     = []
+    private var timeSignature:    String       = "4/4"
+    private var tempo:            String       = "\(Int(ScoreTimeline.defaultTempo)) BPM"
+    private var keySignature:     String       = "C Major"
+    private var sheetMusicJSON:   [String: Any]?
+    private var isProcessing      = true
+    private var unavailableReasonMessage: String?
+    private var hasPresentedUnavailableReason = false
+    private var processingHeightConstraint: NSLayoutConstraint?
+    private var statusHeightConstraint:     NSLayoutConstraint?
+    private var refreshHeightConstraint:    NSLayoutConstraint?
+    private var loadedPDFData:     Data?
+    private var jobLoadTask:      Task<Void, Never>?
+    private var trackedPracticeSessionStartedAt: Date?
+    /// Set by the mini player's play button: open this mode as soon as the sheet is ready.
+    var autoStartMode: LastPlayedItem.Mode?
+    /// True between viewDidAppear and viewWillDisappear, so nothing is presented mid-push.
+    private var isOnScreen = false
+
+    // MARK: - Scroll
+    private let scrollView  = UIScrollView()
+    private let contentView = UIView()
+
+    // MARK: - Sheet container
+    private let sheetContainer   = UIView()
+    private let sheetHeaderLabel = UILabel()
+    private let previewButton    = UIButton(type: .system)
+
+    // Sheet display
+    private let sheetPDFView          = PDFView()
+    private let sheetLoadingIndicator = UIActivityIndicatorView(style: .medium)
+
+    // Status
+    private let metronomeLabel = UILabel()
+    private let progressView   = UIProgressView()
+    private let statusLabel    = UILabel()
+    private let refreshButton  = UIButton(type: .system)
+
+    private let infoStackView = UIStackView()
+    private let keyLabel      = UILabel()
+    private let timeLabel     = UILabel()
+    private let chordLabel    = UILabel()
+
+    // Tips
+    private let tipsContainer  = PracticeTipsView()
+    private var tipsTask: Task<Void, Never>?
+
+    // Action buttons
+    private let playAlongButton = UIButton(type: .system)
+    private let animationButton = UIButton(type: .system)
+
+    // MARK: - Data Models
+    struct SheetMusicData {
+        let text: String; let chords: [String]
+        let timeSignature: String; let tempo: String
+        let keySignature: String; let jsonData: [String: Any]?
+    }
+
+    // MARK: - Lifecycle
+
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.hidesBottomBarWhenPushed = true
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = ComponentColors.App.screenBackground
+        setupNativeNavBar(); setupUI(); buildHierarchy(); applyConstraints(); setupActions()
+        showProcessingState()
+        debugLog("[VDL] upload=\(jobId?.uuidString.lowercased() ?? "nil")")
+        NotificationCenter.default.addObserver(self, selector: #selector(handleLibraryChange),
+                                               name: LocalSheetLibrary.didChangeNotification, object: nil)
+        loadFromJobId()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        isOnScreen = true
+        SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
+        presentUnavailableReasonIfNeeded()
+        // Next run loop: the push transition has fully finished by then.
+        DispatchQueue.main.async { [weak self] in self?.performAutoStartIfReady() }
+        AppTour.showIfNeeded(.uploadResult, in: self, after: 1.0) { [weak self] in
+            guard self != nil else { return [] }
+            return [
+                TourStep(target: { [weak self] in self?.previewButton },
+                         title: "Your sheet",
+                         message: "Preview it full screen, with or without note names."),
+                TourStep(target: { [weak self] in self?.tipsContainer },
+                         title: "Tips for this piece",
+                         message: "Worked out from your sheet: its key, tricky rhythms and what each hand does."),
+                TourStep(target: { [weak self] in self?.playAlongButton },
+                         title: "Play Along",
+                         message: "You play, Re-Hearse listens and waits for each note."),
+                TourStep(target: { [weak self] in self?.animationButton },
+                         title: "Animation",
+                         message: "Watch and hear it played, with every key lit up."),
+            ]
+        }
+    }
+
+    /// Resumes Play Along or Animation for the mini player, once the sheet has loaded and this
+    /// screen is on screen (not mid-push).
+    private func performAutoStartIfReady() {
+        guard let mode = autoStartMode, isOnScreen, presentedViewController == nil,
+              !isProcessing, sheetMusicJSON != nil else { return }
+        autoStartMode = nil
+        switch mode {
+        case .playAlong:
+            guard !presentGuestPlayAlongGateIfNeeded(),
+                  let json = validSheetMusicJSON(orPresentingFor: "Play Along") else { return }
+            startPlayAlong(with: json)
+        case .animation:
+            guard !presentGuestAnimationGateIfNeeded(),
+                  let json = validSheetMusicJSON(orPresentingFor: "Animation") else { return }
+            navigateToAnimation(withJSON: json)
+        }
+    }
+
+    private func recordLastPlayed(_ mode: LastPlayedItem.Mode) {
+        guard let jobId, let upload = LocalSheetLibrary.shared.upload(id: jobId) else { return }
+        LastPlayedStore.shared.record(upload: upload, mode: mode, tempo: tempo)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.isHidden = false
+        if isProcessing, jobLoadTask?.isCancelled == true { loadFromJobId() }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isOnScreen = false
+        jobLoadTask?.cancel()
+
+        let movedOffNavigationStack = navigationController?.topViewController.map { $0.screen !== self } ?? false
+        if isLeavingNavigationStack || isBeingDismissed || movedOffNavigationStack {
+            releasePreviewResources()
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        SupabaseProgressManager.endTrackedPracticeSession(
+            &trackedPracticeSessionStartedAt,
+            kind: .practicePage
+        )
+    }
+
+    deinit {
+        jobLoadTask?.cancel()
+        releasePreviewResources()
+    }
+
+    // MARK: - Data Loading
+
+    /// Shows the upload stored on this device. While it is still being converted on the device,
+    /// the processing state shows progress and the results fill in when it finishes.
+    private func loadFromJobId() {
+        guard let jobId else {
+            debugLog("[Load] ❌ No upload id for the upload result screen")
+            showUnavailableState(message: "We couldn't load this upload. Please return to Uploads and try again.")
+            return
+        }
+        guard LocalSheetLibrary.shared.upload(id: jobId) != nil else {
+            showUnavailableState(message: "This upload is no longer on this device. Please refresh your uploads list.")
+            return
+        }
+        showProcessingState()
+        updateConversionProgress()
+        jobLoadTask?.cancel()
+        jobLoadTask = Task { [weak self] in
+            let finished = await LocalSheetLibrary.shared.waitForConversion(id: jobId)
+            guard let self, !Task.isCancelled else { return }
+            await self.showConversionResult(finished)
+        }
+    }
+
+    private func showConversionResult(_ upload: LocalSheetLibrary.Upload?) async {
+        guard let upload else {
+            showUnavailableState(message: "This upload is no longer on this device. Please refresh your uploads list.")
+            return
+        }
+        switch upload.status {
+        case .processing:
+            return
+        case .failed:
+            isProcessing = false
+            let message = upload.errorMessage
+                ?? "We couldn't convert this sheet music. The file may be unclear, unsupported, or incomplete."
+            if onConversionFailed?(message) == true { hasPresentedUnavailableReason = true }
+            showUnavailableState(message: message)
+        case .completed:
+            isProcessing = false
+            progressView.isHidden  = true
+            statusLabel.isHidden   = true
+            refreshButton.isHidden = true
+            let library = LocalSheetLibrary.shared
+            if let pdf = library.labeledPDF(id: upload.id) ?? library.inputPDF(id: upload.id) {
+                handlePDFData(pdf)
+            }
+            guard let json = library.scoreJSON(id: upload.id) else {
+                showUnavailableState(message: "This upload is missing its converted sheet music. Please convert it again.")
+                return
+            }
+            debugLog("[OnDevice] showing \(upload.noteCount ?? 0) notes, skipped pages \(upload.skippedPages ?? [])")
+            await parseAndDisplayJSON(json)
+        }
+    }
+
+    @objc private func handleLibraryChange(_ note: Notification) {
+        guard let id = note.userInfo?["id"] as? UUID, id == jobId else { return }
+        updateConversionProgress()
+    }
+
+    private func updateConversionProgress() {
+        guard isProcessing, let jobId, let p = LocalSheetLibrary.shared.progress[jobId] else { return }
+        updateProcessingStatus(message: "Reading the notes on your device… \(Int((p * 100).rounded()))%")
+    }
+
+    private func handlePDFData(_ data: Data) {
+        guard let doc = PDFDocument(data: data), doc.pageCount > 0 else {
+            debugLog("[PDF] ❌ Not a valid PDF")
+            statusLabel.text       = "We couldn't render this sheet preview right now. Please try again."
+            statusLabel.isHidden   = false
+            refreshButton.isHidden = false
+            return
+        }
+
+        debugLog("[PDF] ✅ Rendering PDF inline")
+        loadedPDFData          = data
+        sheetPDFView.document  = doc
+        if let p = doc.page(at: 0) { sheetPDFView.go(to: p) }
+        sheetPDFView.isHidden  = false
+        sheetLoadingIndicator.stopAnimating()
+    }
+
+    private func parseAndDisplayJSON(_ json: [String: Any]) async {
+        let chords   = extractChordsFromJSON(json)
+        let timeSig  = extractTimeSignature(json)
+        let keySig   = extractKeySignature(json)
+        let tempoStr = extractTempo(json)
+        let header   = extractStaffHeader(json)
+        debugLog("[ParseJSON] chords=\(chords.count) \(Array(chords.prefix(4)))  staff=\(header)")
+        await MainActor.run {
+            self.sheetHeaderLabel.text = header
+            self.displaySheetData(SheetMusicData(
+                text: "", chords: chords, timeSignature: timeSig,
+                tempo: tempoStr, keySignature: keySig, jsonData: json))
+        }
+    }
+
+    /// Reads "staff" (or parts/clefs) from the JSON and returns a human-readable focus label.
+    private func extractStaffHeader(_ json: [String: Any]) -> String {
+        // Collect all unique staff/clef values from the JSON
+        var clefs = Set<String>()
+
+        // Top-level "staff" key
+        if let s = json["staff"] as? String { clefs.insert(s.lowercased()) }
+
+        // MusicXML: score-partwise → part → measure → attributes → clef → sign
+        if let sp = json["score-partwise"] as? [String: Any] {
+            for part in flatList(sp["part"]) {
+                for measure in flatList(part["measure"]) {
+                    if let attrs = measure["attributes"] as? [String: Any] {
+                        let clefNodes = flatList(attrs["clef"])
+                        for c in clefNodes {
+                            if let sign = c["sign"] as? String { clefs.insert(sign.lowercased()) }
+                        }
+                    }
+                }
+            }
+        }
+
+        let hasTreble = clefs.contains("g") || clefs.contains("treble")
+        let hasBass   = clefs.contains("f") || clefs.contains("bass")
+
+        switch (hasTreble, hasBass) {
+        case (true, true):  return "Both hands focus"
+        case (true, false): return "Right hand focus"
+        case (false, true): return "Left hand focus"
+        default:            return "Right hand focus"   // sensible default
+        }
+    }
+
+    // MARK: - Extraction Helpers
+
+    private func extractChordsFromJSON(_ json: [String: Any]) -> [String] {
+        if let a = json["chords"] as? [String], !a.isEmpty { return a }
+        if let s = json["chords"] as? String {
+            let p = s.components(separatedBy: ",")
+                     .map { $0.trimmingCharacters(in: .whitespaces) }
+                     .filter { !$0.isEmpty }
+            if !p.isEmpty { return p }
+        }
+        if let a = (json["analysis"] as? [String: Any])?["chords"] as? [String], !a.isEmpty { return a }
+        if let sp = json["score-partwise"] as? [String: Any] {
+            let xml = extractChordsFromMusicXML(sp)
+            return xml.isEmpty ? deriveChordsFallback(from: sp) : xml
+        }
+        return []
+    }
+
+    private func extractChordsFromMusicXML(_ sp: [String: Any]) -> [String] {
+        var chords: [String] = []
+        let parts = flatList(sp["part"])
+        for part in parts {
+            let measures = flatList(part["measure"])
+            for m in measures { if let h = m["harmony"] { chords += extractHarmonies(from: h) } }
+        }
+        return chords
+    }
+
+    /// The score has no chord symbols: names, bar by bar, the major or minor triad that best
+    /// covers the bar's notes (weighted by length), in the order they first appear.
+    private func deriveChordsFallback(from sp: [String: Any]) -> [String] {
+        let stepClass = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11]
+        let names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+        func number(_ value: Any?) -> Double? {
+            if let d = value as? Double { return d }
+            if let i = value as? Int { return Double(i) }
+            if let s = value as? String { return Double(s) }
+            return nil
+        }
+
+        // pitch-class weights per bar, all parts together
+        var bars: [[Double]] = []
+        for part in flatList(sp["part"]) {
+            for (index, measure) in flatList(part["measure"]).enumerated() {
+                if bars.count <= index { bars.append(Array(repeating: 0, count: 12)) }
+                for note in flatList(measure["note"]) {
+                    guard let pitch = note["pitch"] as? [String: Any],
+                          let step = pitch["step"] as? String, let base = stepClass[step] else { continue }
+                    let alter = Int(number(pitch["alter"]) ?? 0)
+                    let pc = ((base + alter) % 12 + 12) % 12
+                    bars[index][pc] += max(number(note["duration"]) ?? 1, 0.25)
+                }
+            }
+        }
+
+        var chords: [String] = []
+        for weights in bars {
+            let total = weights.reduce(0, +)
+            guard total > 0 else { continue }
+            var best: (name: String, score: Double, tones: Int)?
+            for root in 0..<12 {
+                for (third, suffix) in [(4, ""), (3, "m")] {
+                    let tones = [root, (root + third) % 12, (root + 7) % 12]
+                    let covered = tones.map { weights[$0] }
+                    // the root and the notes that belong count; a small bonus for the root itself
+                    let score = covered.reduce(0, +) + 0.1 * weights[root]
+                    let present = covered.filter { $0 > 0 }.count
+                    if best == nil || score > best!.score + 1e-9 {
+                        best = (names[root] + suffix, score, present)
+                    }
+                }
+            }
+            // only name a chord the bar really outlines: two of its notes and most of the bar
+            guard let best, best.tones >= 2, best.score >= 0.6 * total else { continue }
+            if !chords.contains(best.name) { chords.append(best.name) }
+        }
+        return chords
+    }
+
+    // Accepts either a [[String:Any]] or [String:Any] and returns [[String:Any]].
+    private func flatList(_ value: Any?) -> [[String: Any]] {
+        if let arr = value as? [[String: Any]]  { return arr }
+        if let d   = value as? [String: Any]    { return [d] }
+        return []
+    }
+
+    private func extractHarmonies(from harmonies: Any) -> [String] {
+        var names: [String] = []
+        let process: ([String: Any]) -> Void = { h in
+            guard let root = h["root"] as? [String: Any],
+                  let step = root["root-step"] as? String else { return }
+            var name = step
+            if let alter = root["root-alter"] as? String, let v = Int(alter) {
+                name += v == 1 ? "♯" : (v == -1 ? "♭" : "")
+            }
+            let map = ["major":"","minor":"m","dominant":"7","major-seventh":"maj7",
+                       "minor-seventh":"m7","diminished":"dim","augmented":"aug","sus4":"sus4"]
+            if let kind = h["kind"] as? String { name += map[kind] ?? kind }
+            names.append(name)
+        }
+        if let arr = harmonies as? [[String: Any]] { arr.forEach(process) }
+        else if let d = harmonies as? [String: Any] { process(d) }
+        return names
+    }
+
+    private func extractTimeSignature(_ json: [String: Any]) -> String {
+        if let t = json["time_signature"] as? String { return t }
+        if let t = (json["analysis"] as? [String: Any])?["time_signature"] as? String { return t }
+        if let sp = json["score-partwise"] as? [String: Any] {
+            for part in flatList(sp["part"]) {
+                if let first = flatList(part["measure"]).first,
+                   let attrs = first["attributes"] as? [String: Any],
+                   let time  = attrs["time"] as? [String: Any] {
+                    let b  = (time["beats"]     as? String) ?? "\(time["beats"]     ?? "4")"
+                    let bt = (time["beat-type"] as? String) ?? "\(time["beat-type"] ?? "4")"
+                    return "\(b)/\(bt)"
+                }
+            }
+        }
+        return "4/4"
+    }
+
+    private func extractKeySignature(_ json: [String: Any]) -> String {
+        if let k = json["key_signature"] as? String { return k }
+        if let k = (json["analysis"] as? [String: Any])?["key_signature"] as? String { return k }
+        // MusicXML: score-partwise → part → measure → attributes → key → fifths
+        if let sp = json["score-partwise"] as? [String: Any] {
+            for part in flatList(sp["part"]) {
+                for measure in flatList(part["measure"]) {
+                    if let attrs = measure["attributes"] as? [String: Any],
+                       let key   = attrs["key"] as? [String: Any],
+                       let fifthsStr = key["fifths"] as? String,
+                       let fifths = Int(fifthsStr) {
+                        return keyFromFifths(fifths)
+                    }
+                }
+            }
+            return inferKeyFromNotes(sp)
+        }
+        return "C Major"
+    }
+
+    private func keyFromFifths(_ fifths: Int) -> String {
+        // 0…7 sharps, then 1…7 flats
+        let major = ["C Major","G Major","D Major","A Major","E Major","B Major",
+                     "F♯ Major","C♯ Major","F Major","B♭ Major",
+                     "E♭ Major","A♭ Major","D♭ Major","G♭ Major","C♭ Major"]
+        let idx = fifths >= 0 ? fifths : (7 + (-fifths))
+        return (0..<major.count).contains(idx) ? major[idx] : "C Major"
+    }
+
+    private func inferKeyFromNotes(_ sp: [String: Any]) -> String {
+        var sharps = 0; var flats = 0
+        for part in flatList(sp["part"]) {
+            for measure in flatList(part["measure"]) {
+                for note in flatList(measure["note"]) {
+                    if let pitch = note["pitch"] as? [String: Any],
+                       let alter = pitch["alter"] as? String {
+                        if alter == "1" { sharps += 1 } else if alter == "-1" { flats += 1 }
+                    }
+                }
+            }
+        }
+        if sharps > flats { return sharps > 3 ? "E Major" : "G Major" }
+        if flats > sharps { return flats  > 3 ? "E♭ Major" : "F Major" }
+        return "A Minor"
+    }
+
+    /// The opening tempo Animation and Play Along will use, read the way they read it.
+    private func extractTempo(_ json: [String: Any]) -> String {
+        let bpm = (try? ScoreTimeline.parse(root: json))?.tempos.first?.bpm ?? ScoreTimeline.defaultTempo
+        return "\(Int(bpm.rounded())) BPM"
+    }
+
+    // MARK: - UI State
+
+    private func updateProcessingStatus(message: String) {
+        DispatchQueue.main.async { self.statusLabel.text = message }
+    }
+
+    private func showProcessingState() {
+        isProcessing        = true
+        metronomeLabel.text = "Metronome: Analyzing..."
+        keyLabel.text       = "Key: –"; timeLabel.text = "Time: –"; chordLabel.text = "Chords: –"
+        processingHeightConstraint?.constant = 4
+        statusHeightConstraint?.constant     = 32
+        refreshHeightConstraint?.constant    = 24
+        progressView.isHidden  = false
+        statusLabel.isHidden   = false
+        refreshButton.isHidden = false
+        animateProgress()
+        tipsContainer.setMessage(icon: "doc.text.magnifyingglass", title: "Reading your sheet",
+                                 detail: "On this device, nothing is uploaded. Tips for the piece appear when it's done.")
+    }
+
+    private func animateProgress() {
+        UIView.animate(withDuration: 1.5, delay: 0,
+                       options: [.autoreverse, .repeat, .curveEaseInOut]) {
+            self.progressView.setProgress(0.7, animated: true)
+        }
+    }
+
+    private func displaySheetData(_ data: SheetMusicData) {
+        sheetMusicText  = data.text;  extractedChords = data.chords
+        timeSignature   = data.timeSignature; tempo = data.tempo
+        keySignature    = data.keySignature;  sheetMusicJSON = data.jsonData
+        unavailableReasonMessage = nil
+        hasPresentedUnavailableReason = false
+
+        let bpm = tempo.components(separatedBy: " ").first ?? "nil"
+    metronomeLabel.text = "Metronome on \(bpm) BPM"
+        keyLabel.text       = "Key: \(keySignature)"
+        timeLabel.text      = "Time: \(timeSignature)"
+        chordLabel.text     = extractedChords.isEmpty ? "Chords: –"
+            : "Chords: \(extractedChords.prefix(3).joined(separator: ", "))"
+        updatePracticeTips()
+        processingHeightConstraint?.constant = 0
+        statusHeightConstraint?.constant     = 0
+        refreshHeightConstraint?.constant    = 0
+        progressView.isHidden  = true
+        statusLabel.isHidden   = true
+        refreshButton.isHidden = true
+        onDataReady?()
+        performAutoStartIfReady()
+    }
+
+    private func showUnavailableState(message: String) {
+        unavailableReasonMessage = message
+        extractedChords = []
+        timeSignature = "Unavailable"
+        tempo = "Unavailable"
+        keySignature = "Unavailable"
+        sheetMusicJSON = nil
+        sheetMusicText = ""
+        loadedPDFData = nil
+        sheetHeaderLabel.text = "Upload unavailable"
+        metronomeLabel.text = "Metronome: Unavailable"
+        keyLabel.text = "Key: Unavailable"
+        timeLabel.text = "Time: Unavailable"
+        chordLabel.text = "Chords: Unavailable"
+        tipsContainer.setMessage(icon: "exclamationmark.triangle", title: "Sheet unavailable", detail: message)
+        progressView.isHidden = true
+        statusLabel.text = message
+        statusLabel.isHidden = false
+        refreshButton.isHidden = false
+        presentUnavailableReasonIfNeeded()
+    }
+
+    private func presentUnavailableReasonIfNeeded() {
+        guard isViewLoaded,
+              view.window != nil,
+              !hasPresentedUnavailableReason,
+              presentedViewController == nil,
+              let message = unavailableReasonMessage,
+              !message.isEmpty else { return }
+
+        hasPresentedUnavailableReason = true
+        let alert = UIAlertController(
+            title: "Conversion Issue",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    /// Tips worked out from this piece's score (read off the main thread).
+    private func updatePracticeTips() {
+        tipsTask?.cancel()
+        guard let json = sheetMusicJSON, let data = try? JSONSerialization.data(withJSONObject: json) else {
+            tipsContainer.setTips([PracticeTips.general])
+            return
+        }
+        tipsTask = Task { [weak self] in
+            let tips = await Task.detached(priority: .userInitiated) { () -> [PracticeTip] in
+                guard let timeline = try? ScoreTimeline.parse(data: data) else { return [PracticeTips.general] }
+                return PracticeTips.tips(for: timeline)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.tipsContainer.setTips(tips)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func setupActions() {
+        previewButton.addTarget(self,   action: #selector(didTapPreview),   for: .touchUpInside)
+        playAlongButton.addTarget(self, action: #selector(didTapPlayAlong), for: .touchUpInside)
+        animationButton.addTarget(self, action: #selector(didTapAnimation), for: .touchUpInside)
+        refreshButton.addTarget(self,   action: #selector(didTapRefresh),   for: .touchUpInside)
+    }
+
+    @objc private func didTapRefresh() {
+        if let jobId, LocalSheetLibrary.shared.upload(id: jobId)?.status == .failed {
+            hasPresentedUnavailableReason = false
+            LocalSheetLibrary.shared.retry(id: jobId)
+        }
+        loadFromJobId()
+    }
+
+    @objc private func didTapPreview() {
+        NavigationBarHelper.animateButtonPress(previewButton) { [weak self] in
+            guard let self = self else { return }
+            guard let pdfData = self.loadedPDFData,
+                  let doc = autoreleasepool(invoking: { PDFDocument(data: pdfData) }),
+                  doc.pageCount > 0 else {
+                let a = UIAlertController(title: "Not Ready", message: "PDF is still loading.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
+            let vc = MaximizeUploadPageViewController()
+            vc.pdfData = pdfData
+            vc.pdfDocument = doc
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
+    }
+
+    @objc private func didTapPlayAlong() {
+        NavigationBarHelper.animateButtonPress(playAlongButton) { [weak self] in
+            guard let self = self else { return }
+            guard !self.presentGuestPlayAlongGateIfNeeded() else { return }
+            guard let json = self.validSheetMusicJSON(orPresentingFor: "Play Along") else { return }
+            self.startPlayAlong(with: json)
+        }
+    }
+
+    private func startPlayAlong(with json: [String: Any]) {
+        guard !presentGuestPlayAlongGateIfNeeded() else { return }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else {
+            let a = UIAlertController(title: "Error", message: "Failed to prepare data for Play Along.", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
+            return
+        }
+        
+        let vc = PlayAlongViewController()
+        vc.sheetMusicData = data
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+        recordLastPlayed(.playAlong)
+    }
+
+    @discardableResult
+    private func presentGuestPlayAlongGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsPlayAlong else { return false }
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        presentGuestGate(featureName: "play along")
+        return true
+    }
+
+    @objc private func didTapAnimation() {
+        NavigationBarHelper.animateButtonPress(animationButton) { [weak self] in
+            guard let self = self else { return }
+            guard !self.presentGuestAnimationGateIfNeeded() else { return }
+            guard let json = self.validSheetMusicJSON(orPresentingFor: "Animation") else { return }
+            self.navigateToAnimation(withJSON: json)
+        }
+    }
+
+    private func validSheetMusicJSON(orPresentingFor feature: String) -> [String: Any]? {
+        if isProcessing {
+            showFeatureUnavailableAlert(
+                title: "Processing",
+                message: "Please wait for the analysis to complete before opening \(feature)."
+            )
+            return nil
+        }
+
+        guard let json = sheetMusicJSON else {
+            showFeatureUnavailableAlert(
+                title: "No Data",
+                message: "This upload could not be converted properly, so \(feature) is unavailable for it."
+            )
+            return nil
+        }
+
+        if loadedPDFData == nil || sheetHeaderLabel.text == "Upload unavailable" || tempo == "Unavailable" {
+            showFeatureUnavailableAlert(
+                title: "Unavailable",
+                message: "This upload is missing converted sheet music data, so \(feature) can't be opened."
+            )
+            return nil
+        }
+
+        return json
+    }
+
+    private func showFeatureUnavailableAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    @discardableResult
+    private func presentGuestAnimationGateIfNeeded() -> Bool {
+        guard !GuestFeatureAccessPolicy.allowsAnimation else { return false }
+        guard GuestSessionManager.shared.isGuest(), presentedViewController == nil else { return false }
+
+        presentGuestGate(featureName: "animation")
+        return true
+    }
+
+    private func navigateToAnimation(withJSON json: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else {
+            showAnimationError("Failed to prepare data."); return
+        }
+        let vc = AnimationViewController()
+        vc.sheetMusicData = data
+        let nav = LandscapeNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+        recordLastPlayed(.animation)
+    }
+
+    private func showAnimationError(_ msg: String) {
+        let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+
+    // MARK: - UI Setup
+
+    private func setupNativeNavBar() {
+        title = "Practice"
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
+        
+        navigationItem.leftBarButtonItem = NavigationBarHelper.createCustomBackButton(target: self, action: #selector(backAction))
+    }
+
+    @objc private func backAction() {
+        if let btn = navigationItem.leftBarButtonItem?.customView {
+            NavigationBarHelper.animateButtonPress(btn) { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            }
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
+    }
+
+    private func setupUI() {
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.alwaysBounceVertical = true
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+
+        sheetContainer.backgroundColor    = ComponentColors.SongDetailScreen.sheetMusicCardFill
+        sheetContainer.layer.cornerRadius = 24
+        sheetContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        sheetHeaderLabel.text      = "Right hand focus"
+        sheetHeaderLabel.font      = .systemFont(ofSize: 16, weight: .semibold)
+        sheetHeaderLabel.textColor = .label
+        sheetHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        var previewConfig = UIButton.Configuration.filled()
+        previewConfig.title = "Preview"
+        previewConfig.baseForegroundColor = .white
+        previewConfig.baseBackgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        previewConfig.background.cornerRadius = 16
+        previewConfig.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 18, bottom: 7, trailing: 18)
+        previewConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var attrs = attrs
+            attrs.font = .systemFont(ofSize: 14, weight: .semibold)
+            return attrs
+        }
+        previewButton.configuration = previewConfig
+        previewButton.translatesAutoresizingMaskIntoConstraints = false
+
+        sheetPDFView.autoScales          = true
+        sheetPDFView.displayMode         = .singlePageContinuous
+        sheetPDFView.displayDirection    = .vertical
+        sheetPDFView.backgroundColor     = ComponentColors.SongDetailScreen.sheetMusicBackground
+        sheetPDFView.layer.cornerRadius  = 14
+        sheetPDFView.clipsToBounds       = true
+        sheetPDFView.isHidden            = true
+        sheetPDFView.isUserInteractionEnabled = true
+        sheetPDFView.translatesAutoresizingMaskIntoConstraints = false
+
+        sheetLoadingIndicator.color             = ComponentColors.HomeScreen.actionButtonFill
+        sheetLoadingIndicator.hidesWhenStopped  = true
+        sheetLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+
+        progressView.progressTintColor  = ComponentColors.HomeScreen.actionButtonFill
+        progressView.trackTintColor     = UIColor.secondaryLabel.withAlphaComponent(0.2)
+        progressView.layer.cornerRadius = 3
+        progressView.clipsToBounds      = true
+        progressView.isHidden           = true
+        progressView.translatesAutoresizingMaskIntoConstraints = false
+
+        statusLabel.text          = "Processing your sheet music..."
+        statusLabel.font          = .systemFont(ofSize: 12, weight: .medium)
+        statusLabel.textColor     = .secondaryLabel
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        statusLabel.isHidden      = true
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        refreshButton.setTitle("Refresh", for: .normal)
+        refreshButton.setTitleColor(ComponentColors.HomeScreen.actionButtonFill, for: .normal)
+        refreshButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        refreshButton.isHidden         = true
+        refreshButton.translatesAutoresizingMaskIntoConstraints = false
+
+        infoStackView.axis         = .horizontal
+        infoStackView.spacing      = 10
+        infoStackView.distribution = .fillEqually
+        infoStackView.alignment    = .center   // ← ADD THIS LINE
+        infoStackView.translatesAutoresizingMaskIntoConstraints = false
+        for lbl in [keyLabel, timeLabel, chordLabel] {
+            lbl.font              = .systemFont(ofSize: 12, weight: .medium)
+            lbl.textColor         = .secondaryLabel
+            lbl.textAlignment     = .center
+            lbl.backgroundColor   = ComponentColors.SongDetailScreen.sheetMusicBackground
+            lbl.layer.cornerRadius = 8
+            lbl.clipsToBounds     = true
+            lbl.numberOfLines     = 2
+            infoStackView.addArrangedSubview(lbl)
+        }
+        keyLabel.text   = "Key: C Major"
+        timeLabel.text  = "Time: 4/4"
+        chordLabel.text = "Chords: –"
+
+        //metronomeLabel.text      = "Metronome on 120 BPM"
+        metronomeLabel.font      = .systemFont(ofSize: 13, weight: .medium)
+        metronomeLabel.textColor = .secondaryLabel
+        metronomeLabel.textAlignment = .right
+        metronomeLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        tipsContainer.translatesAutoresizingMaskIntoConstraints = false
+        tipsContainer.setTips([PracticeTips.general])
+
+        playAlongButton.setTitle("Play Along", for: .normal)
+        playAlongButton.setTitleColor(.white, for: .normal)
+        playAlongButton.backgroundColor = ComponentColors.HomeScreen.actionButtonFill
+        playAlongButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        playAlongButton.layer.cornerRadius = 20
+        playAlongButton.clipsToBounds = true
+        playAlongButton.translatesAutoresizingMaskIntoConstraints = false
+
+        animationButton.setTitle("Animation", for: .normal)
+        animationButton.setTitleColor(.label, for: .normal)
+        animationButton.backgroundColor = ComponentColors.SongDetailScreen.sheetMusicBackground
+        animationButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        animationButton.layer.cornerRadius = 20
+        animationButton.clipsToBounds = true
+        animationButton.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    private func buildHierarchy() {
+        view.addSubview(scrollView); scrollView.addSubview(contentView)
+        contentView.addSubview(sheetContainer)
+        sheetContainer.addSubview(sheetHeaderLabel); sheetContainer.addSubview(previewButton)
+        sheetContainer.addSubview(sheetPDFView)
+        sheetContainer.addSubview(sheetLoadingIndicator)
+        sheetContainer.addSubview(progressView);     sheetContainer.addSubview(statusLabel)
+        sheetContainer.addSubview(refreshButton);    sheetContainer.addSubview(infoStackView)
+        sheetContainer.addSubview(metronomeLabel)
+        contentView.addSubview(tipsContainer)
+        contentView.addSubview(playAlongButton);  contentView.addSubview(animationButton)
+    }
+
+    private func releasePreviewResources() {
+        loadedPDFData = nil
+        sheetPDFView.document = nil
+        sheetPDFView.isHidden = true
+        statusLabel.isHidden = true
+        sheetLoadingIndicator.stopAnimating()
+    }
+
+
+    private func applyConstraints() {
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // to the screen's edge: content scrolls under the home indicator (no hard cut above
+            // it) and the safe area becomes a bottom inset, so the buttons end above it
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+
+            sheetHeaderLabel.topAnchor.constraint(equalTo: sheetContainer.topAnchor, constant: 30),
+            sheetHeaderLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 18),
+
+            previewButton.centerYAnchor.constraint(equalTo: sheetHeaderLabel.centerYAnchor),
+            previewButton.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+
+            sheetPDFView.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 14),
+            sheetPDFView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 12),
+            sheetPDFView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -12),
+
+            sheetLoadingIndicator.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
+            sheetLoadingIndicator.topAnchor.constraint(equalTo: sheetHeaderLabel.bottomAnchor, constant: 200),
+
+            // Processing views sit between PDF and info labels (spacing collapses with content)
+            progressView.topAnchor.constraint(equalTo: sheetPDFView.bottomAnchor, constant: 0),
+            progressView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
+            progressView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+            {
+                let c = progressView.heightAnchor.constraint(equalToConstant: 4)
+                processingHeightConstraint = c
+                return c
+            }(),
+
+            statusLabel.topAnchor.constraint(equalTo: progressView.bottomAnchor, constant: 0),
+            statusLabel.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
+            statusLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+            {
+                let c = statusLabel.heightAnchor.constraint(equalToConstant: 32)
+                statusHeightConstraint = c; return c
+            }(),
+
+            refreshButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 0),
+            refreshButton.centerXAnchor.constraint(equalTo: sheetContainer.centerXAnchor),
+            {
+                let c = refreshButton.heightAnchor.constraint(equalToConstant: 24)
+                refreshHeightConstraint = c; return c
+            }(),
+
+            // Info stack anchors to refreshButton — collapses to 10pt gap when processing hidden
+            infoStackView.topAnchor.constraint(equalTo: refreshButton.bottomAnchor, constant: 10),
+            infoStackView.leadingAnchor.constraint(equalTo: sheetContainer.leadingAnchor, constant: 16),
+            infoStackView.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -16),
+            infoStackView.heightAnchor.constraint(equalToConstant: 36),
+
+            metronomeLabel.topAnchor.constraint(equalTo: infoStackView.bottomAnchor, constant: 12),
+            metronomeLabel.trailingAnchor.constraint(equalTo: sheetContainer.trailingAnchor, constant: -18),
+            metronomeLabel.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: -16),
+
+
+        ])
+        NSLayoutConstraint.activate(DeviceLayout.isPad ? twoPaneConstraints() : phoneConstraints())
+    }
+
+    /// Phone: the sheet card, then tips, then the two buttons side by side.
+    private func phoneConstraints() -> [NSLayoutConstraint] {
+        [
+            sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            sheetContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            sheetPDFView.heightAnchor.constraint(equalToConstant: 400),
+
+            tipsContainer.topAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 16),
+            tipsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            tipsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+
+            playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 24),
+            playAlongButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            playAlongButton.heightAnchor.constraint(equalToConstant: 46),
+
+            animationButton.centerYAnchor.constraint(equalTo: playAlongButton.centerYAnchor),
+            animationButton.leadingAnchor.constraint(equalTo: playAlongButton.trailingAnchor, constant: 12),
+            animationButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            animationButton.heightAnchor.constraint(equalToConstant: 46),
+            animationButton.widthAnchor.constraint(equalTo: playAlongButton.widthAnchor),
+            animationButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
+        ]
+    }
+
+    /// iPad: the sheet card fills the left at the screen's height; tips and the buttons sit in
+    /// a pane on the right instead of stretching under it.
+    private func twoPaneConstraints() -> [NSLayoutConstraint] {
+        let pane = UILayoutGuide()
+        contentView.addLayoutGuide(pane)
+        return [
+            pane.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            pane.widthAnchor.constraint(equalToConstant: 320),
+
+            sheetContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            sheetContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            sheetContainer.trailingAnchor.constraint(equalTo: pane.leadingAnchor, constant: -24),
+            // the page fills what's left of the screen's height under the card's header and info
+            sheetPDFView.heightAnchor.constraint(equalTo: view.safeAreaLayoutGuide.heightAnchor, constant: -220),
+
+            tipsContainer.topAnchor.constraint(equalTo: sheetContainer.topAnchor),
+            tipsContainer.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            tipsContainer.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+
+            playAlongButton.topAnchor.constraint(equalTo: tipsContainer.bottomAnchor, constant: 24),
+            playAlongButton.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            playAlongButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            playAlongButton.heightAnchor.constraint(equalToConstant: 50),
+
+            animationButton.topAnchor.constraint(equalTo: playAlongButton.bottomAnchor, constant: 12),
+            animationButton.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            animationButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            animationButton.heightAnchor.constraint(equalToConstant: 50),
+
+            contentView.bottomAnchor.constraint(greaterThanOrEqualTo: animationButton.bottomAnchor, constant: 16),
+            contentView.bottomAnchor.constraint(greaterThanOrEqualTo: sheetContainer.bottomAnchor, constant: 16),
+            {
+                let fit = contentView.bottomAnchor.constraint(equalTo: sheetContainer.bottomAnchor, constant: 16)
+                fit.priority = .defaultLow
+                return fit
+            }(),
+        ]
+    }
+}
+
+extension UploadPageNextViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1240 }
+}

@@ -1,0 +1,622 @@
+//
+//  PlayListInside.swift
+//  Re-Hearse_v1
+//
+
+import UIKit
+import Foundation
+
+// MARK: - Track Image Placeholder Helper
+/// Returns a stable, deterministic image for a track based on its title.
+/// Maps to trackimage_1 through trackimage_16.
+func trackImagePlaceholder(for title: String) -> UIImage {
+    let hash = abs(title.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
+    let index = (hash % 16) + 1
+    return UIImage(named: "trackimage_\(index)") ?? UIImage(systemName: "music.note")!
+}
+
+class PlaylistDetailViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    
+    // MARK: - Passed Data
+    var passedImage: UIImage? {
+        didSet {
+            guard isViewLoaded else { return }
+            let placeholder = resolvePlaylistCoverImage(playlistId: playlistId, coverUrl: passedCoverUrl)
+            let img = passedImage ?? placeholder
+            albumArtBackgroundView.image = img
+            albumArtCardView.image = img
+        }
+    }
+    var passedTitle: String?
+    var passedArtist: String?
+    var passedCoverUrl: String?   // local asset name or HTTP URL from DB
+    var playlistId: UUID?
+    
+    // MARK: - Tracks (fetched from Supabase)
+    private var trackList: [PlaylistTrack] = []
+    private var trackLoadErrorMessage: String?
+    
+    // Header View Components (will be placed in tableView.tableHeaderView)
+    private let headerContainerView = UIView()
+    private let albumArtBackgroundContainer = UIView()
+    private let albumArtBackgroundView = UIImageView()
+    private let albumArtCardView = UIImageView()
+    private let playlistTitleLabel = UILabel()
+    private let playlistArtistLabel = UILabel()
+    private let tracksHeaderLabel = UILabel()
+    
+    // Table View
+    private let tracksTableView = UITableView(frame: .zero, style: .plain)
+    
+    // MARK: - Activity Indicator
+    private let activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.color = .orange
+        indicator.hidesWhenStopped = true
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        return indicator
+    }()
+    
+    // MARK: - Empty State
+    private let emptyStateLabel: UILabel = {
+        let label = UILabel()
+        label.text = "No tracks yet.\nTap + to add a track."
+        label.textColor = .secondaryLabel
+        label.font = .systemFont(ofSize: DeviceLayout.s(16))
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+    
+    // MARK: - Floating Button
+    private let floatingAddButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.backgroundColor = UIColor.orange
+        btn.setImage(UIImage(systemName: "plus"), for: .normal)
+        btn.tintColor = .white
+        btn.layer.cornerRadius = DeviceLayout.s(30)
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowOpacity = 0.25
+        btn.layer.shadowRadius = 6
+        btn.layer.shadowOffset = CGSize(width: 0, height: 4)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }()
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Background color #F8F8F4
+        view.backgroundColor = ComponentColors.App.screenBackground
+        
+        title = ""
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationController?.navigationBar.tintColor = .white
+        let textAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.titleTextAttributes = textAttributes
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "square.and.pencil"),
+            style: .plain,
+            target: self,
+            action: #selector(handlePlaylistRename)
+        )
+        
+        setupTableView()
+        setupHeader()
+        setupActivityIndicator()
+        applyPassedData()
+        setupFloatingButton()
+        fetchTracks()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        if let selectedIndexPath = tracksTableView.indexPathForSelectedRow {
+            tracksTableView.deselectRow(at: selectedIndexPath, animated: animated)
+        }
+    }
+    
+    // MARK: - Apply Passed Playlist Data
+    private func applyPassedData() {
+        let placeholder = resolvePlaylistCoverImage(playlistId: playlistId, coverUrl: passedCoverUrl)
+
+        if let img = passedImage {
+            albumArtBackgroundView.image = img
+            albumArtCardView.image = img
+        } else {
+            // The wide backdrop shows a photo cover too, but a gradient without its glyph
+            // (blown up, the glyph would fill the banner).
+            let backdrop = PlaylistCover.isUserPhoto(passedCoverUrl)
+                ? placeholder
+                : PlaylistCover.image(forPlaylist: playlistId, reference: passedCoverUrl, glyph: false)
+            loadPlaylistCoverImage(
+                into: albumArtBackgroundView,
+                playlistId: playlistId,
+                coverUrl: passedCoverUrl,
+                fallbackImage: backdrop
+            )
+            loadPlaylistCoverImage(
+                into: albumArtCardView,
+                playlistId: playlistId,
+                coverUrl: passedCoverUrl,
+                fallbackImage: placeholder
+            )
+        }
+
+        playlistTitleLabel.text = passedTitle ?? "Playlist"
+        playlistArtistLabel.text = passedArtist ?? "Custom Playlist"
+    }
+    
+    private func setupTableView() {
+        tracksTableView.backgroundColor = .clear
+        tracksTableView.separatorStyle = .none
+        tracksTableView.dataSource = self
+        tracksTableView.delegate = self
+        tracksTableView.register(TrackTableViewCell.self, forCellReuseIdentifier: "TrackCell")
+        tracksTableView.register(PadCardPairCell.self, forCellReuseIdentifier: PadCardPairCell.reuseID)
+        if DeviceLayout.isPad { tracksTableView.allowsSelection = false }   // the cards take the taps
+        tracksTableView.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(tracksTableView)
+        
+        NSLayoutConstraint.activate([
+            tracksTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            tracksTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tracksTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tracksTableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    private func setupActivityIndicator() {
+        view.addSubview(activityIndicator)
+        NSLayoutConstraint.activate([
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+    }
+
+    // MARK: - Header Setup
+    private func setupHeader() {
+        headerContainerView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: DeviceLayout.s(350))
+        
+        albumArtBackgroundContainer.layer.cornerRadius = DeviceLayout.s(24)
+        albumArtBackgroundContainer.clipsToBounds = true
+        albumArtBackgroundContainer.translatesAutoresizingMaskIntoConstraints = false
+        headerContainerView.addSubview(albumArtBackgroundContainer)
+        
+        albumArtBackgroundView.contentMode = .scaleAspectFill
+        albumArtBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        albumArtBackgroundContainer.addSubview(albumArtBackgroundView)
+        
+        albumArtCardView.contentMode = .scaleAspectFill
+        albumArtCardView.clipsToBounds = true
+        albumArtCardView.layer.cornerRadius = DeviceLayout.s(24)
+        albumArtCardView.translatesAutoresizingMaskIntoConstraints = false
+        headerContainerView.addSubview(albumArtCardView)
+        
+        playlistTitleLabel.font = .systemFont(ofSize: DeviceLayout.s(28), weight: .bold)
+        playlistTitleLabel.textAlignment = .center
+        playlistTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        headerContainerView.addSubview(playlistTitleLabel)
+        
+        playlistArtistLabel.font = .systemFont(ofSize: DeviceLayout.s(16))
+        playlistArtistLabel.textColor = .secondaryLabel
+        playlistArtistLabel.textAlignment = .center
+        playlistArtistLabel.translatesAutoresizingMaskIntoConstraints = false
+        headerContainerView.addSubview(playlistArtistLabel)
+        
+        tracksHeaderLabel.font = .systemFont(ofSize: DeviceLayout.s(20), weight: .bold)
+        tracksHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
+        headerContainerView.addSubview(tracksHeaderLabel)
+        
+        headerContainerView.addSubview(emptyStateLabel)
+        
+        tracksTableView.tableHeaderView = headerContainerView
+        
+        NSLayoutConstraint.activate([
+            albumArtBackgroundContainer.topAnchor.constraint(equalTo: headerContainerView.topAnchor, constant: DeviceLayout.s(8)),
+            albumArtBackgroundContainer.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: DeviceLayout.s(16)),
+            albumArtBackgroundContainer.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: DeviceLayout.s(-16)),
+            albumArtBackgroundContainer.heightAnchor.constraint(equalToConstant: DeviceLayout.s(160)),
+            
+            albumArtBackgroundView.topAnchor.constraint(equalTo: albumArtBackgroundContainer.topAnchor),
+            albumArtBackgroundView.leadingAnchor.constraint(equalTo: albumArtBackgroundContainer.leadingAnchor),
+            albumArtBackgroundView.trailingAnchor.constraint(equalTo: albumArtBackgroundContainer.trailingAnchor),
+            albumArtBackgroundView.bottomAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor),
+            
+            albumArtCardView.centerXAnchor.constraint(equalTo: albumArtBackgroundContainer.centerXAnchor),
+            albumArtCardView.centerYAnchor.constraint(equalTo: albumArtBackgroundContainer.bottomAnchor, constant: DeviceLayout.s(-10)),
+            albumArtCardView.heightAnchor.constraint(equalToConstant: DeviceLayout.s(140)),
+            albumArtCardView.widthAnchor.constraint(equalToConstant: DeviceLayout.s(140)),
+            
+            playlistTitleLabel.topAnchor.constraint(equalTo: albumArtCardView.bottomAnchor, constant: DeviceLayout.s(10)),
+            playlistTitleLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
+            
+            playlistArtistLabel.topAnchor.constraint(equalTo: playlistTitleLabel.bottomAnchor, constant: DeviceLayout.s(4)),
+            playlistArtistLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
+            
+            tracksHeaderLabel.topAnchor.constraint(equalTo: playlistArtistLabel.bottomAnchor, constant: DeviceLayout.s(16)),
+            tracksHeaderLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: DeviceLayout.s(20)),
+            
+            emptyStateLabel.topAnchor.constraint(equalTo: tracksHeaderLabel.bottomAnchor, constant: DeviceLayout.s(30)),
+            emptyStateLabel.centerXAnchor.constraint(equalTo: headerContainerView.centerXAnchor),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: headerContainerView.leadingAnchor, constant: DeviceLayout.s(40)),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: headerContainerView.trailingAnchor, constant: DeviceLayout.s(-40)),
+        ])
+        
+    }
+    
+    @objc private func handlePlaylistRename() {
+        let alert = UIAlertController(title: "Rename Playlist", message: "Enter new name", preferredStyle: .alert)
+        alert.addTextField {
+            $0.text = self.playlistTitleLabel.text
+            $0.placeholder = "Enter new name"
+            $0.clearButtonMode = .whileEditing
+            $0.autocapitalizationType = .words
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let newName = InputValidator.limit(
+                InputValidator.trimOnSubmit(alert?.textFields?.first?.text ?? ""),
+                maxLength: InputValidator.nameMaxLength
+            )
+            guard InputValidator.validateRequired(newName, message: "Playlist name is required.") == nil else {
+                self.showInputError(message: "Playlist name is required.")
+                return
+            }
+            self.updatePlaylistName(newName)
+        })
+        present(alert, animated: true)
+    }
+    
+    private func updatePlaylistName(_ newName: String) {
+        guard let id = playlistId else { return }
+        Task {
+            do {
+                try await PlaylistsManager.shared.updatePlaylistName(id: id, newName: newName)
+                await MainActor.run {
+                    self.playlistTitleLabel.text = newName
+                    self.passedTitle = newName
+                    NotificationCenter.default.post(name: NSNotification.Name("PlaylistUpdated"), object: nil)
+                }
+            } catch {
+                debugLog("❌ Rename error: \(error)")
+                await MainActor.run {
+                    self.showInputError(message: "We couldn't rename that playlist right now. Please try again.")
+                }
+            }
+        }
+    }
+    
+    // MARK: - Floating Button Setup
+    private func setupFloatingButton() {
+        view.addSubview(floatingAddButton)
+        
+        floatingAddButton.addTarget(self, action: #selector(showAddTrackDialog), for: .touchUpInside)
+        
+        NSLayoutConstraint.activate([
+            floatingAddButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: DeviceLayout.s(-22)),
+            floatingAddButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: DeviceLayout.s(-20)),
+            floatingAddButton.widthAnchor.constraint(equalToConstant: DeviceLayout.s(60)),
+            floatingAddButton.heightAnchor.constraint(equalToConstant: DeviceLayout.s(60)),
+        ])
+    }
+    
+    // MARK: - Fetch Tracks
+    private func fetchTracks() {
+        guard let playlistId = playlistId else {
+            reloadTracksUI()
+            return
+        }
+        
+        // the songs saved from an earlier visit show at once; the spinner only when there are none
+        if trackList.isEmpty, let saved = PlaylistsManager.shared.savedTracks(playlistId: playlistId), !saved.isEmpty {
+            trackList = saved
+            reloadTracksUI()
+        }
+        if trackList.isEmpty { activityIndicator.startAnimating() }
+        
+        Task {
+            let existingTracks = self.trackList
+            do {
+                let tracks = try await PlaylistsManager.shared.fetchPlaylistTracks(playlistId: playlistId)
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackLoadErrorMessage = nil
+                    self?.trackList = tracks
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            } catch {
+                debugLog("❌ Error fetching tracks: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackLoadErrorMessage = AppUserFacingError.message(
+                        for: "load this playlist",
+                        error: error,
+                        fallback: "We couldn't load this playlist right now. Please try again."
+                    )
+                    if !existingTracks.isEmpty {
+                        // offline or a failed refresh: keep what is shown, without an error
+                        self?.trackList = existingTracks
+                        self?.trackLoadErrorMessage = nil
+                    }
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Add Track
+    @objc private func showAddTrackDialog() {
+        guard let playlistId = playlistId else { return }
+        let picker = UploadPickerViewController()
+        picker.modalPresentationStyle = .pageSheet
+        if #available(iOS 15.0, *), let sheet = picker.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 24
+        }
+        picker.onSelect = { [weak self] uploadItem in
+            guard let self else { return }
+            self.addScanToPlaylist(playlistId: playlistId, scan: uploadItem)
+        }
+        present(picker, animated: true)
+    }
+    
+    private func addScanToPlaylist(playlistId: UUID, scan: UploadScanItem) {
+        activityIndicator.startAnimating()
+        Task {
+            do {
+                let newTrack = try await PlaylistsManager.shared.addScanToPlaylist(
+                    playlistId: playlistId,
+                    scan: scan
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackLoadErrorMessage = nil
+                    self?.trackList.insert(newTrack, at: 0)
+                    self?.activityIndicator.stopAnimating()
+                    AnalyticsManager.logTrackAddedToPlaylist(playlistId: playlistId)
+                    self?.reloadTracksUI()
+                }
+            } catch {
+                debugLog("❌ Error adding scan to playlist: \(error)")
+                let message = AppUserFacingError.message(
+                    for: "add that upload to the playlist",
+                    error: error,
+                    fallback: "We couldn't add that track right now. Please try again."
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.activityIndicator.stopAnimating()
+                    let alert = UIAlertController(title: AppUserFacingError.title(for: error),
+                                                  message: message,
+                                                  preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self?.present(alert, animated: true)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Remove Track
+    private func removeTrack(at index: Int) {
+        let track = trackList[index]
+        guard let itemId = track.playlistItemId else { return }
+        
+        activityIndicator.startAnimating()
+        
+        Task {
+            do {
+                try await PlaylistsManager.shared.removeTrackFromPlaylist(playlistItemId: itemId)
+                DispatchQueue.main.async { [weak self] in
+                    self?.trackList.remove(at: index)
+                    self?.activityIndicator.stopAnimating()
+                    self?.reloadTracksUI()
+                }
+            } catch {
+                debugLog("❌ Error removing track: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.activityIndicator.stopAnimating()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Refresh UI
+    private func reloadTracksUI() {
+        tracksHeaderLabel.text = "Tracks - \(trackList.count)"
+        emptyStateLabel.text = trackLoadErrorMessage ?? "No tracks yet.\nTap + to add a track."
+        emptyStateLabel.isHidden = !trackList.isEmpty
+        tracksTableView.reloadData()
+    }
+    
+    // MARK: - UITableViewDataSource
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        DeviceLayout.isPad ? (trackList.count + 1) / 2 : trackList.count
+    }
+
+    /// iPad card: the track's artwork, title and artist.
+    private func content(for track: PlaylistTrack) -> UIListContentConfiguration {
+        var content = UIListContentConfiguration.subtitleCell()
+        content.image = trackImagePlaceholder(for: track.title)
+        content.imageProperties.maximumSize = CGSize(width: 64, height: 64)
+        content.imageProperties.reservedLayoutSize = CGSize(width: 64, height: 64)
+        content.imageProperties.cornerRadius = 12
+        content.imageToTextPadding = 16
+        content.text = track.title
+        content.textProperties.font = .systemFont(ofSize: 19, weight: .semibold)
+        content.secondaryText = track.artist
+        content.secondaryTextProperties.font = .systemFont(ofSize: 15)
+        content.secondaryTextProperties.color = .secondaryLabel
+        content.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 0)
+        return content
+    }
+
+    private func openTrack(_ track: PlaylistTrack) {
+        let vc = PlaylistSongDetailViewController()
+        vc.passedImage = trackImagePlaceholder(for: track.title)
+        vc.passedSongTitle = track.title
+        vc.passedArtist = track.artist
+        vc.passedTrackId = track.trackId
+        vc.passedSheetScanId = track.sheetScanId
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if DeviceLayout.isPad {
+            // two tracks to a row, as cards (like the Library); long-press to remove
+            let cell = tableView.dequeueReusableCell(withIdentifier: PadCardPairCell.reuseID,
+                                                     for: indexPath) as! PadCardPairCell
+            let first = indexPath.row * 2
+            let pair = [trackList[first]] + (first + 1 < trackList.count ? [trackList[first + 1]] : [])
+            let menus: [UIMenu?] = (0..<2).map { side in
+                guard side < pair.count else { return nil }
+                return UIMenu(children: [UIAction(title: "Remove from Playlist", image: UIImage(systemName: "trash"),
+                                                  attributes: .destructive) { [weak self] _ in
+                    guard let self, let index = self.trackList.firstIndex(where: { $0.id == pair[side].id })
+                    else { return }
+                    self.removeTrack(at: index)
+                }])
+            }
+            cell.configure(left: content(for: pair[0]), right: pair.count > 1 ? content(for: pair[1]) : nil,
+                           menus: menus)
+            cell.onTap = { [weak self] side in
+                guard side < pair.count else { return }
+                self?.openTrack(pair[side])
+            }
+            return cell
+        }
+        let cell = tableView.dequeueReusableCell(withIdentifier: "TrackCell", for: indexPath) as! TrackTableViewCell
+        let track = trackList[indexPath.row]
+        cell.configure(with: track)
+        cell.selectionStyle = .default
+        return cell
+    }
+
+    private func showInputError(message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    // MARK: - UITableViewDelegate
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        DeviceLayout.isPad ? 104 : 92
+    }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let track = trackList[indexPath.row]
+        let vc = PlaylistSongDetailViewController()
+        vc.passedImage = trackImagePlaceholder(for: track.title)   // ← stable random image
+        vc.passedSongTitle = track.title
+        vc.passedArtist = track.artist
+        vc.passedTrackId = track.trackId
+        vc.passedSheetScanId = track.sheetScanId
+        navigationController?.pushViewController(vc, animated: true)
+    }
+    
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { [weak self] (_, _, completion) in
+            self?.removeTrack(at: indexPath.row)
+            completion(true)
+        }
+        deleteAction.backgroundColor = .systemRed
+        deleteAction.image = UIImage(systemName: "trash")
+        
+        return UISwipeActionsConfiguration(actions: [deleteAction])
+    }
+}
+
+
+// MARK: - Custom TableViewCell
+class TrackTableViewCell: UITableViewCell {
+    
+    private let container = UIView()
+    private let artwork = UIImageView()
+    private let titleLabel = UILabel()
+    private let artistLabel = UILabel()
+    private let chevronImageView = UIImageView()
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setupUI() {
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        
+        container.backgroundColor = ComponentColors.SongCard.background
+        container.layer.cornerRadius = DeviceLayout.s(22)
+        container.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(container)
+        
+        artwork.contentMode = .scaleAspectFill
+        artwork.layer.cornerRadius = DeviceLayout.s(18)
+        artwork.clipsToBounds = true
+        artwork.backgroundColor = UIColor.systemGray4
+        artwork.tintColor = .darkGray
+        artwork.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(artwork)
+        
+        titleLabel.font = .systemFont(ofSize: DeviceLayout.s(15), weight: .semibold)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(titleLabel)
+        
+        artistLabel.font = .systemFont(ofSize: DeviceLayout.s(12))
+        artistLabel.textColor = .secondaryLabel
+        artistLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(artistLabel)
+
+        chevronImageView.image = UIImage(systemName: "chevron.right")
+        chevronImageView.tintColor = ComponentColors.SongCard.metadataText.withAlphaComponent(0.45)
+        chevronImageView.contentMode = .scaleAspectFit
+        chevronImageView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(chevronImageView)
+        
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: DeviceLayout.s(6)),
+            container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DeviceLayout.s(16)),
+            container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: DeviceLayout.s(-16)),
+            container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: DeviceLayout.s(-6)),
+            
+            artwork.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: DeviceLayout.s(12)),
+            artwork.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            artwork.widthAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
+            artwork.heightAnchor.constraint(equalToConstant: DeviceLayout.s(56)),
+
+            chevronImageView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: DeviceLayout.s(-16)),
+            chevronImageView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            chevronImageView.widthAnchor.constraint(equalToConstant: DeviceLayout.s(14)),
+            
+            titleLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: DeviceLayout.s(12)),
+            titleLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: DeviceLayout.s(-12)),
+            titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: DeviceLayout.s(-10)),
+            
+            artistLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: DeviceLayout.s(12)),
+            artistLabel.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: DeviceLayout.s(-12)),
+            artistLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: DeviceLayout.s(10)),
+        ])
+    }
+    
+    /// Configure the cell — no index needed; image is derived from the track title.
+    func configure(with track: PlaylistTrack) {
+        titleLabel.text = track.title
+        artistLabel.text = track.artist
+        artwork.image = trackImagePlaceholder(for: track.title)   // ← stable random image
+    }
+}
+
+/// iPad: wide, two tracks to a row, like the Library.
+extension PlaylistDetailViewController: IPadContentWidth {
+    var iPadContentWidth: CGFloat { 1180 }
+}

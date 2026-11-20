@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Combine
 
 // MARK: - Particle System for Aesthetics (Optimized)
 struct Particle: Identifiable {
@@ -16,53 +17,59 @@ struct ParticleView: View {
     @Binding var isPulseActive: Bool
     @State private var particles: [Particle] = []
     let color: Color
+    private let timer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
     
     var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                for particle in particles {
-                    let rect = CGRect(
-                        x: particle.x, 
-                        y: particle.y, 
-                        width: particle.size * (isPulseActive ? 1.4 : 1.0), 
-                        height: particle.size * (isPulseActive ? 1.4 : 1.0)
-                    )
-                    
-                    let baseOpacity = colorScheme == .dark ? particle.opacity : (particle.opacity + 0.1)
-                    context.opacity = isPulseActive ? min(1.0, baseOpacity + 0.2) : baseOpacity
-                    
-                    context.fill(Circle().path(in: rect), with: .color(color))
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(particles) { particle in
+                    Circle()
+                        .fill(color)
+                        .frame(
+                            width: particle.size * (isPulseActive ? 1.4 : 1.0),
+                            height: particle.size * (isPulseActive ? 1.4 : 1.0)
+                        )
+                        .opacity(adjustedOpacity(for: particle))
+                        .position(x: particle.x, y: particle.y)
                 }
             }
             .onAppear {
-                createParticles()
+                createParticles(in: geometry.size)
             }
-            .onChange(of: timeline.date) { _, _ in
-                updateParticles()
+            .onReceive(timer) { _ in
+                updateParticles(in: geometry.size)
             }
         }
-        .drawingGroup() // High-performance GPU rendering
     }
     
-    private func createParticles() {
+    private func adjustedOpacity(for particle: Particle) -> Double {
+        let baseOpacity = colorScheme == .dark ? particle.opacity : (particle.opacity + 0.1)
+        return isPulseActive ? min(1.0, baseOpacity + 0.2) : baseOpacity
+    }
+
+    private func createParticles(in size: CGSize) {
+        guard particles.isEmpty else { return }
         for _ in 0..<25 {
-            particles.append(Particle(
-                x: CGFloat.random(in: 0...500),
-                y: CGFloat.random(in: 0...1000),
-                size: CGFloat.random(in: 3...6),
-                opacity: Double.random(in: 0.1...0.3),
-                speed: Double.random(in: 0.5...1.4)
-            ))
+            particles.append(
+                Particle(
+                    x: CGFloat.random(in: 0...max(size.width, 1)),
+                    y: CGFloat.random(in: 0...max(size.height, 1)),
+                    size: CGFloat.random(in: 3...6),
+                    opacity: Double.random(in: 0.1...0.3),
+                    speed: Double.random(in: 0.5...1.4)
+                )
+            )
         }
     }
     
-    private func updateParticles() {
+    private func updateParticles(in size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
         let speedMult: CGFloat = isPulseActive ? 4.5 : 1.0
         for i in 0..<particles.count {
             particles[i].y -= CGFloat(particles[i].speed) * speedMult
             if particles[i].y < -20 {
-                particles[i].y = 1000
-                particles[i].x = CGFloat.random(in: 0...500)
+                particles[i].y = size.height + 20
+                particles[i].x = CGFloat.random(in: 0...size.width)
             }
         }
     }
@@ -92,7 +99,6 @@ struct SplashScreenView: View {
     
     var onGetStarted: () -> Void
     
-    private let impact = UIImpactFeedbackGenerator(style: .medium)
     private let brandOrange = Color(red: 239.0/255.0, green: 148.0/255.0, blue: 8.0/255.0) // #EF9408
     
     private var baseColor: Color {
@@ -242,10 +248,6 @@ struct SplashScreenView: View {
         withAnimation(.easeIn(duration: 0.4)) {
             waveOpacity1 = colorScheme == .dark ? 0.6 : 0.8
         }
-        
-        // Synchronized Haptic at the peak of the reveal
-        impact.prepare()
-        impact.impactOccurred()
         
         // Global Atmosphere Reactivity
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {

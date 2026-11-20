@@ -1,0 +1,456 @@
+import Foundation
+import AVFoundation
+
+// MARK: - AudioEngineManager
+// Uses AVAudioUnitSampler with system GM DLS when available.
+// Falls back to a pure-tone AVAudioPlayerNode synth so sound ALWAYS works.
+
+final class AudioEngineManager {
+
+    static let shared = AudioEngineManager()
+
+    /// Every engine call runs here, in order: setting up and starting AVAudioEngine takes a few
+    /// hundred milliseconds, which on the main thread froze the screen opening Animation, Play
+    /// Along or a lesson. Notes and clicks go through the same queue, so they keep their order.
+    private let queue = DispatchQueue(label: "rehearse.audio-engine", qos: .userInteractive)
+
+    // MARK: - Public (any thread; the work runs on `queue`)
+
+    /// Runs `work` on the audio queue and waits for it. For other audio engines (the
+    /// microphone): Core Audio sets up one I/O unit at a time, and an engine starting on another
+    /// thread while this one starts left both waiting on each other for seconds.
+    func runExclusively<T>(_ work: () throws -> T) rethrows -> T {
+        try queue.sync(execute: work)
+    }
+
+    /// `work` on the audio queue, without waiting for it.
+    func runExclusivelyLater(_ work: @escaping () -> Void) {
+        queue.async(execute: work)
+    }
+
+    /// Sets the microphone flag right away (inside `runExclusively`, where the queue is busy).
+    func setMicrophoneActiveOnQueue(_ active: Bool) {
+        dispatchPrecondition(condition: .onQueue(queue))
+        micActive = active
+    }
+
+    func acquirePlaybackSession() { queue.async { self._acquirePlaybackSession() } }
+    func releasePlaybackSession() { queue.async { self._releasePlaybackSession() } }
+    func startEngine() { queue.async { self._startEngine() } }
+    func playClick(accent: Bool) { queue.async { self._playClick(accent: accent) } }
+    func startNote(midi: UInt8, velocity: UInt8 = 90) { queue.async { self._startNote(midi: midi, velocity: velocity) } }
+    func stopNote(midi: UInt8) { queue.async { self._stopNote(midi: midi) } }
+    func stopAllNotes() { queue.async { self._stopAllNotes() } }
+
+    // MARK: - Piano Sound
+    /// The one piano sound: the grand piano sound font in the bundle.
+    private static let soundFontName = "SteinGrandPiano"
+    /// GM program for the system DLS fallback (acoustic grand piano).
+    private static let gmProgram: UInt8 = 0
+
+    // MARK: - Engine
+    private var engine: AVAudioEngine?
+    private var sampler: AVAudioUnitSampler?
+    private var reverb: AVAudioUnitReverb?
+    private var sfLoaded = false
+    private var activePlaybackClients = 0
+
+    // Metronome clicks: short decaying tones on their own player
+    private var clickPlayer: AVAudioPlayerNode?
+    private var clickBuffers: (accent: AVAudioPCMBuffer, beat: AVAudioPCMBuffer)?
+
+    /// The clicks' pitches (A6 accented, E6 otherwise), so a listener can tell them from notes.
+    static let accentClickMidi = 93
+    static let beatClickMidi = 88
+
+    // Fallback tone synth (used when no soundfont found)
+    private var toneNodes: [UInt8: AVAudioPlayerNode] = [:]
+    private var useFallback = false
+
+    /// Set while the microphone listens (Play Along, chord recognition): playback then keeps the
+    /// record-capable audio session instead of switching it to playback only.
+    var microphoneIsActive: Bool {
+        get { queue.sync { micActive } }
+        set { queue.async { self.micActive = newValue } }
+    }
+    private var micActive = false {
+        didSet { applyOutputGain() }
+    }
+
+    /// While the microphone listens the audio session runs in measurement mode (no automatic
+    /// gain, no voice processing), which plays noticeably quieter on a real device: the piano
+    /// gets a lift to match, and a limiter keeps loud chords from clipping.
+    private static let listeningGainDB: Float = 9
+
+    private func applyOutputGain() {
+        sampler?.overallGain = micActive ? Self.listeningGainDB : 0
+    }
+
+    private var activeNotes: Set<UInt8> = []
+    private var samplerChannelsByNote: [UInt8: UInt8] = [:]
+    private(set) var isStarted = false
+
+    // MARK: - Init
+    private init() {
+        setupNotifications()
+    }
+
+    private func ensureGraphInitialized() {
+        guard engine == nil else { return }
+
+        let engine = AVAudioEngine()
+        let sampler = AVAudioUnitSampler()
+        let reverb = AVAudioUnitReverb()
+
+        engine.attach(sampler)
+        engine.attach(reverb)
+        reverb.loadFactoryPreset(.smallRoom)
+        reverb.wetDryMix = 15
+        let limiter = AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
+            componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_PeakLimiter,
+            componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0))
+        engine.attach(limiter)
+        engine.connect(sampler, to: reverb, format: nil)
+        engine.connect(reverb, to: limiter, format: nil)
+        engine.connect(limiter, to: engine.mainMixerNode, format: nil)
+
+        let clickFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        let clickPlayer = AVAudioPlayerNode()
+        engine.attach(clickPlayer)
+        engine.connect(clickPlayer, to: engine.mainMixerNode, format: clickFormat)
+        if let accent = Self.makeClick(frequency: 1760, gain: 0.7, format: clickFormat),
+           let beat = Self.makeClick(frequency: 1318.5, gain: 0.5, format: clickFormat) {
+            clickBuffers = (accent, beat)
+        }
+        self.clickPlayer = clickPlayer
+        engine.prepare()
+
+        self.engine = engine
+        self.sampler = sampler
+        self.reverb = reverb
+        self.sfLoaded = false
+        self.useFallback = false
+        applyOutputGain()
+    }
+
+    private func teardownGraph() {
+        _stopAllNotes()
+
+        guard let engine else {
+            toneNodes.removeAll()
+            sampler = nil
+            reverb = nil
+            sfLoaded = false
+            useFallback = false
+            samplerChannelsByNote.removeAll()
+            isStarted = false
+            return
+        }
+
+        for node in toneNodes.values {
+            node.stop()
+            if engine.attachedNodes.contains(where: { $0 === node }) {
+                engine.detach(node)
+            }
+        }
+        toneNodes.removeAll()
+
+        if let sampler, engine.attachedNodes.contains(where: { $0 === sampler }) {
+            engine.detach(sampler)
+        }
+        if let reverb, engine.attachedNodes.contains(where: { $0 === reverb }) {
+            engine.detach(reverb)
+        }
+        if let clickPlayer, engine.attachedNodes.contains(where: { $0 === clickPlayer }) {
+            clickPlayer.stop()
+            engine.detach(clickPlayer)
+        }
+        clickPlayer = nil
+
+        engine.stop()
+        engine.reset()
+
+        self.engine = nil
+        self.sampler = nil
+        self.reverb = nil
+        self.sfLoaded = false
+        self.useFallback = false
+        self.samplerChannelsByNote.removeAll()
+        self.isStarted = false
+    }
+
+    private func setupNotifications() {
+        NotificationCenter.default.addObserver(self, selector: #selector(handleInterruption), name: AVAudioSession.interruptionNotification, object: nil)
+    }
+
+    @objc private func handleInterruption(notification: Notification) {
+        queue.async { self.interruptionChanged(notification) }
+    }
+
+    private func interruptionChanged(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+        
+        if type == .began {
+            isStarted = false
+            engine?.stop()
+        } else if type == .ended {
+            if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                if options.contains(.shouldResume), activePlaybackClients > 0 {
+                    _startEngine()
+                }
+            }
+        }
+    }
+
+    // MARK: - Ownership
+    private func _acquirePlaybackSession() {
+        activePlaybackClients += 1
+        _startEngine()
+    }
+
+    private func _releasePlaybackSession() {
+        if activePlaybackClients > 0 {
+            activePlaybackClients -= 1
+        }
+
+        guard activePlaybackClients == 0 else { return }
+
+        _stopAllNotes()
+        teardownGraph()
+        guard !micActive else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+
+    // MARK: - Start
+    private func _startEngine() {
+        ensureGraphInitialized()
+        guard !isStarted else { return }
+        guard let engine else { return }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            if !micActive {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
+            try session.setActive(true)
+            try engine.start()
+            isStarted = true
+            debugLog("🎹 Audio engine started")
+        } catch {
+            debugLog("❌ Engine start failed:", error); return
+        }
+        loadSoundFont()
+    }
+
+    // MARK: - Metronome
+
+    /// One metronome click now: higher and louder on the bar's first beat.
+    private func _playClick(accent: Bool) {
+        _startEngine()
+        guard let clickPlayer, let clickBuffers, isStarted else { return }
+        clickPlayer.scheduleBuffer(accent ? clickBuffers.accent : clickBuffers.beat, at: nil,
+                                   options: .interrupts, completionHandler: nil)
+        if !clickPlayer.isPlaying { clickPlayer.play() }
+    }
+
+    /// A 60 ms click: a tone with a 1 ms attack, decaying fast.
+    private static func makeClick(frequency: Double, gain: Float, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let rate = format.sampleRate
+        let frames = AVAudioFrameCount(rate * 0.06)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
+              let channel = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = frames
+        for i in 0..<Int(frames) {
+            let t = Double(i) / rate
+            let attack = min(1, t / 0.001)
+            let decay = exp(-t / 0.012)
+            channel[i] = gain * Float(attack * decay * sin(2 * .pi * frequency * t))
+        }
+        return buffer
+    }
+
+    // MARK: - Load SoundFont
+    private func loadSoundFont() {
+        guard sampler != nil else { return }
+        sfLoaded = false
+        useFallback = false
+
+        // 1. Custom bundle SF2/DLS
+        for ext in ["sf2", "dls"] {
+            if let url = Bundle.main.url(forResource: Self.soundFontName, withExtension: ext) {
+                if tryLoad(url: url, program: Self.gmProgram) { return }
+            }
+        }
+
+        // 2. System General MIDI DLS
+        let sysPaths = [
+            "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls",
+            "/Library/Audio/Sounds/Banks/gs_instruments.dls",
+            "/System/Library/Audio/UISounds/New/Classic/NewsFlash.caf" // Just a test to see if system library is readable, though not a DLS
+        ]
+        for path in sysPaths {
+            let url = URL(fileURLWithPath: path)
+            if (try? url.checkResourceIsReachable()) == true {
+                if tryLoad(url: url, program: Self.gmProgram) { return }
+            }
+        }
+        if let url = Bundle(identifier: "com.apple.audio.units.components")?
+            .url(forResource: "gs_instruments", withExtension: "dls") {
+            if tryLoad(url: url, program: Self.gmProgram) { return }
+        }
+
+        // 3. Pure tone fallback — always sounds decent
+        debugLog("⚠️ No soundfont found — using sine-wave fallback")
+        useFallback = true
+        sfLoaded    = true  // allow playback via fallback path
+    }
+
+    private func tryLoad(url: URL, program: UInt8) -> Bool {
+        guard let sampler else { return false }
+        do {
+            try sampler.loadSoundBankInstrument(
+                at: url, program: program,
+                bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: 0)
+            sfLoaded = true
+            useFallback = false
+            debugLog("🎹 Loaded:", url.lastPathComponent)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Note On/Off
+
+    private func _startNote(midi: UInt8, velocity: UInt8 = 90) {
+        guard isStarted else { return }
+
+        // If this MIDI note is already active, stop it cleanly first
+        // so the sampler channel is freed before we re-allocate it.
+        if activeNotes.contains(midi) {
+            stopNote(midi: midi)
+        }
+
+        if useFallback {
+            playTone(midi: midi, velocity: velocity)
+        } else {
+            guard let sampler, sfLoaded else { return }
+            let channel = allocateSamplerChannel(for: midi)
+            let vel = UInt8(clamping: Int(velocity) + Int.random(in: -4...4))
+            sampler.startNote(midi, withVelocity: vel, onChannel: channel)
+        }
+        activeNotes.insert(midi)
+    }
+
+    private func _stopNote(midi: UInt8) {
+        guard isStarted else { return }
+        activeNotes.remove(midi)
+
+        if useFallback {
+            stopTone(midi: midi)
+        } else {
+            guard let sampler else { return }
+            let channel = samplerChannelsByNote.removeValue(forKey: midi) ?? 0
+            sampler.stopNote(midi, onChannel: channel)
+        }
+    }
+
+    private func _stopAllNotes() {
+        let snapshot = activeNotes
+        for m in snapshot { stopNote(midi: m) }
+        activeNotes.removeAll()
+    }
+
+    // MARK: - Sine Tone Fallback
+    // Generates a clean sine wave at the correct pitch.
+    // Each MIDI note gets its own AVAudioPlayerNode playing a looping buffer.
+
+    private func playTone(midi: UInt8, velocity: UInt8) {
+        guard let engine else { return }
+        let freq = midiToHz(midi)
+        guard let buffer = makeSineBuffer(freq: freq, duration: 2.0) else { return }
+
+        let node = AVAudioPlayerNode()
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode,
+                       format: buffer.format)
+        node.scheduleBuffer(buffer, at: nil, options: .loops)
+
+        let gain = Float(velocity) / 127.0 * 0.4
+        node.volume = gain
+        node.play()
+        toneNodes[midi] = node
+    }
+
+    private func stopTone(midi: UInt8) {
+        guard let node = toneNodes.removeValue(forKey: midi) else { return }
+        node.stop()
+        if let engine, engine.attachedNodes.contains(where: { $0 === node }) {
+            engine.detach(node)
+        }
+    }
+
+    private func makeSineBuffer(freq: Double, duration: Double) -> AVAudioPCMBuffer? {
+        let sampleRate: Double = 44100
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        let frameCount = AVAudioFrameCount(sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
+        buffer.frameLength = frameCount
+
+        let twoPi = 2.0 * Double.pi
+        guard let ch = buffer.floatChannelData?[0] else { return nil }
+
+        // Sine with short attack/decay envelope to avoid clicks
+        let attack = Int(sampleRate * 0.01)
+        let decay  = Int(sampleRate * 0.1)
+        let total  = Int(frameCount)
+
+        for i in 0..<total {
+            var amp: Float = 1.0
+            if i < attack {
+                amp = Float(i) / Float(attack)
+            } else if i > total - decay {
+                amp = Float(total - i) / Float(decay)
+            }
+            ch[i] = amp * Float(sin(twoPi * freq * Double(i) / sampleRate))
+        }
+        return buffer
+    }
+
+    private func midiToHz(_ midi: UInt8) -> Double {
+        return 440.0 * pow(2.0, (Double(midi) - 69.0) / 12.0)
+    }
+
+    private func allocateSamplerChannel(for midi: UInt8) -> UInt8 {
+        let melodicChannels = (0...15).map(UInt8.init).filter { $0 != 9 }
+        let usedChannels = Set(samplerChannelsByNote.values)
+        let channel = melodicChannels.first(where: { !usedChannels.contains($0) }) ?? 0
+        samplerChannelsByNote[midi] = channel
+        return channel
+    }
+
+    // MARK: - Note Name → MIDI
+    func midiNumber(from noteName: String) -> UInt8? {
+        let s = noteName.trimmingCharacters(in: .whitespaces)
+        guard s.count >= 2 else { return nil }
+
+        var note = ""
+        var octStr = ""
+        for c in s {
+            if c.isLetter || c == "#" || c == "b" { note.append(c) }
+            else if c.isNumber || (c == "-" && !note.isEmpty) { octStr.append(c) }
+        }
+        guard !note.isEmpty, let oct = Int(octStr) else { return nil }
+
+        let bases = ["C":0,"D":2,"E":4,"F":5,"G":7,"A":9,"B":11]
+        let letter = String(note.prefix(1)).uppercased()
+        var semi   = bases[letter] ?? 0
+        if note.contains("#") { semi += 1 }
+        if note.contains("b") { semi -= 1 }
+        let midi = 12 * (oct + 1) + semi
+        guard (0...127).contains(midi) else { return nil }
+        return UInt8(midi)
+    }
+}
