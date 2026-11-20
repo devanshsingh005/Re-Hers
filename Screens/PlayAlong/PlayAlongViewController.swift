@@ -45,6 +45,12 @@ final class PlayAlongViewController: UIViewController {
     private var timeline: ScoreTimeline?
     private var trackedPracticeSessionStartedAt: Date?
     private var lastHeard: CFTimeInterval = 0
+    /// Where this sheet's chosen tempo is kept (shared with Animation).
+    private var tempoKey: String?
+    /// Set once the score is in: the tempo pop-up shows as soon as the screen is up.
+    private var tempoPromptPending = false
+    /// The player has answered the tempo pop-up: listening and the guide click may run.
+    private var tempoChosen = false
 
     // Practice: a guide click at the score's tempo, the A–B loop, the other hand played for you
     private var metronomeOn = UserDefaults.standard.bool(forKey: "practice.metronome") {
@@ -105,8 +111,9 @@ final class PlayAlongViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
-        if session != nil, session?.isFinished == false { startInput(askIfNeeded: true) }
+        if tempoChosen, session != nil, session?.isFinished == false { startInput(askIfNeeded: true) }
         updateGuideClick()
+        presentTempoPromptIfReady()
         AppTour.showIfNeeded(.playAlong, in: self, after: 1.2) { [weak self] in
             guard let self else { return [] }
             let bar = self.navBar.tourTargets
@@ -313,9 +320,35 @@ final class PlayAlongViewController: UIViewController {
         }
         keyboard.setHandPerformance(notes)
         navBar.setHands(session.hands.label)
+        tempoKey = SheetTempo.key(for: sheetMusicData ?? Data())
+        session.tempoScale = Double(SheetTempo.saved(forKey: tempoKey) ?? Int(scoreBPM.rounded())) / max(1, scoreBPM)
         refresh()
-        if view.window != nil { startInput(askIfNeeded: true) }
-        updateGuideClick()
+        tempoPromptPending = true
+        presentTempoPromptIfReady()
+    }
+
+    // MARK: Tempo
+
+    /// The score's opening tempo.
+    private var scoreBPM: Double { timeline?.writtenTime.bpm(atTick: 0) ?? defaultTempoBPM }
+
+    /// "Play at this tempo?" once the score is in and the screen is up. Listening and the guide
+    /// click wait for the answer; Cancel leaves the screen.
+    private func presentTempoPromptIfReady() {
+        guard tempoPromptPending, let session, view.window != nil, presentedViewController == nil else { return }
+        tempoPromptPending = false
+        let current = Int((scoreBPM * session.tempoScale).rounded())
+        SheetTempo.ask(in: self, scoreBPM: scoreBPM, prefill: current, onDone: { [weak self] bpm in
+            guard let self, let session = self.session else { return }
+            SheetTempo.save(bpm, forKey: self.tempoKey)
+            session.tempoScale = Double(bpm) / max(1, self.scoreBPM)
+            self.tempoChosen = true
+            self.refresh()
+            if self.view.window != nil { self.startInput(askIfNeeded: true) }
+            self.updateGuideClick()
+        }, onCancel: { [weak self] in
+            self?.close()
+        })
     }
 
     /// Shows the current step everywhere.
@@ -445,7 +478,7 @@ final class PlayAlongViewController: UIViewController {
 
     /// The guide click runs while the metronome is on and a session is being played.
     private func updateGuideClick() {
-        let run = metronomeOn && session?.isFinished == false && reportView.isHidden && view.window != nil
+        let run = tempoChosen && metronomeOn && session?.isFinished == false && reportView.isHidden && view.window != nil
         if run, guideLink == nil {
             clickCount = 0
             nextClickAt = CACurrentMediaTime() + 0.15
@@ -483,7 +516,8 @@ final class PlayAlongViewController: UIViewController {
         let steps = session.steps
         let end = after > before ? min(after, steps.count) : before + 1   // a loop jump: just this step
         let playsLeft = session.hands == .right
-        let scale = session.playedBPM.map { max(0.5, min(1.5, $0 / max(1, session.targetBPM))) } ?? 1
+        // the written timing at the chosen tempo, then nudged to the player's
+        let scale = session.tempoScale * (session.playedBPM.map { max(0.5, min(1.5, $0 / max(1, session.targetBPM))) } ?? 1)
         let time = timeline.writtenTime
         let t0 = time.seconds(atTick: Double(steps[before].tick))
         let now = CACurrentMediaTime()

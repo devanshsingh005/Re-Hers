@@ -1,5 +1,4 @@
 import UIKit
-import CryptoKit
 
 // MARK: - AnimationViewController
 //
@@ -41,11 +40,11 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
     private var holding:         [Int]  = []       // playNotes whose keys are down
     private var lastFrameTime:   CFTimeInterval?
     private var isPlaying:       Bool   = false
-    private var tempoMultiplier: Double = 1.0 {
-        didSet { if let speedKey { UserDefaults.standard.set(tempoMultiplier, forKey: speedKey) } }
-    }
-    /// Where this sheet's chosen speed is kept, so it opens at the speed it was last played at.
-    private var speedKey: String?
+    private var tempoMultiplier: Double = 1.0
+    /// Where this sheet's chosen tempo is kept, so it opens at the tempo it was last played at.
+    private var tempoKey: String?
+    /// Set once the score is in: the tempo pop-up shows as soon as the screen is up.
+    private var tempoPromptPending = false
     private var displayLink:     CADisplayLink?
     private var totalDuration:   Double = 0        // 1× length of the score in seconds
 
@@ -137,6 +136,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         super.viewDidAppear(animated)
         SupabaseProgressManager.beginTrackedPracticeSessionIfNeeded(&trackedPracticeSessionStartedAt)
         setOverlay(visible: true, animated: true)
+        presentTempoPromptIfReady()
         AppTour.showIfNeeded(.animation, in: self, after: 1.0) { [weak self] in
             guard self != nil else { return [] }
             return [
@@ -151,7 +151,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
                          message: "Slide along the bar to move through the piece."),
                 TourStep(target: { [weak self] in self?.navBar.menuTarget },
                          title: "Settings",
-                         message: "Change the tempo and the sound, and choose how many keys fit on screen."),
+                         message: "Change the tempo and choose how many keys fit on screen."),
             ]
         }
     }
@@ -335,10 +335,7 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
             debugLog("⚠️ [Animation] No sheet data provided")
             return
         }
-        let digest = SHA256.hash(data: data).prefix(12).map { String(format: "%02x", $0) }.joined()
-        speedKey = "animation.speed." + digest
-        let saved = UserDefaults.standard.double(forKey: speedKey!)
-        if (0.5...2.0).contains(saved) { tempoMultiplier = saved }
+        tempoKey = SheetTempo.key(for: data)
         let defaultTempo = defaultTempoBPM
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let parsed = try? ScoreTimeline.parse(data: data, defaultTempoBPM: defaultTempo)
@@ -368,9 +365,39 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         sheetCard.updateToTick(0)
         navBar.updateProgress(0)
         if overlay.alpha == 0 { setOverlay(visible: true, animated: true) }
+        setBPM(SheetTempo.saved(forKey: tempoKey) ?? Int(baseBPM.rounded()), save: false)
+        tempoPromptPending = true
+        presentTempoPromptIfReady()
         debugLog("🎵 \(playNotes.count) notes, \(timeline.measures.count) measures (\(timeline.performance.count) played), "
                  + "~\(String(format: "%.1f", totalDuration))s, \(String(format: "%g", timeline.tempos.first?.bpm ?? 0)) BPM"
                  + (timeline.keepsElementOrder ? "" : " (no element order: timing per staff and voice)"))
+    }
+
+    // MARK: - Tempo
+
+    /// The tempo at 1×: the score's opening tempo.
+    private var baseBPM: Double { timeline.map { $0.writtenTime.bpm(atTick: 0) } ?? defaultTempoBPM }
+    private var currentBPM: Int { Int((baseBPM * tempoMultiplier).rounded()) }
+
+    /// Plays at `bpm` from here on (tempo changes in the score keep their proportions).
+    private func setBPM(_ bpm: Int, save: Bool = true) {
+        let bpm = SheetTempo.clamp(bpm)
+        tempoMultiplier = Double(bpm) / max(1, baseBPM)
+        if save { SheetTempo.save(bpm, forKey: tempoKey) }
+    }
+
+    /// "Play at this tempo?" once the score is in and the screen is up; Play starts playing,
+    /// Cancel leaves the screen.
+    private func presentTempoPromptIfReady() {
+        guard tempoPromptPending, view.window != nil, presentedViewController == nil, !playNotes.isEmpty else { return }
+        tempoPromptPending = false
+        SheetTempo.ask(in: self, scoreBPM: baseBPM, prefill: currentBPM, onDone: { [weak self] bpm in
+            guard let self else { return }
+            self.setBPM(bpm)
+            self.startPlayback()
+        }, onCancel: { [weak self] in
+            self?.navBar.onBackTap?()
+        })
     }
 
     private static func playNotes(in timeline: ScoreTimeline) -> [PlayNote] {
@@ -577,13 +604,17 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
         
         overlay.isUserInteractionEnabled = false
         let card = SettingsMenuView()
-        card.baseBPM = timeline?.tempos.first?.bpm
-        card.currentTempo = tempoMultiplier
-        card.onTempoChanged = { [weak self] newT in
-            self?.tempoMultiplier = newT
+        card.bpm = currentBPM
+        card.onBPMChanged = { [weak self] bpm in
+            self?.setBPM(bpm)
         }
-        card.onInstrumentChanged = { inst in
-            AudioEngineManager.shared.switchInstrument(to: inst)
+        card.onEditBPM = { [weak self, weak card] in
+            guard let self else { return }
+            SheetTempo.ask(in: self, title: "Tempo", scoreBPM: self.baseBPM, prefill: self.currentBPM,
+                           doneTitle: "Set") { [weak self] bpm in
+                self?.setBPM(bpm)
+                card?.bpm = self?.currentBPM ?? bpm
+            }
         }
         
         card.translatesAutoresizingMaskIntoConstraints = false
@@ -629,23 +660,15 @@ final class AnimationViewController: UIViewController, UIGestureRecognizerDelega
 
 // MARK: - Custom Settings Card UI (Stateful & Interactive)
 private final class SettingsMenuView: UIView {
-    enum MenuState { case main, tempo, sound, keyboard }
+    enum MenuState { case main, tempo, keyboard }
     private var state: MenuState = .main
 
-    var currentTempo: Double = 1.0 { didSet { updateTempoLabel() } }
-    /// The score's opening tempo at 1×, shown with the speed ("♩ 99 · 1.1×").
-    var baseBPM: Double? { didSet { updateTempoLabel() } }
-
-    private func updateTempoLabel() {
-        let speed = String(format: "%g×", (currentTempo * 100).rounded() / 100)
-        if let baseBPM {
-            tempoValLbl.text = "♩ \(Int((baseBPM * currentTempo).rounded())) · \(speed)"
-        } else {
-            tempoValLbl.text = speed
-        }
-    }
-    var onTempoChanged: ((Double) -> Void)?
-    var onInstrumentChanged: ((AudioEngineManager.InstrumentType) -> Void)?
+    /// The tempo playing now, shown as "♩ 63".
+    var bpm: Int = 100 { didSet { tempoValLbl.text = "♩ \(bpm)" } }
+    /// The tempo after a − or + (one BPM a tap).
+    var onBPMChanged: ((Int) -> Void)?
+    /// A tap on the tempo: type any tempo.
+    var onEditBPM: (() -> Void)?
     
     private let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
     private let mainStack = UIStackView()
@@ -714,7 +737,6 @@ private final class SettingsMenuView: UIView {
         case .main:
             titleLabel.text = "SETTINGS"
             mainStack.addArrangedSubview(makeMenuRow(title: "Change Tempo", icon: "metronome", action: #selector(showTempo)))
-            mainStack.addArrangedSubview(makeMenuRow(title: "Choose Sound", icon: "pianokeys", action: #selector(showSound)))
             mainStack.addArrangedSubview(makeMenuRow(title: "Keys on Screen", icon: "arrow.left.and.right.square", action: #selector(showKeyboard)))
         case .tempo:
             titleLabel.text = "TEMPO"
@@ -722,10 +744,28 @@ private final class SettingsMenuView: UIView {
             let plus = makeIconBtn(sym: "plus.circle.fill", action: #selector(doPlus))
             tempoValLbl.font = .monospacedDigitSystemFont(ofSize: 18, weight: .bold)
             tempoValLbl.textColor = .label
-            
-            let row = UIStackView(arrangedSubviews: [minus, tempoValLbl, plus])
+            tempoValLbl.text = "♩ \(bpm)"
+            let value = UIButton(type: .system)
+            value.addTarget(self, action: #selector(editTempo), for: .touchUpInside)
+            tempoValLbl.translatesAutoresizingMaskIntoConstraints = false
+            tempoValLbl.isUserInteractionEnabled = false
+            value.addSubview(tempoValLbl)
+            NSLayoutConstraint.activate([
+                tempoValLbl.topAnchor.constraint(equalTo: value.topAnchor, constant: 4),
+                tempoValLbl.bottomAnchor.constraint(equalTo: value.bottomAnchor, constant: -4),
+                tempoValLbl.leadingAnchor.constraint(equalTo: value.leadingAnchor, constant: 4),
+                tempoValLbl.trailingAnchor.constraint(equalTo: value.trailingAnchor, constant: -4),
+            ])
+            let hint = UILabel()
+            hint.text = "Tap the tempo to type one"
+            hint.font = .systemFont(ofSize: 11, weight: .medium)
+            hint.textColor = .secondaryLabel
+            hint.textAlignment = .center
+
+            let row = UIStackView(arrangedSubviews: [minus, value, plus])
             row.axis = .horizontal; row.spacing = 24; row.alignment = .center; row.distribution = .equalCentering
             mainStack.addArrangedSubview(row)
+            mainStack.addArrangedSubview(hint)
         case .keyboard:
             titleLabel.text = "KEYS ON SCREEN"
             let minus = makeIconBtn(sym: "minus.circle.fill", action: #selector(fewerKeys))
@@ -737,17 +777,6 @@ private final class SettingsMenuView: UIView {
             let row = UIStackView(arrangedSubviews: [minus, keyboardValLbl, plus])
             row.axis = .horizontal; row.spacing = 24; row.alignment = .center; row.distribution = .equalCentering
             mainStack.addArrangedSubview(row)
-        case .sound:
-            titleLabel.text = "CHOOSE SOUND"
-            let soundList = UIStackView()
-            soundList.axis = .vertical; soundList.spacing = 8
-            
-            for inst in AudioEngineManager.InstrumentType.allCases {
-                let btn = makeMenuRow(title: instName(for: inst), icon: instIcon(for: inst), action: #selector(instTapped(_:)))
-                btn.tag = AudioEngineManager.InstrumentType.allCases.firstIndex(of: inst) ?? 0
-                soundList.addArrangedSubview(btn)
-            }
-            mainStack.addArrangedSubview(soundList)
         }
         
         UIView.animate(withDuration: 0.2) { self.layoutIfNeeded() }
@@ -791,23 +820,8 @@ private final class SettingsMenuView: UIView {
         return b
     }
 
-    private func instName(for type: AudioEngineManager.InstrumentType) -> String {
-        switch type {
-        case .grandPiano: return "Grand Piano"
-        case .electricPiano: return "Electric Piano"
-        }
-    }
-
-    private func instIcon(for type: AudioEngineManager.InstrumentType) -> String {
-        switch type {
-        case .grandPiano: return "pianokeys"
-        case .electricPiano: return "bolt.fill"
-        }
-    }
-
     @objc private func goBack() { renderState(.main) }
     @objc private func showTempo() { renderState(.tempo) }
-    @objc private func showSound() { renderState(.sound) }
     @objc private func showKeyboard() { renderState(.keyboard) }
     @objc private func fewerKeys(_ sender: UIButton) { stepKeyboard(-1, sender) }
     @objc private func moreKeys(_ sender: UIButton) { stepKeyboard(1, sender) }
@@ -825,26 +839,13 @@ private final class SettingsMenuView: UIView {
         minus?.isEnabled = KeyboardSize.canShowFewer
         plus?.isEnabled = KeyboardSize.canShowMore
     }
-    @objc private func doMinus() { adjustTempo(-0.1) }
-    @objc private func doPlus() { adjustTempo(0.1) }
-    
-    private func adjustTempo(_ delta: Double) {
-        currentTempo = max(0.5, min(2.0, currentTempo + delta))
-        currentTempo = (currentTempo * 10).rounded() / 10
-        onTempoChanged?(currentTempo)
-    }
-    
-    @objc private func instTapped(_ sender: UIButton) {
-        let type = AudioEngineManager.InstrumentType.allCases[sender.tag]
-        onInstrumentChanged?(type)
-        
-        // Flash feedback
-        UIView.animate(withDuration: 0.1) {
-            sender.backgroundColor = BrandColors.brand.withAlphaComponent(0.2)
-        } completion: { _ in
-            UIView.animate(withDuration: 0.2) { sender.backgroundColor = UIColor.label.withAlphaComponent(0.04) }
-            self.goBack() 
-        }
+    @objc private func doMinus() { adjustTempo(-1) }
+    @objc private func doPlus() { adjustTempo(1) }
+    @objc private func editTempo() { onEditBPM?() }
+
+    private func adjustTempo(_ delta: Int) {
+        bpm = SheetTempo.clamp(bpm + delta)
+        onBPMChanged?(bpm)
     }
 }
 

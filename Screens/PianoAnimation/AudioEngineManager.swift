@@ -38,37 +38,15 @@ final class AudioEngineManager {
     func releasePlaybackSession() { queue.async { self._releasePlaybackSession() } }
     func startEngine() { queue.async { self._startEngine() } }
     func playClick(accent: Bool) { queue.async { self._playClick(accent: accent) } }
-    func switchInstrument(to instrument: InstrumentType) { queue.async { self._switchInstrument(to: instrument) } }
     func startNote(midi: UInt8, velocity: UInt8 = 90) { queue.async { self._startNote(midi: midi, velocity: velocity) } }
     func stopNote(midi: UInt8) { queue.async { self._stopNote(midi: midi) } }
     func stopAllNotes() { queue.async { self._stopAllNotes() } }
 
-    // MARK: - Instrument Types
-    enum InstrumentType: CaseIterable {
-        case grandPiano, electricPiano
-
-        var displayName: String {
-            switch self {
-            case .grandPiano:    return "Grand Piano"
-            case .electricPiano: return "Electric Piano"
-            }
-        }
-
-        var sfName: String {
-            switch self {
-            case .grandPiano:    return "SteinGrandPiano"
-            case .electricPiano: return "Wurlitzer210"
-            }
-        }
-
-        // GM program number for system DLS fallback
-        var gmProgram: UInt8 {
-            switch self {
-            case .grandPiano:    return 0
-            case .electricPiano: return 4
-            }
-        }
-    }
+    // MARK: - Piano Sound
+    /// The one piano sound: the grand piano sound font in the bundle.
+    private static let soundFontName = "SteinGrandPiano"
+    /// GM program for the system DLS fallback (acoustic grand piano).
+    private static let gmProgram: UInt8 = 0
 
     // MARK: - Engine
     private var engine: AVAudioEngine?
@@ -95,12 +73,22 @@ final class AudioEngineManager {
         get { queue.sync { micActive } }
         set { queue.async { self.micActive = newValue } }
     }
-    private var micActive = false
+    private var micActive = false {
+        didSet { applyOutputGain() }
+    }
+
+    /// While the microphone listens the audio session runs in measurement mode (no automatic
+    /// gain, no voice processing), which plays noticeably quieter on a real device: the piano
+    /// gets a lift to match, and a limiter keeps loud chords from clipping.
+    private static let listeningGainDB: Float = 9
+
+    private func applyOutputGain() {
+        sampler?.overallGain = micActive ? Self.listeningGainDB : 0
+    }
 
     private var activeNotes: Set<UInt8> = []
     private var samplerChannelsByNote: [UInt8: UInt8] = [:]
     private(set) var isStarted = false
-    private var currentInstrument: InstrumentType = .grandPiano
 
     // MARK: - Init
     private init() {
@@ -118,8 +106,13 @@ final class AudioEngineManager {
         engine.attach(reverb)
         reverb.loadFactoryPreset(.smallRoom)
         reverb.wetDryMix = 15
+        let limiter = AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
+            componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_PeakLimiter,
+            componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0))
+        engine.attach(limiter)
         engine.connect(sampler, to: reverb, format: nil)
-        engine.connect(reverb, to: engine.mainMixerNode, format: nil)
+        engine.connect(reverb, to: limiter, format: nil)
+        engine.connect(limiter, to: engine.mainMixerNode, format: nil)
 
         let clickFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
         let clickPlayer = AVAudioPlayerNode()
@@ -137,6 +130,7 @@ final class AudioEngineManager {
         self.reverb = reverb
         self.sfLoaded = false
         self.useFallback = false
+        applyOutputGain()
     }
 
     private func teardownGraph() {
@@ -247,7 +241,7 @@ final class AudioEngineManager {
         } catch {
             debugLog("❌ Engine start failed:", error); return
         }
-        loadSoundFont(for: currentInstrument)
+        loadSoundFont()
     }
 
     // MARK: - Metronome
@@ -278,15 +272,15 @@ final class AudioEngineManager {
     }
 
     // MARK: - Load SoundFont
-    private func loadSoundFont(for instrument: InstrumentType) {
+    private func loadSoundFont() {
         guard sampler != nil else { return }
         sfLoaded = false
         useFallback = false
 
         // 1. Custom bundle SF2/DLS
         for ext in ["sf2", "dls"] {
-            if let url = Bundle.main.url(forResource: instrument.sfName, withExtension: ext) {
-                if tryLoad(url: url, program: instrument.gmProgram) { return }
+            if let url = Bundle.main.url(forResource: Self.soundFontName, withExtension: ext) {
+                if tryLoad(url: url, program: Self.gmProgram) { return }
             }
         }
 
@@ -299,12 +293,12 @@ final class AudioEngineManager {
         for path in sysPaths {
             let url = URL(fileURLWithPath: path)
             if (try? url.checkResourceIsReachable()) == true {
-                if tryLoad(url: url, program: instrument.gmProgram) { return }
+                if tryLoad(url: url, program: Self.gmProgram) { return }
             }
         }
         if let url = Bundle(identifier: "com.apple.audio.units.components")?
             .url(forResource: "gs_instruments", withExtension: "dls") {
-            if tryLoad(url: url, program: instrument.gmProgram) { return }
+            if tryLoad(url: url, program: Self.gmProgram) { return }
         }
 
         // 3. Pure tone fallback — always sounds decent
@@ -325,15 +319,6 @@ final class AudioEngineManager {
             return true
         } catch {
             return false
-        }
-    }
-
-    // MARK: - Switch Instrument
-    private func _switchInstrument(to instrument: InstrumentType) {
-        currentInstrument = instrument
-        _stopAllNotes()
-        if engine != nil {
-            loadSoundFont(for: instrument)
         }
     }
 

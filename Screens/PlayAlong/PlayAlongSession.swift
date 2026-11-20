@@ -131,16 +131,21 @@ nonisolated final class PlayAlongSession {
     var remaining: Set<Int> { expected.subtracting(hit) }
     var progress: Double { steps.isEmpty ? 1 : Double(index) / Double(steps.count) }
 
-    /// The score's tempo where the player is (quarter notes per minute).
+    /// The player's chosen tempo against the score's (1 = as written; tempo changes keep their
+    /// proportions).
+    var tempoScale: Double = 1
+
+    /// The tempo to play at where the player is (quarter notes per minute): the score's, scaled
+    /// to the chosen tempo.
     var targetBPM: Double {
-        timeline.writtenTime.bpm(atTick: Double(current?.tick ?? steps.last?.tick ?? 0))
+        timeline.writtenTime.bpm(atTick: Double(current?.tick ?? steps.last?.tick ?? 0)) * tempoScale
     }
 
     /// The player's tempo over the last few steps.
     var playedBPM: Double? { tempoSamples.last }
 
     var result: Result {
-        let target = steps.isEmpty ? 0 : steps.reduce(0.0) { $0 + timeline.writtenTime.bpm(atTick: Double($1.tick)) } / Double(steps.count)
+        let target = steps.isEmpty ? 0 : steps.reduce(0.0) { $0 + timeline.writtenTime.bpm(atTick: Double($1.tick)) } / Double(steps.count) * tempoScale
         return Result(correct: correct, mistakes: mistakes, steps: steps.count, cleanSteps: cleanSteps,
                       skipped: skipped, playedBPM: totalSeconds > 0 ? totalBeats / totalSeconds * 60 : nil,
                       targetBPM: target, seconds: max(0, (lastCompletion?.time ?? 0) - (startedAt ?? 0)))
